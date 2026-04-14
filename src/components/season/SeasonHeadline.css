@@ -1,0 +1,130 @@
+.season-headline {
+  display: grid;
+  gap: 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  box-shadow: var(--shadow-card);
+  padding: clamp(18px, 4vw, 24px);
+}
+
+.season-headline__kicker-row,
+.season-headline__bar-copy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.season-headline__kicker,
+.season-headline__label {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.season-headline__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.season-headline__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--green);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--green) 10%, transparent);
+}
+
+.season-headline__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.season-headline__metric {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-inset) 84%, transparent);
+}
+
+.season-headline__value {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: clamp(28px, 7vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+
+.season-headline__value--amber {
+  color: var(--text-amber);
+}
+
+.season-headline__range,
+.season-headline__rank {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.season-headline__bar-block {
+  display: grid;
+  gap: 10px;
+}
+
+.season-headline__bar-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.season-headline__bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+}
+
+.season-headline__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--amber), var(--amber-bright));
+}
+
+.season-headline__rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.season-headline__rank-value {
+  color: var(--text-amber);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 479px) {
+  .season-headline__grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,378 @@
+.matchup-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg-surface-soft) 92%, transparent),
+      color-mix(in srgb, var(--bg-surface) 96%, transparent)
+    );
+  box-shadow: var(--shadow-card);
+  isolation: isolate;
+  transition:
+    background-color var(--transition-base),
+    box-shadow var(--transition-base),
+    border-color var(--transition-base);
+}
+
+.matchup-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--amber) 50%, transparent),
+    transparent
+  );
+  opacity: 0.9;
+}
+
+.matchup-card__content {
+  position: relative;
+  z-index: 0;
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+}
+
+.matchup-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.matchup-card__header-pills {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.matchup-card__eyebrow {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.matchup-card__title {
+  margin: 6px 0 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.matchup-card__live-pill,
+.matchup-card__movement {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding-inline: 10px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.matchup-card__live-pill {
+  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+  color: var(--cyan);
+}
+
+.matchup-card__movement {
+  border: 1px solid var(--glass-border);
+  background: var(--bg-inset);
+  color: var(--text-muted);
+}
+
+.matchup-card__movement--positive {
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+}
+
+.matchup-card__movement--negative {
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  color: var(--red);
+}
+
+.matchup-card__teams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.matchup-card__team {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-inset) 72%, transparent);
+}
+
+.matchup-card__team-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.matchup-card__avatar {
+  flex: 0 0 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--bg-inset);
+}
+
+.matchup-card__avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.matchup-card__avatar-fallback {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.matchup-card__team-label {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.matchup-card__team-name {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.matchup-card__team-record {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.matchup-card__projection-block {
+  display: grid;
+  gap: 2px;
+}
+
+.matchup-card__projection {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+
+.matchup-card__projection-label {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.matchup-card__odds-board {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-inset) 78%, transparent);
+}
+
+.matchup-card__price-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-surface-soft) 55%, transparent);
+}
+
+.matchup-card__price-card--yours {
+  border-color: color-mix(in srgb, var(--amber) 35%, var(--border-subtle));
+}
+
+.matchup-card__price-label,
+.matchup-card__board-label {
+  color: var(--text-soft);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.matchup-card__odds-center {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.matchup-card__moneyline {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.matchup-card__moneyline--yours {
+  color: var(--amber-bright);
+}
+
+.matchup-card__moneyline--opponent {
+  color: var(--text-primary);
+}
+
+.matchup-card__win-probability {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.matchup-card__probability-bar {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+}
+
+.matchup-card__probability-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--amber), var(--amber-bright));
+  box-shadow: 0 0 20px color-mix(in srgb, var(--amber) 20%, transparent);
+  transition: width var(--transition-slow);
+}
+
+.matchup-card__probability-meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.matchup-card__commentary {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.matchup-card__markets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.matchup-card__market {
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  text-align: center;
+  background: var(--bg-inset);
+}
+
+.matchup-card__market--accent {
+  background: color-mix(in srgb, var(--amber) 8%, var(--bg-inset));
+  border-color: color-mix(in srgb, var(--amber) 28%, var(--border-subtle));
+}
+
+.matchup-card__market-label {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.matchup-card__market-value {
+  margin: var(--space-xs) 0 0;
+  color: var(--amber-bright);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.matchup-card__market-value--neutral {
+  color: var(--text-primary);
+}
+
+@media (min-width: 640px) {
+  .matchup-card__content {
+    padding: 24px;
+  }
+
+  .matchup-card__odds-board {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .matchup-card__content {
+    padding: 28px;
+  }
+
+  .matchup-card__team-name {
+    font-size: 18px;
+  }
+
+  .matchup-card__projection {
+    font-size: 30px;
+  }
+
+  .matchup-card__moneyline {
+    font-size: 40px;
+  }
+}

@@ -1,0 +1,104 @@
+:root {
+  /* ── Backgrounds ── */
+  --bg: #0b1018;
+  --bg-deep: #070b12;
+  --bg-surface: #111826;
+  --bg-surface-soft: #162032;
+  --bg-raised: rgba(26, 36, 55, 0.88);
+  --bg-inset: rgba(9, 13, 21, 0.92);
+  --bg-overlay: rgba(6, 10, 16, 0.78);
+  --bg-positive: rgba(18, 53, 38, 0.72);
+  --bg-negative: rgba(70, 23, 28, 0.64);
+
+  /* ── Text ── */
+  --text-primary: #f4f7fb;
+  --text-dim: rgba(220, 227, 238, 0.78);
+  --text-soft: rgba(177, 188, 205, 0.56);
+  --text-amber: #ffd36c;
+  --text-muted: #8d99ae;
+
+  /* ── Accent Colors ── */
+  --amber: #d79a24;
+  --amber-mid: #e2ad47;
+  --amber-bright: #ffd36c;
+  --amber-hot: #fff0b8;
+  --green: #4ad89a;
+  --red: #ff6f7d;
+  --cyan: #6dc8ff;
+  --blue: #7da2ff;
+
+  /* ── Typography ── */
+  --font-serif: "Instrument Serif", serif;
+  --font-sans: "Manrope", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  /* ── Position Colors ── */
+  --pos-qb: #5b9bd5;
+  --pos-rb: #4ade80;
+  --pos-wr: #e7bf72;
+  --pos-te: #b388eb;
+  --pos-k: #fde047;
+  --pos-def: #f87171;
+  --pos-flex: #c8903f;
+
+  --pos-qb-bg: rgba(91, 155, 213, 0.12);
+  --pos-qb-border: rgba(91, 155, 213, 0.22);
+  --pos-qb-text: rgba(121, 185, 243, 0.96);
+  --pos-rb-bg: rgba(74, 222, 128, 0.12);
+  --pos-rb-border: rgba(74, 222, 128, 0.22);
+  --pos-rb-text: rgba(108, 237, 154, 0.96);
+  --pos-wr-bg: rgba(226, 173, 71, 0.12);
+  --pos-wr-border: rgba(226, 173, 71, 0.22);
+  --pos-wr-text: rgba(255, 212, 108, 0.96);
+  --pos-te-bg: rgba(179, 136, 235, 0.12);
+  --pos-te-border: rgba(179, 136, 235, 0.2);
+  --pos-te-text: rgba(208, 170, 255, 0.94);
+  --pos-k-bg: rgba(253, 224, 71, 0.12);
+  --pos-k-border: rgba(253, 224, 71, 0.2);
+  --pos-k-text: rgba(255, 232, 124, 0.94);
+  --pos-def-bg: rgba(248, 113, 113, 0.12);
+  --pos-def-border: rgba(248, 113, 113, 0.22);
+  --pos-def-text: rgba(255, 145, 145, 0.96);
+  --pos-flex-bg: rgba(200, 144, 63, 0.12);
+  --pos-flex-border: rgba(200, 144, 63, 0.22);
+  --pos-flex-text: rgba(240, 184, 102, 0.96);
+
+  /* ── Spacing ── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* ── Border Radius ── */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-card: 0 12px 36px rgba(0, 0, 0, 0.34);
+  --shadow-elevated: 0 22px 60px rgba(0, 0, 0, 0.44);
+  --shadow-glow-amber: 0 0 0 1px rgba(215, 154, 36, 0.1),
+    0 20px 48px rgba(215, 154, 36, 0.08);
+
+  /* ── Glass Effect ── */
+  --glass-bg: rgba(17, 24, 38, 0.84);
+  --glass-border: rgba(140, 156, 184, 0.18);
+  --glass-blur: 14px;
+
+  /* ── Borders ── */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(215, 154, 36, 0.32);
+
+  /* ── Focus ── */
+  --focus-ring: rgba(255, 211, 108, 0.42);
+
+  /* ── Transitions ── */
+  --transition-fast: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-base: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-slow: 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}

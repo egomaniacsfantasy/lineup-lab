@@ -1,0 +1,14 @@
+.trade-page {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 28px);
+  display: grid;
+  gap: var(--space-lg);
+}
+
+@media (min-width: 1024px) {
+  .trade-page {
+    padding: var(--space-xl);
+  }
+}

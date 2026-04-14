@@ -1,0 +1,34 @@
+.app-shell {
+  --shell-strip-height: var(--space-xl);
+  --shell-header-height: calc(var(--space-2xl) + var(--space-sm));
+  --shell-tabbar-reserve: calc(var(--space-2xl) + var(--space-xl));
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100vh;
+  height: 100vh;
+  flex-direction: column;
+}
+
+.app-content {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: clip;
+  padding-top: calc(var(--shell-strip-height) + var(--shell-header-height));
+  padding-bottom: calc(
+    var(--shell-tabbar-reserve) + env(safe-area-inset-bottom, var(--space-sm))
+  );
+  scrollbar-gutter: stable;
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    --shell-header-height: 72px;
+  }
+
+  .app-content {
+    padding-bottom: 0;
+  }
+}

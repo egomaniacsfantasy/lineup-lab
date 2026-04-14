@@ -1,0 +1,165 @@
+.matchup-slate {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
+  box-shadow: var(--shadow-card);
+  padding: clamp(18px, 4vw, 24px);
+}
+
+.matchup-slate__header {
+  display: grid;
+  gap: 8px;
+}
+
+.matchup-slate__kicker,
+.matchup-slate__odds,
+.matchup-slate__record,
+.matchup-slate__tag,
+.matchup-slate__vs {
+  font-family: var(--font-mono);
+}
+
+.matchup-slate__kicker {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.matchup-slate__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: clamp(22px, 4vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.matchup-slate__rows {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-inset) 80%, transparent);
+}
+
+.matchup-slate__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.matchup-slate__row + .matchup-slate__row {
+  border-top: 1px solid var(--glass-border);
+}
+
+.matchup-slate__row--user {
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+}
+
+.matchup-slate__row--user::before {
+  content: '';
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: linear-gradient(180deg, var(--amber), var(--amber-bright));
+}
+
+.matchup-slate__team {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.matchup-slate__team--right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.matchup-slate__team-name {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.matchup-slate__record {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.matchup-slate__market {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: center;
+}
+
+.matchup-slate__odds {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+}
+
+.matchup-slate__vs {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.matchup-slate__tag {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding-inline: 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  color: var(--text-amber);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+  .matchup-slate__row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding-top: 18px;
+  }
+
+  .matchup-slate__team,
+  .matchup-slate__team--right {
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .matchup-slate__market {
+    justify-self: start;
+  }
+
+  .matchup-slate__tag {
+    position: static;
+    justify-self: start;
+  }
+}

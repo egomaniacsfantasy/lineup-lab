@@ -1,0 +1,25 @@
+.league-page {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 28px);
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.league-page__settings {
+  width: min(100%, 420px);
+  justify-self: end;
+}
+
+@media (min-width: 1024px) {
+  .league-page {
+    padding: var(--space-xl);
+  }
+}
+
+@media (max-width: 767px) {
+  .league-page__settings {
+    width: 100%;
+  }
+}

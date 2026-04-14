@@ -1,0 +1,241 @@
+.league-futures {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
+  box-shadow: var(--shadow-card);
+  padding: clamp(18px, 4vw, 24px);
+}
+
+.league-futures__header {
+  display: grid;
+  gap: 8px;
+}
+
+.league-futures__kicker,
+.league-futures__meta,
+.league-futures__market-option,
+.league-futures__odds,
+.league-futures__record,
+.league-futures__cutoff-label {
+  font-family: var(--font-mono);
+}
+
+.league-futures__kicker,
+.league-futures__meta,
+.league-futures__cutoff-label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.league-futures__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: clamp(28px, 5vw, 38px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+}
+
+.league-futures__markets {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  width: min(100%, 420px);
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-inset) 88%, transparent);
+}
+
+.league-futures__market-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding-inline: 12px;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.league-futures__market-option--active {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--amber-bright) 70%, var(--amber)),
+    color-mix(in srgb, var(--amber) 88%, var(--bg-surface-soft))
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 28%, transparent);
+  color: var(--bg-deep);
+}
+
+.league-futures__board {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-inset) 74%, transparent);
+}
+
+.league-futures__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.league-futures__slot + .league-futures__slot {
+  border-top: 1px solid var(--glass-border);
+}
+
+.league-futures__row {
+  position: relative;
+  padding: 15px 18px;
+}
+
+.league-futures__row--user {
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+.league-futures__row--user::before {
+  content: '';
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: linear-gradient(180deg, var(--amber), var(--amber-bright));
+}
+
+.league-futures__identity {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.league-futures__team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.league-futures__team-name {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.league-futures__context {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.league-futures__you {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding-inline: 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--amber) 26%, transparent);
+  background: color-mix(in srgb, var(--amber) 20%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.league-futures__record {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.league-futures__odds {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 104px;
+  min-height: 42px;
+  padding-inline: 16px;
+  border: 1px solid color-mix(in srgb, var(--amber) 32%, var(--glass-border));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-surface-soft) 92%, transparent);
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  white-space: nowrap;
+}
+
+.league-futures__odds--selected {
+  border-color: color-mix(in srgb, var(--amber) 72%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--amber-bright) 70%, var(--amber)),
+    color-mix(in srgb, var(--amber) 88%, var(--bg-surface-soft))
+  );
+  color: var(--bg-deep);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 28%, transparent);
+}
+
+.league-futures__cutoff {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--bg-surface-soft) 72%, transparent);
+}
+
+.league-futures__cutoff-line {
+  height: 1px;
+  flex: 1;
+  background: color-mix(in srgb, var(--amber) 18%, var(--glass-border));
+}
+
+@media (max-width: 767px) {
+  .league-futures__markets {
+    width: 100%;
+  }
+
+  .league-futures__row {
+    align-items: flex-start;
+  }
+
+  .league-futures__odds {
+    min-width: 96px;
+    min-height: 40px;
+    padding-inline: 14px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 540px) {
+  .league-futures__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .league-futures__odds {
+    align-self: flex-start;
+  }
+}

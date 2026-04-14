@@ -1,0 +1,190 @@
+.cascade-panel {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  box-shadow: var(--shadow-card);
+  padding: clamp(18px, 4vw, 24px);
+}
+
+.cascade-panel__header {
+  display: grid;
+  gap: 8px;
+}
+
+.cascade-panel__kicker,
+.cascade-panel__summary-kicker,
+.cascade-panel__chart-label,
+.cascade-panel__summary-label,
+.cascade-panel__axis-label {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cascade-panel__title,
+.cascade-panel__chart-value,
+.cascade-panel__chart-note,
+.cascade-panel__summary-title,
+.cascade-panel__summary-value,
+.cascade-panel__summary-delta {
+  margin: 0;
+}
+
+.cascade-panel__title {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.cascade-panel__chart-card,
+.cascade-panel__summary {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-inset) 84%, transparent);
+}
+
+.cascade-panel__chart-card {
+  padding: 16px;
+}
+
+.cascade-panel__chart-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cascade-panel__chart-value {
+  color: var(--amber-bright);
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+
+.cascade-panel__chart-note {
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.cascade-panel__chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.cascade-panel__grid-line {
+  stroke: color-mix(in srgb, var(--text-soft) 18%, transparent);
+  stroke-width: 1;
+}
+
+.cascade-panel__axis-label {
+  fill: var(--text-soft);
+  font-size: 8px;
+}
+
+.cascade-panel__line-glow {
+  fill: none;
+  stroke: color-mix(in srgb, var(--amber) 30%, transparent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 8;
+}
+
+.cascade-panel__line {
+  fill: none;
+  stroke: var(--amber);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.cascade-panel__point {
+  fill: var(--amber-bright);
+}
+
+.cascade-panel__point--current {
+  fill: var(--cyan);
+  stroke: color-mix(in srgb, var(--cyan) 24%, transparent);
+  stroke-width: 4;
+}
+
+.cascade-panel__callout {
+  fill: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cascade-panel__summary {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.cascade-panel__summary-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cascade-panel__summary-title {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cascade-panel__summary-metrics {
+  display: grid;
+  gap: 12px;
+}
+
+.cascade-panel__summary-metric {
+  display: grid;
+  gap: 4px;
+}
+
+.cascade-panel__summary-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+
+.cascade-panel__summary-delta {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.cascade-panel__summary-delta--positive {
+  color: var(--green);
+}
+
+.cascade-panel__summary-delta--negative {
+  color: var(--red);
+}
+
+@media (min-width: 640px) {
+  .cascade-panel__summary-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

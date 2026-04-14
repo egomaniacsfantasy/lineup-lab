@@ -1,0 +1,163 @@
+.schedule-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-grid__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.schedule-grid__kicker {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.schedule-grid__rows {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+}
+
+.schedule-grid__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-left: 3px solid transparent;
+}
+
+.schedule-grid__row + .schedule-grid__row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.schedule-grid__row--projected {
+  border-left-color: color-mix(in srgb, var(--green) 28%, transparent);
+}
+
+.schedule-grid__row--favored {
+  border-left-color: color-mix(in srgb, var(--green) 28%, transparent);
+}
+
+.schedule-grid__row--underdog {
+  border-left-color: color-mix(in srgb, var(--red) 28%, transparent);
+}
+
+.schedule-grid__row--live {
+  border-left-color: var(--text-amber);
+  background: color-mix(in srgb, var(--amber) 6%, transparent);
+}
+
+.schedule-grid__row--win {
+  border-left-color: var(--green);
+}
+
+.schedule-grid__row--loss {
+  border-left-color: var(--red);
+}
+
+.schedule-grid__row--bye {
+  border-left-color: color-mix(in srgb, var(--text-muted) 28%, transparent);
+  background: color-mix(in srgb, var(--bg-inset) 80%, transparent);
+}
+
+.schedule-grid__week-label,
+.schedule-grid__odds,
+.schedule-grid__result-badge,
+.schedule-grid__result-bye,
+.schedule-grid__result-detail {
+  font-family: var(--font-mono);
+}
+
+.schedule-grid__week-label {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.schedule-grid__opponent {
+  min-width: 0;
+}
+
+.schedule-grid__opponent-name,
+.schedule-grid__opponent-meta {
+  margin: 0;
+}
+
+.schedule-grid__opponent-name {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.schedule-grid__opponent-meta {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.schedule-grid__result {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.schedule-grid__odds {
+  color: var(--text-amber);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.schedule-grid__row--projected .schedule-grid__odds {
+  color: var(--green);
+}
+
+.schedule-grid__row--underdog .schedule-grid__odds {
+  color: var(--red);
+}
+
+.schedule-grid__result-badge,
+.schedule-grid__result-bye {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.schedule-grid__row--win .schedule-grid__result-badge {
+  color: var(--green);
+}
+
+.schedule-grid__row--loss .schedule-grid__result-badge {
+  color: var(--red);
+}
+
+.schedule-grid__result-bye {
+  color: var(--text-muted);
+}
+
+.schedule-grid__result-detail {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 479px) {
+  .schedule-grid__row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .schedule-grid__result {
+    grid-column: 2;
+    justify-items: start;
+  }
+}

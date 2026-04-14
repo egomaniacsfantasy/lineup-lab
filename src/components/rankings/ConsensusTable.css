@@ -1,0 +1,162 @@
+.consensus-table {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
+  box-shadow: var(--shadow-card);
+  padding: clamp(18px, 4vw, 24px);
+}
+
+.consensus-table__header {
+  display: grid;
+  gap: 8px;
+}
+
+.consensus-table__kicker,
+.consensus-table__title {
+  margin: 0;
+}
+
+.consensus-table__kicker {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.consensus-table__title {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+
+.consensus-table__table-wrap {
+  overflow-x: auto;
+}
+
+.consensus-table__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.consensus-table__table th,
+.consensus-table__table td {
+  padding: 12px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.consensus-table__table th {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.consensus-table__table tbody tr + tr td {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.consensus-table__rank,
+.consensus-table__player-team,
+.consensus-table__trend {
+  font-family: var(--font-mono);
+}
+
+.consensus-table__rank {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.consensus-table__player {
+  display: grid;
+  gap: 4px;
+}
+
+.consensus-table__player-name {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.consensus-table__player-team {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.consensus-table__pos,
+.consensus-table__tier {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.consensus-table__pos--qb {
+  background: var(--pos-qb-bg);
+  color: var(--pos-qb-text);
+}
+
+.consensus-table__pos--rb {
+  background: var(--pos-rb-bg);
+  color: var(--pos-rb-text);
+}
+
+.consensus-table__pos--wr {
+  background: var(--pos-wr-bg);
+  color: var(--pos-wr-text);
+}
+
+.consensus-table__pos--te {
+  background: var(--pos-te-bg);
+  color: var(--pos-te-text);
+}
+
+.consensus-table__pos--k {
+  background: var(--pos-k-bg);
+  color: var(--pos-k-text);
+}
+
+.consensus-table__pos--def {
+  background: var(--pos-def-bg);
+  color: var(--pos-def-text);
+}
+
+.consensus-table__tier {
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  color: var(--text-dim);
+}
+
+.consensus-table__tier--elite {
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  color: var(--text-amber);
+}
+
+.consensus-table__trend {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.consensus-table__trend--up {
+  color: var(--green);
+}
+
+.consensus-table__trend--down {
+  color: var(--red);
+}

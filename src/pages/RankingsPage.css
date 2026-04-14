@@ -1,0 +1,26 @@
+.rankings-page {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 28px);
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.rankings-page__main,
+.rankings-page__sidebar {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .rankings-page {
+    grid-template-columns: minmax(0, 1.1fr) minmax(380px, 0.9fr);
+    align-items: start;
+    padding: var(--space-xl);
+  }
+
+  .rankings-page__sidebar {
+    position: sticky;
+    top: var(--space-xl);
+  }
+}

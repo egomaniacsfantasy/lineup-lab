@@ -1,0 +1,58 @@
+.odds-strip {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  height: var(--shell-strip-height);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-deep);
+}
+
+.odds-strip__track {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  align-items: center;
+  will-change: transform;
+  animation: odds-strip-scroll 30s linear infinite;
+}
+
+.odds-strip__segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding-inline: var(--space-md);
+  white-space: nowrap;
+}
+
+.odds-strip__item-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.odds-strip__item {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.odds-strip__separator {
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+@keyframes odds-strip-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}

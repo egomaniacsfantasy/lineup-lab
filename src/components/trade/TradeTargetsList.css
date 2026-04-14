@@ -1,0 +1,95 @@
+.trade-targets-list {
+  display: grid;
+  gap: 18px;
+}
+
+.trade-targets-list__header,
+.trade-targets-list__needs,
+.trade-targets-list__group,
+.trade-targets-list__group-list,
+.trade-targets-list__needs-list {
+  display: grid;
+}
+
+.trade-targets-list__header,
+.trade-targets-list__needs,
+.trade-targets-list__group {
+  gap: 10px;
+}
+
+.trade-targets-list__kicker,
+.trade-targets-list__needs-label,
+.trade-targets-list__group-kicker,
+.trade-targets-list__need-position {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.trade-targets-list__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: clamp(28px, 5vw, 38px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.12;
+}
+
+.trade-targets-list__needs {
+  padding: 16px 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
+  box-shadow: var(--shadow-card);
+}
+
+.trade-targets-list__needs-list {
+  gap: 10px;
+}
+
+.trade-targets-list__need {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.trade-targets-list__need-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.trade-targets-list__need-dot--critical {
+  background: var(--red);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--red) 12%, transparent);
+}
+
+.trade-targets-list__need-dot--moderate {
+  background: var(--amber);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 12%, transparent);
+}
+
+.trade-targets-list__need-summary {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.trade-targets-list__groups,
+.trade-targets-list__group-list {
+  gap: 16px;
+}
+
+@media (min-width: 1024px) {
+  .trade-targets-list {
+    gap: 22px;
+  }
+}
