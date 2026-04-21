@@ -250,11 +250,6 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
               {animatedTotal}
             </p>
           </div>
-
-          <div className="matchup-card__market matchup-card__market--accent">
-            <p className="matchup-card__market-label">Win Prob</p>
-            <p className="matchup-card__market-value">{animatedYourWinProbability}</p>
-          </div>
         </div>
       </div>
     </section>

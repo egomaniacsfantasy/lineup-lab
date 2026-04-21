@@ -116,6 +116,7 @@ export function CompareWidget({
       comparison.deltaWinProbability,
       leftPlayer.shortName,
       rightPlayer.shortName,
+      `${leftPlayer.id}:${rightPlayer.id}`,
     );
   }, [comparison, leftPlayer, rightPlayer]);
 

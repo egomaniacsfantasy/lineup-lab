@@ -107,7 +107,7 @@
 }
 
 .league-futures__row--user {
-  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  background: transparent;
 }
 
 .league-futures__row--user::before {
@@ -153,9 +153,9 @@
   min-height: 20px;
   padding-inline: 8px;
   border-radius: var(--radius-pill);
-  border: 1px solid color-mix(in srgb, var(--amber) 26%, transparent);
-  background: color-mix(in srgb, var(--amber) 20%, transparent);
-  color: var(--text-amber);
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--bg-inset) 78%, transparent);
+  color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 700;
@@ -177,7 +177,7 @@
   min-width: 104px;
   min-height: 42px;
   padding-inline: 16px;
-  border: 1px solid color-mix(in srgb, var(--amber) 32%, var(--glass-border));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-surface-soft) 92%, transparent);
   color: var(--text-primary);
@@ -209,7 +209,7 @@
 .league-futures__cutoff-line {
   height: 1px;
   flex: 1;
-  background: color-mix(in srgb, var(--amber) 18%, var(--glass-border));
+  background: var(--glass-border);
 }
 
 @media (max-width: 767px) {

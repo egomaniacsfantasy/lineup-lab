@@ -23,22 +23,21 @@ export function MatchupPreseason() {
       <section className="matchup-preseason__hero">
         <p className="matchup-preseason__kicker">Your matchup line</p>
         <h2 className="matchup-preseason__title">
-          Season starts September 4.
+          The gods return September 4.
         </h2>
         <p className="matchup-preseason__body">
-          Your live matchup board opens Week 1. Until then, use Lineup Lab to
-          preview the season, review your draft, and build trade value context.
+          Until then: preview the season, replay the draft, build your trade leverage.
         </p>
 
         <div className="matchup-preseason__links">
           <Link className="matchup-preseason__link" to="/season">
-            Check your season outlook
+            Preview the season →
           </Link>
           <Link className="matchup-preseason__link" to="/draft">
-            Explore draft tools
+            Replay the draft →
           </Link>
           <Link className="matchup-preseason__link" to="/rankings">
-            Rank players to build trade values
+            Rank players →
           </Link>
         </div>
       </section>

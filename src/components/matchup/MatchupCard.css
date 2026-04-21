@@ -25,10 +25,10 @@
   background: linear-gradient(
     90deg,
     transparent,
-    color-mix(in srgb, var(--amber) 50%, transparent),
+    color-mix(in srgb, var(--text-soft) 24%, transparent),
     transparent
   );
-  opacity: 0.9;
+  opacity: 0.7;
 }
 
 .matchup-card__content {
@@ -88,9 +88,9 @@
 }
 
 .matchup-card__live-pill {
-  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
-  background: color-mix(in srgb, var(--cyan) 10%, transparent);
-  color: var(--cyan);
+  border: 1px solid color-mix(in srgb, var(--amber) 36%, var(--glass-border));
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  color: var(--text-amber);
 }
 
 .matchup-card__movement {
@@ -230,7 +230,7 @@
 }
 
 .matchup-card__price-card--yours {
-  border-color: color-mix(in srgb, var(--amber) 35%, var(--border-subtle));
+  border-color: var(--border-subtle);
 }
 
 .matchup-card__price-label,
@@ -309,7 +309,7 @@
 
 .matchup-card__markets {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -322,8 +322,8 @@
 }
 
 .matchup-card__market--accent {
-  background: color-mix(in srgb, var(--amber) 8%, var(--bg-inset));
-  border-color: color-mix(in srgb, var(--amber) 28%, var(--border-subtle));
+  background: var(--bg-inset);
+  border-color: var(--border-subtle);
 }
 
 .matchup-card__market-label {
@@ -338,7 +338,7 @@
 
 .matchup-card__market-value {
   margin: var(--space-xs) 0 0;
-  color: var(--amber-bright);
+  color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 16px;
   font-weight: 700;

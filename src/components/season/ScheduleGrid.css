@@ -53,8 +53,8 @@
 }
 
 .schedule-grid__row--live {
-  border-left-color: var(--text-amber);
-  background: color-mix(in srgb, var(--amber) 6%, transparent);
+  border-left-color: color-mix(in srgb, var(--text-muted) 32%, transparent);
+  background: color-mix(in srgb, var(--bg-inset) 66%, transparent);
 }
 
 .schedule-grid__row--win {
@@ -115,7 +115,7 @@
 }
 
 .schedule-grid__odds {
-  color: var(--text-amber);
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 700;
 }

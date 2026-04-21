@@ -6,7 +6,7 @@ import './RankingsPage.css';
 export function RankingsPage() {
   return (
     <div className="rankings-page">
-      <h1 className="visually-hidden">Player rankings</h1>
+      <h1 className="visually-hidden">Rank these. Move the line.</h1>
       <div className="rankings-page__main">
         <RankingMechanic />
       </div>

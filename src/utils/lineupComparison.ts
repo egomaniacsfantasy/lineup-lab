@@ -39,36 +39,94 @@ export function winProbabilityToMoneyline(winProbability: number) {
   return Math.round(((1 - probability) / probability) * 100);
 }
 
+// Voice: short, declarative, sportsbook-confident. Avoid em-dashes, hedging, and "you should..." constructions.
+const COMPARISON_VERDICTS = {
+  largeNegative: [
+    'The book moves against you. Hard.',
+    'A clear downgrade. The line knows it.',
+    '{player} costs you. Pivot if you can.',
+    'Your win prob takes a real hit here.',
+    'The book shortens you. Not the move.',
+    '{player} gets expensive fast.',
+    '{player} loses too much edge.',
+    'The board says no on {player}.',
+  ],
+  smallNegative: [
+    'A small step back. Not nothing.',
+    'The line nudges the wrong way.',
+    '{player} shaves your edge.',
+    'Marginally worse. Reasonable people differ.',
+    'A quiet downgrade.',
+    '{player} adds a little tax.',
+    'You can live with {player}. The number dips.',
+    'The price slips with {player}.',
+  ],
+  nearZero: [
+    'A wash. Pick the one you trust.',
+    'The book shrugs.',
+    'Effectively even. Go with the gut.',
+    'Same line, different name.',
+    'Within the noise.',
+    '{player} changes little.',
+    'The number barely breathes with {player}.',
+    '{player} does not break the market.',
+  ],
+  smallPositive: [
+    'A modest upgrade. The line tilts your way.',
+    'Slight edge. The book notices.',
+    '{player} earns the start.',
+    'A real, if quiet, win.',
+    'The line moves your way.',
+    '{player} gives you a useful edge.',
+    'The price improves with {player}.',
+    'The market gives {player} a nod.',
+  ],
+  largePositive: [
+    'The book moves. You priced this one right.',
+    'A clear upgrade. Make the swap.',
+    '{player} is the play. The line agrees.',
+    "Big edge. Don't think twice.",
+    'The line opens up. Take it.',
+    '{player} creates real leverage.',
+    'The market opens for {player}.',
+    'Clear signal from the book on {player}.',
+  ],
+};
+
+function getVerdictBand(delta: number) {
+  if (delta <= -7) {
+    return COMPARISON_VERDICTS.largeNegative;
+  }
+
+  if (delta < -2) {
+    return COMPARISON_VERDICTS.smallNegative;
+  }
+
+  if (delta <= 2) {
+    return COMPARISON_VERDICTS.nearZero;
+  }
+
+  if (delta < 7) {
+    return COMPARISON_VERDICTS.smallPositive;
+  }
+
+  return COMPARISON_VERDICTS.largePositive;
+}
+
+function getLastName(playerName: string) {
+  return playerName.trim().split(/\s+/).at(-1) ?? playerName;
+}
+
 export function getComparisonVerdict(
   delta: number,
   leftPlayerName: string,
   rightPlayerName: string,
+  seed = `${leftPlayerName}:${rightPlayerName}:${delta}`,
 ) {
-  if (delta <= -7) {
-    return `Switching to ${rightPlayerName} carries a major cost in win probability.`;
-  }
+  const verdicts = getVerdictBand(delta);
+  const selectedVerdict = verdicts[hashString(seed) % verdicts.length];
 
-  if (delta < -3) {
-    return `A real step back. The book notices ${rightPlayerName}.`;
-  }
-
-  if (delta < -0.5) {
-    return `A small step back. The line leans ${leftPlayerName}.`;
-  }
-
-  if (delta <= 0.5) {
-    return 'A wash. Pick the one you trust.';
-  }
-
-  if (delta < 3) {
-    return `A modest upgrade. The line nudges toward ${rightPlayerName}.`;
-  }
-
-  if (delta < 7) {
-    return `A meaningful upgrade. ${rightPlayerName} moves the number your way.`;
-  }
-
-  return `The book moves. You priced ${rightPlayerName} right.`;
+  return selectedVerdict.replace('{player}', getLastName(rightPlayerName));
 }
 
 export function getSyntheticGameContext(player: Player) {

@@ -62,7 +62,7 @@ export function RankingMechanic() {
       <div className="ranking-mechanic__header">
         <p className="ranking-mechanic__kicker">Rank these players</p>
         <h2 className="ranking-mechanic__title" id="ranking-mechanic-title">
-          Drag to reorder. Best value at the top.
+          Rank these. Move the line.
         </h2>
       </div>
 
@@ -101,7 +101,7 @@ export function RankingMechanic() {
       </button>
 
       <p className="ranking-mechanic__meta">
-        Enters you in this week&apos;s Pro raffle.
+        Your rank shapes the consensus. Submitting enters this week&apos;s Pro raffle.
       </p>
 
       {toastVisible ? (

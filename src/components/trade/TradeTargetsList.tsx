@@ -50,8 +50,11 @@ export function TradeTargetsList({ groups }: TradeTargetsListProps) {
       <div className="trade-targets-list__header">
         <p className="trade-targets-list__kicker">Trade targets</p>
         <h2 className="trade-targets-list__title" id="trade-targets-list-title">
-          Players available from teams that need what you have
+          Open trade lanes.
         </h2>
+        <p className="trade-targets-list__subhead">
+          Teams that need what you have. Pricing the fit.
+        </p>
       </div>
 
       <div className="trade-targets-list__needs">

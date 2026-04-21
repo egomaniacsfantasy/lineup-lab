@@ -65,7 +65,7 @@ export function CascadePanel({
       <div className="cascade-panel__header">
         <p className="cascade-panel__kicker">Season trajectory</p>
         <h2 className="cascade-panel__title" id="cascade-panel-title">
-          How your championship line has moved
+          The line moves. Week by week.
         </h2>
       </div>
 

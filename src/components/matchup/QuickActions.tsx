@@ -46,7 +46,7 @@ export function QuickActions({
       <div className="quick-actions__header">
         <p className="quick-actions__kicker">This week</p>
         <h2 className="quick-actions__title" id="quick-actions-title">
-          A smart list of what matters most
+          The week, priced.
         </h2>
       </div>
 
@@ -79,7 +79,7 @@ export function QuickActions({
             onClick={onCompareBiggestSwing}
             type="button"
           >
-            Compare
+            OPEN →
           </button>
         </article>
 
@@ -99,7 +99,7 @@ export function QuickActions({
           </div>
 
           <button className="quick-actions__button" type="button">
-            Explore
+            OPEN →
           </button>
         </article>
 
@@ -130,7 +130,7 @@ export function QuickActions({
             onClick={() => navigate('/league')}
             type="button"
           >
-            See fit
+            OPEN →
           </button>
         </article>
 

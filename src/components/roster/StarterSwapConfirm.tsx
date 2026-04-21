@@ -29,7 +29,7 @@ export function StarterSwapConfirm({
 
   return (
     <div className="starter-swap-confirm" data-swap-confirm>
-      <p className="starter-swap-confirm__eyebrow">Swap confirmation</p>
+      <p className="starter-swap-confirm__eyebrow">SWAP CONFIRMATION</p>
 
       <p className="starter-swap-confirm__title">
         Swap <span>{currentPlayerName}</span>{' '}
@@ -49,7 +49,12 @@ export function StarterSwapConfirm({
       </p>
 
       <p className="starter-swap-confirm__verdict">
-        {getComparisonVerdict(deltaWinProbability, currentPlayerName, targetPlayerName)}
+        {getComparisonVerdict(
+          deltaWinProbability,
+          currentPlayerName,
+          targetPlayerName,
+          `${currentPlayerName}:${targetPlayerName}:${deltaWinProbability}`,
+        )}
       </p>
 
       <div className="starter-swap-confirm__actions">

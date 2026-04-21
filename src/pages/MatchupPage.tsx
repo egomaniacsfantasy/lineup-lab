@@ -367,11 +367,16 @@ export function MatchupPage() {
           visible={engine.lastChangeDelta !== 0}
         />
 
-        <MatchupCard
-          activeLine={engine.activeLine}
-          activeRoster={engine.roster}
-          matchup={MOCK_MATCHUP}
-        />
+        <div className="matchup-page__market-stack">
+          <p className="matchup-page__thesis">
+            THE LINE MOVES WITH YOUR LINEUP. PRICE EVERY DECISION.
+          </p>
+          <MatchupCard
+            activeLine={engine.activeLine}
+            activeRoster={engine.roster}
+            matchup={MOCK_MATCHUP}
+          />
+        </div>
 
         <RosterList
           activeDecisionSlot={

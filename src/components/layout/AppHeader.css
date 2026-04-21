@@ -85,10 +85,10 @@
   justify-content: center;
   min-height: 28px;
   padding-inline: 10px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--amber) 14%, transparent);
-  color: var(--text-amber);
+  background: color-mix(in srgb, var(--bg-inset) 78%, transparent);
+  color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
@@ -140,7 +140,7 @@
   }
 
   .app-header__nav-link--active {
-    color: var(--text-amber);
+    color: var(--text-primary);
   }
 
   .app-header__nav-link--active::after {
@@ -149,7 +149,7 @@
     inset: auto 0 -1px;
     height: 2px;
     border-radius: var(--radius-pill);
-    background: linear-gradient(90deg, var(--amber), var(--amber-bright));
+    background: color-mix(in srgb, var(--text-soft) 72%, transparent);
   }
 
   .app-header__actions {

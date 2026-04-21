@@ -7,7 +7,6 @@
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow-card);
-  animation: starter-swap-confirm-in var(--transition-base) both;
 }
 
 .starter-swap-confirm__eyebrow,
@@ -103,16 +102,4 @@
   border: 1px solid color-mix(in srgb, var(--amber) 42%, var(--glass-border));
   background: var(--amber);
   color: var(--bg);
-}
-
-@keyframes starter-swap-confirm-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }

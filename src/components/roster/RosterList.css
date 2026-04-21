@@ -24,7 +24,7 @@
 
 .roster-list__meta {
   margin: 0;
-  color: var(--text-amber);
+  color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -39,6 +39,20 @@
 .roster-list__starter {
   display: grid;
   gap: 6px;
+}
+
+.roster-list__swap-confirm-shell {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height 200ms ease-out,
+    opacity 150ms ease-out;
+}
+
+.roster-list__swap-confirm-shell--open {
+  max-height: 200px;
+  opacity: 1;
 }
 
 .roster-list__bench-header {

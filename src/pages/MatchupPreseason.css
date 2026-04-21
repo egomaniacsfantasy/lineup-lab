@@ -72,6 +72,29 @@
   font-weight: 600;
 }
 
+.matchup-preseason__link:first-child {
+  min-height: 48px;
+  border-color: color-mix(in srgb, var(--amber) 36%, var(--glass-border));
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  color: var(--text-amber);
+  font-weight: 700;
+}
+
+.matchup-preseason__link:nth-child(2) {
+  border-color: var(--glass-border);
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.matchup-preseason__link:nth-child(3) {
+  min-height: 34px;
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 .matchup-preseason__preview-card {
   border-color: color-mix(in srgb, var(--amber) 20%, var(--glass-border));
 }

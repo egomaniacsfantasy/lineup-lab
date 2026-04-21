@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BenchPlayer, MatchupLine, RosterSlot } from '../../types';
 import { PlayerRow } from './PlayerRow';
 import { StarterSwapConfirm } from './StarterSwapConfirm';
@@ -30,9 +30,23 @@ export function RosterList({
   getOptionLine,
 }: RosterListProps) {
   const confirmWrapRef = useRef<HTMLDivElement | null>(null);
+  const [renderedSwapSlotIndex, setRenderedSwapSlotIndex] = useState<number | null>(
+    pendingSwapSlotIndex,
+  );
   const interactiveCount = baselineRoster.filter(
     (slot) => slot.alternatives.length > 0,
   ).length;
+
+  useEffect(() => {
+    const collapseDelay = pendingSwapSlotIndex === null ? 200 : 0;
+    const renderTimer = window.setTimeout(() => {
+      setRenderedSwapSlotIndex(pendingSwapSlotIndex);
+    }, collapseDelay);
+
+    return () => {
+      window.clearTimeout(renderTimer);
+    };
+  }, [pendingSwapSlotIndex]);
 
   useEffect(() => {
     if (pendingSwapSlotIndex === null) {
@@ -95,8 +109,10 @@ export function RosterList({
               ? referenceSlot.starter
               : referenceSlot.alternatives[targetAlternativeIndex]?.player;
           const currentLine = getOptionLine(slotIndex, selectedAlternativeIndex);
+          const shouldRenderSwapConfirm = renderedSwapSlotIndex === slotIndex;
+          const isSwapConfirmOpen = pendingSwapSlotIndex === slotIndex;
           const targetLine =
-            targetPlayer && pendingSwapSlotIndex === slotIndex
+            targetPlayer && shouldRenderSwapConfirm
               ? getOptionLine(slotIndex, targetAlternativeIndex)
               : null;
 
@@ -116,8 +132,16 @@ export function RosterList({
                 slotIndex={slotIndex}
               />
 
-              {pendingSwapSlotIndex === slotIndex && targetPlayer && targetLine ? (
-                <div ref={confirmWrapRef}>
+              <div
+                className={[
+                  'roster-list__swap-confirm-shell',
+                  isSwapConfirmOpen ? 'roster-list__swap-confirm-shell--open' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                ref={shouldRenderSwapConfirm ? confirmWrapRef : null}
+              >
+                {shouldRenderSwapConfirm && targetPlayer && targetLine ? (
                   <StarterSwapConfirm
                     currentPlayerName={currentPlayer.shortName}
                     currentWinProbability={currentLine.winProbability}
@@ -129,8 +153,8 @@ export function RosterList({
                     targetPlayerName={targetPlayer.shortName}
                     targetWinProbability={targetLine.winProbability}
                   />
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </div>
           );
         })}

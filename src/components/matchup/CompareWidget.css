@@ -65,7 +65,7 @@
   align-items: center;
   justify-content: center;
   min-height: 24px;
-  color: var(--text-soft);
+  color: var(--text-amber);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -213,15 +213,15 @@
 }
 
 .compare-widget__delta--positive .compare-widget__delta-value {
-  color: var(--green);
+  color: var(--text-amber);
 }
 
 .compare-widget__delta--negative .compare-widget__delta-value {
-  color: var(--red);
+  color: var(--text-amber);
 }
 
 .compare-widget__delta--neutral .compare-widget__delta-value {
-  color: var(--text-primary);
+  color: var(--text-amber);
 }
 
 .compare-widget__delta-copy,

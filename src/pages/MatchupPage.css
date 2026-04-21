@@ -25,6 +25,21 @@
   gap: var(--space-lg);
 }
 
+.matchup-page__market-stack {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.matchup-page__thesis {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .matchup-page__toast {
   position: fixed;
   right: var(--space-md);
