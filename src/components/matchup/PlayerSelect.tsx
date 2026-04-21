@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Player, Position } from '../../types';
+import {
+  cacheImageFailure,
+  getInitials,
+  getPlayerAvatarUrl,
+  hasCachedImageFailure,
+} from '../../utils/playerAssets';
 import './PlayerSelect.css';
 
 interface PlayerSelectProps {
@@ -20,6 +26,55 @@ function groupPlayers(players: Player[]) {
   })).filter((group) => group.players.length > 0);
 }
 
+function PlayerOption({
+  isActive,
+  onSelect,
+  player,
+}: {
+  isActive: boolean;
+  onSelect: () => void;
+  player: Player;
+}) {
+  const avatarUrl = getPlayerAvatarUrl(player);
+  const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(avatarUrl));
+
+  return (
+    <button
+      className={[
+        'player-select__option',
+        isActive ? 'player-select__option--active' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onClick={onSelect}
+      type="button"
+    >
+      <span className="player-select__option-avatar" aria-hidden="true">
+        {hasImageError ? (
+          <span className="player-select__option-avatar-fallback">
+            {getInitials(player.shortName)}
+          </span>
+        ) : (
+          <img
+            alt=""
+            aria-hidden="true"
+            className="player-select__option-avatar-image"
+            onError={() => {
+              cacheImageFailure(avatarUrl);
+              setHasImageError(true);
+            }}
+            src={avatarUrl}
+          />
+        )}
+      </span>
+      <span className="player-select__option-name">{player.shortName}</span>
+      <span className="player-select__option-meta">
+        {player.position} · {player.team}
+      </span>
+    </button>
+  );
+}
+
 export function PlayerSelect({
   label,
   players,
@@ -30,6 +85,7 @@ export function PlayerSelect({
 }: PlayerSelectProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -52,6 +108,44 @@ export function PlayerSelect({
   );
 
   const groupedPlayers = useMemo(() => groupPlayers(availablePlayers), [availablePlayers]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const positionMenu = () => {
+      const menuElement = menuRef.current;
+      const containerElement = containerRef.current;
+
+      if (!menuElement || !containerElement) {
+        return;
+      }
+
+      menuElement.dataset.align = 'left';
+
+      const boundaryElement = containerElement.closest('.compare-widget');
+      const boundaryRect =
+        boundaryElement?.getBoundingClientRect() ?? {
+          left: 0,
+          right: window.innerWidth,
+        };
+      const menuRect = menuElement.getBoundingClientRect();
+
+      if (menuRect.right > boundaryRect.right) {
+        menuElement.dataset.align = 'right';
+      } else if (menuRect.left < boundaryRect.left) {
+        menuElement.dataset.align = 'left';
+      }
+    };
+
+    positionMenu();
+    window.addEventListener('resize', positionMenu);
+
+    return () => {
+      window.removeEventListener('resize', positionMenu);
+    };
+  }, [groupedPlayers, isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -105,7 +199,7 @@ export function PlayerSelect({
       </button>
 
       {isOpen ? (
-        <div className="player-select__menu">
+        <div className="player-select__menu" data-align="left" ref={menuRef}>
           <div className="player-select__search-row">
             <input
               aria-label={`${label} search`}
@@ -140,26 +234,16 @@ export function PlayerSelect({
                   <p className="player-select__group-label">{group.position}</p>
                   <div className="player-select__options">
                     {group.players.map((player) => (
-                      <button
-                        className={[
-                          'player-select__option',
-                          value?.id === player.id ? 'player-select__option--active' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
+                      <PlayerOption
+                        isActive={value?.id === player.id}
                         key={player.id}
-                        onClick={() => {
+                        onSelect={() => {
                           onChange(player);
                           setQuery('');
                           setIsOpen(false);
                         }}
-                        type="button"
-                      >
-                        <span className="player-select__option-name">{player.shortName}</span>
-                        <span className="player-select__option-meta">
-                          {player.position} · {player.team}
-                        </span>
-                      </button>
+                        player={player}
+                      />
                     ))}
                   </div>
                 </div>
