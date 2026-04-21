@@ -130,7 +130,7 @@ export function PlayerRow({
 }: PlayerRowProps) {
   const tone = getPositionTone(slot.slotLabel);
   const impactTier = getImpactTier(referenceSlot, isBench);
-  const isInteractive = impactTier !== 'none';
+  const isInteractive = impactTier === 'pivot';
   const showsPivotTreatment = impactTier === 'pivot';
 
   const currentLine = isInteractive

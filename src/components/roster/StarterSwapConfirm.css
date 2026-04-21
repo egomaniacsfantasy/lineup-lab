@@ -1,0 +1,118 @@
+.starter-swap-confirm {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 8px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  animation: starter-swap-confirm-in var(--transition-base) both;
+}
+
+.starter-swap-confirm__eyebrow,
+.starter-swap-confirm__impact,
+.starter-swap-confirm__button {
+  font-family: var(--font-mono);
+}
+
+.starter-swap-confirm__eyebrow,
+.starter-swap-confirm__title,
+.starter-swap-confirm__impact,
+.starter-swap-confirm__verdict {
+  margin: 0;
+}
+
+.starter-swap-confirm__eyebrow {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.starter-swap-confirm__title {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.starter-swap-confirm__arrow {
+  color: var(--text-amber);
+}
+
+.starter-swap-confirm__impact {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.starter-swap-confirm__impact-next--positive {
+  color: var(--text-amber);
+}
+
+.starter-swap-confirm__impact-next--negative {
+  color: var(--red);
+}
+
+.starter-swap-confirm__impact-next--neutral {
+  color: var(--text-primary);
+}
+
+.starter-swap-confirm__verdict {
+  color: var(--text-dim);
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-style: italic;
+  line-height: 1.25;
+}
+
+.starter-swap-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.starter-swap-confirm__button {
+  min-height: 32px;
+  padding-inline: 14px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.starter-swap-confirm__button:active {
+  transform: scale(0.98);
+}
+
+.starter-swap-confirm__button--ghost {
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+}
+
+.starter-swap-confirm__button--primary {
+  border: 1px solid color-mix(in srgb, var(--amber) 42%, var(--glass-border));
+  background: var(--amber);
+  color: var(--bg);
+}
+
+@keyframes starter-swap-confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

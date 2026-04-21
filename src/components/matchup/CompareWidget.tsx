@@ -9,6 +9,10 @@ import {
 } from '../../utils/playerAssets';
 import type { MatchupPlayerComparison } from '../../hooks/useMatchupEngine';
 import { PlayerSelect } from './PlayerSelect';
+import {
+  getComparisonVerdict,
+  getSyntheticGameContext,
+} from '../../utils/lineupComparison';
 import './CompareWidget.css';
 
 interface PlayerContext {
@@ -25,36 +29,6 @@ interface CompareWidgetProps {
   onSelectLeft: (player: Player | null) => void;
   onSelectRight: (player: Player | null) => void;
   playerContexts: Record<string, PlayerContext>;
-}
-
-function getDeltaCopy(delta: number, leftPlayer: Player, rightPlayer: Player) {
-  const magnitude = Math.abs(delta);
-
-  if (delta > 0) {
-    if (magnitude > 7) {
-      return `Starting ${rightPlayer.shortName} gives you a significant edge over ${leftPlayer.shortName}.`;
-    }
-
-    if (magnitude >= 3) {
-      return `Starting ${rightPlayer.shortName} gives you a meaningful edge over ${leftPlayer.shortName}.`;
-    }
-
-    return `Starting ${rightPlayer.shortName} gives you a slight edge over ${leftPlayer.shortName}.`;
-  }
-
-  if (delta < 0) {
-    if (magnitude > 7) {
-      return `Switching to ${rightPlayer.shortName} carries a major cost in win probability.`;
-    }
-
-    if (magnitude >= 3) {
-      return `Switching to ${rightPlayer.shortName} costs you win probability this week.`;
-    }
-
-    return `Switching to ${rightPlayer.shortName} only changes the line marginally.`;
-  }
-
-  return `${leftPlayer.shortName} and ${rightPlayer.shortName} grade out nearly even in this lineup.`;
 }
 
 function ComparePlayerCard({
@@ -138,7 +112,11 @@ export function CompareWidget({
       return null;
     }
 
-    return getDeltaCopy(comparison.deltaWinProbability, leftPlayer, rightPlayer);
+    return getComparisonVerdict(
+      comparison.deltaWinProbability,
+      leftPlayer.shortName,
+      rightPlayer.shortName,
+    );
   }, [comparison, leftPlayer, rightPlayer]);
 
   const deltaTone =
@@ -153,8 +131,12 @@ export function CompareWidget({
       ? `Δ ${comparison.deltaWinProbability > 0 ? '+' : ''}${comparison.deltaWinProbability.toFixed(1)}%`
       : 'Δ 0.0%';
 
-  const leftContext = leftPlayer ? playerContexts[leftPlayer.id] : null;
-  const rightContext = rightPlayer ? playerContexts[rightPlayer.id] : null;
+  const leftContext = leftPlayer
+    ? playerContexts[leftPlayer.id] ?? getSyntheticGameContext(leftPlayer)
+    : null;
+  const rightContext = rightPlayer
+    ? playerContexts[rightPlayer.id] ?? getSyntheticGameContext(rightPlayer)
+    : null;
 
   return (
     <section aria-labelledby="compare-widget-title" className="compare-widget">
@@ -238,10 +220,10 @@ export function CompareWidget({
       ) : (
         <div className="compare-widget__empty">
           <p className="compare-widget__empty-copy">
-            This comparison requires the simulation engine. Coming soon.
+            Select two different players to price the lineup impact.
           </p>
           <p className="compare-widget__empty-suggestion">
-            For now, compare a starter against one of that slot&apos;s modeled alternatives.
+            Try: {defaultSuggestionLabel}
           </p>
         </div>
       )}

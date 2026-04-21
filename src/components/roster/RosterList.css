@@ -36,6 +36,11 @@
   gap: 2px;
 }
 
+.roster-list__starter {
+  display: grid;
+  gap: 6px;
+}
+
 .roster-list__bench-header {
   display: flex;
   align-items: baseline;

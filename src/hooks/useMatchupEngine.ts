@@ -1,5 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { BenchPlayer, MatchupData, MatchupLine, Player, RosterSlot } from '../types';
+import {
+  clamp,
+  hashString,
+  moneylineToWinProbability,
+  roundTo,
+  winProbabilityToMoneyline,
+} from '../utils/lineupComparison';
 
 export interface MatchupPlayerComparison {
   slotIndex: number;
@@ -42,15 +49,6 @@ type LineDelta = {
   total: number;
 };
 
-function roundTo(value: number, decimals = 1) {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
 const EMPTY_DELTA: LineDelta = {
   moneyline: 0,
   winProbability: 0,
@@ -58,6 +56,133 @@ const EMPTY_DELTA: LineDelta = {
   spread: 0,
   total: 0,
 };
+
+const MIN_SYNTHETIC_MONEYLINE = -280;
+const MAX_SYNTHETIC_MONEYLINE = 180;
+const MIN_SYNTHETIC_WIN_PROB = moneylineToWinProbability(MAX_SYNTHETIC_MONEYLINE);
+const MAX_SYNTHETIC_WIN_PROB = moneylineToWinProbability(MIN_SYNTHETIC_MONEYLINE);
+
+function getPlayerProjection(
+  player: Player,
+  roster: RosterSlot[],
+  bench: BenchPlayer[],
+) {
+  for (const slot of roster) {
+    if (slot.starter.id === player.id) {
+      return slot.projection;
+    }
+
+    const alternative = slot.alternatives.find(
+      (candidate) => candidate.player.id === player.id,
+    );
+
+    if (alternative) {
+      return alternative.projection;
+    }
+  }
+
+  const benchPlayer = bench.find((candidate) => candidate.player.id === player.id);
+
+  if (benchPlayer) {
+    return benchPlayer.projection;
+  }
+
+  switch (player.position) {
+    case 'QB':
+      return 18;
+    case 'RB':
+    case 'WR':
+      return 12;
+    case 'TE':
+      return 9;
+    case 'K':
+    case 'DEF':
+      return 7;
+    default:
+      return 10;
+  }
+}
+
+function getSyntheticDelta(playerA: Player, playerB: Player) {
+  const hash = hashString(`${playerA.id}:${playerB.id}`);
+  return roundTo((hash % 301) / 10 - 18);
+}
+
+function getSyntheticWinProbabilities(playerA: Player, playerB: Player, delta: number) {
+  const low = MIN_SYNTHETIC_WIN_PROB + Math.max(0, -delta);
+  const high = MAX_SYNTHETIC_WIN_PROB - Math.max(0, delta);
+  const ratio = (hashString(`${playerA.id}:line:${playerB.id}`) % 1000) / 1000;
+  const leftWinProbability = roundTo(low + (high - low) * ratio);
+
+  return {
+    leftWinProbability,
+    rightWinProbability: roundTo(leftWinProbability + delta),
+  };
+}
+
+function buildSyntheticLine(
+  winProbability: number,
+  projection: number,
+  baselineLine: MatchupLine,
+): MatchupLine {
+  const rawMoneyline = winProbabilityToMoneyline(winProbability);
+  const moneyline = clamp(
+    Math.round(rawMoneyline / 5) * 5,
+    MIN_SYNTHETIC_MONEYLINE,
+    MAX_SYNTHETIC_MONEYLINE,
+  );
+  const impliedWinProbability = moneylineToWinProbability(moneyline);
+  const projectionDelta = projection - 14;
+
+  return {
+    moneyline,
+    winProbability: impliedWinProbability,
+    projection: roundTo(baselineLine.projection + projectionDelta),
+    spread: roundTo((impliedWinProbability - 50) * 0.75),
+    total: roundTo(baselineLine.total + projectionDelta * 0.6),
+  };
+}
+
+// TEMP: synthetic deltas for prototype review. Replace with simulation engine output when Franco ships the API.
+function buildSyntheticComparison(
+  playerA: Player,
+  playerB: Player,
+  baselineLine: MatchupLine,
+  roster: RosterSlot[],
+  bench: BenchPlayer[],
+): MatchupPlayerComparison {
+  const requestedDelta = getSyntheticDelta(playerA, playerB);
+  const { leftWinProbability, rightWinProbability } = getSyntheticWinProbabilities(
+    playerA,
+    playerB,
+    requestedDelta,
+  );
+  const leftProjection = getPlayerProjection(playerA, roster, bench);
+  const rightProjection = getPlayerProjection(playerB, roster, bench);
+  const leftLine = buildSyntheticLine(
+    leftWinProbability,
+    leftProjection,
+    baselineLine,
+  );
+  const rightLine = buildSyntheticLine(
+    rightWinProbability,
+    rightProjection,
+    baselineLine,
+  );
+
+  return {
+    slotIndex: -1,
+    leftSelectionIndex: null,
+    rightSelectionIndex: null,
+    leftLine,
+    rightLine,
+    leftProjection,
+    rightProjection,
+    deltaWinProbability: roundTo(
+      clamp(rightLine.winProbability - leftLine.winProbability, -18, 12),
+    ),
+  };
+}
 
 function isSwappableSlot(slot: RosterSlot | undefined) {
   return Boolean(slot && slot.alternatives.length > 0);
@@ -204,9 +329,15 @@ export function useMatchupEngine(matchup: MatchupData): MatchupEngineState {
         };
       }
 
-      return null;
+      return buildSyntheticComparison(
+        playerA,
+        playerB,
+        baselineLine.yours,
+        baselineRoster,
+        baselineBench,
+      );
     },
-    [baselineRoster, getOptionLine],
+    [baselineBench, baselineLine.yours, baselineRoster, getOptionLine],
   );
 
   const activeYourLine = useMemo(

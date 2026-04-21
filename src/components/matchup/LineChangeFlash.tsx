@@ -48,15 +48,22 @@ export function LineChangeFlash({ delta, visible }: LineChangeFlashProps) {
         ? pickMessage(0)
         : `${pickMessage(roundedDelta)} ${roundedDelta > 0 ? '+' : ''}${roundedDelta.toFixed(1)}%`;
 
-    setMessage(nextMessage);
-    setIsVisible(true);
+    let hideTimer: number | null = null;
 
-    const hideTimer = window.setTimeout(() => {
-      setIsVisible(false);
-    }, 2000);
+    const showTimer = window.setTimeout(() => {
+      setMessage(nextMessage);
+      setIsVisible(true);
+      hideTimer = window.setTimeout(() => {
+        setIsVisible(false);
+      }, 2000);
+    }, 0);
 
     return () => {
-      window.clearTimeout(hideTimer);
+      window.clearTimeout(showTimer);
+
+      if (hideTimer !== null) {
+        window.clearTimeout(hideTimer);
+      }
     };
   }, [roundedDelta, visible]);
 

@@ -17,7 +17,10 @@ export function AppHeader() {
   const navItems = [
     { label: 'Matchup', path: '/matchup' },
     { label: 'Season', path: '/season' },
-    { label: mode === 'preseason' ? 'Draft' : 'Trade', path: '/draft' },
+    {
+      label: mode === 'preseason' ? 'Draft' : 'Trade',
+      path: mode === 'preseason' ? '/draft' : '/trade',
+    },
     { label: 'Rankings', path: '/rankings' },
     { label: 'League', path: '/league' },
   ];

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 function getInitialMatch(query: string) {
   if (typeof window === 'undefined') {
@@ -9,25 +9,20 @@ function getInitialMatch(query: string) {
 }
 
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => getInitialMatch(query));
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === 'undefined') {
+        return () => {};
+      }
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined;
-    }
+      const mediaQueryList = window.matchMedia(query);
+      mediaQueryList.addEventListener('change', onStoreChange);
 
-    const mediaQueryList = window.matchMedia(query);
-    const handleChange = (event: MediaQueryListEvent) => {
-      setMatches(event.matches);
-    };
-
-    setMatches(mediaQueryList.matches);
-    mediaQueryList.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQueryList.removeEventListener('change', handleChange);
-    };
-  }, [query]);
-
-  return matches;
+      return () => {
+        mediaQueryList.removeEventListener('change', onStoreChange);
+      };
+    },
+    () => getInitialMatch(query),
+    () => false,
+  );
 }

@@ -77,6 +77,11 @@ function getBestAlternative(slot: RosterSlot) {
   );
 }
 
+function isPivotSlot(slot: RosterSlot) {
+  const bestAlternative = getBestAlternative(slot);
+  return Boolean(bestAlternative && Math.abs(bestAlternative.deltaWinProbability) >= 5);
+}
+
 function getHighestImpactDecision(roster: RosterSlot[]) {
   return roster.reduce<{
     slotIndex: number;
@@ -137,6 +142,12 @@ export function MatchupPage() {
   const [desktopCompareSlotIndex, setDesktopCompareSlotIndex] = useState<number | null>(
     defaultComparison?.slotIndex ?? null,
   );
+  const [pendingSwapSlotIndex, setPendingSwapSlotIndex] = useState<number | null>(null);
+  const [swapToast, setSwapToast] = useState<{
+    previousAlternativeIndex: number | null;
+    slotIndex: number;
+  } | null>(null);
+  const swapToastTimerRef = useRef<number | null>(null);
 
   const availablePlayers = useMemo(
     () => getUniquePlayers(engine.roster, engine.bench),
@@ -201,23 +212,6 @@ export function MatchupPage() {
   }, [engine.baselineRoster, engine.selectedAlternatives]);
 
   useEffect(() => {
-    if (!defaultComparison) {
-      return;
-    }
-
-    setCompareSelection((current) => {
-      if (current.leftId && current.rightId) {
-        return current;
-      }
-
-      return {
-        leftId: defaultComparison.slot.starter.id,
-        rightId: defaultComparison.alternative.player.id,
-      };
-    });
-  }, [defaultComparison]);
-
-  useEffect(() => {
     if (!hasActivatedCompare || !compareResult) {
       return;
     }
@@ -226,17 +220,12 @@ export function MatchupPage() {
   }, [compareResult, engine, hasActivatedCompare]);
 
   useEffect(() => {
-    if (!isDesktop) {
-      setDesktopCompareSlotIndex(null);
-      return;
-    }
-
-    if (!hasActivatedCompare || !compareResult) {
-      return;
-    }
-
-    setDesktopCompareSlotIndex(compareResult.slotIndex);
-  }, [compareResult, hasActivatedCompare, isDesktop]);
+    return () => {
+      if (swapToastTimerRef.current !== null) {
+        window.clearTimeout(swapToastTimerRef.current);
+      }
+    };
+  }, []);
 
   if (mode === 'preseason') {
     return <MatchupPreseason />;
@@ -303,18 +292,12 @@ export function MatchupPage() {
     }
 
     const slot = engine.baselineRoster[slotIndex];
-    const bestAlternative = getBestAlternative(slot);
 
-    if (!bestAlternative) {
+    if (!slot || !isPivotSlot(slot)) {
       return;
     }
 
-    handleDesktopComparePreset(
-      slot.starter.id,
-      bestAlternative.player.id,
-      slotIndex,
-      false,
-    );
+    setPendingSwapSlotIndex((current) => (current === slotIndex ? null : slotIndex));
   };
 
   const handleComparePlayerChange = (side: 'left' | 'right', player: Player | null) => {
@@ -322,7 +305,46 @@ export function MatchupPage() {
       ...current,
       [side === 'left' ? 'leftId' : 'rightId']: player?.id ?? null,
     }));
+    setDesktopCompareSlotIndex(null);
     setHasActivatedCompare(true);
+    setPendingSwapSlotIndex(null);
+  };
+
+  const showSwapToast = (slotIndex: number, previousAlternativeIndex: number | null) => {
+    if (swapToastTimerRef.current !== null) {
+      window.clearTimeout(swapToastTimerRef.current);
+    }
+
+    setSwapToast({ previousAlternativeIndex, slotIndex });
+    swapToastTimerRef.current = window.setTimeout(() => {
+      setSwapToast(null);
+      swapToastTimerRef.current = null;
+    }, 3000);
+  };
+
+  const handleConfirmSwap = (
+    slotIndex: number,
+    nextAlternativeIndex: number | null,
+  ) => {
+    const previousAlternativeIndex = engine.selectedAlternatives[slotIndex] ?? null;
+
+    engine.selectPlayer(slotIndex, nextAlternativeIndex);
+    setPendingSwapSlotIndex(null);
+    showSwapToast(slotIndex, previousAlternativeIndex);
+  };
+
+  const handleUndoSwap = () => {
+    if (!swapToast) {
+      return;
+    }
+
+    if (swapToastTimerRef.current !== null) {
+      window.clearTimeout(swapToastTimerRef.current);
+      swapToastTimerRef.current = null;
+    }
+
+    engine.selectPlayer(swapToast.slotIndex, swapToast.previousAlternativeIndex);
+    setSwapToast(null);
   };
 
   const biggestSwing = defaultComparison
@@ -352,11 +374,18 @@ export function MatchupPage() {
         />
 
         <RosterList
-          activeDecisionSlot={isDesktop ? desktopCompareSlotIndex : engine.activeDecisionSlot}
+          activeDecisionSlot={
+            isDesktop
+              ? pendingSwapSlotIndex ?? desktopCompareSlotIndex
+              : engine.activeDecisionSlot
+          }
           baselineRoster={engine.baselineRoster}
           bench={engine.bench}
           getOptionLine={engine.getOptionLine}
+          onCancelSwapConfirm={() => setPendingSwapSlotIndex(null)}
+          onConfirmSwap={handleConfirmSwap}
           onToggleDecision={handleRosterInteraction}
+          pendingSwapSlotIndex={isDesktop ? pendingSwapSlotIndex : null}
           roster={engine.roster}
           selectedAlternatives={engine.selectedAlternatives}
         />
@@ -445,6 +474,15 @@ export function MatchupPage() {
       ) : null}
 
       {!isDesktop ? decisionPanel : null}
+
+      {swapToast ? (
+        <div className="matchup-page__toast" role="status">
+          <span>Lineup updated.</span>
+          <button onClick={handleUndoSwap} type="button">
+            Undo
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

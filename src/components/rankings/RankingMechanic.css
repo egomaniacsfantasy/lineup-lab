@@ -15,8 +15,7 @@
 }
 
 .ranking-mechanic__kicker,
-.ranking-mechanic__meta,
-.ranking-mechanic__count {
+.ranking-mechanic__meta {
   margin: 0;
 }
 
@@ -56,15 +55,10 @@
   text-transform: uppercase;
 }
 
-.ranking-mechanic__meta,
-.ranking-mechanic__count {
+.ranking-mechanic__meta {
   color: var(--text-dim);
   font-family: var(--font-sans);
   font-size: 13px;
-}
-
-.ranking-mechanic__count {
-  color: var(--text-muted);
 }
 
 .ranking-mechanic__toast {

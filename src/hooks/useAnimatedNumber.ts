@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UseAnimatedNumberOptions {
   duration?: number;
@@ -26,13 +26,13 @@ export function useAnimatedNumber(
   const currentValueRef = useRef(target);
   const prefersReducedMotionRef = useRef(false);
 
-  const formatValue = (value: number) => {
+  const formatValue = useCallback((value: number) => {
     if (formatter) {
       return formatter(value);
     }
 
     return `${prefix}${value.toFixed(decimals)}`;
-  };
+  }, [decimals, formatter, prefix]);
 
   const [displayValue, setDisplayValue] = useState(() => formatValue(target));
 
@@ -64,8 +64,17 @@ export function useAnimatedNumber(
 
     if (from === to || duration <= 0 || prefersReducedMotionRef.current) {
       currentValueRef.current = to;
-      setDisplayValue(formatValue(to));
-      return undefined;
+      animationFrameRef.current = window.requestAnimationFrame(() => {
+        setDisplayValue(formatValue(to));
+        animationFrameRef.current = null;
+      });
+
+      return () => {
+        if (animationFrameRef.current !== null) {
+          window.cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+      };
     }
 
     const startedAt = performance.now();
@@ -96,7 +105,7 @@ export function useAnimatedNumber(
         animationFrameRef.current = null;
       }
     };
-  }, [target, duration, decimals, prefix, formatter]);
+  }, [target, duration, formatValue]);
 
   return displayValue;
 }

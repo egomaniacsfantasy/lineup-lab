@@ -29,7 +29,9 @@ export function TradeTargetsList({ groups }: TradeTargetsListProps) {
     }
 
     const targetId = hash.replace('trade-target-', '');
-    setExpandedId(targetId);
+    const expandTimer = window.setTimeout(() => {
+      setExpandedId(targetId);
+    }, 0);
 
     window.requestAnimationFrame(() => {
       document.getElementById(hash)?.scrollIntoView({
@@ -37,6 +39,10 @@ export function TradeTargetsList({ groups }: TradeTargetsListProps) {
         block: 'center',
       });
     });
+
+    return () => {
+      window.clearTimeout(expandTimer);
+    };
   }, [location.hash]);
 
   return (

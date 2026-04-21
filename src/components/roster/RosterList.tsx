@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import type { BenchPlayer, MatchupLine, RosterSlot } from '../../types';
 import { PlayerRow } from './PlayerRow';
+import { StarterSwapConfirm } from './StarterSwapConfirm';
 import './RosterList.css';
 
 interface RosterListProps {
@@ -7,7 +9,10 @@ interface RosterListProps {
   baselineRoster: RosterSlot[];
   bench: BenchPlayer[];
   activeDecisionSlot: number | null;
+  pendingSwapSlotIndex: number | null;
   selectedAlternatives: Record<number, number | null>;
+  onCancelSwapConfirm: () => void;
+  onConfirmSwap: (slotIndex: number, alternativeIndex: number | null) => void;
   onToggleDecision: (slotIndex: number) => void;
   getOptionLine: (slotIndex: number, alternativeIndex: number | null) => MatchupLine;
 }
@@ -17,13 +22,51 @@ export function RosterList({
   baselineRoster,
   bench,
   activeDecisionSlot,
+  pendingSwapSlotIndex,
   selectedAlternatives,
+  onCancelSwapConfirm,
+  onConfirmSwap,
   onToggleDecision,
   getOptionLine,
 }: RosterListProps) {
+  const confirmWrapRef = useRef<HTMLDivElement | null>(null);
   const interactiveCount = baselineRoster.filter(
     (slot) => slot.alternatives.length > 0,
   ).length;
+
+  useEffect(() => {
+    if (pendingSwapSlotIndex === null) {
+      return undefined;
+    }
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target;
+
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (confirmWrapRef.current?.contains(target)) {
+        return;
+      }
+
+      onCancelSwapConfirm();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onCancelSwapConfirm();
+      }
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onCancelSwapConfirm, pendingSwapSlotIndex]);
 
   return (
     <section aria-labelledby="roster-title" className="roster-list">
@@ -37,18 +80,60 @@ export function RosterList({
       </div>
 
       <div className="roster-list__items">
-        {roster.map((slot, slotIndex) => (
-          <PlayerRow
-            getOptionLine={getOptionLine}
-            isActive={activeDecisionSlot === slotIndex}
-            key={`${slot.slotLabel}-${baselineRoster[slotIndex]?.starter.id ?? slotIndex}`}
-            onToggleDecision={onToggleDecision}
-            referenceSlot={baselineRoster[slotIndex]}
-            selectedAlternativeIndex={selectedAlternatives[slotIndex] ?? null}
-            slot={slot}
-            slotIndex={slotIndex}
-          />
-        ))}
+        {roster.map((slot, slotIndex) => {
+          const referenceSlot = baselineRoster[slotIndex];
+          const selectedAlternativeIndex = selectedAlternatives[slotIndex] ?? null;
+          const targetAlternativeIndex =
+            selectedAlternativeIndex === null ? 0 : null;
+          const currentPlayer =
+            selectedAlternativeIndex === null
+              ? referenceSlot.starter
+              : referenceSlot.alternatives[selectedAlternativeIndex]?.player ??
+                referenceSlot.starter;
+          const targetPlayer =
+            targetAlternativeIndex === null
+              ? referenceSlot.starter
+              : referenceSlot.alternatives[targetAlternativeIndex]?.player;
+          const currentLine = getOptionLine(slotIndex, selectedAlternativeIndex);
+          const targetLine =
+            targetPlayer && pendingSwapSlotIndex === slotIndex
+              ? getOptionLine(slotIndex, targetAlternativeIndex)
+              : null;
+
+          return (
+            <div
+              className="roster-list__starter"
+              data-roster-slot-index={slotIndex}
+              key={`${slot.slotLabel}-${baselineRoster[slotIndex]?.starter.id ?? slotIndex}`}
+            >
+              <PlayerRow
+                getOptionLine={getOptionLine}
+                isActive={activeDecisionSlot === slotIndex}
+                onToggleDecision={onToggleDecision}
+                referenceSlot={referenceSlot}
+                selectedAlternativeIndex={selectedAlternativeIndex}
+                slot={slot}
+                slotIndex={slotIndex}
+              />
+
+              {pendingSwapSlotIndex === slotIndex && targetPlayer && targetLine ? (
+                <div ref={confirmWrapRef}>
+                  <StarterSwapConfirm
+                    currentPlayerName={currentPlayer.shortName}
+                    currentWinProbability={currentLine.winProbability}
+                    deltaWinProbability={
+                      targetLine.winProbability - currentLine.winProbability
+                    }
+                    onCancel={onCancelSwapConfirm}
+                    onConfirm={() => onConfirmSwap(slotIndex, targetAlternativeIndex)}
+                    targetPlayerName={targetPlayer.shortName}
+                    targetWinProbability={targetLine.winProbability}
+                  />
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
 
       <div className="roster-list__bench-header">

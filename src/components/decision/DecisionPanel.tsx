@@ -19,10 +19,6 @@ export function DecisionPanel(props: DecisionPanelProps) {
   const closeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setIsClosing(false);
-  }, [props.slot.starter.id, props.slot.slotLabel]);
-
-  useEffect(() => {
     return () => {
       if (closeTimerRef.current !== null) {
         window.clearTimeout(closeTimerRef.current);

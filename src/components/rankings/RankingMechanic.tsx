@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MOCK_RANKING_PROMPT } from '../../mocks';
 import type { Player } from '../../types';
 import { DraggableCard } from './DraggableCard';
@@ -25,7 +25,6 @@ function shufflePlayers(players: Player[]) {
 export function RankingMechanic() {
   const [players, setPlayers] = useState<Player[]>(MOCK_RANKING_PROMPT.players);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [submissionsToday, setSubmissionsToday] = useState(0);
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -36,11 +35,6 @@ export function RankingMechanic() {
       }
     };
   }, []);
-
-  const submissionLabel = useMemo(
-    () => `Rankings submitted today: ${submissionsToday}`,
-    [submissionsToday],
-  );
 
   const showToast = () => {
     setToastVisible(true);
@@ -98,7 +92,6 @@ export function RankingMechanic() {
       <button
         className="ranking-mechanic__submit"
         onClick={() => {
-          setSubmissionsToday((current) => current + 1);
           setPlayers((currentPlayers) => shufflePlayers(currentPlayers));
           showToast();
         }}
@@ -110,7 +103,6 @@ export function RankingMechanic() {
       <p className="ranking-mechanic__meta">
         Enters you in this week&apos;s Pro raffle.
       </p>
-      <p className="ranking-mechanic__count">{submissionLabel}</p>
 
       {toastVisible ? (
         <div className="ranking-mechanic__toast" role="status">

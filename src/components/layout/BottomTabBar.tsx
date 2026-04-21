@@ -63,7 +63,11 @@ export function BottomTabBar() {
   const { mode } = useSeasonMode();
   const tabs = BASE_TABS.map((tab) =>
     tab.path === '/draft'
-      ? { ...tab, label: mode === 'preseason' ? 'Draft' : 'Trade' }
+      ? {
+          ...tab,
+          label: mode === 'preseason' ? 'Draft' : 'Trade',
+          path: mode === 'preseason' ? '/draft' : '/trade',
+        }
       : tab,
   );
 
