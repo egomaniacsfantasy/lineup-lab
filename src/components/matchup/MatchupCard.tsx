@@ -1,3 +1,4 @@
+import { useState, type CSSProperties } from 'react';
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import type { MatchupData, MatchupLine, RosterSlot, ScoringFormat } from '../../types';
 import { formatAmericanOdds, formatSpread } from '../../utils/formatOdds';
@@ -8,7 +9,6 @@ import {
   hasCachedImageFailure,
 } from '../../utils/playerAssets';
 import './MatchupCard.css';
-import { useState } from 'react';
 
 interface MatchupCardProps {
   matchup: MatchupData;
@@ -35,6 +35,10 @@ function formatProjection(value: number) {
 
 function formatUserSpread(value: number) {
   return `You ${formatSpread(value * -1)}`;
+}
+
+function formatMeterSpread(value: number) {
+  return `${formatSpread(value * -1)} spread`;
 }
 
 function getCommentary(winProbability: number) {
@@ -121,9 +125,18 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
   const animatedSpread = useAnimatedNumber(activeLine.yours.spread, {
     formatter: formatUserSpread,
   });
+  const animatedMeterSpread = useAnimatedNumber(activeLine.yours.spread, {
+    formatter: formatMeterSpread,
+  });
   const animatedTotal = useAnimatedNumber(activeLine.yours.total, {
     formatter: formatProjection,
   });
+  const favoredSide = winProbability >= activeLine.opponent.winProbability
+    ? 'yours'
+    : 'opponent';
+  const meterStyle = {
+    '--line-position': `${winProbability}%`,
+  } as CSSProperties;
 
   return (
     <section
@@ -201,7 +214,7 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
 
         <div className="matchup-card__odds-board">
           <div className="matchup-card__price-card matchup-card__price-card--yours">
-            <p className="matchup-card__price-label">You</p>
+            <p className="matchup-card__price-label">{matchup.yourTeam.teamName}</p>
             <p className="matchup-card__moneyline matchup-card__moneyline--yours">
               {animatedYourMoneyline}
             </p>
@@ -209,18 +222,16 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           </div>
 
           <div className="matchup-card__odds-center">
-            <p className="matchup-card__board-label">Moneyline</p>
-            <div className="matchup-card__probability-bar" aria-hidden="true">
-              <div
-                className="matchup-card__probability-fill"
-                style={{ width: `${winProbability}%` }}
-              />
+            <div
+              className={`matchup-card__probability-bar matchup-card__probability-bar--${favoredSide}`}
+              style={meterStyle}
+              aria-hidden="true"
+            >
+              <div className="matchup-card__probability-fill" />
+              <span className="matchup-card__probability-marker" />
             </div>
 
-            <div className="matchup-card__probability-meta">
-              <span>{matchup.yourTeam.teamName}</span>
-              <span>{matchup.opponentTeam.teamName}</span>
-            </div>
+            <p className="matchup-card__spread-readout">{animatedMeterSpread}</p>
 
             <p className="matchup-card__commentary">
               {getCommentary(activeLine.yours.winProbability)}
@@ -228,7 +239,7 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           </div>
 
           <div className="matchup-card__price-card matchup-card__price-card--opponent">
-            <p className="matchup-card__price-label">Opp</p>
+            <p className="matchup-card__price-label">{matchup.opponentTeam.teamName}</p>
             <p className="matchup-card__moneyline matchup-card__moneyline--opponent">
               {animatedOpponentMoneyline}
             </p>

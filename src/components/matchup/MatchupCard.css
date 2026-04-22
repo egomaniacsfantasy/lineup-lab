@@ -233,19 +233,20 @@
   border-color: var(--border-subtle);
 }
 
-.matchup-card__price-label,
-.matchup-card__board-label {
+.matchup-card__price-label {
   color: var(--text-soft);
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.16em;
+  line-height: 1.15;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .matchup-card__odds-center {
   display: grid;
-  gap: 10px;
+  gap: var(--space-sm);
   align-items: center;
 }
 
@@ -275,28 +276,73 @@
 }
 
 .matchup-card__probability-bar {
+  --line-position: 50%;
+  position: relative;
   width: 100%;
-  height: 8px;
-  overflow: hidden;
+  height: 10px;
   border-radius: var(--radius-pill);
-  background: var(--bg-inset);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg-surface-soft) 66%, transparent),
+      var(--bg-inset)
+    );
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    inset 0 1px 8px color-mix(in srgb, var(--bg-deep) 72%, transparent);
 }
 
 .matchup-card__probability-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--line-position);
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--amber), var(--amber-bright));
-  box-shadow: 0 0 20px color-mix(in srgb, var(--amber) 20%, transparent);
-  transition: width var(--transition-slow);
+  background: linear-gradient(
+    90deg,
+    var(--amber),
+    color-mix(in srgb, var(--amber) 72%, transparent)
+  );
+  box-shadow: 0 0 18px color-mix(in srgb, var(--amber) 16%, transparent);
+  transition:
+    left 300ms ease-out,
+    right 300ms ease-out,
+    width 300ms ease-out;
 }
 
-.matchup-card__probability-meta {
-  display: flex;
-  justify-content: space-between;
+.matchup-card__probability-bar--opponent .matchup-card__probability-fill {
+  right: 0;
+  left: var(--line-position);
+  width: auto;
+  background: linear-gradient(
+    270deg,
+    color-mix(in srgb, var(--amber) 80%, transparent),
+    color-mix(in srgb, var(--amber) 58%, transparent)
+  );
+}
+
+.matchup-card__probability-marker {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: var(--line-position);
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--text-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg-deep) 72%, transparent);
+  transform: translateX(-50%);
+  transition: left 300ms ease-out;
+}
+
+.matchup-card__spread-readout {
+  margin: 0;
   color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .matchup-card__commentary {

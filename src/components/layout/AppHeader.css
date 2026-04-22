@@ -1,6 +1,6 @@
 .app-header {
   position: fixed;
-  inset: var(--shell-strip-height) 0 auto;
+  inset: 0 0 auto;
   z-index: 21;
   height: var(--shell-header-height);
   border-bottom: 1px solid var(--border-subtle);

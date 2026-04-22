@@ -25,6 +25,49 @@ function formatSwing(delta: number) {
   return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}% win prob`;
 }
 
+function LightningIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="M9.4 1.7 4.6 8.2h3.7l-1.7 6.1 4.8-6.7H7.8l1.6-5.9Z" />
+    </svg>
+  );
+}
+
+function ScalesIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="M8 2.3v11.4" />
+      <path d="M4.1 5h7.8" />
+      <path d="M5.1 5 2.8 9.1h4.6L5.1 5Z" />
+      <path d="m10.9 5-2.3 4.1h4.6L10.9 5Z" />
+      <path d="M5.3 13.7h5.4" />
+    </svg>
+  );
+}
+
+function ExchangeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="M8 2.2v11.6" />
+      <path d="M5.2 5.1c-1.3.4-2.2 1.5-2.2 2.9 0 1.7 1.3 3 3 3h3.6" />
+      <path d="m8.4 9.1 1.8 1.9-1.8 1.8" />
+      <path d="M10.8 10.9c1.3-.4 2.2-1.5 2.2-2.9 0-1.7-1.3-3-3-3H6.4" />
+      <path d="M7.6 6.9 5.8 5l1.8-1.8" />
+    </svg>
+  );
+}
+
+function HourglassIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16">
+      <path d="M4.2 2.4h7.6" />
+      <path d="M4.2 13.6h7.6" />
+      <path d="M5.2 2.4c0 3.4 1.4 4 2.8 5.6-1.4 1.6-2.8 2.2-2.8 5.6" />
+      <path d="M10.8 2.4c0 3.4-1.4 4-2.8 5.6 1.4 1.6 2.8 2.2 2.8 5.6" />
+    </svg>
+  );
+}
+
 export function QuickActions({
   biggestSwing,
   lineupLocks,
@@ -54,7 +97,7 @@ export function QuickActions({
         <article className="quick-actions__item quick-actions__item--primary">
           <div className="quick-actions__item-head">
             <span className="quick-actions__icon" aria-hidden="true">
-              🔥
+              <LightningIcon />
             </span>
             <div className="quick-actions__copy">
               <p className="quick-actions__label">Biggest swing</p>
@@ -86,7 +129,7 @@ export function QuickActions({
         <article className="quick-actions__item">
           <div className="quick-actions__item-head">
             <span className="quick-actions__icon" aria-hidden="true">
-              📈
+              <ScalesIcon />
             </span>
             <div className="quick-actions__copy">
               <p className="quick-actions__label">Waiver watch</p>
@@ -106,7 +149,7 @@ export function QuickActions({
         <article className="quick-actions__item">
           <div className="quick-actions__item-head">
             <span className="quick-actions__icon" aria-hidden="true">
-              🔄
+              <ExchangeIcon />
             </span>
             <div className="quick-actions__copy">
               <p className="quick-actions__label">Trade opportunity</p>
@@ -137,7 +180,7 @@ export function QuickActions({
         <article className="quick-actions__item">
           <div className="quick-actions__item-head">
             <span className="quick-actions__icon" aria-hidden="true">
-              ⏰
+              <HourglassIcon />
             </span>
             <div className="quick-actions__copy">
               <p className="quick-actions__label">Lineup locks</p>
