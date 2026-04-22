@@ -38,6 +38,7 @@ export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
         <h2 className="welcome-card__title" id="welcome-title">
           Your lineup, priced.
         </h2>
+        <p className="welcome-card__replay-note">2024 season replay · demo data</p>
 
         <div className="welcome-card__sections">
           <div className="welcome-card__section">

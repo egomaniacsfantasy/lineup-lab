@@ -12,17 +12,25 @@ interface PlayerDetailPanelProps {
 }
 
 const NEWS_TEMPLATES = [
-  ['ESPN', '{last} practiced in full and remains on track for the week.'],
-  ['Fantasy Wire', '{last} is seeing steady usage in high-leverage looks.'],
-  ['Beat report', '{last} drew extra red-zone work during the open period.'],
-  ['ESPN', '{last} has no new injury designation after walkthroughs.'],
-  ['Fantasy Wire', 'Coaches expect {last} to keep the same role this week.'],
-  ['Beat report', '{last} handled the normal rep share in team drills.'],
-  ['ESPN', '{last} remains a featured piece in the weekly plan.'],
-  ['Fantasy Wire', 'The matchup keeps {last} in a playable range.'],
-  ['Beat report', '{last} was not listed on the final injury report.'],
-  ['ESPN', '{last} is expected to be available for the full script.'],
+  ['ESPN', '{last} logged a full practice Friday and is tracking toward his normal Week 8 role.'],
+  ['The Athletic', "{last}'s usage has held steady over the last month of the 2024 replay window."],
+  ['Rotoworld', 'Coaches expect {last} to see the high-leverage snaps against {opponent} this week.'],
+  ['NFL Network', '{last} was not listed with a new injury designation entering the weekend.'],
+  ['PFF', '{last} remains a top-15 positional usage profile through Week 7.'],
+  ['ESPN', "{last}'s matchup grade improved after the final Week 8 injury report."],
+  ['Fantasy Wire', 'The Week 8 script keeps {last} in the playable range for PPR formats.'],
+  ['Beat report', '{last} handled the expected rep share during the open practice window.'],
+  ['Rotoworld', "{last}'s route and touch profile remains stable heading into {opponent}."],
+  ['The Athletic', 'The market is treating {last} as a steady-volume option for Week 8.'],
 ];
+
+const DEFENSE_NEWS_TEMPLATES = [
+  ['ESPN', '{last} allowed fewer than 20 points per game across the first half of the 2024 replay.'],
+  ['The Athletic', "{last}'s pressure profile remains one of the cleaner Week 8 matchup levers."],
+  ['PFF', '{last} carries a turnover-path matchup into the {opponent} game.'],
+];
+
+const NEWS_DATES = ['Oct 28, 2024', 'Oct 26, 2024', 'Oct 24, 2024'];
 
 const OPPONENTS = ['DEN', 'BUF', 'PHI', 'DAL', 'MIA', 'BAL', 'SF', 'DET'];
 
@@ -63,24 +71,33 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
     () => getSyntheticDetail(playerDetail?.slug ?? 'player', projection),
     [playerDetail?.slug, projection],
   );
-  const floor = playerDetail?.floor ?? detail.floor;
-  const ceiling = playerDetail?.ceiling ?? detail.ceiling;
-  const gameLine = playerDetail?.gameLine ?? detail.matchup;
+  const week8 = manifestEntry?.week8_2024;
+  const recentGames = manifestEntry?.last4_2024.map((game) => ({
+    opponent: game.opponent,
+    points: game.pts,
+  })) ?? detail.recent;
+  const replayScores = [
+    ...recentGames.map((game) => game.points).filter((points) => points > 0),
+    week8?.pprPoints ?? 0,
+  ].filter((points) => points > 0);
+  const floor = playerDetail?.floor ?? (replayScores.length > 0 ? Math.min(...replayScores) : detail.floor);
+  const ceiling =
+    playerDetail?.ceiling ?? (replayScores.length > 0 ? Math.max(...replayScores) : detail.ceiling);
+  const gameLine = playerDetail?.gameLine ?? week8?.gameLine ?? detail.matchup;
   const lastName = getLastName(fullName);
-  const newsItems = useMemo(
-    () =>
-      [0, 1, 2].map((index) => {
-        const template = NEWS_TEMPLATES[(detail.newsSeed + index) % NEWS_TEMPLATES.length];
+  const newsItems = [0, 1, 2].map((index) => {
+    const sourcePool = position === 'DEF' ? DEFENSE_NEWS_TEMPLATES : NEWS_TEMPLATES;
+    const template = sourcePool[(detail.newsSeed + index) % sourcePool.length];
 
-        return {
-          source: template[0],
-          text: template[1].replace('{last}', lastName),
-          date: `Apr ${22 - index}`,
-        };
-      }),
-    [detail.newsSeed, lastName],
-  );
-  const maxRecent = Math.max(...detail.recent.map((game) => game.points));
+    return {
+      source: template[0],
+      text: template[1]
+        .replace('{last}', lastName)
+        .replace('{opponent}', week8?.opponent ?? 'the opponent'),
+      date: NEWS_DATES[index],
+    };
+  });
+  const maxRecent = Math.max(...recentGames.map((game) => game.points), 1);
 
   useEffect(() => {
     if (!playerDetail) {
@@ -164,7 +181,9 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
 
           <section className="player-detail-panel__section">
             <p className="player-detail-panel__section-label">This week</p>
-            <p className="player-detail-panel__game">{gameLine}</p>
+            <p className="player-detail-panel__game">
+              {week8 ? `vs. ${week8.opponent} · ${week8.kickoff} · ${gameLine}` : gameLine}
+            </p>
             <p className="player-detail-panel__projection">
               <Gloss term="projection">Projection</Gloss>:{' '}
               <strong>{projection.toFixed(1)} pts</strong> · Floor{' '}
@@ -175,7 +194,7 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
           <section className="player-detail-panel__section">
             <p className="player-detail-panel__section-label">Last four weeks</p>
             <div className="player-detail-panel__bars" aria-label="Last four fantasy scores">
-              {detail.recent.map((game) => (
+              {recentGames.map((game) => (
                 <div className="player-detail-panel__bar-group" key={game.opponent}>
                   <span className="player-detail-panel__bar-score">
                     {game.points.toFixed(1)}

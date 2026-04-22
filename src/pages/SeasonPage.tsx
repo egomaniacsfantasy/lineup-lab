@@ -70,7 +70,7 @@ export function SeasonPage() {
             recordLabel="Record"
             recordRange={MOCK_SEASON_OUTLOOK.recordRange}
             recordValue={MOCK_MATCHUP.yourTeam.record}
-            title={`Your season · week ${MOCK_MATCHUP.week}`}
+            title={`Your 2024 replay · week ${MOCK_MATCHUP.week}`}
           />
 
           <CascadePanel

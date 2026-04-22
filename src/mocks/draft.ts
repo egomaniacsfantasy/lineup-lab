@@ -81,13 +81,13 @@ export const MOCK_DRAFT_SLOT_ODDS: DraftSlotResult = {
 
 export const MOCK_DRAFT_WRAPPED: DraftWrappedData = {
   teamName: "Zeus's Bolts",
-  leagueName: 'Mount Olympus League',
+  leagueName: 'Mount Olympus League · 2024 Replay',
   championshipOdds: 450,
   projectedRecord: '9-5',
   recordRange: { best: '12-2', worst: '6-8', median: '9-5' },
   leagueRank: 3,
   boldestPick: {
-    player: MOCK_PLAYERS.adams,
+    player: MOCK_PLAYERS.lamb,
     pickNumber: 18,
     adpDelta: 8,
   },

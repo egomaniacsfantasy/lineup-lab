@@ -1,22 +1,113 @@
-import type { MatchupData, MatchupLine } from '../types';
+import type { MatchupData, MatchupLine, Player, PlayerAlternative, RosterSlot } from '../types';
+import {
+  getPlayerManifestEntry,
+  getWeek8ReplayCeiling,
+  getWeek8ReplayFloor,
+  getWeek8ReplayGameLine,
+  getWeek8ReplayProjection,
+} from '../data/playerManifest';
+import { roundTo, winProbabilityToMoneyline } from '../utils/lineupComparison';
 import { MOCK_PLAYERS } from './players';
 
 const p = MOCK_PLAYERS;
 
+const BASE_PROJECTION = 170.1;
+const BASE_WIN_PROBABILITY = 72.2;
+const BASE_SPREAD = 26.7;
+const BASE_TOTAL = 313.5;
+
+function projection(player: Player) {
+  return getWeek8ReplayProjection(player.slug ?? player.id);
+}
+
+function floor(player: Player) {
+  return getWeek8ReplayFloor(player.slug ?? player.id);
+}
+
+function ceiling(player: Player) {
+  return getWeek8ReplayCeiling(player.slug ?? player.id);
+}
+
+function buildLine(delta: number): MatchupLine {
+  const winProbability = roundTo(Math.max(5, Math.min(95, BASE_WIN_PROBABILITY + delta)));
+
+  return {
+    moneyline: winProbabilityToMoneyline(winProbability),
+    winProbability,
+    projection: roundTo(BASE_PROJECTION + delta),
+    spread: roundTo(BASE_SPREAD + delta),
+    total: roundTo(BASE_TOTAL + delta * 0.25),
+  };
+}
+
+function actualContext(player: Player) {
+  const entry = getPlayerManifestEntry(player.slug ?? player.id);
+  const week8 = entry?.week8_2024;
+
+  if (!week8) {
+    return `${player.shortName} Week 8 result unavailable`;
+  }
+
+  if (player.position === 'QB') {
+    return `${player.shortName} Week 8: ${week8.passYards ?? 0} pass yds, ${week8.passTDs ?? 0} TD`;
+  }
+
+  if (player.position === 'K') {
+    return `${player.shortName} Week 8: ${week8.fgMade ?? 0}-${week8.fgAttempts ?? 0} FG, ${week8.xpMade ?? 0}-${week8.xpAttempts ?? 0} XP`;
+  }
+
+  if (player.position === 'DEF') {
+    return `${player.shortName} Week 8: ${week8.sacks ?? 0} sacks, ${week8.ints ?? 0} INT, ${week8.pointsAllowed ?? 0} PA`;
+  }
+
+  return `${player.shortName} Week 8: ${week8.receptions ?? 0} rec, ${week8.recYards ?? 0} yds, ${week8.recTDs ?? 0} TD`;
+}
+
+function alternative(currentPlayer: Player, alternativePlayer: Player): PlayerAlternative {
+  const delta = roundTo(projection(alternativePlayer) - projection(currentPlayer));
+
+  return {
+    player: alternativePlayer,
+    projection: projection(alternativePlayer),
+    floor: floor(alternativePlayer),
+    ceiling: ceiling(alternativePlayer),
+    resultingLine: buildLine(delta),
+    deltaWinProbability: delta,
+    gameLine: getWeek8ReplayGameLine(alternativePlayer.slug ?? alternativePlayer.id),
+    playerProp: actualContext(alternativePlayer),
+  };
+}
+
+function slot(
+  slotLabel: RosterSlot['slotLabel'],
+  starter: Player,
+  alternatives: Player[] = [],
+): RosterSlot {
+  return {
+    slotLabel,
+    starter,
+    projection: projection(starter),
+    floor: floor(starter),
+    ceiling: ceiling(starter),
+    isDecisionSlot: alternatives.length > 0,
+    alternatives: alternatives.map((candidate) => alternative(starter, candidate)),
+  };
+}
+
 export const MOCK_YOUR_LINE: MatchupLine = {
-  moneyline: -220,
-  winProbability: 68.8,
-  projection: 142.6,
-  spread: 14.2,
-  total: 271.0,
+  moneyline: -260,
+  winProbability: BASE_WIN_PROBABILITY,
+  projection: BASE_PROJECTION,
+  spread: BASE_SPREAD,
+  total: BASE_TOTAL,
 };
 
 export const MOCK_OPPONENT_LINE: MatchupLine = {
-  moneyline: 180,
-  winProbability: 31.2,
-  projection: 128.4,
-  spread: -14.2,
-  total: 271.0,
+  moneyline: 210,
+  winProbability: roundTo(100 - BASE_WIN_PROBABILITY),
+  projection: roundTo(BASE_TOTAL - BASE_PROJECTION),
+  spread: roundTo(BASE_SPREAD * -1),
+  total: BASE_TOTAL,
 };
 
 export const MOCK_MATCHUP: MatchupData = {
@@ -27,266 +118,25 @@ export const MOCK_MATCHUP: MatchupData = {
     managerName: 'Andre',
     record: '5-2',
     roster: [
-      {
-        slotLabel: 'QB',
-        starter: p.mahomes,
-        projection: 22.4,
-        floor: 14.8,
-        ceiling: 34.2,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.prescott,
-            projection: 18.2,
-            floor: 11.6,
-            ceiling: 29.7,
-            resultingLine: {
-              moneyline: -175,
-              winProbability: 64.6,
-              projection: 138.4,
-              spread: 10.0,
-              total: 266.8,
-            },
-            deltaWinProbability: -4.2,
-            gameLine: 'DAL -2.5 · O/U 47.0',
-            playerProp: 'Prescott O/U 264.5 pass yds (-110)',
-          },
-        ],
-      },
-      {
-        slotLabel: 'RB',
-        starter: p.henry,
-        projection: 16.8,
-        floor: 8.2,
-        ceiling: 28.6,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.pollard,
-            projection: 11.4,
-            floor: 5.9,
-            ceiling: 20.8,
-            resultingLine: {
-              moneyline: -195,
-              winProbability: 66.7,
-              projection: 137.2,
-              spread: 12.1,
-              total: 265.6,
-            },
-            deltaWinProbability: -2.1,
-            gameLine: 'TEN +1.5 · O/U 41.5',
-            playerProp: 'Pollard O/U 63.5 rush+rec yds (-108)',
-          },
-        ],
-      },
-      {
-        slotLabel: 'RB',
-        starter: p.robinson,
-        projection: 18.2,
-        floor: 10.4,
-        ceiling: 30.1,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.pollard,
-            projection: 11.4,
-            floor: 5.9,
-            ceiling: 20.8,
-            resultingLine: {
-              moneyline: -182,
-              winProbability: 65.0,
-              projection: 135.8,
-              spread: 10.4,
-              total: 264.2,
-            },
-            deltaWinProbability: -3.8,
-            gameLine: 'TEN +1.5 · O/U 41.5',
-            playerProp: 'Pollard O/U 63.5 rush+rec yds (-108)',
-          },
-        ],
-      },
-      {
-        slotLabel: 'WR',
-        starter: p.adams,
-        projection: 17.6,
-        floor: 8.1,
-        ceiling: 29.4,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.waddle,
-            projection: 14.2,
-            floor: 5.8,
-            ceiling: 24.6,
-            resultingLine: {
-              moneyline: -145,
-              winProbability: 59.2,
-              projection: 139.2,
-              spread: 10.8,
-              total: 267.6,
-            },
-            deltaWinProbability: -9.6,
-            gameLine: 'MIA -3 · O/U 48.5',
-            playerProp: 'Waddle O/U 58.5 rec yds (-115)',
-          },
-        ],
-      },
-      {
-        slotLabel: 'WR',
-        starter: p.jefferson,
-        projection: 19.4,
-        floor: 10.2,
-        ceiling: 32.8,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.smith,
-            projection: 13.6,
-            floor: 6.8,
-            ceiling: 24.0,
-            resultingLine: {
-              moneyline: -205,
-              winProbability: 67.4,
-              projection: 136.8,
-              spread: 12.8,
-              total: 265.2,
-            },
-            deltaWinProbability: -1.4,
-            gameLine: 'PHI -4.5 · O/U 46.5',
-            playerProp: 'Smith O/U 61.5 rec yds (-112)',
-          },
-        ],
-      },
-      {
-        slotLabel: 'TE',
-        starter: p.kelce,
-        projection: 12.8,
-        floor: 6.4,
-        ceiling: 21.2,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.goedert,
-            projection: 9.8,
-            floor: 4.6,
-            ceiling: 17.3,
-            resultingLine: {
-              moneyline: -188,
-              winProbability: 66.0,
-              projection: 139.6,
-              spread: 11.4,
-              total: 268.0,
-            },
-            deltaWinProbability: -2.8,
-            gameLine: 'PHI -4.5 · O/U 46.5',
-            playerProp: 'Goedert O/U 47.5 rec yds (-106)',
-          },
-        ],
-      },
-      {
-        slotLabel: 'FLEX',
-        starter: p.mclaurin,
-        projection: 15.2,
-        floor: 7.6,
-        ceiling: 26.8,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.smith,
-            projection: 13.6,
-            floor: 6.8,
-            ceiling: 24.0,
-            resultingLine: {
-              moneyline: -280,
-              winProbability: 73.5,
-              projection: 144.0,
-              spread: 16.5,
-              total: 272.4,
-            },
-            deltaWinProbability: 4.7,
-            gameLine: 'PHI -4.5 · O/U 46.5',
-            playerProp: 'Smith O/U 61.5 rec yds (-112)',
-          },
-          {
-            player: p.kirk,
-            projection: 12.8,
-            floor: 5.2,
-            ceiling: 22.4,
-            resultingLine: {
-              moneyline: -185,
-              winProbability: 64.9,
-              projection: 140.2,
-              spread: 11.8,
-              total: 268.6,
-            },
-            deltaWinProbability: -3.9,
-            gameLine: 'JAX +6.5 · O/U 43.0',
-            playerProp: 'Kirk O/U 52.5 rec yds (-110)',
-          },
-        ],
-      },
-      {
-        slotLabel: 'K',
-        starter: p.tucker,
-        projection: 8.6,
-        floor: 3.0,
-        ceiling: 16.0,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.bass,
-            projection: 7.8,
-            floor: 2.6,
-            ceiling: 13.9,
-            resultingLine: {
-              moneyline: -214,
-              winProbability: 68.0,
-              projection: 141.8,
-              spread: 13.7,
-              total: 270.2,
-            },
-            deltaWinProbability: -0.8,
-            gameLine: 'BUF -4.0 · O/U 49.0',
-            playerProp: 'Bass O/U 1.5 FGs made (+105)',
-          },
-        ],
-      },
-      {
-        slotLabel: 'DEF',
-        starter: p.sf_def,
-        projection: 7.2,
-        floor: 1.0,
-        ceiling: 18.0,
-        isDecisionSlot: true,
-        alternatives: [
-          {
-            player: p.dal_def,
-            projection: 6.1,
-            floor: 1.2,
-            ceiling: 14.6,
-            resultingLine: {
-              moneyline: -230,
-              winProbability: 69.7,
-              projection: 141.5,
-              spread: 13.6,
-              total: 269.9,
-            },
-            deltaWinProbability: 0.9,
-            gameLine: 'DAL -2.5 · O/U 47.0',
-            playerProp: 'Cowboys D/ST O/U 2.5 sacks (-120)',
-          },
-        ],
-      },
+      slot('QB', p.mahomes, [p.burrow]),
+      slot('RB', p.henry, [p.barkley]),
+      slot('RB', p.robinson, [p.barkley]),
+      slot('WR', p.jefferson, [p.smith]),
+      slot('WR', p.lamb, [p.london]),
+      slot('TE', p.kelce, [p.mcbride]),
+      slot('FLEX', p.mclaurin, [p.smith, p.london]),
+      slot('K', p.aubrey, [p.fairbairn]),
+      slot('DEF', p.sf_def, [p.phi_def]),
     ],
     bench: [
-      { player: p.prescott, projection: 18.2 },
-      { player: p.pollard, projection: 11.4 },
-      { player: p.waddle, projection: 14.2 },
-      { player: p.smith, projection: 13.6 },
-      { player: p.goedert, projection: 9.8 },
-      { player: p.kirk, projection: 12.8 },
-      { player: p.bass, projection: 7.8 },
-      { player: p.dal_def, projection: 6.1 },
+      { player: p.burrow, projection: projection(p.burrow) },
+      { player: p.barkley, projection: projection(p.barkley) },
+      { player: p.smith, projection: projection(p.smith) },
+      { player: p.london, projection: projection(p.london) },
+      { player: p.stbrown, projection: projection(p.stbrown) },
+      { player: p.mcbride, projection: projection(p.mcbride) },
+      { player: p.fairbairn, projection: projection(p.fairbairn) },
+      { player: p.phi_def, projection: projection(p.phi_def) },
     ],
   },
   opponentTeam: {
@@ -294,24 +144,15 @@ export const MOCK_MATCHUP: MatchupData = {
     managerName: 'Marcus',
     record: '4-3',
     roster: [
-      {
-        slotLabel: 'QB',
-        starter: p.allen,
-        projection: 23.8,
-        floor: 15.2,
-        ceiling: 36.4,
-        isDecisionSlot: false,
-        alternatives: [],
-      },
-      {
-        slotLabel: 'RB',
-        starter: p.barkley,
-        projection: 16.4,
-        floor: 9.1,
-        ceiling: 27.8,
-        isDecisionSlot: false,
-        alternatives: [],
-      },
+      slot('QB', p.lamar),
+      slot('RB', p.gibbs),
+      slot('RB', p.jacobs),
+      slot('WR', p.chase),
+      slot('WR', p.nacua),
+      slot('TE', p.bowers),
+      slot('FLEX', p.barkley),
+      slot('K', p.fairbairn),
+      slot('DEF', p.min_def),
     ],
   },
   baseline: {

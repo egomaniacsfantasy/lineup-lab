@@ -1,4 +1,5 @@
 import type { Player } from '../types';
+import { getPlayerManifestEntry } from '../data/playerManifest';
 
 const NFL_TEAMS = ['KC', 'BUF', 'PHI', 'SF', 'DAL', 'MIA', 'BAL', 'DET', 'CIN', 'HOU'];
 
@@ -130,6 +131,14 @@ export function getComparisonVerdict(
 }
 
 export function getSyntheticGameContext(player: Player) {
+  const replayLine = getPlayerManifestEntry(player.slug ?? player.id)?.week8_2024.gameLine;
+
+  if (replayLine) {
+    return {
+      gameLine: replayLine,
+    };
+  }
+
   const hash = hashString(player.id);
   const opponent = NFL_TEAMS[hash % NFL_TEAMS.length];
   const spreadHalfPoints = (hash % 29) - 14;

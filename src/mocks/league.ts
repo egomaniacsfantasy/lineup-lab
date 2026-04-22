@@ -23,8 +23,8 @@ export interface LeagueWeekMatchup {
 
 export const MOCK_LEAGUE: LeagueConnection = {
   platform: 'sleeper',
-  leagueId: 'mount-olympus-2026',
-  leagueName: 'Mount Olympus League',
+  leagueId: 'mount-olympus-2024-replay',
+  leagueName: 'Mount Olympus League · 2024 Replay',
   teamName: "Zeus's Bolts",
   teamId: 'zeus-01',
   scoringFormat: 'ppr',
@@ -37,8 +37,8 @@ export const MOCK_LEAGUE: LeagueConnection = {
 export const MOCK_LEAGUE_FUTURES: LeagueFutureRow[] = [
   {
     teamName: 'Apollo Archers',
-    record: '6-1',
-    championOdds: 280,
+    record: '7-0',
+    championOdds: 240,
     finalsOdds: 150,
     playoffOdds: -450,
     playoffProb: 91.2,
@@ -47,7 +47,7 @@ export const MOCK_LEAGUE_FUTURES: LeagueFutureRow[] = [
   {
     teamName: 'Hermes Express',
     record: '4-3',
-    championOdds: 340,
+    championOdds: 420,
     finalsOdds: 180,
     playoffOdds: -320,
     playoffProb: 84.6,
@@ -73,7 +73,7 @@ export const MOCK_LEAGUE_FUTURES: LeagueFutureRow[] = [
   },
   {
     teamName: 'Hades Hounds',
-    record: '3-4',
+    record: '4-3',
     championOdds: 680,
     finalsOdds: 390,
     playoffOdds: 145,
@@ -82,7 +82,7 @@ export const MOCK_LEAGUE_FUTURES: LeagueFutureRow[] = [
   },
   {
     teamName: 'Athena Owls',
-    record: '3-4',
+    record: '4-3',
     championOdds: 750,
     finalsOdds: 330,
     playoffOdds: 105,
@@ -91,7 +91,7 @@ export const MOCK_LEAGUE_FUTURES: LeagueFutureRow[] = [
   },
   {
     teamName: 'Ares Warriors',
-    record: '3-4',
+    record: '2-5',
     championOdds: 820,
     finalsOdds: 420,
     playoffOdds: 170,
@@ -100,7 +100,7 @@ export const MOCK_LEAGUE_FUTURES: LeagueFutureRow[] = [
   },
   {
     teamName: 'Dionysus Vines',
-    record: '2-5',
+    record: '3-4',
     championOdds: 1200,
     finalsOdds: 650,
     playoffOdds: 360,
@@ -118,7 +118,7 @@ export const MOCK_LEAGUE_FUTURES: LeagueFutureRow[] = [
   },
   {
     teamName: 'Hephaestus Forge',
-    record: '2-5',
+    record: '1-6',
     championOdds: 1800,
     finalsOdds: 950,
     playoffOdds: 580,
@@ -149,7 +149,7 @@ export const MOCK_WEEK_MATCHUPS: LeagueWeekMatchup[] = [
   {
     teamA: "Zeus's Bolts",
     teamARecord: '5-2',
-    teamAOdds: -220,
+    teamAOdds: -260,
     teamB: 'Hermes Express',
     teamBRecord: '4-3',
     teamBOdds: 180,
@@ -157,10 +157,10 @@ export const MOCK_WEEK_MATCHUPS: LeagueWeekMatchup[] = [
   },
   {
     teamA: 'Apollo Archers',
-    teamARecord: '6-1',
+    teamARecord: '7-0',
     teamAOdds: -310,
     teamB: 'Hades Hounds',
-    teamBRecord: '3-4',
+    teamBRecord: '4-3',
     teamBOdds: 250,
     isUserGame: false,
   },
@@ -169,16 +169,16 @@ export const MOCK_WEEK_MATCHUPS: LeagueWeekMatchup[] = [
     teamARecord: '5-2',
     teamAOdds: -145,
     teamB: 'Athena Owls',
-    teamBRecord: '3-4',
+    teamBRecord: '4-3',
     teamBOdds: 125,
     isUserGame: false,
   },
   {
     teamA: 'Ares Warriors',
-    teamARecord: '3-4',
+    teamARecord: '2-5',
     teamAOdds: 110,
     teamB: 'Dionysus Vines',
-    teamBRecord: '2-5',
+    teamBRecord: '3-4',
     teamBOdds: -130,
     isUserGame: false,
   },
@@ -193,7 +193,7 @@ export const MOCK_WEEK_MATCHUPS: LeagueWeekMatchup[] = [
   },
   {
     teamA: 'Hephaestus Forge',
-    teamARecord: '2-5',
+    teamARecord: '1-6',
     teamAOdds: 160,
     teamB: 'Kronos Titans',
     teamBRecord: '1-6',

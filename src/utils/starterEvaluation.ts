@@ -22,52 +22,52 @@ interface StarterEvaluationSeed {
 
 const TIGHT_CALL_THRESHOLD = 1.5;
 
-// TEMP: prototype seed for pivot logic. Replace with engine output. Positive delta = swap in bench player improves win prob.
+// TEMP: 2024 replay seed for pivot logic. Replace with engine output. Positive delta = bench player outscored the starter in Week 8.
 const PROTOTYPE_STARTER_EVALUATION_SEED: Record<string, StarterEvaluationSeed> = {
-  'mahomes-01': {
-    alternativePlayerId: 'prescott-01',
-    currentWinProbContribution: 22.4,
-    alternativeWinProbContribution: 18.2,
-  },
-  'henry-01': {
-    alternativePlayerId: 'pollard-01',
-    currentWinProbContribution: 16.8,
-    alternativeWinProbContribution: 14.7,
-  },
-  'robinson-01': {
-    alternativePlayerId: 'pollard-01',
+  'p-mahomes': {
+    alternativePlayerId: 'j-burrow',
     currentWinProbContribution: 18.2,
-    alternativeWinProbContribution: 14.4,
+    alternativeWinProbContribution: 12.9,
   },
-  'adams-01': {
-    alternativePlayerId: 'waddle-01',
-    currentWinProbContribution: 17.6,
-    alternativeWinProbContribution: 8.0,
+  'd-henry': {
+    alternativePlayerId: 's-barkley',
+    currentWinProbContribution: 14.7,
+    alternativeWinProbContribution: 12.1,
   },
-  'jefferson-01': {
-    alternativePlayerId: 'smith-01',
-    currentWinProbContribution: 19.4,
-    alternativeWinProbContribution: 17.7,
+  'b-robinson': {
+    alternativePlayerId: 's-barkley',
+    currentWinProbContribution: 23.6,
+    alternativeWinProbContribution: 12.1,
   },
-  'kelce-01': {
-    alternativePlayerId: 'goedert-01',
-    currentWinProbContribution: 12.8,
-    alternativeWinProbContribution: 10.0,
+  'j-jefferson': {
+    alternativePlayerId: 'd-smith',
+    currentWinProbContribution: 19.5,
+    alternativeWinProbContribution: 20.5,
   },
-  'mclaurin-01': {
-    alternativePlayerId: 'smith-01',
-    currentWinProbContribution: 15.2,
-    alternativeWinProbContribution: 19.9,
+  'c-lamb': {
+    alternativePlayerId: 'd-london',
+    currentWinProbContribution: 39.6,
+    alternativeWinProbContribution: 7.4,
   },
-  'tucker-01': {
-    alternativePlayerId: 'bass-01',
-    currentWinProbContribution: 8.6,
-    alternativeWinProbContribution: 6.8,
+  't-kelce': {
+    alternativePlayerId: 't-mcbride',
+    currentWinProbContribution: 25.0,
+    alternativeWinProbContribution: 21.4,
   },
-  'sf-def-01': {
-    alternativePlayerId: 'dal-def-01',
-    currentWinProbContribution: 7.2,
-    alternativeWinProbContribution: 8.1,
+  't-mclaurin': {
+    alternativePlayerId: 'd-smith',
+    currentWinProbContribution: 17.5,
+    alternativeWinProbContribution: 20.5,
+  },
+  'b-aubrey': {
+    alternativePlayerId: 'k-fairbairn',
+    currentWinProbContribution: 6.0,
+    alternativeWinProbContribution: 11.0,
+  },
+  'sf-def': {
+    alternativePlayerId: 'phi-def',
+    currentWinProbContribution: 6.0,
+    alternativeWinProbContribution: 6.0,
   },
 };
 

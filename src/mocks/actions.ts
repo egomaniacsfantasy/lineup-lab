@@ -17,20 +17,20 @@ export interface LineupLockWindow {
 
 export const MOCK_WAIVER_SUGGESTION: WaiverSuggestion = {
   player: {
-    name: 'J. Addison',
+    name: 'A. St. Brown',
     position: 'WR',
-    team: 'MIN',
+    team: 'DET',
   },
-  context: 'Could upgrade your FLEX if McLaurin underperforms.',
-  projectedDelta: 1.4,
+  context: 'Week 8 was quiet, but his 2024 volume profile keeps him on the watch list.',
+  projectedDelta: 1.2,
 };
 
 export const MOCK_LINEUP_LOCKS: LineupLockWindow[] = [
   {
     day: 'Thursday',
-    time: '8:00 PM ET',
-    players: ['P. Mahomes'],
-    game: 'KC @ DEN',
+    time: '8:15 PM ET',
+    players: ['J. Jefferson'],
+    game: 'MIN @ LAR',
   },
   {
     day: 'Sunday',

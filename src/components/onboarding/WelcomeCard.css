@@ -30,6 +30,7 @@
 .welcome-card__kicker,
 .welcome-card__label,
 .welcome-card__copy,
+.welcome-card__replay-note,
 .welcome-card__title {
   margin: 0;
 }
@@ -50,6 +51,15 @@
   font-style: italic;
   letter-spacing: -0.05em;
   line-height: 0.9;
+}
+
+.welcome-card__replay-note {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .welcome-card__sections {

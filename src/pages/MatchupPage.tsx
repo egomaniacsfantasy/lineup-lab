@@ -13,6 +13,7 @@ import { usePlayerDetail } from '../contexts/PlayerDetailContext';
 import {
   MOCK_LINEUP_LOCKS,
   MOCK_MATCHUP,
+  MOCK_PLAYER_POOL,
   MOCK_TRADE_TARGET_GROUPS,
   MOCK_WAIVER_SUGGESTION,
 } from '../mocks';
@@ -23,49 +24,8 @@ import {
   getTopSwapEvaluation,
 } from '../utils/starterEvaluation';
 import type { Player, RosterSlot } from '../types';
+import { getWeek8ReplayGameLine } from '../data/playerManifest';
 import './MatchupPage.css';
-
-const STARTER_MARKET_CONTEXT: Record<
-  string,
-  { gameLine: string; playerProp?: string }
-> = {
-  'mahomes-01': {
-    gameLine: 'KC -3.0 · O/U 47.5',
-    playerProp: 'Mahomes O/U 281.5 pass yds (-115)',
-  },
-  'henry-01': {
-    gameLine: 'BAL -3.5 · O/U 47.0',
-    playerProp: 'Henry O/U 83.5 rush yds (-112)',
-  },
-  'robinson-01': {
-    gameLine: 'ATL -2.0 · O/U 45.5',
-    playerProp: 'Robinson O/U 78.5 rush yds (-110)',
-  },
-  'adams-01': {
-    gameLine: 'LV +2.5 · O/U 44.5',
-    playerProp: 'Adams O/U 72.5 rec yds (-110)',
-  },
-  'jefferson-01': {
-    gameLine: 'MIN -2.5 · O/U 44.0',
-    playerProp: 'Jefferson O/U 87.5 rec yds (-118)',
-  },
-  'kelce-01': {
-    gameLine: 'KC -3.0 · O/U 47.5',
-    playerProp: 'Kelce O/U 63.5 rec yds (-114)',
-  },
-  'mclaurin-01': {
-    gameLine: 'WAS -1.5 · O/U 42.0',
-    playerProp: 'McLaurin O/U 68.5 rec yds (-110)',
-  },
-  'tucker-01': {
-    gameLine: 'BAL -3.5 · O/U 47.0',
-    playerProp: 'Tucker O/U 1.5 FGs made (-105)',
-  },
-  'sf-def-01': {
-    gameLine: 'SF -1.5 · O/U 43.5',
-    playerProp: '49ers D/ST O/U 2.5 sacks (-118)',
-  },
-};
 
 function getBestAlternative(slot: RosterSlot) {
   return slot.alternatives.reduce<(typeof slot.alternatives)[number] | null>(
@@ -74,8 +34,15 @@ function getBestAlternative(slot: RosterSlot) {
         return alternative;
       }
 
-      return Math.abs(alternative.deltaWinProbability) >
-        Math.abs(bestAlternative.deltaWinProbability)
+      if (alternative.deltaWinProbability > 0 && bestAlternative.deltaWinProbability <= 0) {
+        return alternative;
+      }
+
+      if (alternative.deltaWinProbability <= 0 && bestAlternative.deltaWinProbability > 0) {
+        return bestAlternative;
+      }
+
+      return alternative.deltaWinProbability > bestAlternative.deltaWinProbability
         ? alternative
         : bestAlternative;
     },
@@ -104,24 +71,6 @@ function getHighestImpactDecision(roster: RosterSlot[]) {
       ? { slotIndex, slot, alternative: bestAlternative }
       : bestDecision;
   }, null);
-}
-
-function getUniquePlayers(roster: RosterSlot[], bench: { player: Player }[]) {
-  const seen = new Set<string>();
-  const players: Player[] = [];
-
-  [...roster.map((slot) => slot.starter), ...bench.map((benchPlayer) => benchPlayer.player)].forEach(
-    (player) => {
-      if (seen.has(player.id)) {
-        return;
-      }
-
-      seen.add(player.id);
-      players.push(player);
-    },
-  );
-
-  return players;
 }
 
 export function MatchupPage() {
@@ -160,8 +109,8 @@ export function MatchupPage() {
   const swapToastTimerRef = useRef<number | null>(null);
 
   const availablePlayers = useMemo(
-    () => getUniquePlayers(engine.roster, engine.bench),
-    [engine.bench, engine.roster],
+    () => MOCK_PLAYER_POOL,
+    [],
   );
   const playerMap = useMemo(
     () => new Map(availablePlayers.map((player) => [player.id, player])),
@@ -171,11 +120,9 @@ export function MatchupPage() {
     const contexts: Record<string, { gameLine: string; playerProp?: string }> = {};
 
     engine.baselineRoster.forEach((slot) => {
-      const starterContext = STARTER_MARKET_CONTEXT[slot.starter.id];
-      contexts[slot.starter.id] =
-        starterContext ?? {
-          gameLine: `${slot.starter.team} line pending`,
-        };
+      contexts[slot.starter.id] = {
+        gameLine: getWeek8ReplayGameLine(slot.starter.slug ?? slot.starter.id),
+      };
 
       slot.alternatives.forEach((alternative) => {
         contexts[alternative.player.id] = {
@@ -228,20 +175,20 @@ export function MatchupPage() {
   }, []);
 
   useEffect(() => {
-    const adamsSlotIndex = engine.baselineRoster.findIndex(
-      (slot) => slot.starter.id === 'adams-01',
-    );
+    const topSwap = topSwapEvaluation;
 
-    if (adamsSlotIndex === -1) {
+    if (!topSwap?.bestBenchAlternative) {
       return;
     }
 
-    const selectedAlternative = engine.selectedAlternatives[adamsSlotIndex] ?? null;
+    const selectedAlternative = engine.selectedAlternatives[topSwap.slotIndex] ?? null;
     const nextLabel =
-      selectedAlternative === null ? 'Start Adams' : 'Start Waddle';
+      selectedAlternative === null
+        ? `Start ${topSwap.currentStarter.shortName}`
+        : `Start ${topSwap.bestBenchAlternative.player.shortName}`;
 
     setStoredCascadeScenarioLabel(nextLabel);
-  }, [engine.baselineRoster, engine.selectedAlternatives]);
+  }, [engine.selectedAlternatives, topSwapEvaluation]);
 
   useEffect(() => {
     if (!hasActivatedCompare || !compareResult) {
@@ -291,8 +238,9 @@ export function MatchupPage() {
 
   const starterContext =
     activeSlot !== null
-      ? STARTER_MARKET_CONTEXT[activeSlot.starter.id] ?? {
-          gameLine: `${activeSlot.starter.team} game line pending`,
+      ? {
+          gameLine: getWeek8ReplayGameLine(activeSlot.starter.slug ?? activeSlot.starter.id),
+          playerProp: undefined,
         }
       : null;
 

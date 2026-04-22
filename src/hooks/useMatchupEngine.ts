@@ -7,6 +7,7 @@ import {
   roundTo,
   winProbabilityToMoneyline,
 } from '../utils/lineupComparison';
+import { getWeek8ReplayProjection } from '../data/playerManifest';
 
 export interface MatchupPlayerComparison {
   slotIndex: number;
@@ -85,6 +86,12 @@ function getPlayerProjection(
 
   if (benchPlayer) {
     return benchPlayer.projection;
+  }
+
+  const replayProjection = getWeek8ReplayProjection(player.slug ?? player.id);
+
+  if (replayProjection > 0) {
+    return replayProjection;
   }
 
   switch (player.position) {

@@ -1,89 +1,34 @@
 import type { Player } from '../types';
-import { playerFromManifest } from '../data/playerManifest';
-
-function teamLogo(team: string) {
-  return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/${team.toLowerCase()}.png&w=56`;
-}
+import { PLAYER_MANIFEST, playerFromManifest } from '../data/playerManifest';
 
 export const MOCK_PLAYERS: Record<string, Player> = {
-  adams: playerFromManifest('adams-01', {
-    bye: 10,
-    teamLogoUrl: teamLogo('lv'),
-  }),
-  waddle: playerFromManifest('waddle-01', {
-    bye: 6,
-    teamLogoUrl: teamLogo('mia'),
-  }),
-  mahomes: playerFromManifest('mahomes-01', {
-    bye: 6,
-    teamLogoUrl: teamLogo('kc'),
-  }),
-  henry: playerFromManifest('henry-01', {
-    bye: 14,
-    teamLogoUrl: teamLogo('bal'),
-  }),
-  mclaurin: playerFromManifest('mclaurin-01', {
-    bye: 14,
-    teamLogoUrl: teamLogo('wsh'),
-  }),
-  kirk: playerFromManifest('kirk-01', {
-    bye: 12,
-    teamLogoUrl: teamLogo('jax'),
-  }),
-  kelce: playerFromManifest('kelce-01', {
-    bye: 6,
-    teamLogoUrl: teamLogo('kc'),
-  }),
-  tucker: playerFromManifest('tucker-01', {
-    bye: 14,
-    teamLogoUrl: teamLogo('bal'),
-  }),
-  sf_def: playerFromManifest('sf-def-01', {
-    bye: 9,
-    teamLogoUrl: teamLogo('sf'),
-  }),
-  robinson: playerFromManifest('robinson-01', {
-    bye: 12,
-    teamLogoUrl: teamLogo('atl'),
-  }),
-  jefferson: playerFromManifest('jefferson-01', {
-    bye: 6,
-    teamLogoUrl: teamLogo('min'),
-  }),
-  chase: playerFromManifest('chase-01', {
-    bye: 12,
-    teamLogoUrl: teamLogo('cin'),
-  }),
-  pollard: playerFromManifest('pollard-01', {
-    bye: 5,
-    teamLogoUrl: teamLogo('ten'),
-  }),
-  prescott: playerFromManifest('prescott-01', {
-    bye: 7,
-    teamLogoUrl: teamLogo('dal'),
-  }),
-  goedert: playerFromManifest('goedert-01', {
-    bye: 5,
-    teamLogoUrl: teamLogo('phi'),
-  }),
-  bass: playerFromManifest('bass-01', {
-    bye: 12,
-    teamLogoUrl: teamLogo('buf'),
-  }),
-  dal_def: playerFromManifest('dal-def-01', {
-    bye: 7,
-    teamLogoUrl: teamLogo('dal'),
-  }),
-  smith: playerFromManifest('smith-01', {
-    bye: 5,
-    teamLogoUrl: teamLogo('phi'),
-  }),
-  allen: playerFromManifest('allen-01', {
-    bye: 12,
-    teamLogoUrl: teamLogo('buf'),
-  }),
-  barkley: playerFromManifest('barkley-01', {
-    bye: 5,
-    teamLogoUrl: teamLogo('phi'),
-  }),
+  mahomes: playerFromManifest('p-mahomes'),
+  lamar: playerFromManifest('l-jackson'),
+  allen: playerFromManifest('j-allen'),
+  burrow: playerFromManifest('j-burrow'),
+  barkley: playerFromManifest('s-barkley'),
+  henry: playerFromManifest('d-henry'),
+  robinson: playerFromManifest('b-robinson'),
+  gibbs: playerFromManifest('j-gibbs'),
+  jacobs: playerFromManifest('j-jacobs'),
+  jefferson: playerFromManifest('j-jefferson'),
+  chase: playerFromManifest('j-chase'),
+  lamb: playerFromManifest('c-lamb'),
+  stbrown: playerFromManifest('a-stbrown'),
+  nacua: playerFromManifest('p-nacua'),
+  london: playerFromManifest('d-london'),
+  mclaurin: playerFromManifest('t-mclaurin'),
+  smith: playerFromManifest('d-smith'),
+  kelce: playerFromManifest('t-kelce'),
+  bowers: playerFromManifest('b-bowers'),
+  mcbride: playerFromManifest('t-mcbride'),
+  aubrey: playerFromManifest('b-aubrey'),
+  fairbairn: playerFromManifest('k-fairbairn'),
+  phi_def: playerFromManifest('phi-def'),
+  sf_def: playerFromManifest('sf-def'),
+  min_def: playerFromManifest('min-def'),
 };
+
+export const MOCK_PLAYER_POOL = Object.keys(PLAYER_MANIFEST).map((slug) =>
+  playerFromManifest(slug as keyof typeof PLAYER_MANIFEST),
+);

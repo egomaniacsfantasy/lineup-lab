@@ -1,17 +1,17 @@
 import { useRef, useState } from 'react';
 import './WeeklyRecapCard.css';
 
-// TEMP: mock Week 7 result for share card demo. Replace with real recap data from API when available.
+// TEMP: 2024 Week 7 replay result for share card demo. Replace with real recap data from API when available.
 const WEEKLY_RECAP = {
   week: 7,
   closedLine: -180,
   resultMargin: 12,
-  finalScore: '132.4 - 120.1',
-  biggestContributor: 'J. Jefferson · 28.4 pts',
-  bestDecision: 'Started Waddle over Adams · +6.2% line move',
+  finalScore: '141.8 - 129.6',
+  biggestContributor: 'D. Henry · 25.2 pts',
+  bestDecision: 'Started London over Smith · +17.5 pts',
   movement: [
-    { label: 'Mon', value: -180 },
-    { label: 'Thu', value: -205 },
+    { label: 'Mon', value: -160 },
+    { label: 'Thu', value: -180 },
     { label: 'Final', value: -180 },
   ],
 };
@@ -99,8 +99,8 @@ function drawShareImage() {
   ctx.fillStyle = '#f4f7fb';
   ctx.font = '800 28px Manrope, sans-serif';
   ctx.fillText(WEEKLY_RECAP.finalScore, 150, 770);
-  ctx.fillText('J. Jefferson', 405, 770);
-  ctx.fillText('Waddle > Adams', 710, 770);
+  ctx.fillText('D. Henry', 405, 770);
+  ctx.fillText('London > Smith', 710, 770);
 
   ctx.fillStyle = '#8d99ae';
   ctx.font = '700 24px IBM Plex Mono, monospace';

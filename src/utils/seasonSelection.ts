@@ -10,8 +10,8 @@ export function setStoredCascadeScenarioLabel(label: string) {
 
 export function getStoredCascadeScenarioLabel() {
   if (typeof window === 'undefined') {
-    return 'Start Adams';
+    return 'Start McLaurin';
   }
 
-  return window.localStorage.getItem(CASCADE_SCENARIO_KEY) ?? 'Start Adams';
+  return window.localStorage.getItem(CASCADE_SCENARIO_KEY) ?? 'Start McLaurin';
 }
