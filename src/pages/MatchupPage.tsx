@@ -16,6 +16,10 @@ import {
 } from '../mocks';
 import { MatchupPreseason } from './MatchupPreseason';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
+import {
+  evaluateStarterRoster,
+  getTopSwapEvaluation,
+} from '../utils/starterEvaluation';
 import type { Player, RosterSlot } from '../types';
 import './MatchupPage.css';
 
@@ -77,11 +81,6 @@ function getBestAlternative(slot: RosterSlot) {
   );
 }
 
-function isPivotSlot(slot: RosterSlot) {
-  const bestAlternative = getBestAlternative(slot);
-  return Boolean(bestAlternative && Math.abs(bestAlternative.deltaWinProbability) >= 5);
-}
-
 function getHighestImpactDecision(roster: RosterSlot[]) {
   return roster.reduce<{
     slotIndex: number;
@@ -128,6 +127,16 @@ export function MatchupPage() {
   const engine = useMatchupEngine(MOCK_MATCHUP);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const compareWidgetRef = useRef<HTMLDivElement | null>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+
+  const starterEvaluations = useMemo(
+    () => evaluateStarterRoster(engine.baselineRoster),
+    [engine.baselineRoster],
+  );
+  const topSwapEvaluation = useMemo(
+    () => getTopSwapEvaluation(starterEvaluations),
+    [starterEvaluations],
+  );
 
   const defaultComparison = useMemo(
     () => getHighestImpactDecision(engine.baselineRoster),
@@ -139,10 +148,8 @@ export function MatchupPage() {
     rightId: defaultComparison?.alternative.player.id ?? null,
   }));
   const [hasActivatedCompare, setHasActivatedCompare] = useState(false);
-  const [desktopCompareSlotIndex, setDesktopCompareSlotIndex] = useState<number | null>(
-    defaultComparison?.slotIndex ?? null,
-  );
   const [pendingSwapSlotIndex, setPendingSwapSlotIndex] = useState<number | null>(null);
+  const [highlightedSwapSlotIndex, setHighlightedSwapSlotIndex] = useState<number | null>(null);
   const [swapToast, setSwapToast] = useState<{
     previousAlternativeIndex: number | null;
     slotIndex: number;
@@ -224,6 +231,10 @@ export function MatchupPage() {
       if (swapToastTimerRef.current !== null) {
         window.clearTimeout(swapToastTimerRef.current);
       }
+
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
     };
   }, []);
 
@@ -265,24 +276,26 @@ export function MatchupPage() {
       />
     ) : null;
 
-  const handleDesktopComparePreset = (
-    starterId: string,
-    alternativeId: string,
-    slotIndex: number,
-    shouldScroll = false,
-  ) => {
-    setCompareSelection({ leftId: starterId, rightId: alternativeId });
-    setHasActivatedCompare(true);
-    setDesktopCompareSlotIndex(slotIndex);
-
-    if (shouldScroll) {
-      window.requestAnimationFrame(() => {
-        compareWidgetRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        });
-      });
+  const handleOpenBiggestSwing = (slotIndex: number) => {
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
     }
+
+    setHighlightedSwapSlotIndex(slotIndex);
+
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-roster-slot-index="${slotIndex}"]`)
+        ?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+    });
+
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedSwapSlotIndex(null);
+      highlightTimerRef.current = null;
+    }, 1000);
   };
 
   const handleRosterInteraction = (slotIndex: number) => {
@@ -291,9 +304,9 @@ export function MatchupPage() {
       return;
     }
 
-    const slot = engine.baselineRoster[slotIndex];
+    const evaluation = starterEvaluations[slotIndex];
 
-    if (!slot || !isPivotSlot(slot)) {
+    if (!evaluation || evaluation.state !== 'SWAP') {
       return;
     }
 
@@ -305,7 +318,6 @@ export function MatchupPage() {
       ...current,
       [side === 'left' ? 'leftId' : 'rightId']: player?.id ?? null,
     }));
-    setDesktopCompareSlotIndex(null);
     setHasActivatedCompare(true);
     setPendingSwapSlotIndex(null);
   };
@@ -347,13 +359,13 @@ export function MatchupPage() {
     setSwapToast(null);
   };
 
-  const biggestSwing = defaultComparison
+  const biggestSwing = topSwapEvaluation?.bestBenchAlternative
     ? {
-        slotIndex: defaultComparison.slotIndex,
-        slotLabel: defaultComparison.slot.slotLabel,
-        starter: defaultComparison.slot.starter,
-        alternative: defaultComparison.alternative.player,
-        delta: defaultComparison.alternative.deltaWinProbability,
+        slotIndex: topSwapEvaluation.slotIndex,
+        slotLabel: engine.baselineRoster[topSwapEvaluation.slotIndex].slotLabel,
+        starter: topSwapEvaluation.currentStarter,
+        alternative: topSwapEvaluation.bestBenchAlternative.player,
+        delta: topSwapEvaluation.delta,
       }
     : null;
 
@@ -381,18 +393,20 @@ export function MatchupPage() {
         <RosterList
           activeDecisionSlot={
             isDesktop
-              ? pendingSwapSlotIndex ?? desktopCompareSlotIndex
+              ? pendingSwapSlotIndex
               : engine.activeDecisionSlot
           }
           baselineRoster={engine.baselineRoster}
           bench={engine.bench}
           getOptionLine={engine.getOptionLine}
+          highlightedSlotIndex={highlightedSwapSlotIndex}
           onCancelSwapConfirm={() => setPendingSwapSlotIndex(null)}
           onConfirmSwap={handleConfirmSwap}
           onToggleDecision={handleRosterInteraction}
           pendingSwapSlotIndex={isDesktop ? pendingSwapSlotIndex : null}
           roster={engine.roster}
           selectedAlternatives={engine.selectedAlternatives}
+          starterEvaluations={starterEvaluations}
         />
 
         {!isDesktop ? (
@@ -422,12 +436,7 @@ export function MatchupPage() {
                   return;
                 }
 
-                handleDesktopComparePreset(
-                  biggestSwing.starter.id,
-                  biggestSwing.alternative.id,
-                  biggestSwing.slotIndex,
-                  true,
-                );
+                handleOpenBiggestSwing(biggestSwing.slotIndex);
               }}
               topTradeTarget={topTradeTarget}
               waiverSuggestion={MOCK_WAIVER_SUGGESTION}
@@ -464,12 +473,7 @@ export function MatchupPage() {
                   return;
                 }
 
-                handleDesktopComparePreset(
-                  biggestSwing.starter.id,
-                  biggestSwing.alternative.id,
-                  biggestSwing.slotIndex,
-                  false,
-                );
+                handleOpenBiggestSwing(biggestSwing.slotIndex);
               }}
               topTradeTarget={topTradeTarget}
               waiverSuggestion={MOCK_WAIVER_SUGGESTION}

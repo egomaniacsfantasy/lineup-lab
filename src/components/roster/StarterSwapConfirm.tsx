@@ -7,6 +7,7 @@ interface StarterSwapConfirmProps {
   currentWinProbability: number;
   targetWinProbability: number;
   deltaWinProbability: number;
+  verdictSeed: string;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -17,6 +18,7 @@ export function StarterSwapConfirm({
   currentWinProbability,
   targetWinProbability,
   deltaWinProbability,
+  verdictSeed,
   onCancel,
   onConfirm,
 }: StarterSwapConfirmProps) {
@@ -53,7 +55,7 @@ export function StarterSwapConfirm({
           deltaWinProbability,
           currentPlayerName,
           targetPlayerName,
-          `${currentPlayerName}:${targetPlayerName}:${deltaWinProbability}`,
+          verdictSeed,
         )}
       </p>
 

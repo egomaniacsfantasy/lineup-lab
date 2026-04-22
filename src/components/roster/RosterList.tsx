@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BenchPlayer, MatchupLine, RosterSlot } from '../../types';
+import type { StarterEvaluation } from '../../utils/starterEvaluation';
 import { PlayerRow } from './PlayerRow';
 import { StarterSwapConfirm } from './StarterSwapConfirm';
 import './RosterList.css';
@@ -10,6 +11,8 @@ interface RosterListProps {
   bench: BenchPlayer[];
   activeDecisionSlot: number | null;
   pendingSwapSlotIndex: number | null;
+  highlightedSlotIndex: number | null;
+  starterEvaluations: StarterEvaluation[];
   selectedAlternatives: Record<number, number | null>;
   onCancelSwapConfirm: () => void;
   onConfirmSwap: (slotIndex: number, alternativeIndex: number | null) => void;
@@ -23,6 +26,8 @@ export function RosterList({
   bench,
   activeDecisionSlot,
   pendingSwapSlotIndex,
+  highlightedSlotIndex,
+  starterEvaluations,
   selectedAlternatives,
   onCancelSwapConfirm,
   onConfirmSwap,
@@ -33,8 +38,8 @@ export function RosterList({
   const [renderedSwapSlotIndex, setRenderedSwapSlotIndex] = useState<number | null>(
     pendingSwapSlotIndex,
   );
-  const interactiveCount = baselineRoster.filter(
-    (slot) => slot.alternatives.length > 0,
+  const swapTargetCount = starterEvaluations.filter(
+    (evaluation) => evaluation.state === 'SWAP',
   ).length;
 
   useEffect(() => {
@@ -89,24 +94,27 @@ export function RosterList({
           Starters
         </h2>
         <p className="roster-list__meta">
-          {interactiveCount} swappable starter{interactiveCount === 1 ? '' : 's'}
+          {swapTargetCount > 0
+            ? `${swapTargetCount} swap target${swapTargetCount === 1 ? '' : 's'}`
+            : 'Lineup locked'}
         </p>
       </div>
 
       <div className="roster-list__items">
         {roster.map((slot, slotIndex) => {
           const referenceSlot = baselineRoster[slotIndex];
+          const evaluation = starterEvaluations[slotIndex] ?? null;
           const selectedAlternativeIndex = selectedAlternatives[slotIndex] ?? null;
           const targetAlternativeIndex =
-            selectedAlternativeIndex === null ? 0 : null;
+            evaluation?.state === 'SWAP' ? evaluation.alternativeIndex : null;
           const currentPlayer =
             selectedAlternativeIndex === null
               ? referenceSlot.starter
               : referenceSlot.alternatives[selectedAlternativeIndex]?.player ??
                 referenceSlot.starter;
           const targetPlayer =
-            targetAlternativeIndex === null
-              ? referenceSlot.starter
+            targetAlternativeIndex === null || targetAlternativeIndex === undefined
+              ? null
               : referenceSlot.alternatives[targetAlternativeIndex]?.player;
           const currentLine = getOptionLine(slotIndex, selectedAlternativeIndex);
           const shouldRenderSwapConfirm = renderedSwapSlotIndex === slotIndex;
@@ -118,15 +126,19 @@ export function RosterList({
 
           return (
             <div
-              className="roster-list__starter"
+              className={[
+                'roster-list__starter',
+                highlightedSlotIndex === slotIndex ? 'roster-list__starter--highlight' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               data-roster-slot-index={slotIndex}
               key={`${slot.slotLabel}-${baselineRoster[slotIndex]?.starter.id ?? slotIndex}`}
             >
               <PlayerRow
-                getOptionLine={getOptionLine}
+                evaluation={evaluation}
                 isActive={activeDecisionSlot === slotIndex}
                 onToggleDecision={onToggleDecision}
-                referenceSlot={referenceSlot}
                 selectedAlternativeIndex={selectedAlternativeIndex}
                 slot={slot}
                 slotIndex={slotIndex}
@@ -152,6 +164,7 @@ export function RosterList({
                     onConfirm={() => onConfirmSwap(slotIndex, targetAlternativeIndex)}
                     targetPlayerName={targetPlayer.shortName}
                     targetWinProbability={targetLine.winProbability}
+                    verdictSeed={`${currentPlayer.id}:${targetPlayer.id}`}
                   />
                 ) : null}
               </div>
@@ -179,12 +192,11 @@ export function RosterList({
 
           return (
             <PlayerRow
-              getOptionLine={getOptionLine}
+              evaluation={null}
               isActive={false}
               isBench
               key={`bench-${benchPlayer.player.id}-${benchIndex}`}
               onToggleDecision={onToggleDecision}
-              referenceSlot={benchSlot}
               selectedAlternativeIndex={null}
               slot={benchSlot}
               slotIndex={-1}

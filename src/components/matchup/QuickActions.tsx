@@ -65,11 +65,11 @@ export function QuickActions({
                     {formatSwing(biggestSwing.delta)}
                   </p>
                   <p className="quick-actions__context">
-                    Your {biggestSwing.slotLabel} slot has the biggest line movement this week.
+                    Your {biggestSwing.slotLabel} slot has the clearest swap edge this week.
                   </p>
                 </>
               ) : (
-                <p className="quick-actions__context">No major pivots modeled for this slate.</p>
+                <p className="quick-actions__context">No swap targets on this slate.</p>
               )}
             </div>
           </div>

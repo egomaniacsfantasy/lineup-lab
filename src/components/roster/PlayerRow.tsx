@@ -1,25 +1,24 @@
 import { useState } from 'react';
-import type { MatchupLine, RosterSlot, SlotLabel } from '../../types';
+import type { RosterSlot, SlotLabel } from '../../types';
 import {
   cacheImageFailure,
   getInitials,
   getPlayerAvatarUrl,
   hasCachedImageFailure,
 } from '../../utils/playerAssets';
+import type { StarterEvaluation } from '../../utils/starterEvaluation';
+import { getPlayerLastName } from '../../utils/starterEvaluation';
 import './PlayerRow.css';
 
 interface PlayerRowProps {
   slot: RosterSlot;
-  referenceSlot: RosterSlot;
   slotIndex: number;
   isActive: boolean;
   isBench?: boolean;
+  evaluation: StarterEvaluation | null;
   selectedAlternativeIndex: number | null;
   onToggleDecision: (slotIndex: number) => void;
-  getOptionLine: (slotIndex: number, alternativeIndex: number | null) => MatchupLine;
 }
-
-type ImpactTier = 'pivot' | 'tap' | 'low' | 'none';
 
 function getPositionTone(slotLabel: SlotLabel) {
   switch (slotLabel) {
@@ -42,37 +41,8 @@ function getPositionTone(slotLabel: SlotLabel) {
   }
 }
 
-function getPreviewLabel(slot: RosterSlot, selectedAlternativeIndex: number | null) {
-  if (selectedAlternativeIndex === null) {
-    return slot.alternatives[0]?.player.shortName ?? slot.starter.shortName;
-  }
-
-  return slot.starter.shortName;
-}
-
-function getBestAlternativeDelta(slot: RosterSlot) {
-  return slot.alternatives.reduce((bestDelta, alternative) => {
-    const candidate = Math.abs(alternative.deltaWinProbability);
-    return Math.max(bestDelta, candidate);
-  }, 0);
-}
-
-function getImpactTier(slot: RosterSlot, isBench: boolean): ImpactTier {
-  if (isBench || slot.alternatives.length === 0) {
-    return 'none';
-  }
-
-  const bestDelta = getBestAlternativeDelta(slot);
-
-  if (bestDelta >= 5) {
-    return 'pivot';
-  }
-
-  if (bestDelta >= 1) {
-    return 'tap';
-  }
-
-  return 'low';
+function formatDelta(delta: number) {
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`;
 }
 
 function Headshot({
@@ -120,40 +90,33 @@ function Headshot({
 
 export function PlayerRow({
   slot,
-  referenceSlot,
   slotIndex,
   isActive,
   isBench = false,
+  evaluation,
   selectedAlternativeIndex,
   onToggleDecision,
-  getOptionLine,
 }: PlayerRowProps) {
   const tone = getPositionTone(slot.slotLabel);
-  const impactTier = getImpactTier(referenceSlot, isBench);
-  const isInteractive = impactTier === 'pivot';
-  const showsPivotTreatment = impactTier === 'pivot';
-
-  const currentLine = isInteractive
-    ? getOptionLine(slotIndex, selectedAlternativeIndex)
-    : null;
-  const previewAlternativeIndex = isInteractive
-    ? selectedAlternativeIndex === null
-      ? 0
-      : null
-    : null;
-  const previewLine =
-    isInteractive && previewAlternativeIndex !== undefined
-      ? getOptionLine(slotIndex, previewAlternativeIndex)
-      : null;
-  const previewDelta =
-    currentLine && previewLine
-      ? previewLine.winProbability - currentLine.winProbability
-      : 0;
-
-  const previewTone =
-    previewDelta > 0 ? 'positive' : previewDelta < 0 ? 'negative' : 'neutral';
-  const swingLabel =
-    previewDelta > 0 ? `+${previewDelta.toFixed(1)}%` : `${previewDelta.toFixed(1)}%`;
+  const isRecommendedAlternativeStarted =
+    evaluation?.alternativeIndex !== null &&
+    evaluation?.alternativeIndex !== undefined &&
+    selectedAlternativeIndex === evaluation.alternativeIndex;
+  const visualState =
+    isBench || isRecommendedAlternativeStarted ? 'OPTIMAL' : evaluation?.state ?? 'OPTIMAL';
+  const isSwapState = Boolean(
+    visualState === 'SWAP' && evaluation?.bestBenchAlternative && evaluation.delta > 0,
+  );
+  const isTightCallState = Boolean(
+    visualState === 'TIGHT_CALL' && evaluation?.bestBenchAlternative,
+  );
+  const isInteractive = Boolean(isSwapState);
+  const swingLabel = evaluation ? formatDelta(evaluation.delta) : '';
+  const alternativeShortName = evaluation?.bestBenchAlternative?.player.shortName ?? '';
+  const alternativeLastName = evaluation?.bestBenchAlternative
+    ? getPlayerLastName(evaluation.bestBenchAlternative.player.shortName)
+    : '';
+  const tightCallDelta = evaluation ? formatDelta(Math.abs(evaluation.delta)) : '';
 
   const content = (
     <>
@@ -179,40 +142,34 @@ export function PlayerRow({
       <span className="player-row__content">
         <span className="player-row__name-wrap">
           <span className="player-row__name">{slot.starter.shortName}</span>
-          {showsPivotTreatment ? (
-            <span className="player-row__decision-badge">Pivot</span>
+          {isSwapState ? (
+            <span className="player-row__decision-badge">Swap</span>
           ) : null}
         </span>
         <span className="player-row__meta">
           {slot.starter.position} · {slot.starter.team}
         </span>
-        {showsPivotTreatment && currentLine && previewLine ? (
+        {isTightCallState ? (
+          <span className="player-row__tight-call">
+            Tight call. {alternativeLastName} within {tightCallDelta}.
+          </span>
+        ) : null}
+        {isSwapState ? (
           <span className="player-row__preview">
-            <span className="player-row__preview-current">
-              {currentLine.moneyline > 0
-                ? `+${currentLine.moneyline}`
-                : `${currentLine.moneyline}`}
-            </span>
-            <span className="player-row__preview-arrow">-&gt;</span>
-            <span className={`player-row__preview-alt player-row__preview-alt--${previewTone}`}>
-              {previewLine.moneyline > 0
-                ? `+${previewLine.moneyline}`
-                : `${previewLine.moneyline}`}
-            </span>
-            <span className="player-row__preview-note">
-              if {getPreviewLabel(referenceSlot, selectedAlternativeIndex)}
-            </span>
+            <span className="player-row__preview-note">Start {alternativeShortName}</span>
+            <span className="player-row__preview-arrow">·</span>
+            <span className="player-row__preview-gain">{swingLabel}</span>
           </span>
         ) : null}
       </span>
 
       <span className="player-row__value-stack">
-        {showsPivotTreatment ? (
+        {isSwapState ? (
           <>
-            <span className={`player-row__delta player-row__delta--${previewTone}`}>
+            <span className="player-row__delta">
               {swingLabel}
             </span>
-            <span className="player-row__value-label">if switch</span>
+            <span className="player-row__value-label">swap +%</span>
           </>
         ) : (
           <>
@@ -226,7 +183,7 @@ export function PlayerRow({
         <span
           className={[
             'player-row__chevron',
-            `player-row__chevron--${impactTier}`,
+            'player-row__chevron--swap',
           ].join(' ')}
           aria-hidden="true"
         >
@@ -242,7 +199,7 @@ export function PlayerRow({
         className={[
           'player-row',
           'player-row--interactive',
-          `player-row--impact-${impactTier}`,
+          'player-row--state-swap',
           isActive ? 'player-row--active' : '',
         ]
           .filter(Boolean)
@@ -260,6 +217,7 @@ export function PlayerRow({
     <div
       className={[
         'player-row',
+        !isBench ? `player-row--state-${visualState.toLowerCase().replace('_', '-')}` : '',
         isBench ? 'player-row--bench' : '',
       ]
         .filter(Boolean)

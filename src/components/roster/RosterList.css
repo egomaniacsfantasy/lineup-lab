@@ -41,6 +41,10 @@
   gap: 6px;
 }
 
+.roster-list__starter--highlight .player-row {
+  animation: roster-list-highlight 1s ease-out both;
+}
+
 .roster-list__swap-confirm-shell {
   max-height: 0;
   overflow: hidden;
@@ -87,4 +91,15 @@
 
 .roster-list__items--bench {
   margin-top: 6px;
+}
+
+@keyframes roster-list-highlight {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+
+  25% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 32%, transparent);
+  }
 }
