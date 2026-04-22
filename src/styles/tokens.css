@@ -10,7 +10,7 @@
   --bg-positive: rgba(18, 53, 38, 0.72);
   --bg-negative: rgba(70, 23, 28, 0.64);
   /* Canvas texture: near-background solid tone so atmospheric text tints, not reads. */
-  --canvas-numeral: #0c111a;
+  --canvas-numeral: #070b12;
 
   /* ── Text ── */
   --text-primary: #f4f7fb;
