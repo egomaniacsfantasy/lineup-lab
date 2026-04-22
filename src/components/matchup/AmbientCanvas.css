@@ -17,8 +17,8 @@
 .ambient-canvas__moneylines {
   width: 100%;
   height: 100%;
-  color: var(--text-muted);
-  opacity: 0.018;
+  color: var(--canvas-numeral);
+  opacity: 1;
 }
 
 .ambient-canvas__moneyline {
@@ -45,16 +45,15 @@
 }
 
 .ambient-canvas__watermark {
-  inset: auto clamp(1.5rem, 6vw, 5rem) clamp(1rem, 6vw, 4rem) auto;
+  inset: auto var(--space-2xl) var(--space-2xl) auto;
   display: grid;
   justify-items: end;
-  color: var(--text-muted);
+  color: var(--canvas-numeral);
   font-family: var(--font-serif);
-  font-size: clamp(4.5rem, 9vw, 8rem);
+  font-size: clamp(4rem, 7vw, 6rem);
   font-style: italic;
   letter-spacing: -0.05em;
   line-height: 0.82;
-  opacity: 0.02;
+  opacity: 1;
   text-align: right;
-  mix-blend-mode: overlay;
 }

@@ -1,7 +1,7 @@
 .roster-list {
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  background: var(--bg-surface);
   box-shadow: var(--shadow-card);
   padding: 18px;
 }

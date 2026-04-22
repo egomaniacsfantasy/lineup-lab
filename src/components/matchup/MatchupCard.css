@@ -3,12 +3,12 @@
   overflow: hidden;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--bg-surface-soft) 92%, transparent),
-      color-mix(in srgb, var(--bg-surface) 96%, transparent)
-    );
+  background-color: var(--bg-surface);
+  background-image: linear-gradient(
+    180deg,
+    var(--bg-surface-soft),
+    var(--bg-surface)
+  );
   box-shadow: var(--shadow-card);
   isolation: isolate;
   transition:
