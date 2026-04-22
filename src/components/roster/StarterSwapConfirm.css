@@ -68,6 +68,20 @@
   line-height: 1.25;
 }
 
+.starter-swap-confirm__detail-link {
+  justify-self: start;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.starter-swap-confirm__detail-link:hover {
+  color: var(--text-amber);
+}
+
 .starter-swap-confirm__actions {
   display: flex;
   justify-content: flex-end;

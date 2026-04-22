@@ -1,11 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { TradeTargetGroup } from '../../mocks/tradeTargets';
-import {
-  cacheImageFailure,
-  getInitials,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import './TradeTargetTeaser.css';
 
 interface TradeTargetTeaserProps {
@@ -22,34 +18,6 @@ function getFitTone(fitScore: number) {
   }
 
   return 'soft';
-}
-
-function TradeTeaserAvatar({
-  src,
-  name,
-}: {
-  src: string;
-  name: string;
-}) {
-  const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(src));
-
-  return (
-    <span aria-hidden="true" className="trade-target-teaser__avatar">
-      {hasImageError ? (
-        <span className="trade-target-teaser__avatar-fallback">{getInitials(name)}</span>
-      ) : (
-        <img
-          alt=""
-          className="trade-target-teaser__avatar-image"
-          onError={() => {
-            cacheImageFailure(src);
-            setHasImageError(true);
-          }}
-          src={src}
-        />
-      )}
-    </span>
-  );
 }
 
 export function TradeTargetTeaser({ groups }: TradeTargetTeaserProps) {
@@ -84,9 +52,13 @@ export function TradeTargetTeaser({ groups }: TradeTargetTeaserProps) {
             key={target.id}
             to={`/trade#trade-target-${target.id}`}
           >
-            <TradeTeaserAvatar
+            <PlayerHeadshot
+              className="trade-target-teaser__avatar"
+              fallbackClassName="trade-target-teaser__avatar-fallback"
+              imageClassName="trade-target-teaser__avatar-image"
               name={target.player.name}
-              src={target.player.headshotUrl}
+              position={target.player.position}
+              slug={target.player.slug}
             />
             <span className="trade-target-teaser__name">{target.player.name}</span>
             <span className="trade-target-teaser__meta">

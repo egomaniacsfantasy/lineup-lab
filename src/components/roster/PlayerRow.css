@@ -17,6 +17,17 @@
     transform var(--transition-fast);
 }
 
+.player-row--detail {
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.player-row--detail:active {
+  transform: scale(0.995);
+}
+
 .player-row--interactive:hover,
 .player-row:not(.player-row--bench):not(.player-row--state-swap):hover {
   background: color-mix(in srgb, var(--bg-surface-soft) 68%, transparent);

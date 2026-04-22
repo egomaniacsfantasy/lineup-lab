@@ -12,6 +12,7 @@ export type SlotLabel =
 
 export interface Player {
   id: string;
+  slug?: string;
   name: string;
   shortName: string;
   position: Position;
@@ -21,4 +22,5 @@ export interface Player {
   bye: number;
   isActive: boolean;
   injuryStatus?: string;
+  jerseyNumber?: string;
 }

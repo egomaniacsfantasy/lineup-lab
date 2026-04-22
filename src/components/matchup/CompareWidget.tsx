@@ -1,13 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { Player } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
-import {
-  cacheImageFailure,
-  getInitials,
-  getPlayerAvatarUrl,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
 import type { MatchupPlayerComparison } from '../../hooks/useMatchupEngine';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
+import { Gloss } from '../ui/Gloss';
 import { PlayerSelect } from './PlayerSelect';
 import {
   getComparisonVerdict,
@@ -28,6 +24,7 @@ interface CompareWidgetProps {
   defaultSuggestionLabel: string;
   onSelectLeft: (player: Player | null) => void;
   onSelectRight: (player: Player | null) => void;
+  onOpenPlayerDetail?: (player: Player, projection: number) => void;
   playerContexts: Record<string, PlayerContext>;
 }
 
@@ -36,36 +33,35 @@ function ComparePlayerCard({
   player,
   positionTeam,
   projection,
+  onOpen,
 }: {
   player: Player;
   positionTeam: string;
   projection: number;
   lineText: string;
+  onOpen?: () => void;
 }) {
-  const avatarUrl = getPlayerAvatarUrl(player);
-  const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(avatarUrl));
+  const CardElement = onOpen ? 'button' : 'article';
 
   return (
-    <article className="compare-widget__card">
+    <CardElement
+      className={[
+        'compare-widget__card',
+        onOpen ? 'compare-widget__card--button' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      onClick={onOpen}
+      type={onOpen ? 'button' : undefined}
+    >
       <div className="compare-widget__card-top">
         <span className="compare-widget__avatar-wrap" aria-hidden="true">
-          <span className="compare-widget__avatar">
-            {hasImageError ? (
-              <span className="compare-widget__avatar-fallback">
-                {getInitials(player.shortName)}
-              </span>
-            ) : (
-              <img
-                alt=""
-                className="compare-widget__avatar-image"
-                onError={() => {
-                  cacheImageFailure(avatarUrl);
-                  setHasImageError(true);
-                }}
-                src={avatarUrl}
-              />
-            )}
-          </span>
+          <PlayerHeadshot
+            className="compare-widget__avatar"
+            fallbackClassName="compare-widget__avatar-fallback"
+            imageClassName="compare-widget__avatar-image"
+            player={player}
+          />
           {player.position !== 'DEF' ? (
             <span className="compare-widget__logo-badge">
               <img alt="" className="compare-widget__logo-image" src={player.teamLogoUrl} />
@@ -81,7 +77,9 @@ function ComparePlayerCard({
 
       <div className="compare-widget__stats">
         <div className="compare-widget__stat-block">
-          <span className="compare-widget__stat-label">Projection</span>
+          <span className="compare-widget__stat-label">
+            <Gloss term="projection">Projection</Gloss>
+          </span>
           <span className="compare-widget__stat-value">
             {projection.toFixed(1)}
             <span className="compare-widget__stat-unit"> pts</span>
@@ -89,11 +87,13 @@ function ComparePlayerCard({
         </div>
 
         <div className="compare-widget__stat-block">
-          <span className="compare-widget__stat-label">Line if started</span>
+          <span className="compare-widget__stat-label">
+            <Gloss term="line-if-started">Line if started</Gloss>
+          </span>
           <span className="compare-widget__line-value">{lineText}</span>
         </div>
       </div>
-    </article>
+    </CardElement>
   );
 }
 
@@ -105,6 +105,7 @@ export function CompareWidget({
   defaultSuggestionLabel,
   onSelectLeft,
   onSelectRight,
+  onOpenPlayerDetail,
   playerContexts,
 }: CompareWidgetProps) {
   const compareCopy = useMemo(() => {
@@ -126,11 +127,6 @@ export function CompareWidget({
       : comparison && comparison.deltaWinProbability < 0
         ? 'negative'
         : 'neutral';
-
-  const deltaLabel =
-    comparison && comparison.deltaWinProbability !== 0
-      ? `Δ ${comparison.deltaWinProbability > 0 ? '+' : ''}${comparison.deltaWinProbability.toFixed(1)}%`
-      : 'Δ 0.0%';
 
   const leftContext = leftPlayer
     ? playerContexts[leftPlayer.id] ?? getSyntheticGameContext(leftPlayer)
@@ -184,12 +180,22 @@ export function CompareWidget({
           <div className="compare-widget__cards">
             <ComparePlayerCard
               lineText={`${formatAmericanOdds(comparison.leftLine.moneyline)} · ${comparison.leftLine.winProbability.toFixed(1)}%`}
+              onOpen={
+                onOpenPlayerDetail
+                  ? () => onOpenPlayerDetail(leftPlayer, comparison.leftProjection)
+                  : undefined
+              }
               player={leftPlayer}
               positionTeam={`${leftPlayer.position} · ${leftPlayer.team}`}
               projection={comparison.leftProjection}
             />
             <ComparePlayerCard
               lineText={`${formatAmericanOdds(comparison.rightLine.moneyline)} · ${comparison.rightLine.winProbability.toFixed(1)}%`}
+              onOpen={
+                onOpenPlayerDetail
+                  ? () => onOpenPlayerDetail(rightPlayer, comparison.rightProjection)
+                  : undefined
+              }
               player={rightPlayer}
               positionTeam={`${rightPlayer.position} · ${rightPlayer.team}`}
               projection={comparison.rightProjection}
@@ -202,7 +208,11 @@ export function CompareWidget({
               `compare-widget__delta--${deltaTone}`,
             ].join(' ')}
           >
-            <span className="compare-widget__delta-value">{deltaLabel}</span>
+            <span className="compare-widget__delta-value">
+              <Gloss term="delta">Δ</Gloss>{' '}
+              {comparison.deltaWinProbability > 0 ? '+' : ''}
+              {comparison.deltaWinProbability.toFixed(1)}%
+            </span>
             <p className="compare-widget__delta-copy">{compareCopy}</p>
           </div>
 
@@ -210,10 +220,26 @@ export function CompareWidget({
             <span className="compare-widget__context-label">Game context</span>
             <div className="compare-widget__context-list">
               <p className="compare-widget__context-item">
-                {leftPlayer.shortName}: {leftContext?.gameLine ?? 'Line pending'}
+                {leftPlayer.shortName}:{' '}
+                {(leftContext?.gameLine ?? 'Line pending').replace('O/U', '')}
+                {leftContext?.gameLine.includes('O/U') ? (
+                  <>
+                    {' '}
+                    <Gloss term="o-u">O/U</Gloss>
+                    {leftContext.gameLine.split('O/U')[1]}
+                  </>
+                ) : null}
               </p>
               <p className="compare-widget__context-item">
-                {rightPlayer.shortName}: {rightContext?.gameLine ?? 'Line pending'}
+                {rightPlayer.shortName}:{' '}
+                {(rightContext?.gameLine ?? 'Line pending').replace('O/U', '')}
+                {rightContext?.gameLine.includes('O/U') ? (
+                  <>
+                    {' '}
+                    <Gloss term="o-u">O/U</Gloss>
+                    {rightContext.gameLine.split('O/U')[1]}
+                  </>
+                ) : null}
               </p>
             </div>
           </div>

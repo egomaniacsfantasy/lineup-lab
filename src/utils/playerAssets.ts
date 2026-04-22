@@ -1,9 +1,5 @@
 import type { Player } from '../types';
-
-const AVATAR_OVERRIDES: Record<string, string> = {
-  'adams-01': 'https://a.espncdn.com/i/headshots/nfl/players/full/16800.png',
-  'kirk-01': 'https://a.espncdn.com/i/headshots/nfl/players/full/3915416.png',
-};
+import { getManifestHeadshotUrl } from '../data/playerManifest';
 
 const failedImages = new Set<string>();
 
@@ -21,7 +17,7 @@ export function getPlayerAvatarUrl(player: Player) {
     return player.teamLogoUrl;
   }
 
-  return AVATAR_OVERRIDES[player.id] ?? (player.headshotUrl || player.teamLogoUrl);
+  return getManifestHeadshotUrl(player.slug ?? player.id) || player.headshotUrl || player.teamLogoUrl;
 }
 
 export function hasCachedImageFailure(src: string) {

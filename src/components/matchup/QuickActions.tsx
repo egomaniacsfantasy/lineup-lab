@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Player, RosterSlot } from '../../types';
 import type { TradeTarget } from '../../mocks/tradeTargets';
 import type { LineupLockWindow, WaiverSuggestion } from '../../mocks/actions';
+import { Gloss } from '../ui/Gloss';
 import './QuickActions.css';
 
 interface BiggestSwing {
@@ -22,7 +23,7 @@ interface QuickActionsProps {
 }
 
 function formatSwing(delta: number) {
-  return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}% win prob`;
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`;
 }
 
 function LightningIcon() {
@@ -105,7 +106,7 @@ export function QuickActions({
                 <>
                   <p className="quick-actions__headline">
                     {biggestSwing.starter.shortName} → {biggestSwing.alternative.shortName}:{' '}
-                    {formatSwing(biggestSwing.delta)}
+                    {formatSwing(biggestSwing.delta)} <Gloss term="win-prob">win prob</Gloss>
                   </p>
                   <p className="quick-actions__context">
                     Your {biggestSwing.slotLabel} slot has the clearest swap edge this week.

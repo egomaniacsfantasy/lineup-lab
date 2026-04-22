@@ -1,4 +1,5 @@
 import type { ConsensusRanking, Position } from '../../types';
+import { usePlayerDetail } from '../../contexts/PlayerDetailContext';
 import './ConsensusTable.css';
 
 interface ConsensusTableProps {
@@ -25,6 +26,8 @@ function getPositionClass(position: Position) {
 }
 
 export function ConsensusTable({ rankings }: ConsensusTableProps) {
+  const { openPlayerDetail } = usePlayerDetail();
+
   return (
     <section aria-labelledby="consensus-table-title" className="consensus-table">
       <div className="consensus-table__header">
@@ -47,7 +50,15 @@ export function ConsensusTable({ rankings }: ConsensusTableProps) {
           </thead>
           <tbody>
             {rankings.map((ranking) => (
-              <tr key={ranking.player.id}>
+              <tr
+                key={ranking.player.id}
+                onClick={() =>
+                  openPlayerDetail({
+                    player: ranking.player,
+                    slug: ranking.player.slug ?? ranking.player.id,
+                  })
+                }
+              >
                 <td className="consensus-table__rank">{ranking.rank}</td>
                 <td className="consensus-table__player">
                   <span className="consensus-table__player-name">

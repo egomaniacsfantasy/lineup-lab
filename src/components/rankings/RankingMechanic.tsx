@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MOCK_RANKING_PROMPT } from '../../mocks';
 import type { Player } from '../../types';
+import { usePlayerDetail } from '../../contexts/PlayerDetailContext';
 import { DraggableCard } from './DraggableCard';
 import './RankingMechanic.css';
 
@@ -23,6 +24,7 @@ function shufflePlayers(players: Player[]) {
 }
 
 export function RankingMechanic() {
+  const { openPlayerDetail } = usePlayerDetail();
   const [players, setPlayers] = useState<Player[]>(MOCK_RANKING_PROMPT.players);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
@@ -83,6 +85,12 @@ export function RankingMechanic() {
             onDrop={() => setDragIndex(null)}
             onMoveDown={() => movePlayer(index, index + 1)}
             onMoveUp={() => movePlayer(index, index - 1)}
+            onOpenPlayerDetail={(player) =>
+              openPlayerDetail({
+                player,
+                slug: player.slug ?? player.id,
+              })
+            }
             player={player}
             rank={index + 1}
           />

@@ -296,17 +296,7 @@ export const MOCK_MATCHUP: MatchupData = {
     roster: [
       {
         slotLabel: 'QB',
-        starter: {
-          ...p.mahomes,
-          id: 'opp-qb',
-          name: 'Josh Allen',
-          shortName: 'J. Allen',
-          team: 'BUF',
-          headshotUrl:
-            'https://a.espncdn.com/i/headshots/nfl/players/full/3918298.png',
-          teamLogoUrl:
-            'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/buf.png&w=56',
-        },
+        starter: p.allen,
         projection: 23.8,
         floor: 15.2,
         ceiling: 36.4,
@@ -315,17 +305,7 @@ export const MOCK_MATCHUP: MatchupData = {
       },
       {
         slotLabel: 'RB',
-        starter: {
-          ...p.henry,
-          id: 'opp-rb1',
-          name: 'Saquon Barkley',
-          shortName: 'S. Barkley',
-          team: 'PHI',
-          headshotUrl:
-            'https://a.espncdn.com/i/headshots/nfl/players/full/3929630.png',
-          teamLogoUrl:
-            'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/phi.png&w=56',
-        },
+        starter: p.barkley,
         projection: 16.4,
         floor: 9.1,
         ceiling: 27.8,

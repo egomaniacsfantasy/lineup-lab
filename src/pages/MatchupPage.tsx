@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DecisionPanel } from '../components/decision/DecisionPanel';
 import { CompareWidget } from '../components/matchup/CompareWidget';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { MatchupCard } from '../components/matchup/MatchupCard';
 import { QuickActions } from '../components/matchup/QuickActions';
+import { WeeklyRecapCard } from '../components/matchup/WeeklyRecapCard';
 import { RosterList } from '../components/roster/RosterList';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSeasonMode } from '../hooks/useSeasonMode';
+import { usePlayerDetail } from '../contexts/PlayerDetailContext';
 import {
   MOCK_LINEUP_LOCKS,
   MOCK_MATCHUP,
@@ -124,6 +126,7 @@ function getUniquePlayers(roster: RosterSlot[], bench: { player: Player }[]) {
 
 export function MatchupPage() {
   const { mode } = useSeasonMode();
+  const { isOpen: isPlayerDetailOpen, openPlayerDetail } = usePlayerDetail();
   const engine = useMatchupEngine(MOCK_MATCHUP);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const compareWidgetRef = useRef<HTMLDivElement | null>(null);
@@ -202,6 +205,28 @@ export function MatchupPage() {
     [],
   );
 
+  const handleOpenBiggestSwing = useCallback((slotIndex: number) => {
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+
+    setHighlightedSwapSlotIndex(slotIndex);
+
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-roster-slot-index="${slotIndex}"]`)
+        ?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+    });
+
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedSwapSlotIndex(null);
+      highlightTimerRef.current = null;
+    }, 1000);
+  }, []);
+
   useEffect(() => {
     const adamsSlotIndex = engine.baselineRoster.findIndex(
       (slot) => slot.starter.id === 'adams-01',
@@ -227,7 +252,21 @@ export function MatchupPage() {
   }, [compareResult, engine, hasActivatedCompare]);
 
   useEffect(() => {
+    const handleHighlightSlot = (event: Event) => {
+      const slotIndex = (event as CustomEvent<{ slotIndex?: number }>).detail?.slotIndex;
+
+      if (typeof slotIndex !== 'number') {
+        return;
+      }
+
+      handleOpenBiggestSwing(slotIndex);
+    };
+
+    window.addEventListener('lineuplab:highlight-slot', handleHighlightSlot);
+
     return () => {
+      window.removeEventListener('lineuplab:highlight-slot', handleHighlightSlot);
+
       if (swapToastTimerRef.current !== null) {
         window.clearTimeout(swapToastTimerRef.current);
       }
@@ -236,7 +275,7 @@ export function MatchupPage() {
         window.clearTimeout(highlightTimerRef.current);
       }
     };
-  }, []);
+  }, [handleOpenBiggestSwing]);
 
   if (mode === 'preseason') {
     return <MatchupPreseason />;
@@ -275,28 +314,6 @@ export function MatchupPage() {
         starterPlayerProp={starterContext.playerProp}
       />
     ) : null;
-
-  const handleOpenBiggestSwing = (slotIndex: number) => {
-    if (highlightTimerRef.current !== null) {
-      window.clearTimeout(highlightTimerRef.current);
-    }
-
-    setHighlightedSwapSlotIndex(slotIndex);
-
-    window.requestAnimationFrame(() => {
-      document
-        .querySelector(`[data-roster-slot-index="${slotIndex}"]`)
-        ?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        });
-    });
-
-    highlightTimerRef.current = window.setTimeout(() => {
-      setHighlightedSwapSlotIndex(null);
-      highlightTimerRef.current = null;
-    }, 1000);
-  };
 
   const handleRosterInteraction = (slotIndex: number) => {
     if (!isDesktop) {
@@ -388,6 +405,7 @@ export function MatchupPage() {
             activeRoster={engine.roster}
             matchup={MOCK_MATCHUP}
           />
+          <WeeklyRecapCard />
         </div>
 
         <RosterList
@@ -402,6 +420,7 @@ export function MatchupPage() {
           highlightedSlotIndex={highlightedSwapSlotIndex}
           onCancelSwapConfirm={() => setPendingSwapSlotIndex(null)}
           onConfirmSwap={handleConfirmSwap}
+          onOpenPlayerDetail={openPlayerDetail}
           onToggleDecision={handleRosterInteraction}
           pendingSwapSlotIndex={isDesktop ? pendingSwapSlotIndex : null}
           roster={engine.roster}
@@ -422,6 +441,14 @@ export function MatchupPage() {
                 leftPlayer={leftPlayer}
                 onSelectLeft={(player) => handleComparePlayerChange('left', player)}
                 onSelectRight={(player) => handleComparePlayerChange('right', player)}
+                onOpenPlayerDetail={(player, projection) =>
+                  openPlayerDetail({
+                    player,
+                    slug: player.slug ?? player.id,
+                    projection,
+                    gameLine: playerContexts[player.id]?.gameLine,
+                  })
+                }
                 playerContexts={playerContexts}
                 players={availablePlayers}
                 rightPlayer={rightPlayer}
@@ -447,7 +474,14 @@ export function MatchupPage() {
 
       {isDesktop ? (
         <aside className="matchup-page__sidebar">
-          <div className="matchup-page__sidebar-stack">
+          <div
+            className={[
+              'matchup-page__sidebar-stack',
+              isPlayerDetailOpen ? 'matchup-page__sidebar-stack--detail-open' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
             <div ref={compareWidgetRef}>
               <CompareWidget
                 comparison={compareResult}
@@ -459,6 +493,14 @@ export function MatchupPage() {
                 leftPlayer={leftPlayer}
                 onSelectLeft={(player) => handleComparePlayerChange('left', player)}
                 onSelectRight={(player) => handleComparePlayerChange('right', player)}
+                onOpenPlayerDetail={(player, projection) =>
+                  openPlayerDetail({
+                    player,
+                    slug: player.slug ?? player.id,
+                    projection,
+                    gameLine: playerContexts[player.id]?.gameLine,
+                  })
+                }
                 playerContexts={playerContexts}
                 players={availablePlayers}
                 rightPlayer={rightPlayer}

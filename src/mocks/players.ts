@@ -1,220 +1,89 @@
 import type { Player } from '../types';
+import { playerFromManifest } from '../data/playerManifest';
+
+function teamLogo(team: string) {
+  return `https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/${team.toLowerCase()}.png&w=56`;
+}
 
 export const MOCK_PLAYERS: Record<string, Player> = {
-  adams: {
-    id: 'adams-01',
-    name: 'Davante Adams',
-    shortName: 'D. Adams',
-    position: 'WR',
-    team: 'LV',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/2543498.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/lv.png&w=56',
+  adams: playerFromManifest('adams-01', {
     bye: 10,
-    isActive: true,
-  },
-  waddle: {
-    id: 'waddle-01',
-    name: 'Jaylen Waddle',
-    shortName: 'J. Waddle',
-    position: 'WR',
-    team: 'MIA',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/4372016.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/mia.png&w=56',
+    teamLogoUrl: teamLogo('lv'),
+  }),
+  waddle: playerFromManifest('waddle-01', {
     bye: 6,
-    isActive: true,
-  },
-  mahomes: {
-    id: 'mahomes-01',
-    name: 'Patrick Mahomes',
-    shortName: 'P. Mahomes',
-    position: 'QB',
-    team: 'KC',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/kc.png&w=56',
+    teamLogoUrl: teamLogo('mia'),
+  }),
+  mahomes: playerFromManifest('mahomes-01', {
     bye: 6,
-    isActive: true,
-  },
-  henry: {
-    id: 'henry-01',
-    name: 'Derrick Henry',
-    shortName: 'D. Henry',
-    position: 'RB',
-    team: 'BAL',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3043078.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/bal.png&w=56',
+    teamLogoUrl: teamLogo('kc'),
+  }),
+  henry: playerFromManifest('henry-01', {
     bye: 14,
-    isActive: true,
-  },
-  mclaurin: {
-    id: 'mclaurin-01',
-    name: 'Terry McLaurin',
-    shortName: 'T. McLaurin',
-    position: 'WR',
-    team: 'WAS',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3916148.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/wsh.png&w=56',
+    teamLogoUrl: teamLogo('bal'),
+  }),
+  mclaurin: playerFromManifest('mclaurin-01', {
     bye: 14,
-    isActive: true,
-  },
-  kirk: {
-    id: 'kirk-01',
-    name: 'Christian Kirk',
-    shortName: 'C. Kirk',
-    position: 'WR',
-    team: 'JAX',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3116406.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/jax.png&w=56',
+    teamLogoUrl: teamLogo('wsh'),
+  }),
+  kirk: playerFromManifest('kirk-01', {
     bye: 12,
-    isActive: true,
-  },
-  kelce: {
-    id: 'kelce-01',
-    name: 'Travis Kelce',
-    shortName: 'T. Kelce',
-    position: 'TE',
-    team: 'KC',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/15847.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/kc.png&w=56',
+    teamLogoUrl: teamLogo('jax'),
+  }),
+  kelce: playerFromManifest('kelce-01', {
     bye: 6,
-    isActive: true,
-  },
-  tucker: {
-    id: 'tucker-01',
-    name: 'Justin Tucker',
-    shortName: 'J. Tucker',
-    position: 'K',
-    team: 'BAL',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/15683.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/bal.png&w=56',
+    teamLogoUrl: teamLogo('kc'),
+  }),
+  tucker: playerFromManifest('tucker-01', {
     bye: 14,
-    isActive: true,
-  },
-  sf_def: {
-    id: 'sf-def-01',
-    name: 'San Francisco 49ers',
-    shortName: '49ers D/ST',
-    position: 'DEF',
-    team: 'SF',
-    headshotUrl: '',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/sf.png&w=56',
+    teamLogoUrl: teamLogo('bal'),
+  }),
+  sf_def: playerFromManifest('sf-def-01', {
     bye: 9,
-    isActive: true,
-  },
-  robinson: {
-    id: 'robinson-01',
-    name: 'Bijan Robinson',
-    shortName: 'B. Robinson',
-    position: 'RB',
-    team: 'ATL',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/4429795.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/atl.png&w=56',
+    teamLogoUrl: teamLogo('sf'),
+  }),
+  robinson: playerFromManifest('robinson-01', {
     bye: 12,
-    isActive: true,
-  },
-  jefferson: {
-    id: 'jefferson-01',
-    name: 'Justin Jefferson',
-    shortName: 'J. Jefferson',
-    position: 'WR',
-    team: 'MIN',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/4262921.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/min.png&w=56',
+    teamLogoUrl: teamLogo('atl'),
+  }),
+  jefferson: playerFromManifest('jefferson-01', {
     bye: 6,
-    isActive: true,
-  },
-  chase: {
-    id: 'chase-01',
-    name: "Ja'Marr Chase",
-    shortName: 'J. Chase',
-    position: 'WR',
-    team: 'CIN',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/4362628.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/cin.png&w=56',
+    teamLogoUrl: teamLogo('min'),
+  }),
+  chase: playerFromManifest('chase-01', {
     bye: 12,
-    isActive: true,
-  },
-  pollard: {
-    id: 'pollard-01',
-    name: 'Tony Pollard',
-    shortName: 'T. Pollard',
-    position: 'RB',
-    team: 'TEN',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3128429.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/ten.png&w=56',
+    teamLogoUrl: teamLogo('cin'),
+  }),
+  pollard: playerFromManifest('pollard-01', {
     bye: 5,
-    isActive: true,
-  },
-  prescott: {
-    id: 'prescott-01',
-    name: 'Dak Prescott',
-    shortName: 'D. Prescott',
-    position: 'QB',
-    team: 'DAL',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/2577417.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/dal.png&w=56',
+    teamLogoUrl: teamLogo('ten'),
+  }),
+  prescott: playerFromManifest('prescott-01', {
     bye: 7,
-    isActive: true,
-  },
-  goedert: {
-    id: 'goedert-01',
-    name: 'Dallas Goedert',
-    shortName: 'D. Goedert',
-    position: 'TE',
-    team: 'PHI',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3116365.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/phi.png&w=56',
+    teamLogoUrl: teamLogo('dal'),
+  }),
+  goedert: playerFromManifest('goedert-01', {
     bye: 5,
-    isActive: true,
-  },
-  bass: {
-    id: 'bass-01',
-    name: 'Tyler Bass',
-    shortName: 'T. Bass',
-    position: 'K',
-    team: 'BUF',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3919077.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/buf.png&w=56',
+    teamLogoUrl: teamLogo('phi'),
+  }),
+  bass: playerFromManifest('bass-01', {
     bye: 12,
-    isActive: true,
-  },
-  dal_def: {
-    id: 'dal-def-01',
-    name: 'Dallas Cowboys',
-    shortName: 'Cowboys D/ST',
-    position: 'DEF',
-    team: 'DAL',
-    headshotUrl: '',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/dal.png&w=56',
+    teamLogoUrl: teamLogo('buf'),
+  }),
+  dal_def: playerFromManifest('dal-def-01', {
     bye: 7,
-    isActive: true,
-  },
-  smith: {
-    id: 'smith-01',
-    name: 'DeVonta Smith',
-    shortName: 'D. Smith',
-    position: 'WR',
-    team: 'PHI',
-    headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/4241478.png',
-    teamLogoUrl:
-      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/phi.png&w=56',
+    teamLogoUrl: teamLogo('dal'),
+  }),
+  smith: playerFromManifest('smith-01', {
     bye: 5,
-    isActive: true,
-  },
+    teamLogoUrl: teamLogo('phi'),
+  }),
+  allen: playerFromManifest('allen-01', {
+    bye: 12,
+    teamLogoUrl: teamLogo('buf'),
+  }),
+  barkley: playerFromManifest('barkley-01', {
+    bye: 5,
+    teamLogoUrl: teamLogo('phi'),
+  }),
 };

@@ -1,11 +1,7 @@
-import { useState } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import type { SuggestedPackage as SuggestedPackageData } from '../../mocks/tradeTargets';
-import {
-  cacheImageFailure,
-  getInitials,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
+import { Gloss } from '../ui/Gloss';
 import './SuggestedPackage.css';
 
 interface SuggestedPackageProps {
@@ -16,34 +12,6 @@ interface SuggestedPackageProps {
 
 function formatSignedPercent(value: number) {
   return `${value >= 0 ? '+' : '-'}${Math.abs(value).toFixed(1)}%`;
-}
-
-function PackageAvatar({
-  name,
-  src,
-}: {
-  name: string;
-  src: string;
-}) {
-  const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(src));
-
-  return (
-    <span aria-hidden="true" className="trade-suggested-package__avatar">
-      {hasImageError ? (
-        <span className="trade-suggested-package__avatar-fallback">{getInitials(name)}</span>
-      ) : (
-        <img
-          alt=""
-          className="trade-suggested-package__avatar-image"
-          onError={() => {
-            cacheImageFailure(src);
-            setHasImageError(true);
-          }}
-          src={src}
-        />
-      )}
-    </span>
-  );
 }
 
 function PackagePlayer({
@@ -57,7 +25,14 @@ function PackagePlayer({
     <div className="trade-suggested-package__player">
       <span className="trade-suggested-package__column-label">{label}</span>
       <div className="trade-suggested-package__player-card">
-        <PackageAvatar name={player.name} src={player.headshotUrl} />
+        <PlayerHeadshot
+          className="trade-suggested-package__avatar"
+          fallbackClassName="trade-suggested-package__avatar-fallback"
+          imageClassName="trade-suggested-package__avatar-image"
+          name={player.name}
+          position={player.position}
+          slug={player.slug}
+        />
         <div className="trade-suggested-package__player-copy">
           <span className="trade-suggested-package__player-name">{player.name}</span>
           <span className="trade-suggested-package__player-meta">
@@ -120,7 +95,8 @@ export function SuggestedPackage({
                   `trade-suggested-package__delta--${weeklyTone}`,
                 ].join(' ')}
               >
-                {formatSignedPercent(pkg.weeklyWinProbDelta)} win prob
+                {formatSignedPercent(pkg.weeklyWinProbDelta)}{' '}
+                <Gloss term="win-prob">win prob</Gloss>
               </span>
             </div>
 

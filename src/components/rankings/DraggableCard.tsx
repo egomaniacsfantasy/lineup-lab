@@ -1,11 +1,5 @@
-import { useState } from 'react';
 import type { Player } from '../../types';
-import {
-  cacheImageFailure,
-  getInitials,
-  getPlayerAvatarUrl,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import './DraggableCard.css';
 
 interface DraggableCardProps {
@@ -18,6 +12,7 @@ interface DraggableCardProps {
   onDrop: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onOpenPlayerDetail?: (player: Player) => void;
 }
 
 export function DraggableCard({
@@ -30,10 +25,8 @@ export function DraggableCard({
   onDrop,
   onMoveUp,
   onMoveDown,
+  onOpenPlayerDetail,
 }: DraggableCardProps) {
-  const avatarUrl = getPlayerAvatarUrl(player);
-  const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(avatarUrl));
-
   return (
     <div
       className={[
@@ -56,23 +49,20 @@ export function DraggableCard({
       <span className="draggable-card__handle" aria-hidden="true">
         ⋮⋮
       </span>
-      <span className="draggable-card__avatar" aria-hidden="true">
-        {hasImageError ? (
-          <span className="draggable-card__avatar-fallback">{getInitials(player.shortName)}</span>
-        ) : (
-          <img
-            alt=""
-            className="draggable-card__avatar-image"
-            onError={() => {
-              cacheImageFailure(avatarUrl);
-              setHasImageError(true);
-            }}
-            src={avatarUrl}
-          />
-        )}
-      </span>
+      <PlayerHeadshot
+        className="draggable-card__avatar"
+        fallbackClassName="draggable-card__avatar-fallback"
+        imageClassName="draggable-card__avatar-image"
+        player={player}
+      />
       <span className="draggable-card__copy">
-        <span className="draggable-card__name">{player.shortName}</span>
+        <button
+          className="draggable-card__name draggable-card__name--button"
+          onClick={() => onOpenPlayerDetail?.(player)}
+          type="button"
+        >
+          {player.shortName}
+        </button>
         <span className="draggable-card__meta">
           {player.position} · {player.team}
         </span>

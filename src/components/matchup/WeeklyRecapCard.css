@@ -1,0 +1,144 @@
+.weekly-recap-card {
+  position: relative;
+  display: grid;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+  border: 1px solid color-mix(in srgb, var(--amber) 16%, var(--glass-border));
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card), 0 0 40px color-mix(in srgb, var(--amber) 7%, transparent);
+}
+
+.weekly-recap-card__dismiss {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.weekly-recap-card__copy {
+  display: grid;
+  gap: var(--space-xs);
+  max-width: 560px;
+}
+
+.weekly-recap-card__kicker,
+.weekly-recap-card__subhead,
+.weekly-recap-card__title {
+  margin: 0;
+}
+
+.weekly-recap-card__kicker,
+.weekly-recap-card__point-label,
+.weekly-recap-card__odds,
+.weekly-recap-card__stats span {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.weekly-recap-card__title {
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: clamp(34px, 6vw, 54px);
+  font-style: italic;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.weekly-recap-card__subhead {
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.weekly-recap-card__chart {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: end;
+  min-height: 120px;
+  padding: var(--space-md) var(--space-sm);
+}
+
+.weekly-recap-card__chart::before {
+  content: '';
+  position: absolute;
+  left: 13%;
+  right: 13%;
+  top: 50%;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--amber), color-mix(in srgb, var(--amber) 64%, transparent));
+}
+
+.weekly-recap-card__point {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.weekly-recap-card__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--amber);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+.weekly-recap-card__dot--peak {
+  transform: translateY(-18px);
+}
+
+.weekly-recap-card__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.weekly-recap-card__stats div {
+  display: grid;
+  gap: 6px;
+  padding: var(--space-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+}
+
+.weekly-recap-card__stats strong {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.weekly-recap-card__share {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-amber);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.weekly-recap-card__share svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}

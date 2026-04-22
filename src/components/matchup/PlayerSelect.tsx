@@ -1,11 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Player, Position } from '../../types';
-import {
-  cacheImageFailure,
-  getInitials,
-  getPlayerAvatarUrl,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import './PlayerSelect.css';
 
 interface PlayerSelectProps {
@@ -35,9 +30,6 @@ function PlayerOption({
   onSelect: () => void;
   player: Player;
 }) {
-  const avatarUrl = getPlayerAvatarUrl(player);
-  const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(avatarUrl));
-
   return (
     <button
       className={[
@@ -49,24 +41,12 @@ function PlayerOption({
       onClick={onSelect}
       type="button"
     >
-      <span className="player-select__option-avatar" aria-hidden="true">
-        {hasImageError ? (
-          <span className="player-select__option-avatar-fallback">
-            {getInitials(player.shortName)}
-          </span>
-        ) : (
-          <img
-            alt=""
-            aria-hidden="true"
-            className="player-select__option-avatar-image"
-            onError={() => {
-              cacheImageFailure(avatarUrl);
-              setHasImageError(true);
-            }}
-            src={avatarUrl}
-          />
-        )}
-      </span>
+      <PlayerHeadshot
+        className="player-select__option-avatar"
+        fallbackClassName="player-select__option-avatar-fallback"
+        imageClassName="player-select__option-avatar-image"
+        player={player}
+      />
       <span className="player-select__option-name">{player.shortName}</span>
       <span className="player-select__option-meta">
         {player.position} · {player.team}

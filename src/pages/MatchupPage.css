@@ -23,6 +23,15 @@
 .matchup-page__sidebar-stack {
   display: grid;
   gap: var(--space-lg);
+  transition:
+    opacity 150ms ease-out,
+    transform 220ms ease-out;
+}
+
+.matchup-page__sidebar-stack--detail-open {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(var(--space-xl));
 }
 
 .matchup-page__market-stack {

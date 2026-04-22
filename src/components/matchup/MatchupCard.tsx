@@ -1,13 +1,9 @@
-import { useState, type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import type { MatchupData, MatchupLine, RosterSlot, ScoringFormat } from '../../types';
 import { formatAmericanOdds, formatSpread } from '../../utils/formatOdds';
-import {
-  cacheImageFailure,
-  getInitials,
-  getPlayerAvatarUrl,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
+import { Gloss } from '../ui/Gloss';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import './MatchupCard.css';
 
 interface MatchupCardProps {
@@ -59,32 +55,6 @@ function getCommentary(winProbability: number) {
   }
 
   return 'You are getting points. The gods love an upset.';
-}
-
-function Avatar({
-  imageUrl,
-  fallbackLabel,
-}: {
-  imageUrl: string;
-  fallbackLabel: string;
-}) {
-  const [hasError, setHasError] = useState(hasCachedImageFailure(imageUrl));
-
-  if (hasError) {
-    return <span className="matchup-card__avatar-fallback">{fallbackLabel}</span>;
-  }
-
-  return (
-    <img
-      alt=""
-      className="matchup-card__avatar-image"
-      onError={() => {
-        cacheImageFailure(imageUrl);
-        setHasError(true);
-      }}
-      src={imageUrl}
-    />
-  );
 }
 
 export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardProps) {
@@ -148,14 +118,14 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           <div>
             <p className="matchup-card__eyebrow">Matchup Market</p>
             <h2 className="matchup-card__title" id="matchup-market-title">
-              Week {matchup.week} · {SCORING_LABELS[matchup.scoringFormat]}
+              Week {matchup.week} · <Gloss term="ppr">{SCORING_LABELS[matchup.scoringFormat]}</Gloss>
             </h2>
           </div>
 
           <div className="matchup-card__header-pills">
             <span className="matchup-card__live-pill">Live</span>
             <span className={`matchup-card__movement matchup-card__movement--${deltaTone}`}>
-              {movementLabel}
+              {lineDelta === 0 ? <Gloss term="baseline">Baseline</Gloss> : movementLabel}
             </span>
           </div>
         </header>
@@ -165,9 +135,11 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
             <div className="matchup-card__team-head">
               <span className="matchup-card__avatar" aria-hidden="true">
                 {yourQuarterback ? (
-                  <Avatar
-                    fallbackLabel={getInitials(yourQuarterback.shortName)}
-                    imageUrl={getPlayerAvatarUrl(yourQuarterback)}
+                  <PlayerHeadshot
+                    className="matchup-card__avatar-inner"
+                    fallbackClassName="matchup-card__avatar-fallback"
+                    imageClassName="matchup-card__avatar-image"
+                    player={yourQuarterback}
                   />
                 ) : null}
               </span>
@@ -190,9 +162,11 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
             <div className="matchup-card__team-head">
               <span className="matchup-card__avatar" aria-hidden="true">
                 {opponentQuarterback ? (
-                  <Avatar
-                    fallbackLabel={getInitials(opponentQuarterback.shortName)}
-                    imageUrl={getPlayerAvatarUrl(opponentQuarterback)}
+                  <PlayerHeadshot
+                    className="matchup-card__avatar-inner"
+                    fallbackClassName="matchup-card__avatar-fallback"
+                    imageClassName="matchup-card__avatar-image"
+                    player={opponentQuarterback}
                   />
                 ) : null}
               </span>
@@ -216,9 +190,11 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           <div className="matchup-card__price-card matchup-card__price-card--yours">
             <p className="matchup-card__price-label">{matchup.yourTeam.teamName}</p>
             <p className="matchup-card__moneyline matchup-card__moneyline--yours">
-              {animatedYourMoneyline}
+              <Gloss term="moneyline">{animatedYourMoneyline}</Gloss>
             </p>
-            <p className="matchup-card__win-probability">{animatedYourWinProbability}</p>
+            <p className="matchup-card__win-probability">
+              <Gloss term="win-prob">{animatedYourWinProbability}</Gloss>
+            </p>
           </div>
 
           <div className="matchup-card__odds-center">
@@ -231,7 +207,9 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
               <span className="matchup-card__probability-marker" />
             </div>
 
-            <p className="matchup-card__spread-readout">{animatedMeterSpread}</p>
+            <p className="matchup-card__spread-readout">
+              <Gloss term="spread">{animatedMeterSpread}</Gloss>
+            </p>
 
             <p className="matchup-card__commentary">
               {getCommentary(activeLine.yours.winProbability)}
@@ -241,17 +219,19 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           <div className="matchup-card__price-card matchup-card__price-card--opponent">
             <p className="matchup-card__price-label">{matchup.opponentTeam.teamName}</p>
             <p className="matchup-card__moneyline matchup-card__moneyline--opponent">
-              {animatedOpponentMoneyline}
+              <Gloss term="moneyline">{animatedOpponentMoneyline}</Gloss>
             </p>
             <p className="matchup-card__win-probability">
-              {animatedOpponentWinProbability}
+              <Gloss term="win-prob">{animatedOpponentWinProbability}</Gloss>
             </p>
           </div>
         </div>
 
         <div className="matchup-card__markets">
           <div className="matchup-card__market matchup-card__market--accent">
-            <p className="matchup-card__market-label">Spread</p>
+            <p className="matchup-card__market-label">
+              <Gloss term="spread">Spread</Gloss>
+            </p>
             <p className="matchup-card__market-value">{animatedSpread}</p>
           </div>
 

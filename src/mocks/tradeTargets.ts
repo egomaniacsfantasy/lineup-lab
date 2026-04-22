@@ -1,4 +1,5 @@
-import { MOCK_PLAYERS } from './players';
+import type { PlayerSlug } from '../data/playerManifest';
+import { PLAYER_MANIFEST } from '../data/playerManifest';
 
 export interface TradeNeed {
   position: string;
@@ -8,21 +9,21 @@ export interface TradeNeed {
 }
 
 export interface TradeTargetPlayer {
+  slug: PlayerSlug;
   name: string;
   position: string;
   team: string;
   projection: number;
   positionRank: string;
   rostered: 'starter' | 'bench';
-  headshotUrl: string;
 }
 
 export interface SuggestedPackagePlayer {
+  slug: PlayerSlug;
   name: string;
   position: string;
   team: string;
   projection: number;
-  headshotUrl: string;
 }
 
 export interface SuggestedPackage {
@@ -59,6 +60,37 @@ export interface TradeTargetGroup {
   targets: TradeTarget[];
 }
 
+function tradePlayer(
+  slug: PlayerSlug,
+  projection: number,
+  positionRank: string,
+  rostered: TradeTargetPlayer['rostered'],
+): TradeTargetPlayer {
+  const player = PLAYER_MANIFEST[slug];
+
+  return {
+    slug,
+    name: player.displayName,
+    position: player.position,
+    team: player.team,
+    projection,
+    positionRank,
+    rostered,
+  };
+}
+
+function packagePlayer(slug: PlayerSlug, projection: number): SuggestedPackagePlayer {
+  const player = PLAYER_MANIFEST[slug];
+
+  return {
+    slug,
+    name: player.displayName,
+    position: player.position,
+    team: player.team,
+    projection,
+  };
+}
+
 export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
   {
     userNeed: {
@@ -75,36 +107,16 @@ export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
         record: '4-3',
         championshipOdds: 340,
         playoffProb: 84.6,
-        player: {
-          name: 'J. Jacobs',
-          position: 'RB',
-          team: 'GB',
-          projection: 14.8,
-          positionRank: 'RB11',
-          rostered: 'bench',
-          headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3916387.png',
-        },
+        player: tradePlayer('jacobs-01', 14.8, 'RB11', 'bench'),
         theirNeed: 'WR',
         tradeLine: 'They need WR — you have Smith and Waddle.',
         fitScore: 92,
         suggestedPackage: {
           youSend: [
-            {
-              name: 'D. Smith',
-              position: 'WR',
-              team: 'PHI',
-              projection: 13.6,
-              headshotUrl: MOCK_PLAYERS.smith.headshotUrl,
-            },
+            packagePlayer('smith-01', 13.6),
           ],
           youReceive: [
-            {
-              name: 'J. Jacobs',
-              position: 'RB',
-              team: 'GB',
-              projection: 14.8,
-              headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3916387.png',
-            },
+            packagePlayer('jacobs-01', 14.8),
           ],
           weeklyImpact: { before: -220, after: -240, delta: -20 },
           weeklyWinProbDelta: 1.8,
@@ -121,36 +133,16 @@ export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
         record: '4-3',
         championshipOdds: 340,
         playoffProb: 84.6,
-        player: {
-          name: 'R. Stevenson',
-          position: 'RB',
-          team: 'NE',
-          projection: 12.2,
-          positionRank: 'RB18',
-          rostered: 'bench',
-          headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/4361411.png',
-        },
+        player: tradePlayer('stevenson-01', 12.2, 'RB18', 'bench'),
         theirNeed: 'WR',
         tradeLine: 'They need WR — you have Smith and Waddle.',
         fitScore: 92,
         suggestedPackage: {
           youSend: [
-            {
-              name: 'J. Waddle',
-              position: 'WR',
-              team: 'MIA',
-              projection: 14.2,
-              headshotUrl: MOCK_PLAYERS.waddle.headshotUrl,
-            },
+            packagePlayer('waddle-01', 14.2),
           ],
           youReceive: [
-            {
-              name: 'R. Stevenson',
-              position: 'RB',
-              team: 'NE',
-              projection: 12.2,
-              headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/4361411.png',
-            },
+            packagePlayer('stevenson-01', 12.2),
           ],
           weeklyImpact: { before: -220, after: -232, delta: -12 },
           weeklyWinProbDelta: 1.1,
@@ -167,36 +159,16 @@ export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
         record: '3-4',
         championshipOdds: 680,
         playoffProb: 52.3,
-        player: {
-          name: 'A. Ekeler',
-          position: 'RB',
-          team: 'WAS',
-          projection: 13.1,
-          positionRank: 'RB15',
-          rostered: 'bench',
-          headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3068267.png',
-        },
+        player: tradePlayer('ekeler-01', 13.1, 'RB15', 'bench'),
         theirNeed: 'TE',
         tradeLine: 'They need TE — Goedert is a clean match.',
         fitScore: 78,
         suggestedPackage: {
           youSend: [
-            {
-              name: 'D. Goedert',
-              position: 'TE',
-              team: 'PHI',
-              projection: 9.8,
-              headshotUrl: MOCK_PLAYERS.goedert.headshotUrl,
-            },
+            packagePlayer('goedert-01', 9.8),
           ],
           youReceive: [
-            {
-              name: 'A. Ekeler',
-              position: 'RB',
-              team: 'WAS',
-              projection: 13.1,
-              headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3068267.png',
-            },
+            packagePlayer('ekeler-01', 13.1),
           ],
           weeklyImpact: { before: -220, after: -230, delta: -10 },
           weeklyWinProbDelta: 0.9,
@@ -224,36 +196,16 @@ export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
         record: '5-2',
         championshipOdds: 520,
         playoffProb: 68.1,
-        player: {
-          name: 'D. Njoku',
-          position: 'TE',
-          team: 'CLE',
-          projection: 10.4,
-          positionRank: 'TE8',
-          rostered: 'bench',
-          headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3052587.png',
-        },
+        player: tradePlayer('njoku-01', 10.4, 'TE8', 'bench'),
         theirNeed: 'QB',
         tradeLine: 'They need QB — Prescott gives them a real upgrade.',
         fitScore: 85,
         suggestedPackage: {
           youSend: [
-            {
-              name: 'D. Prescott',
-              position: 'QB',
-              team: 'DAL',
-              projection: 18.2,
-              headshotUrl: MOCK_PLAYERS.prescott.headshotUrl,
-            },
+            packagePlayer('prescott-01', 18.2),
           ],
           youReceive: [
-            {
-              name: 'D. Njoku',
-              position: 'TE',
-              team: 'CLE',
-              projection: 10.4,
-              headshotUrl: 'https://a.espncdn.com/i/headshots/nfl/players/full/3052587.png',
-            },
+            packagePlayer('njoku-01', 10.4),
           ],
           weeklyImpact: { before: -220, after: -215, delta: 5 },
           weeklyWinProbDelta: -0.4,

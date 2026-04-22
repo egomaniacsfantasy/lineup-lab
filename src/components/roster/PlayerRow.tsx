@@ -1,11 +1,7 @@
-import { useState } from 'react';
 import type { RosterSlot, SlotLabel } from '../../types';
-import {
-  cacheImageFailure,
-  getInitials,
-  getPlayerAvatarUrl,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
+import type { PlayerDetailRequest } from '../../contexts/PlayerDetailContext';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
+import { Gloss } from '../ui/Gloss';
 import type { StarterEvaluation } from '../../utils/starterEvaluation';
 import { getPlayerLastName } from '../../utils/starterEvaluation';
 import './PlayerRow.css';
@@ -17,6 +13,8 @@ interface PlayerRowProps {
   isBench?: boolean;
   evaluation: StarterEvaluation | null;
   selectedAlternativeIndex: number | null;
+  detailRequest?: PlayerDetailRequest;
+  onOpenPlayerDetail?: (request: PlayerDetailRequest) => void;
   onToggleDecision: (slotIndex: number) => void;
 }
 
@@ -45,49 +43,6 @@ function formatDelta(delta: number) {
   return `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`;
 }
 
-function Headshot({
-  imageUrl,
-  logoUrl,
-  fallbackLabel,
-  showLogoBadge,
-}: {
-  imageUrl: string;
-  logoUrl: string;
-  fallbackLabel: string;
-  showLogoBadge: boolean;
-}) {
-  const [hasError, setHasError] = useState(hasCachedImageFailure(imageUrl));
-
-  return (
-    <span className="player-row__avatar-wrap" aria-hidden="true">
-      <span className="player-row__avatar">
-        {hasError ? (
-          <span className="player-row__avatar-fallback">{fallbackLabel}</span>
-        ) : (
-          <img
-            alt=""
-            className="player-row__avatar-image"
-            onError={() => {
-              cacheImageFailure(imageUrl);
-              setHasError(true);
-            }}
-            src={imageUrl}
-          />
-        )}
-      </span>
-      {showLogoBadge ? (
-        <span className="player-row__logo-badge">
-          <img
-            alt=""
-            className="player-row__logo-image"
-            src={logoUrl}
-          />
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
 export function PlayerRow({
   slot,
   slotIndex,
@@ -95,6 +50,8 @@ export function PlayerRow({
   isBench = false,
   evaluation,
   selectedAlternativeIndex,
+  detailRequest,
+  onOpenPlayerDetail,
   onToggleDecision,
 }: PlayerRowProps) {
   const tone = getPositionTone(slot.slotLabel);
@@ -132,18 +89,31 @@ export function PlayerRow({
         {slot.slotLabel}
       </span>
 
-      <Headshot
-        fallbackLabel={getInitials(slot.starter.shortName)}
-        imageUrl={getPlayerAvatarUrl(slot.starter)}
-        logoUrl={slot.starter.teamLogoUrl}
-        showLogoBadge={slot.starter.position !== 'DEF'}
-      />
+      <span className="player-row__avatar-wrap" aria-hidden="true">
+        <PlayerHeadshot
+          className="player-row__avatar"
+          fallbackClassName="player-row__avatar-fallback"
+          imageClassName="player-row__avatar-image"
+          player={slot.starter}
+        />
+        {slot.starter.position !== 'DEF' ? (
+          <span className="player-row__logo-badge">
+            <img
+              alt=""
+              className="player-row__logo-image"
+              src={slot.starter.teamLogoUrl}
+            />
+          </span>
+        ) : null}
+      </span>
 
       <span className="player-row__content">
         <span className="player-row__name-wrap">
           <span className="player-row__name">{slot.starter.shortName}</span>
           {isSwapState ? (
-            <span className="player-row__decision-badge">Swap</span>
+            <span className="player-row__decision-badge">
+              <Gloss term="swap">Swap</Gloss>
+            </span>
           ) : null}
         </span>
         <span className="player-row__meta">
@@ -151,7 +121,8 @@ export function PlayerRow({
         </span>
         {isTightCallState ? (
           <span className="player-row__tight-call">
-            Tight call. {alternativeLastName} within {tightCallDelta}.
+            <Gloss term="tight-call">Tight call</Gloss>. {alternativeLastName} within{' '}
+            {tightCallDelta}.
           </span>
         ) : null}
         {isSwapState ? (
@@ -169,7 +140,9 @@ export function PlayerRow({
             <span className="player-row__delta">
               {swingLabel}
             </span>
-            <span className="player-row__value-label">swap +%</span>
+            <span className="player-row__value-label">
+              <Gloss term="swap">swap +%</Gloss>
+            </span>
           </>
         ) : (
           <>
@@ -206,6 +179,25 @@ export function PlayerRow({
           .join(' ')}
         aria-expanded={isActive}
         onClick={() => onToggleDecision(slotIndex)}
+        type="button"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  if (detailRequest && onOpenPlayerDetail) {
+    return (
+      <button
+        className={[
+          'player-row',
+          'player-row--detail',
+          !isBench ? `player-row--state-${visualState.toLowerCase().replace('_', '-')}` : '',
+          isBench ? 'player-row--bench' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onClick={() => onOpenPlayerDetail(detailRequest)}
         type="button"
       >
         {content}

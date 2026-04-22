@@ -1,0 +1,51 @@
+.player-headshot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+}
+
+.player-headshot__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.player-headshot__fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.player-headshot--qb .player-headshot__fallback {
+  background: var(--pos-qb-bg);
+}
+
+.player-headshot--rb .player-headshot__fallback {
+  background: var(--pos-rb-bg);
+}
+
+.player-headshot--wr .player-headshot__fallback {
+  background: var(--pos-wr-bg);
+}
+
+.player-headshot--te .player-headshot__fallback {
+  background: var(--pos-te-bg);
+}
+
+.player-headshot--k .player-headshot__fallback {
+  background: var(--pos-k-bg);
+}
+
+.player-headshot--def .player-headshot__fallback {
+  background: var(--pos-def-bg);
+}

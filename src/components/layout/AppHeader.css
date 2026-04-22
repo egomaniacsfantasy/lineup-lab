@@ -55,6 +55,21 @@
   min-width: fit-content;
 }
 
+.app-header__help {
+  display: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color var(--transition-fast);
+}
+
+.app-header__help:hover {
+  color: var(--text-primary);
+}
+
 .app-header__status {
   display: inline-flex;
   align-items: center;
@@ -154,6 +169,10 @@
 
   .app-header__actions {
     gap: var(--space-sm);
+  }
+
+  .app-header__help {
+    display: inline-flex;
   }
 
   .app-header__status {

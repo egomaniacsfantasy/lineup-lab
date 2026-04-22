@@ -65,6 +65,14 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+.consensus-table__table tbody tr {
+  cursor: pointer;
+}
+
+.consensus-table__table tbody tr:hover td {
+  background: color-mix(in srgb, var(--bg-surface-soft) 44%, transparent);
+}
+
 .consensus-table__rank,
 .consensus-table__player-team,
 .consensus-table__trend {

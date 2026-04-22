@@ -1,4 +1,5 @@
 import { getComparisonVerdict } from '../../utils/lineupComparison';
+import { Gloss } from '../ui/Gloss';
 import './StarterSwapConfirm.css';
 
 interface StarterSwapConfirmProps {
@@ -10,6 +11,7 @@ interface StarterSwapConfirmProps {
   verdictSeed: string;
   onCancel: () => void;
   onConfirm: () => void;
+  onViewTargetDetails?: () => void;
 }
 
 export function StarterSwapConfirm({
@@ -21,6 +23,7 @@ export function StarterSwapConfirm({
   verdictSeed,
   onCancel,
   onConfirm,
+  onViewTargetDetails,
 }: StarterSwapConfirmProps) {
   const isPositive = deltaWinProbability > 0;
   const impactTone = isPositive
@@ -31,7 +34,9 @@ export function StarterSwapConfirm({
 
   return (
     <div className="starter-swap-confirm" data-swap-confirm>
-      <p className="starter-swap-confirm__eyebrow">SWAP CONFIRMATION</p>
+      <p className="starter-swap-confirm__eyebrow">
+        <Gloss term="swap">SWAP</Gloss> CONFIRMATION
+      </p>
 
       <p className="starter-swap-confirm__title">
         Swap <span>{currentPlayerName}</span>{' '}
@@ -40,7 +45,7 @@ export function StarterSwapConfirm({
       </p>
 
       <p className="starter-swap-confirm__impact">
-        Win prob:{' '}
+        <Gloss term="win-prob">Win prob</Gloss>:{' '}
         <span>{currentWinProbability.toFixed(1)}%</span>{' '}
         <span className="starter-swap-confirm__arrow">-&gt;</span>{' '}
         <span
@@ -58,6 +63,16 @@ export function StarterSwapConfirm({
           verdictSeed,
         )}
       </p>
+
+      {onViewTargetDetails ? (
+        <button
+          className="starter-swap-confirm__detail-link"
+          onClick={onViewTargetDetails}
+          type="button"
+        >
+          View {targetPlayerName.split(/\s+/).at(-1) ?? targetPlayerName} →
+        </button>
+      ) : null}
 
       <div className="starter-swap-confirm__actions">
         <button

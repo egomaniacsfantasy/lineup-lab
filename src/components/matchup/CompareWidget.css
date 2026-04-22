@@ -79,10 +79,25 @@
 .compare-widget__card {
   display: grid;
   gap: 14px;
+  width: 100%;
+  text-align: left;
   padding: 14px;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-surface-soft) 92%, transparent);
+}
+
+.compare-widget__card--button {
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.compare-widget__card--button:hover {
+  border-color: color-mix(in srgb, var(--text-soft) 70%, var(--glass-border));
+  background: var(--bg-surface-soft);
 }
 
 .compare-widget__card-top {

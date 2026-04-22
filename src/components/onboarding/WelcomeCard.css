@@ -1,0 +1,119 @@
+.welcome-card {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+}
+
+.welcome-card__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.welcome-card__panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(520px, calc(100vw - var(--space-xl)));
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+  border: 1px solid color-mix(in srgb, var(--amber) 18%, var(--glass-border));
+  border-radius: var(--radius-xl);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-elevated), var(--shadow-glow-amber);
+  animation: welcome-card-in var(--transition-base) both;
+}
+
+.welcome-card__kicker,
+.welcome-card__label,
+.welcome-card__copy,
+.welcome-card__title {
+  margin: 0;
+}
+
+.welcome-card__kicker {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.welcome-card__title {
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: clamp(44px, 7vw, 64px);
+  font-style: italic;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+}
+
+.welcome-card__sections {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.welcome-card__section {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.welcome-card__label {
+  color: var(--text-amber);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.welcome-card__copy {
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.welcome-card__primary,
+.welcome-card__secondary {
+  justify-self: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.welcome-card__primary {
+  min-height: 42px;
+  padding-inline: var(--space-lg);
+  border: 1px solid color-mix(in srgb, var(--amber) 46%, var(--glass-border));
+  border-radius: var(--radius-pill);
+  background: var(--amber);
+  color: var(--bg);
+}
+
+.welcome-card__secondary {
+  color: var(--text-muted);
+}
+
+.welcome-card__secondary:hover {
+  color: var(--text-primary);
+}
+
+@keyframes welcome-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ScoringFormat } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import type { LeagueFutureRow } from '../../mocks/league';
+import { Gloss } from '../ui/Gloss';
 import './LeagueFutures.css';
 
 interface LeagueFuturesProps {
@@ -73,7 +74,7 @@ export function LeagueFutures({
           {leagueName}
         </h2>
         <p className="league-futures__meta">
-          {totalTeams} teams · {formatScoring(scoringFormat)} ·{' '}
+          {totalTeams} teams · <Gloss term="ppr">{formatScoring(scoringFormat)}</Gloss> ·{' '}
           {mode === 'inseason' ? `Week ${currentWeek}` : 'Pre-season market'}
         </p>
       </div>

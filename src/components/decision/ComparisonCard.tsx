@@ -1,13 +1,8 @@
 import type { CSSProperties } from 'react';
-import { useState } from 'react';
 import type { MatchupLine, Player } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
-import {
-  cacheImageFailure,
-  getInitials,
-  getPlayerAvatarUrl,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
+import { Gloss } from '../ui/Gloss';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import './ComparisonCard.css';
 
 interface ComparisonCardProps {
@@ -45,8 +40,6 @@ export function ComparisonCard({
   isSelected,
   onSelect,
 }: ComparisonCardProps) {
-  const avatarUrl = getPlayerAvatarUrl(player);
-  const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(avatarUrl));
   const line = resultingLine;
 
   if (!line) {
@@ -83,25 +76,14 @@ export function ComparisonCard({
         type="button"
       >
         <div className="comparison-card__top">
-          <div className="comparison-card__identity">
-            <span className="comparison-card__avatar-wrap" aria-hidden="true">
-              <span className="comparison-card__avatar">
-                {hasImageError ? (
-                  <span className="comparison-card__avatar-fallback">
-                    {getInitials(player.shortName)}
-                  </span>
-                ) : (
-                  <img
-                    alt=""
-                    className="comparison-card__avatar-image"
-                    onError={() => {
-                      cacheImageFailure(avatarUrl);
-                      setHasImageError(true);
-                    }}
-                    src={avatarUrl}
-                  />
-                )}
-              </span>
+            <div className="comparison-card__identity">
+              <span className="comparison-card__avatar-wrap" aria-hidden="true">
+              <PlayerHeadshot
+                className="comparison-card__avatar"
+                fallbackClassName="comparison-card__avatar-fallback"
+                imageClassName="comparison-card__avatar-image"
+                player={player}
+              />
               {player.position !== 'DEF' ? (
                 <span className="comparison-card__logo-badge">
                   <img
@@ -134,14 +116,18 @@ export function ComparisonCard({
 
         <div className="comparison-card__stats">
           <div className="comparison-card__stat comparison-card__stat--line">
-            <span className="comparison-card__stat-label">Line if started</span>
+            <span className="comparison-card__stat-label">
+              <Gloss term="line-if-started">Line if started</Gloss>
+            </span>
             <p className="comparison-card__line">
               {formatAmericanOdds(line.moneyline)} · {line.winProbability.toFixed(1)}%
             </p>
           </div>
 
           <div className="comparison-card__stat comparison-card__stat--projection">
-            <span className="comparison-card__stat-label">Projection</span>
+            <span className="comparison-card__stat-label">
+              <Gloss term="projection">Projection</Gloss>
+            </span>
             <p className="comparison-card__projection">
               {projection.toFixed(1)}
               <span className="comparison-card__projection-unit"> pts</span>
@@ -192,7 +178,17 @@ export function ComparisonCard({
             </div>
           </div>
 
-          <p className="comparison-card__market">{gameLine}</p>
+          <p className="comparison-card__market">
+            {gameLine.includes('O/U') ? (
+              <>
+                {gameLine.split('O/U')[0]}
+                <Gloss term="o-u">O/U</Gloss>
+                {gameLine.split('O/U')[1]}
+              </>
+            ) : (
+              gameLine
+            )}
+          </p>
           {playerProp ? <p className="comparison-card__prop">{playerProp}</p> : null}
         </div>
       </details>

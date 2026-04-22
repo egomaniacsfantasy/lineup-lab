@@ -1,10 +1,6 @@
-import { useState } from 'react';
 import type { TradeTarget } from '../../mocks/tradeTargets';
-import {
-  cacheImageFailure,
-  getInitials,
-  hasCachedImageFailure,
-} from '../../utils/playerAssets';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
+import { usePlayerDetail } from '../../contexts/PlayerDetailContext';
 import { SuggestedPackage } from './SuggestedPackage';
 import './TradeTargetCard.css';
 
@@ -28,34 +24,6 @@ function getFitTone(fitScore: number) {
   return 'soft';
 }
 
-function TradeAvatar({
-  name,
-  src,
-}: {
-  name: string;
-  src: string;
-}) {
-  const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(src));
-
-  return (
-    <span aria-hidden="true" className="trade-target-card__avatar">
-      {hasImageError ? (
-        <span className="trade-target-card__avatar-fallback">{getInitials(name)}</span>
-      ) : (
-        <img
-          alt=""
-          className="trade-target-card__avatar-image"
-          onError={() => {
-            cacheImageFailure(src);
-            setHasImageError(true);
-          }}
-          src={src}
-        />
-      )}
-    </span>
-  );
-}
-
 export function TradeTargetCard({
   target,
   isExpanded,
@@ -63,6 +31,14 @@ export function TradeTargetCard({
   onToggle,
   showLaunchNote,
 }: TradeTargetCardProps) {
+  const { openPlayerDetail } = usePlayerDetail();
+  const openTargetDetail = () => {
+    openPlayerDetail({
+      slug: target.player.slug,
+      projection: target.player.projection,
+    });
+  };
+
   return (
     <article
       className={[
@@ -75,10 +51,25 @@ export function TradeTargetCard({
       id={`trade-target-${target.id}`}
     >
       <div className="trade-target-card__content">
-        <div className="trade-target-card__main">
-          <TradeAvatar
+        <div
+          className="trade-target-card__main"
+          onClick={openTargetDetail}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              openTargetDetail();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <PlayerHeadshot
+            className="trade-target-card__avatar"
+            fallbackClassName="trade-target-card__avatar-fallback"
+            imageClassName="trade-target-card__avatar-image"
             name={target.player.name}
-            src={target.player.headshotUrl}
+            position={target.player.position}
+            slug={target.player.slug}
           />
 
           <div className="trade-target-card__copy">

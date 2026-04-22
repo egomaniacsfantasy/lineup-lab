@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useSeasonMode } from '../../hooks/useSeasonMode';
 import { MOCK_MATCHUP } from '../../mocks';
 import type { ScoringFormat } from '../../types';
+import { Gloss } from '../ui/Gloss';
 import { SeasonToggle } from './SeasonToggle';
 import './AppHeader.css';
 
@@ -11,7 +12,11 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
   'half-ppr': 'HALF',
 };
 
-export function AppHeader() {
+interface AppHeaderProps {
+  onOpenWelcome: () => void;
+}
+
+export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   const { mode } = useSeasonMode();
   const scoringLabel = SCORING_LABELS[MOCK_MATCHUP.scoringFormat];
   const navItems = [
@@ -53,6 +58,15 @@ export function AppHeader() {
         </nav>
 
         <div className="app-header__actions">
+          {mode === 'inseason' ? (
+            <button
+              className="app-header__help"
+              onClick={onOpenWelcome}
+              type="button"
+            >
+              How this works
+            </button>
+          ) : null}
           <SeasonToggle />
           <span
             className={[
@@ -67,7 +81,9 @@ export function AppHeader() {
             ) : null}
             {mode === 'preseason' ? 'Pre-season' : `Week ${MOCK_MATCHUP.week}`}
           </span>
-          <span className="app-header__scoring-pill">{scoringLabel}</span>
+          <span className="app-header__scoring-pill">
+            <Gloss term="ppr">{scoringLabel}</Gloss>
+          </span>
         </div>
       </div>
     </header>

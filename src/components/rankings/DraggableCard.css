@@ -79,6 +79,16 @@
   font-weight: 700;
 }
 
+.draggable-card__name--button {
+  justify-self: start;
+  padding: 0;
+  text-align: left;
+}
+
+.draggable-card__name--button:hover {
+  color: var(--text-amber);
+}
+
 .draggable-card__meta {
   color: var(--text-muted);
   font-size: 11px;
