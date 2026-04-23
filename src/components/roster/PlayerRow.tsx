@@ -1,7 +1,6 @@
 import type { RosterSlot, SlotLabel } from '../../types';
 import type { PlayerDetailRequest } from '../../contexts/PlayerDetailContext';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
-import { Gloss } from '../ui/Gloss';
 import type { StarterEvaluation } from '../../utils/starterEvaluation';
 import { getPlayerLastName } from '../../utils/starterEvaluation';
 import './PlayerRow.css';
@@ -112,7 +111,7 @@ export function PlayerRow({
           <span className="player-row__name">{slot.starter.shortName}</span>
           {isSwapState ? (
             <span className="player-row__decision-badge">
-              <Gloss term="swap">Swap</Gloss>
+              Swap
             </span>
           ) : null}
         </span>
@@ -121,8 +120,7 @@ export function PlayerRow({
         </span>
         {isTightCallState ? (
           <span className="player-row__tight-call">
-            <Gloss term="tight-call">Tight call</Gloss>. {alternativeLastName} within{' '}
-            {tightCallDelta}.
+            Tight call. {alternativeLastName} within {tightCallDelta}.
           </span>
         ) : null}
         {isSwapState ? (
@@ -141,7 +139,7 @@ export function PlayerRow({
               {swingLabel}
             </span>
             <span className="player-row__value-label">
-              <Gloss term="swap">swap +%</Gloss>
+              swap +%
             </span>
           </>
         ) : (

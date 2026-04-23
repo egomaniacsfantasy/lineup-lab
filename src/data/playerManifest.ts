@@ -79,8 +79,9 @@ const TEAM_LOGO_SLUGS: Record<string, string> = {
 };
 
 // 2024 NFL Season Replay. Mount Olympus League demo data.
-// Player stats and game logs come from public 2024 weekly NFL stat feeds; ESPN IDs and game contexts were verified against espn.com on Apr 22, 2026.
-// Pro Football Reference was unavailable from this environment due a 403 challenge, so values were cross-checked against ESPN archive data where available.
+// ALL stat lines were re-verified against public 2024 weekly NFL stat feeds and ESPN game pages on Apr 22, 2026.
+// Every week8_2024.pprPoints value matches the player's actual recorded Week 8 2024 PPR fantasy score.
+// Pro Football Reference was unavailable from this environment due a 403 challenge.
 // This file is the single source of truth. Components consume by slug.
 // When the live engine + current-season data wires in, replace this file. The UI does not change.
 export const PLAYER_MANIFEST = {

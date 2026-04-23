@@ -79,10 +79,18 @@ export function QuickActions({
   const navigate = useNavigate();
 
   const lineupCopy = useMemo(() => {
-    return lineupLocks.map((window) => ({
-      ...window,
-      playersText: window.players.join(', '),
-    }));
+    return lineupLocks.map((window) => {
+      const primaryPlayer = window.players[0]?.replace(/^J\\.\\s*/, '') ?? 'This slot';
+      const lockCopy =
+        window.day === 'Thursday'
+          ? `${primaryPlayer} locks Thu ${window.time} (${window.game})`
+          : 'All other slots lock Sun 1:00 PM ET';
+
+      return {
+        ...window,
+        lockCopy,
+      };
+    });
   }, [lineupLocks]);
 
   return (
@@ -188,7 +196,7 @@ export function QuickActions({
               <div className="quick-actions__locks">
                 {lineupCopy.map((window) => (
                   <p className="quick-actions__context" key={`${window.day}-${window.time}`}>
-                    {window.day}: {window.playersText} ({window.game}) · {window.time}
+                    {window.lockCopy}
                   </p>
                 ))}
               </div>

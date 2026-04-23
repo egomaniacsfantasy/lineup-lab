@@ -30,6 +30,7 @@ interface CompareWidgetProps {
 
 function ComparePlayerCard({
   lineText,
+  showGlosses = false,
   player,
   positionTeam,
   projection,
@@ -39,6 +40,7 @@ function ComparePlayerCard({
   positionTeam: string;
   projection: number;
   lineText: string;
+  showGlosses?: boolean;
   onOpen?: () => void;
 }) {
   const CardElement = onOpen ? 'button' : 'article';
@@ -78,7 +80,7 @@ function ComparePlayerCard({
       <div className="compare-widget__stats">
         <div className="compare-widget__stat-block">
           <span className="compare-widget__stat-label">
-            <Gloss term="projection">Projection</Gloss>
+            {showGlosses ? <Gloss term="projection">Projection</Gloss> : 'Projection'}
           </span>
           <span className="compare-widget__stat-value">
             {projection.toFixed(1)}
@@ -88,7 +90,11 @@ function ComparePlayerCard({
 
         <div className="compare-widget__stat-block">
           <span className="compare-widget__stat-label">
-            <Gloss term="line-if-started">Line if started</Gloss>
+            {showGlosses ? (
+              <Gloss term="line-if-started">Line if started</Gloss>
+            ) : (
+              'Line if started'
+            )}
           </span>
           <span className="compare-widget__line-value">{lineText}</span>
         </div>
@@ -188,6 +194,7 @@ export function CompareWidget({
               player={leftPlayer}
               positionTeam={`${leftPlayer.position} · ${leftPlayer.team}`}
               projection={comparison.leftProjection}
+              showGlosses
             />
             <ComparePlayerCard
               lineText={`${formatAmericanOdds(comparison.rightLine.moneyline)} · ${comparison.rightLine.winProbability.toFixed(1)}%`}
@@ -235,8 +242,7 @@ export function CompareWidget({
                 {(rightContext?.gameLine ?? 'Line pending').replace('O/U', '')}
                 {rightContext?.gameLine.includes('O/U') ? (
                   <>
-                    {' '}
-                    <Gloss term="o-u">O/U</Gloss>
+                    {' '}O/U
                     {rightContext.gameLine.split('O/U')[1]}
                   </>
                 ) : null}

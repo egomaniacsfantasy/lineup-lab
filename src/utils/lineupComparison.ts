@@ -48,9 +48,6 @@ const COMPARISON_VERDICTS = {
     '{player} costs you. Pivot if you can.',
     'Your win prob takes a real hit here.',
     'The book shortens you. Not the move.',
-    '{player} gets expensive fast.',
-    '{player} loses too much edge.',
-    'The board says no on {player}.',
   ],
   smallNegative: [
     'A small step back. Not nothing.',
@@ -58,9 +55,6 @@ const COMPARISON_VERDICTS = {
     '{player} shaves your edge.',
     'Marginally worse. Reasonable people differ.',
     'A quiet downgrade.',
-    '{player} adds a little tax.',
-    'You can live with {player}. The number dips.',
-    'The price slips with {player}.',
   ],
   nearZero: [
     'A wash. Pick the one you trust.',
@@ -68,9 +62,6 @@ const COMPARISON_VERDICTS = {
     'Effectively even. Go with the gut.',
     'Same line, different name.',
     'Within the noise.',
-    '{player} changes little.',
-    'The number barely breathes with {player}.',
-    '{player} does not break the market.',
   ],
   smallPositive: [
     'A modest upgrade. The line tilts your way.',
@@ -78,9 +69,6 @@ const COMPARISON_VERDICTS = {
     '{player} earns the start.',
     'A real, if quiet, win.',
     'The line moves your way.',
-    '{player} gives you a useful edge.',
-    'The price improves with {player}.',
-    'The market gives {player} a nod.',
   ],
   largePositive: [
     'The book moves. You priced this one right.',
@@ -88,9 +76,6 @@ const COMPARISON_VERDICTS = {
     '{player} is the play. The line agrees.',
     "Big edge. Don't think twice.",
     'The line opens up. Take it.',
-    '{player} creates real leverage.',
-    'The market opens for {player}.',
-    'Clear signal from the book on {player}.',
   ],
 };
 

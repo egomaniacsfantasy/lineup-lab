@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { Gloss } from '../ui/Gloss';
 import './WelcomeCard.css';
 
 interface WelcomeCardProps {
@@ -52,8 +51,8 @@ export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
           <div className="welcome-card__section">
             <p className="welcome-card__label">How it works</p>
             <p className="welcome-card__copy">
-              Click a <Gloss term="swap">SWAP</Gloss> row to see what swapping in a bench
-              player does to your win probability. The book moves in real time.
+              Click a SWAP row to see what swapping in a bench player does to your win
+              probability. The book moves in real time.
             </p>
           </div>
 

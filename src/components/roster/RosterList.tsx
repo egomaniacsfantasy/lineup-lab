@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { BenchPlayer, MatchupLine, RosterSlot } from '../../types';
 import type { PlayerDetailRequest } from '../../contexts/PlayerDetailContext';
 import type { StarterEvaluation } from '../../utils/starterEvaluation';
-import { Gloss } from '../ui/Gloss';
 import { PlayerRow } from './PlayerRow';
 import { StarterSwapConfirm } from './StarterSwapConfirm';
 import './RosterList.css';
@@ -45,6 +44,21 @@ export function RosterList({
   const swapTargetCount = starterEvaluations.filter(
     (evaluation) => evaluation.state === 'SWAP',
   ).length;
+  const orderedStarterRows = roster
+    .map((slot, slotIndex) => ({
+      slot,
+      slotIndex,
+      state: starterEvaluations[slotIndex]?.state ?? 'OPTIMAL',
+    }))
+    .sort((rowA, rowB) => {
+      const statePriority = {
+        SWAP: 0,
+        TIGHT_CALL: 1,
+        OPTIMAL: 2,
+      };
+
+      return statePriority[rowA.state] - statePriority[rowB.state] || rowA.slotIndex - rowB.slotIndex;
+    });
 
   useEffect(() => {
     const collapseDelay = pendingSwapSlotIndex === null ? 200 : 0;
@@ -101,8 +115,7 @@ export function RosterList({
           {swapTargetCount > 0
             ? (
                 <>
-                  {swapTargetCount} <Gloss term="swap">swap</Gloss>{' '}
-                  target{swapTargetCount === 1 ? '' : 's'}
+                  {swapTargetCount} swap target{swapTargetCount === 1 ? '' : 's'}
                 </>
               )
             : 'Lineup locked'}
@@ -110,7 +123,7 @@ export function RosterList({
       </div>
 
       <div className="roster-list__items">
-        {roster.map((slot, slotIndex) => {
+        {orderedStarterRows.map(({ slot, slotIndex }) => {
           const referenceSlot = baselineRoster[slotIndex];
           const evaluation = starterEvaluations[slotIndex] ?? null;
           const selectedAlternativeIndex = selectedAlternatives[slotIndex] ?? null;

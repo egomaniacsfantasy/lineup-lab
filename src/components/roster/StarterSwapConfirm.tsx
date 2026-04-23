@@ -35,7 +35,7 @@ export function StarterSwapConfirm({
   return (
     <div className="starter-swap-confirm" data-swap-confirm>
       <p className="starter-swap-confirm__eyebrow">
-        <Gloss term="swap">SWAP</Gloss> CONFIRMATION
+        SWAP CONFIRMATION
       </p>
 
       <p className="starter-swap-confirm__title">

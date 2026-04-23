@@ -1,7 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { MatchupLine, Player } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
-import { Gloss } from '../ui/Gloss';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import './ComparisonCard.css';
 
@@ -117,7 +116,7 @@ export function ComparisonCard({
         <div className="comparison-card__stats">
           <div className="comparison-card__stat comparison-card__stat--line">
             <span className="comparison-card__stat-label">
-              <Gloss term="line-if-started">Line if started</Gloss>
+              Line if started
             </span>
             <p className="comparison-card__line">
               {formatAmericanOdds(line.moneyline)} · {line.winProbability.toFixed(1)}%
@@ -126,7 +125,7 @@ export function ComparisonCard({
 
           <div className="comparison-card__stat comparison-card__stat--projection">
             <span className="comparison-card__stat-label">
-              <Gloss term="projection">Projection</Gloss>
+              Projection
             </span>
             <p className="comparison-card__projection">
               {projection.toFixed(1)}
@@ -182,7 +181,7 @@ export function ComparisonCard({
             {gameLine.includes('O/U') ? (
               <>
                 {gameLine.split('O/U')[0]}
-                <Gloss term="o-u">O/U</Gloss>
+                O/U
                 {gameLine.split('O/U')[1]}
               </>
             ) : (

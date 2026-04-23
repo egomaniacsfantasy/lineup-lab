@@ -3,7 +3,6 @@ import type { PlayerDetailRequest } from '../../contexts/PlayerDetailContext';
 import { getPlayerManifestEntry } from '../../data/playerManifest';
 import { hashString, roundTo } from '../../utils/lineupComparison';
 import { PlayerHeadshot } from './PlayerHeadshot';
-import { Gloss } from '../ui/Gloss';
 import './PlayerDetailPanel.css';
 
 interface PlayerDetailPanelProps {
@@ -185,7 +184,7 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
               {week8 ? `vs. ${week8.opponent} · ${week8.kickoff} · ${gameLine}` : gameLine}
             </p>
             <p className="player-detail-panel__projection">
-              <Gloss term="projection">Projection</Gloss>:{' '}
+              Projection:{' '}
               <strong>{projection.toFixed(1)} pts</strong> · Floor{' '}
               {floor.toFixed(1)} / Ceiling {ceiling.toFixed(1)}
             </p>

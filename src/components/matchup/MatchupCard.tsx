@@ -118,14 +118,14 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           <div>
             <p className="matchup-card__eyebrow">Matchup Market</p>
             <h2 className="matchup-card__title" id="matchup-market-title">
-              Week {matchup.week} · <Gloss term="ppr">{SCORING_LABELS[matchup.scoringFormat]}</Gloss> · 2024 Replay
+              Week {matchup.week} · {SCORING_LABELS[matchup.scoringFormat]} · 2024 Replay
             </h2>
           </div>
 
           <div className="matchup-card__header-pills">
             <span className="matchup-card__live-pill">Live</span>
             <span className={`matchup-card__movement matchup-card__movement--${deltaTone}`}>
-              {lineDelta === 0 ? <Gloss term="baseline">Baseline</Gloss> : movementLabel}
+              {lineDelta === 0 ? 'Baseline' : movementLabel}
             </span>
           </div>
         </header>
@@ -190,10 +190,10 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           <div className="matchup-card__price-card matchup-card__price-card--yours">
             <p className="matchup-card__price-label">{matchup.yourTeam.teamName}</p>
             <p className="matchup-card__moneyline matchup-card__moneyline--yours">
-              <Gloss term="moneyline">{animatedYourMoneyline}</Gloss>
+              {animatedYourMoneyline}
             </p>
             <p className="matchup-card__win-probability">
-              <Gloss term="win-prob">{animatedYourWinProbability}</Gloss>
+              {animatedYourWinProbability}
             </p>
           </div>
 
@@ -208,7 +208,7 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
             </div>
 
             <p className="matchup-card__spread-readout">
-              <Gloss term="spread">{animatedMeterSpread}</Gloss>
+              {animatedMeterSpread}
             </p>
 
             <p className="matchup-card__commentary">
@@ -219,10 +219,10 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           <div className="matchup-card__price-card matchup-card__price-card--opponent">
             <p className="matchup-card__price-label">{matchup.opponentTeam.teamName}</p>
             <p className="matchup-card__moneyline matchup-card__moneyline--opponent">
-              <Gloss term="moneyline">{animatedOpponentMoneyline}</Gloss>
+              {animatedOpponentMoneyline}
             </p>
             <p className="matchup-card__win-probability">
-              <Gloss term="win-prob">{animatedOpponentWinProbability}</Gloss>
+              {animatedOpponentWinProbability}
             </p>
           </div>
         </div>

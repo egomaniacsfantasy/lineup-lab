@@ -1,7 +1,6 @@
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import type { SuggestedPackage as SuggestedPackageData } from '../../mocks/tradeTargets';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
-import { Gloss } from '../ui/Gloss';
 import './SuggestedPackage.css';
 
 interface SuggestedPackageProps {
@@ -95,8 +94,7 @@ export function SuggestedPackage({
                   `trade-suggested-package__delta--${weeklyTone}`,
                 ].join(' ')}
               >
-                {formatSignedPercent(pkg.weeklyWinProbDelta)}{' '}
-                <Gloss term="win-prob">win prob</Gloss>
+                {formatSignedPercent(pkg.weeklyWinProbDelta)} win prob
               </span>
             </div>
 
