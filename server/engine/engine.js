@@ -42,7 +42,9 @@ function normalCdf(z) {
 
 function probToAmerican(prob) {
   const p = Math.min(0.985, Math.max(0.015, prob));
-  return p >= 0.5 ? Math.round((-100 * p) / (1 - p)) : Math.round((100 * (1 - p)) / p);
+  const ml = p >= 0.5 ? Math.round((-100 * p) / (1 - p)) : Math.round((100 * (1 - p)) / p);
+  // even money is always quoted +100, never -100
+  return ml === -100 ? 100 : ml;
 }
 
 function gaussian() {
@@ -54,7 +56,7 @@ function gaussian() {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-function playerDistribution(playerId, projectionMap, catalogEntry) {
+function playerDistribution(playerId, projectionMap, catalogEntry, week = null) {
   const projection = projectionMap.get(playerId);
 
   // OUT/IR starters cost projection zero (surfaced via flags).
@@ -67,17 +69,34 @@ function playerDistribution(playerId, projectionMap, catalogEntry) {
     return { mean: 0, stdev: 0, unpriced: true, zeroed: false };
   }
 
-  return { mean: projection.mean, stdev: projection.stdev, unpriced: false, zeroed: false };
+  let { mean, stdev } = projection;
+
+  // Week-specific projection from the import's game-level grid (already
+  // opponent-adjusted). A full grid missing this week = the player's bye.
+  const weekly = projection.weekly ?? {};
+  const weeklyCount = Object.keys(weekly).length;
+  if (week != null && weeklyCount > 0) {
+    const weekMean = weekly[week] ?? weekly[String(week)];
+    if (weekMean != null) {
+      const scale = mean > 0 ? weekMean / mean : 1;
+      stdev = Number((stdev * Math.max(0.25, scale)).toFixed(2));
+      mean = weekMean;
+    } else if (weeklyCount >= 10) {
+      return { mean: 0, stdev: 0, unpriced: false, zeroed: true };
+    }
+  }
+
+  return { mean, stdev, unpriced: false, zeroed: false };
 }
 
-function teamDistribution(starterIds, projectionMap, catalog) {
+function teamDistribution(starterIds, projectionMap, catalog, week = null) {
   let mean = 0;
   let variance = 0;
   const unpriced = [];
   const zeroed = [];
 
   for (const id of starterIds) {
-    const dist = playerDistribution(id, projectionMap, catalog[id]);
+    const dist = playerDistribution(id, projectionMap, catalog[id], week);
     mean += dist.mean;
     variance += dist.stdev * dist.stdev;
     if (dist.unpriced) unpriced.push(id);
@@ -141,8 +160,26 @@ export function priceLeague(ctx) {
   // ── matchup lines ──
   const teamsByRoster = new Map(teams.map((t) => [t.rosterId, t]));
   const distByRoster = new Map(
-    teams.map((t) => [t.rosterId, teamDistribution(t.starters, projectionMap, catalog)]),
+    teams.map((t) => [t.rosterId, teamDistribution(t.starters, projectionMap, catalog, week)]),
   );
+
+  // Per-week distributions for the futures sim: each remaining week uses
+  // that week's game-level projections (byes priced as real zeros).
+  const weekDistCache = new Map();
+  const distForWeek = (rosterId, w) => {
+    const key = `${rosterId}|${w}`;
+    let dist = weekDistCache.get(key);
+    if (!dist) {
+      dist = teamDistribution(
+        teamsByRoster.get(rosterId)?.starters ?? [],
+        projectionMap,
+        catalog,
+        w,
+      );
+      weekDistCache.set(key, dist);
+    }
+    return dist;
+  };
 
   const byMatchup = new Map();
   matchups.forEach((m) => {
@@ -215,13 +252,13 @@ export function priceLeague(ctx) {
 
       starterIds.forEach((starterId, slotIndex) => {
         const slotLabel = slotLabels[slotIndex] ?? 'FLEX';
-        const starterDist = playerDistribution(starterId, projectionMap, catalog[starterId]);
+        const starterDist = playerDistribution(starterId, projectionMap, catalog[starterId], week);
 
         bench.forEach((benchId) => {
           const benchPosition = catalog[benchId]?.position;
           if (!benchPosition || !slotAllows(slotLabel, benchPosition)) return; // illegal swap: impossible by construction
 
-          const benchDist = playerDistribution(benchId, projectionMap, catalog[benchId]);
+          const benchDist = playerDistribution(benchId, projectionMap, catalog[benchId], week);
           if (benchDist.unpriced && starterDist.unpriced) return;
 
           const newMean = baseDist.mean - starterDist.mean + benchDist.mean;
@@ -249,14 +286,14 @@ export function priceLeague(ctx) {
 
     playerMeans = Object.fromEntries(
       userTeam.players.map((id) => {
-        const dist = playerDistribution(id, projectionMap, catalog[id]);
+        const dist = playerDistribution(id, projectionMap, catalog[id], week);
         return [id, { mean: Number(dist.mean.toFixed(1)), stdev: Number(dist.stdev.toFixed(1)), unpriced: dist.unpriced, zeroed: dist.zeroed, derived: projectionMap.get(id)?.derived ?? false }];
       }),
     );
   }
 
   // ── season futures: simulate the remaining schedule ──
-  const futures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week });
+  const futures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, distForWeek });
 
   // ── real Draft Wrapped (computed, not fiction) ──
   const draftWrapped = computeDraftWrapped({
@@ -534,7 +571,7 @@ function computeMovers(ctx) {
   return movers;
 }
 
-function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week }) {
+function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, distForWeek = null }) {
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffTeams = league.playoffTeams ?? 6;
   const remaining = (scheduleWeeks ?? []).filter(
@@ -566,8 +603,12 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week }) {
       byMatchup.forEach((pair) => {
         if (pair.length !== 2) return;
         const [a, b] = pair;
-        const distA = distByRoster.get(a.rosterId);
-        const distB = distByRoster.get(b.rosterId);
+        const distA = distForWeek
+          ? distForWeek(a.rosterId, weekEntry.week)
+          : distByRoster.get(a.rosterId);
+        const distB = distForWeek
+          ? distForWeek(b.rosterId, weekEntry.week)
+          : distByRoster.get(b.rosterId);
         if (!distA || !distB) return;
         const scoreA = Math.max(0, distA.mean + distA.sigma * gaussian());
         const scoreB = Math.max(0, distB.mean + distB.sigma * gaussian());

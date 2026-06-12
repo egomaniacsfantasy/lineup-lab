@@ -30,8 +30,8 @@ const STAT_HEADERS = {
   fum: 'fum_lost',
 };
 
-// Team aliases: Franco sheets and Sleeper occasionally disagree.
-const TEAM_ALIASES = { JAC: 'JAX', WSH: 'WAS', LAR: 'LA', STL: 'LA', OAK: 'LV', SD: 'LAC' };
+// Team aliases → Sleeper's canonical codes (Franco says LA for the Rams).
+const TEAM_ALIASES = { JAC: 'JAX', WSH: 'WAS', LA: 'LAR', STL: 'LAR', OAK: 'LV', SD: 'LAC' };
 
 export function normalizeName(name) {
   return String(name)
@@ -150,6 +150,104 @@ export function parseWorkbook(buffer, { pointsAre = 'per-game' } = {}) {
 }
 
 /**
+ * Franco combined-format workbooks: one file per position, each holding a
+ * season-totals sheet plus a `game_level` sheet (per-week, opponent-
+ * adjusted points). All numbers are full PPR.
+ *
+ * @param files [{ name, buffer }]
+ * @returns { tabs, rows } — rows compatible with crosswalk()
+ */
+export function parseFrancoWorkbooks(files) {
+  const tabs = [];
+  const rows = [];
+
+  for (const file of files) {
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheetNames = workbook.SheetNames;
+    const seasonSheetName =
+      sheetNames.find((n) => ['all_season', 'all_qbs', 'season_totals'].includes(n)) ??
+      sheetNames[0];
+    const season = XLSX.utils.sheet_to_json(workbook.Sheets[seasonSheetName], { defval: null });
+    const headers = Object.keys(season[0] ?? {});
+
+    let position =
+      ['QB', 'RB', 'WR', 'TE'].find((p) => headers.includes(p)) ??
+      (headers.includes('kicker_name') ? 'K' : headers.includes('pred_sacks') ? 'DEF' : null);
+    if (!position) {
+      const fromName = String(file.name ?? '').toLowerCase().match(/(qb|rb|wr|te|kicker|def)/);
+      position = fromName ? (fromName[1] === 'kicker' ? 'K' : fromName[1].toUpperCase()) : null;
+    }
+    if (!position) {
+      tabs.push({ tab: file.name, position: null, rows: 0, error: 'position_unknown' });
+      continue;
+    }
+
+    const identityOf = (r) =>
+      position === 'DEF'
+        ? normalizeTeam(r.team)
+        : normalizeName(position === 'K' ? r.kicker_name : r[position]);
+    const pointsOf = (r) =>
+      position === 'QB'
+        ? (r.fantasy_pts_adj ?? r.fantasy_pts_raw)
+        : position === 'K'
+          ? r.total_projected_fp
+          : r.fantasy_pts;
+
+    // per-week grid from game_level (the real prize: opponent-adjusted)
+    const weeklyByKey = new Map();
+    if (sheetNames.includes('game_level')) {
+      const games = XLSX.utils.sheet_to_json(workbook.Sheets.game_level, { defval: null });
+      for (const g of games) {
+        const key = identityOf(g);
+        const pts = pointsOf(g) ?? g.fantasy_pts;
+        if (!key || g.week == null || pts == null) continue;
+        const grid = weeklyByKey.get(key) ?? {};
+        grid[Number(g.week)] = Number(Number(pts).toFixed(2));
+        weeklyByKey.set(key, grid);
+      }
+    }
+
+    let parsed = 0;
+    for (const r of season) {
+      const key = identityOf(r);
+      const seasonTotal = Number(pointsOf(r));
+      if (!key || !Number.isFinite(seasonTotal)) continue;
+
+      const team = normalizeTeam(r.team);
+      const weekly = weeklyByKey.get(key) ?? {};
+      const weekValues = Object.values(weekly);
+      const mean =
+        weekValues.length > 0
+          ? weekValues.reduce((a, b) => a + b, 0) / weekValues.length
+          : seasonTotal / 17;
+      const name =
+        position === 'DEF'
+          ? team
+          : String(position === 'K' ? r.kicker_name : r[position]).trim();
+
+      rows.push({
+        position,
+        name,
+        team,
+        points: Number(mean.toFixed(2)),
+        weekly,
+        seasonTotal: Number(seasonTotal.toFixed(1)),
+        floor: r.fantasy_pts_floor != null ? Number(r.fantasy_pts_floor) : null,
+        ceiling: r.fantasy_pts_ceiling != null ? Number(r.fantasy_pts_ceiling) : null,
+        depthRank: r.depth_rank != null ? Number(r.depth_rank) : null,
+        stats: {},
+        normalized: position === 'DEF' ? team.toLowerCase() : normalizeName(name),
+      });
+      parsed += 1;
+    }
+
+    tabs.push({ tab: file.name ?? seasonSheetName, position, rows: parsed });
+  }
+
+  return { tabs, rows };
+}
+
+/**
  * Crosswalk rows to catalog ids.
  * confirmedMatches: { `${normalized}|${position}` -> sleeperId } persisted
  * from earlier imports/reviews.
@@ -170,6 +268,17 @@ export function crosswalk(rows, catalog, confirmedMatches = {}) {
   const unmatched = [];
 
   for (const row of rows) {
+    // D/ST identity IS the Sleeper team code — no name matching needed.
+    if (row.position === 'DEF' && row.team && catalog[row.team]) {
+      matched.push({
+        ...row,
+        playerId: row.team,
+        name: catalog[row.team].name ?? row.name,
+        matchType: 'exact',
+      });
+      continue;
+    }
+
     const key = `${row.normalized}|${row.position}`;
 
     if (confirmedMatches[key]) {
@@ -229,6 +338,10 @@ export function buildProjections(matched, { source, scoringBasis }) {
       derived,
       defaultedVariance: row.stdev == null,
       weekly: row.weekly,
+      seasonTotal: row.seasonTotal ?? null,
+      floor: row.floor ?? null,
+      ceiling: row.ceiling ?? null,
+      depthRank: row.depthRank ?? null,
       stats: Object.keys(row.stats).length > 0 ? row.stats : null,
       tier: row.tier ?? null,
     };

@@ -17,7 +17,6 @@ interface AppHeaderProps {
 }
 
 const STATE_LABELS: Record<string, (season: string, week: number) => string> = {
-  OFFSEASON: (season) => `Pre-season ${season}`,
   IN_SEASON: (_season, week) => `Week ${week}`,
   LEAGUE_PLAYOFFS: (_season, week) => `Playoffs · Week ${week}`,
   COMPLETE: (season) => `${season} final`,
@@ -31,7 +30,7 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
     ? SCORING_LABELS[bootstrap.league.scoringFamily]
     : SCORING_LABELS[MOCK_MATCHUP.scoringFormat];
   const displayedWeek = isSynced ? Math.max(bootstrap.week, nflWeek) : Math.max(1, nflWeek);
-  const stateLabel = (STATE_LABELS[seasonState] ?? STATE_LABELS.OFFSEASON)(
+  const stateLabel = (STATE_LABELS[seasonState] ?? STATE_LABELS.IN_SEASON)(
     season,
     displayedWeek,
   );

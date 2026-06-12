@@ -1,11 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 /**
  * Season state is COMPUTED from the server (/api/state ← Sleeper
- * /state/nfl), never chosen by the user. The old PRE/LIVE demo toggle is
- * retired — reality has no mode switch.
+ * /state/nfl), never chosen by the user. There is NO off-season state:
+ * before kickoff everyone lives in the Week 1 view.
  *
  * Dev override (testing other states): append ?season-state=IN_SEASON
- * (or OFFSEASON / LEAGUE_PLAYOFFS / COMPLETE) to any URL; it persists in
+ * (or LEAGUE_PLAYOFFS / COMPLETE) to any URL; it persists in
  * sessionStorage until ?season-state=clear.
  */
 import {
@@ -17,11 +17,7 @@ import {
   type ReactNode,
 } from 'react';
 
-export type SeasonState =
-  | 'OFFSEASON'
-  | 'IN_SEASON'
-  | 'LEAGUE_PLAYOFFS'
-  | 'COMPLETE';
+export type SeasonState = 'IN_SEASON' | 'LEAGUE_PLAYOFFS' | 'COMPLETE';
 
 export type SeasonMode = 'preseason' | 'inseason';
 
@@ -60,12 +56,7 @@ interface SeasonModeContextValue {
 const SeasonModeContext = createContext<SeasonModeContextValue | null>(null);
 
 const DEV_KEY = 'og.olympus.dev-season-state';
-const VALID_STATES: SeasonState[] = [
-  'OFFSEASON',
-  'IN_SEASON',
-  'LEAGUE_PLAYOFFS',
-  'COMPLETE',
-];
+const VALID_STATES: SeasonState[] = ['IN_SEASON', 'LEAGUE_PLAYOFFS', 'COMPLETE'];
 
 function readDevOverride(): SeasonState | null {
   try {
@@ -108,10 +99,10 @@ export function SeasonModeProvider({ children }: { children: ReactNode }) {
       .then((state) => {
         if (cancelled) return;
         setServerState({
-          seasonState: state.seasonState ?? 'OFFSEASON',
+          seasonState: state.seasonState ?? 'IN_SEASON',
           anchors: state.anchors ?? FALLBACK_ANCHORS,
           season: state.season ?? FALLBACK_ANCHORS.season,
-          week: state.displayWeek || state.week || 0,
+          week: Math.max(1, state.displayWeek || state.week || 1),
         });
       })
       .catch(() => {
@@ -124,17 +115,15 @@ export function SeasonModeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<SeasonModeContextValue>(() => {
-    const seasonState = devOverride ?? serverState?.seasonState ?? 'OFFSEASON';
+    const seasonState = devOverride ?? serverState?.seasonState ?? 'IN_SEASON';
 
     return {
       seasonState,
-      mode:
-        seasonState === 'IN_SEASON' || seasonState === 'LEAGUE_PLAYOFFS'
-          ? 'inseason'
-          : 'preseason',
+      // no off-season mode: the app is always in its in-season shape
+      mode: 'inseason',
       anchors: serverState?.anchors ?? FALLBACK_ANCHORS,
       season: serverState?.season ?? FALLBACK_ANCHORS.season,
-      nflWeek: devOverride === 'IN_SEASON' ? Math.max(1, serverState?.week ?? 1) : (serverState?.week ?? 0),
+      nflWeek: Math.max(1, serverState?.week ?? 1),
       isDevOverride: devOverride !== null,
     };
   }, [serverState, devOverride]);

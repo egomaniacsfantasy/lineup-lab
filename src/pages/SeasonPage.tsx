@@ -1,19 +1,12 @@
 import { useMemo } from 'react';
-import { CascadePanel } from '../components/season/CascadePanel';
 import { DraftWrappedCard } from '../components/season/DraftWrappedCard';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
 import { SeasonHeadline } from '../components/season/SeasonHeadline';
-import { useSeasonMode } from '../hooks/useSeasonMode';
 import {
-  MOCK_CASCADE_SCENARIOS,
   MOCK_DRAFT_WRAPPED,
-  MOCK_INSEASON_SCHEDULE,
-  MOCK_MATCHUP,
   MOCK_SEASON_OUTLOOK,
   MOCK_SCHEDULE_PREVIEW,
-  MOCK_WEEKLY_TRAJECTORY,
 } from '../mocks';
-import { getStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import type { DraftWrappedData } from '../types';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import {
@@ -26,7 +19,6 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import './SeasonPage.css';
 
 export function SeasonPage() {
-  const { mode } = useSeasonMode();
   const { bootstrap, schedule, pricing } = useLeagueConnection();
 
   const connectedSeason = useMemo(() => {
@@ -58,7 +50,6 @@ export function SeasonPage() {
     [],
   );
 
-  const activeScenarioLabel = getStoredCascadeScenarioLabel();
 
   if (connectedSeason && connectedSeason.userRow) {
     const { userTeam, userRow, rank, scheduleItems } = connectedSeason;
@@ -150,53 +141,25 @@ export function SeasonPage() {
     <div className="season-page">
       <h1 className="visually-hidden">Season futures</h1>
 
-      {mode === 'preseason' ? (
-        <>
-          <SeasonHeadline
-            championshipOdds={MOCK_SEASON_OUTLOOK.championshipOdds}
-            leagueRank={MOCK_DRAFT_WRAPPED.leagueRank}
-            playoffProbability={MOCK_SEASON_OUTLOOK.playoffProbability}
-            recordLabel="Projected record"
-            recordRange={MOCK_SEASON_OUTLOOK.recordRange}
-            recordValue={`${MOCK_SEASON_OUTLOOK.projectedRecord.wins}-${MOCK_SEASON_OUTLOOK.projectedRecord.losses}`}
-            title="Your 2026 season futures"
-          />
+      <SeasonHeadline
+        championshipOdds={MOCK_SEASON_OUTLOOK.championshipOdds}
+        leagueRank={MOCK_DRAFT_WRAPPED.leagueRank}
+        playoffProbability={MOCK_SEASON_OUTLOOK.playoffProbability}
+        recordLabel="Projected record"
+        recordRange={MOCK_SEASON_OUTLOOK.recordRange}
+        recordValue={`${MOCK_SEASON_OUTLOOK.projectedRecord.wins}-${MOCK_SEASON_OUTLOOK.projectedRecord.losses}`}
+        title="Your 2026 season futures"
+      />
 
-          <DraftWrappedCard
-            draftWrapped={MOCK_DRAFT_WRAPPED}
-            onShare={() => {}}
-          />
+      <DraftWrappedCard
+        draftWrapped={MOCK_DRAFT_WRAPPED}
+        onShare={() => {}}
+      />
 
-          <ScheduleGrid
-            items={preseasonSchedule}
-            title="Upcoming schedule"
-          />
-        </>
-      ) : (
-        <>
-          <SeasonHeadline
-            championshipOdds={MOCK_SEASON_OUTLOOK.championshipOdds}
-            leagueRank={MOCK_DRAFT_WRAPPED.leagueRank}
-            live
-            playoffProbability={MOCK_SEASON_OUTLOOK.playoffProbability}
-            recordLabel="Record"
-            recordRange={MOCK_SEASON_OUTLOOK.recordRange}
-            recordValue={MOCK_MATCHUP.yourTeam.record}
-            title={`Your 2024 replay · week ${MOCK_MATCHUP.week}`}
-          />
-
-          <CascadePanel
-            activeScenarioLabel={activeScenarioLabel}
-            scenarios={MOCK_CASCADE_SCENARIOS}
-            trajectory={MOCK_WEEKLY_TRAJECTORY}
-          />
-
-          <ScheduleGrid
-            items={MOCK_INSEASON_SCHEDULE}
-            title="Schedule"
-          />
-        </>
-      )}
+      <ScheduleGrid
+        items={preseasonSchedule}
+        title="Upcoming schedule"
+      />
     </div>
   );
 }

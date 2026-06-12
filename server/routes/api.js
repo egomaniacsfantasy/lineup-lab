@@ -42,6 +42,8 @@ apiRouter.get('/state', async (req, res, next) => {
       ...state,
       anchors: SEASON_ANCHORS,
       seasonState: computeSeasonState(state),
+      // pre-kickoff Sleeper reports week 0 — the app lives in Week 1
+      displayWeek: Math.max(1, state.displayWeek ?? state.week ?? 1),
       serverTime: Date.now(),
     });
   } catch (error) {

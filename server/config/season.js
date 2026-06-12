@@ -21,7 +21,10 @@ export const SEASON_ANCHORS = {
  * Season state is COMPUTED from Sleeper /state/nfl (+ the league's
  * playoff settings), never chosen by the user.
  *
- * @returns 'OFFSEASON' | 'IN_SEASON' | 'LEAGUE_PLAYOFFS' | 'COMPLETE'
+ * There is NO off-season state: before kickoff everyone lives in the
+ * Week 1 view. The board prices Week 1 the moment projections exist.
+ *
+ * @returns 'IN_SEASON' | 'LEAGUE_PLAYOFFS' | 'COMPLETE'
  */
 export function computeSeasonState(state, league = null) {
   const seasonType = state?.seasonType ?? state?.season_type ?? 'off';
@@ -30,8 +33,7 @@ export function computeSeasonState(state, league = null) {
   if (seasonType === 'regular') {
     const playoffStart = league?.playoffWeekStart ?? 15;
     if (week >= playoffStart) return 'LEAGUE_PLAYOFFS';
-    if (week >= 1) return 'IN_SEASON';
-    return 'OFFSEASON';
+    return 'IN_SEASON';
   }
 
   if (seasonType === 'post') {
@@ -39,6 +41,6 @@ export function computeSeasonState(state, league = null) {
     return 'COMPLETE';
   }
 
-  // 'off' and 'pre' are both the pre-kickoff world.
-  return 'OFFSEASON';
+  // 'off' and 'pre' both resolve to the Week 1 view.
+  return 'IN_SEASON';
 }

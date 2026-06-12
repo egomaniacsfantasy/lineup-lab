@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
 import {
   buildProjections,
   crosswalk,
+  parseFrancoWorkbooks,
   parseWorkbook,
 } from '../projections/importer.js';
 import {
@@ -32,6 +33,12 @@ if (!process.env.ADMIN_PASSWORD) {
 
 // Pending previews held in memory until confirmed (10 most recent).
 const pending = new Map();
+
+function nextVersionName() {
+  const today = new Date().toISOString().slice(0, 10);
+  const existing = listVersions().versions.filter((v) => v.version.startsWith(`franco-${today}`));
+  return existing.length > 0 ? `franco-${today}-${existing.length + 1}` : `franco-${today}`;
+}
 
 function requireAdmin(req, res, next) {
   if (req.get('x-admin-password') !== ADMIN_PASSWORD) {
@@ -117,9 +124,7 @@ adminRouter.post('/projections/confirm', (req, res, next) => {
       rememberMatches(newConfirmed);
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const existing = listVersions().versions.filter((v) => v.version.startsWith(`franco-${today}`));
-    const version = existing.length > 0 ? `franco-${today}-${existing.length + 1}` : `franco-${today}`;
+    const version = nextVersionName();
 
     const projections = buildProjections([...entry.matched, ...resolvedRows], {
       source: version,
@@ -136,6 +141,55 @@ adminRouter.post('/projections/confirm', (req, res, next) => {
     invalidate('pricing:'); // all lines recompute against the new version
 
     res.json({ version, count: projections.length, skippedUnmatched: skipped, active: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * One-shot import for Franco's combined-format files (all six positions
+ * in one drop). No preview/confirm round-trip: exact + previously
+ * confirmed matches import immediately, unmatched are reported back —
+ * never silently guessed.
+ */
+adminRouter.post('/projections/import-franco', upload.array('files', 8), async (req, res, next) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      res.status(400).json({ error: 'no_files', message: 'Attach the position XLSX files.' });
+      return;
+    }
+
+    const { tabs, rows } = parseFrancoWorkbooks(
+      req.files.map((f) => ({ name: f.originalname, buffer: f.buffer })),
+    );
+    const catalog = await sleeperProvider.getPlayerCatalog();
+    const { matched, unmatched } = crosswalk(rows, catalog, getConfirmedMatches());
+
+    const version = nextVersionName();
+    const projections = buildProjections(matched, { source: version, scoringBasis: 'ppr' });
+
+    saveVersion(version, projections, {
+      scoringBasis: 'ppr',
+      pointsAre: 'per-game',
+      format: 'franco-combined',
+      files: tabs,
+      skippedUnmatched: unmatched.length,
+    });
+    invalidate('pricing:');
+
+    res.json({
+      version,
+      active: true,
+      count: projections.length,
+      tabs,
+      unmatched: unmatched.map(({ key, name, team, position, candidates }) => ({
+        key,
+        name,
+        team,
+        position,
+        candidates,
+      })),
+    });
   } catch (error) {
     next(error);
   }

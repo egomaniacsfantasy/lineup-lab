@@ -5,11 +5,12 @@ export function formatAmericanOdds(odds: number): string {
     return `+${rounded}`;
   }
 
-  if (rounded <= -100) {
+  if (rounded <= -101) {
     return `${rounded}`;
   }
 
-  return 'EVEN';
+  // even money is always quoted +100, never -100 (or "EVEN")
+  return '+100';
 }
 
 export function formatSpread(spread: number): string {
