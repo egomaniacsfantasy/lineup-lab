@@ -4,6 +4,13 @@ services:
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm run start
+    # Persistent disk: projections imports, confirmed name matches, line
+    # history, and the daily player-catalog snapshot live in server/data.
+    # Without this disk they are wiped on every deploy.
+    disk:
+      name: olympus-data
+      mountPath: /opt/render/project/src/server/data
+      sizeGB: 1
     envVars:
       - key: ADMIN_PASSWORD
         sync: false
