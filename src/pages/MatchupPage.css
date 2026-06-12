@@ -197,7 +197,7 @@
   background: var(--bg-inset);
 }
 
-.matchup-page__hero-number--opp {
+.matchup-page__hero-number.matchup-page__hero-number--opp {
   color: var(--text-dim);
   text-shadow: none;
 }
