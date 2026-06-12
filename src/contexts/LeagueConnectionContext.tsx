@@ -70,17 +70,34 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setIsLoading(true);
     setError(null);
 
+    // The server cold-starts on every deploy: the first pricing call can
+    // fail or land mid-warmup. Retry with backoff instead of showing a
+    // zeroed board until the next hourly poll.
+    const loadPricing = async () => {
+      const delays = [0, 4_000, 12_000, 30_000];
+      for (const delay of delays) {
+        if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+        try {
+          const lines = await fetchLines(connection.leagueId, connection.userId);
+          setPricing(lines);
+          if (lines.available) {
+            const h = await fetchLineHistory(connection.leagueId).catch(() => null);
+            setLineHistory(h?.history ?? null);
+            return;
+          }
+        } catch {
+          setPricing(null);
+        }
+      }
+    };
+
     try {
       const data = await fetchBootstrap(connection.leagueId, connection.userId);
       setBootstrap(data);
       fetchSchedule(connection.leagueId)
         .then((s) => setSchedule(s.weeks))
         .catch(() => setSchedule(null));
-      fetchLines(connection.leagueId, connection.userId)
-        .then(setPricing)
-        .then(() => fetchLineHistory(connection.leagueId))
-        .then((h) => setLineHistory(h?.history ?? null))
-        .catch(() => setPricing(null));
+      void loadPricing();
     } catch (caught) {
       setError(
         caught instanceof Error
