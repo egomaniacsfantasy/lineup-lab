@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
+import { getLeaguePricing } from '../engine/engine.js';
 
 const DAY = 24 * 60 * 60_000;
 
@@ -81,16 +82,57 @@ apiRouter.get('/connect/:username', async (req, res, next) => {
   }
 });
 
+async function loadLeagueContext(provider, leagueId, userId) {
+  const league = await provider.getLeague(leagueId);
+  if (!league) return null;
+
+  const [rosters, users, state] = await Promise.all([
+    provider.getRosters(leagueId),
+    provider.getUsers(leagueId),
+    provider.getSeasonState(),
+  ]);
+
+  const usersByOwner = new Map(users.map((u) => [u.ownerId, u]));
+  const teams = rosters.map((r) => {
+    const owner = r.ownerId ? usersByOwner.get(r.ownerId) : null;
+    return {
+      ...r,
+      ownerName: owner?.ownerName ?? 'Unmanaged team',
+      teamName: owner?.teamName ?? `Roster ${r.rosterId}`,
+      avatarUrl: owner?.avatarUrl ?? null,
+      isUser:
+        userId !== null &&
+        userId !== undefined &&
+        (r.ownerId === userId || (r.coOwners ?? []).includes(userId)),
+    };
+  });
+
+  const isCurrentSeason = league.season === state.season;
+  const week = Math.max(
+    1,
+    Math.min(
+      isCurrentSeason ? (state.displayWeek || state.week || 1) : (league.lastScoredWeek ?? 1),
+      18,
+    ),
+  );
+
+  const matchups = await provider.getMatchups(leagueId, week);
+  const rosteredIds = [...new Set(teams.flatMap((t) => t.players))];
+  const players = await provider.getPlayerCatalog(rosteredIds);
+
+  return { league, teams, week, matchups, players, state };
+}
+
 /** Everything one league needs to render: league, teams, week matchups, players. */
 apiRouter.get('/league/:leagueId/bootstrap', async (req, res, next) => {
   try {
-    const provider = getProvider(req);
-    const { leagueId } = req.params;
-    const userId = req.query.userId ?? null;
+    const ctx = await loadLeagueContext(
+      getProvider(req),
+      req.params.leagueId,
+      req.query.userId ?? null,
+    );
 
-    const league = await provider.getLeague(leagueId);
-
-    if (!league) {
+    if (!ctx) {
       res.status(404).json({
         error: 'league_not_found',
         message: 'That league does not exist or is no longer available on Sleeper.',
@@ -98,51 +140,36 @@ apiRouter.get('/league/:leagueId/bootstrap', async (req, res, next) => {
       return;
     }
 
-    const [rosters, users, state] = await Promise.all([
-      provider.getRosters(leagueId),
-      provider.getUsers(leagueId),
-      provider.getSeasonState(),
-    ]);
+    res.json({ ...ctx, players: ctx.players, lastUpdated: Date.now() });
+  } catch (error) {
+    next(error);
+  }
+});
 
-    const usersByOwner = new Map(users.map((u) => [u.ownerId, u]));
-    const teams = rosters.map((r) => {
-      const owner = r.ownerId ? usersByOwner.get(r.ownerId) : null;
-      return {
-        ...r,
-        ownerName: owner?.ownerName ?? 'Unmanaged team',
-        teamName: owner?.teamName ?? `Roster ${r.rosterId}`,
-        avatarUrl: owner?.avatarUrl ?? null,
-        isUser:
-          userId !== null &&
-          (r.ownerId === userId || (r.coOwners ?? []).includes(userId)),
-      };
-    });
+/** Engine-priced lines for a league (requires an active projection import). */
+apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const userId = req.query.userId ?? null;
 
-    // Pick the week to render: live week for the active season, last scored
-    // week for archived seasons, clamp to ≥ 1 in the offseason.
-    const isCurrentSeason = league.season === state.season;
-    const week = Math.max(
-      1,
-      Math.min(
-        isCurrentSeason ? (state.displayWeek || state.week || 1) : (league.lastScoredWeek ?? 1),
-        18,
-      ),
-    );
+    const pricing = await getLeaguePricing(async () => {
+      const ctx = await loadLeagueContext(provider, leagueId, userId);
+      if (!ctx) throw new Error('league_not_found');
 
-    const matchups = await provider.getMatchups(leagueId, week);
+      const lastWeek = Math.min((ctx.league.playoffWeekStart ?? 15) + 2, 18);
+      const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
+        const all = [];
+        for (let week = 1; week <= lastWeek; week += 1) {
+          all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
+        }
+        return all;
+      });
 
-    const rosteredIds = [...new Set(teams.flatMap((t) => t.players))];
-    const players = await provider.getPlayerCatalog(rosteredIds);
+      return { ...ctx, catalog: ctx.players, scheduleWeeks };
+    }, `${leagueId}:${userId}`);
 
-    res.json({
-      league,
-      teams,
-      week,
-      matchups,
-      players,
-      state,
-      lastUpdated: Date.now(),
-    });
+    res.json(pricing);
   } catch (error) {
     next(error);
   }

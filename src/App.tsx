@@ -8,6 +8,7 @@ import { MatchupPage } from './pages/MatchupPage';
 import { RankingsPage } from './pages/RankingsPage';
 import { SeasonPage } from './pages/SeasonPage';
 import { TradePage } from './pages/TradePage';
+import { AdminProjectionsPage } from './pages/AdminProjectionsPage';
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/trade" element={<TradePage />} />
           <Route path="/rankings" element={<RankingsPage />} />
           <Route path="/league" element={<LeaguePage />} />
+          <Route path="/admin/projections" element={<AdminProjectionsPage />} />
         </Route>
         </Routes>
       </LeagueConnectionProvider>

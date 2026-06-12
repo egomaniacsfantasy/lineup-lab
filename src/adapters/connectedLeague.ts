@@ -12,6 +12,8 @@ import type {
   ApiMatchup,
   ApiTeam,
   LeagueBootstrap,
+  LeaguePricing,
+  PricedSide,
   ScheduleWeek,
 } from '../services/leagueApi';
 import type {
@@ -137,7 +139,31 @@ export function toLeagueConnection(bootstrap: LeagueBootstrap): LeagueConnection
   };
 }
 
-export function toLeagueFutures(bootstrap: LeagueBootstrap): LeagueFutureRow[] {
+export function toLeagueFutures(
+  bootstrap: LeagueBootstrap,
+  pricing?: LeaguePricing | null,
+): LeagueFutureRow[] {
+  if (pricing?.available && pricing.futures) {
+    return [...pricing.futures]
+      .sort((a, b) => b.titleProb - a.titleProb)
+      .map((f) => ({
+        teamName: f.teamName,
+        record:
+          f.record.ties > 0
+            ? `${f.record.wins}-${f.record.losses}-${f.record.ties}`
+            : `${f.record.wins}-${f.record.losses}`,
+        championOdds: f.championOdds,
+        finalsOdds: f.finalsOdds,
+        playoffOdds: f.playoffOdds,
+        playoffProb: f.playoffProb,
+        isUser: f.isUser,
+      }));
+  }
+
+  return provisionalFutures(bootstrap);
+}
+
+function provisionalFutures(bootstrap: LeagueBootstrap): LeagueFutureRow[] {
   const teams = [...bootstrap.teams];
   const ppgs = teams.map(teamPpg);
   const mean = ppgs.reduce((a, b) => a + b, 0) / Math.max(1, ppgs.length);
@@ -177,8 +203,14 @@ export function toLeagueFutures(bootstrap: LeagueBootstrap): LeagueFutureRow[] {
   });
 }
 
-export function toWeekMatchups(bootstrap: LeagueBootstrap): LeagueWeekMatchup[] {
+export function toWeekMatchups(
+  bootstrap: LeagueBootstrap,
+  pricing?: LeaguePricing | null,
+): LeagueWeekMatchup[] {
   const teamsByRoster = new Map(bootstrap.teams.map((t) => [t.rosterId, t]));
+  const pricedByMatchup = new Map(
+    pricing?.available ? (pricing.lines ?? []).map((l) => [l.matchupId, l]) : [],
+  );
   const byMatchup = new Map<number, ApiMatchup[]>();
 
   bootstrap.matchups.forEach((m) => {
@@ -197,15 +229,18 @@ export function toWeekMatchups(bootstrap: LeagueBootstrap): LeagueWeekMatchup[] 
     const teamB = teamsByRoster.get(b.rosterId);
     if (!teamA || !teamB) return;
 
+    const priced = pricedByMatchup.get(a.matchupId);
     const line = provisionalLine(teamPpg(teamA), teamPpg(teamB));
+    const oddsA = priced?.sides[String(a.rosterId)]?.moneyline ?? line.yours.moneyline;
+    const oddsB = priced?.sides[String(b.rosterId)]?.moneyline ?? line.opponent.moneyline;
 
     result.push({
       teamA: teamA.teamName,
       teamARecord: recordLabel(teamA),
-      teamAOdds: line.yours.moneyline,
+      teamAOdds: oddsA,
       teamB: teamB.teamName,
       teamBRecord: recordLabel(teamB),
-      teamBOdds: line.opponent.moneyline,
+      teamBOdds: oddsB,
       isUserGame: teamA.isUser || teamB.isUser,
     });
   });
@@ -222,7 +257,20 @@ function slotLabels(rosterPositions: string[]): SlotLabel[] {
     });
 }
 
-export function toMatchupData(bootstrap: LeagueBootstrap): MatchupData | null {
+function sideToLine(side: PricedSide): MatchupLine {
+  return {
+    moneyline: side.moneyline,
+    winProbability: side.winProbability,
+    projection: side.projection,
+    spread: side.spread,
+    total: side.total,
+  };
+}
+
+export function toMatchupData(
+  bootstrap: LeagueBootstrap,
+  pricing?: LeaguePricing | null,
+): MatchupData | null {
   const userTeam = getUserTeam(bootstrap);
   if (!userTeam) return null;
 
@@ -239,18 +287,52 @@ export function toMatchupData(bootstrap: LeagueBootstrap): MatchupData | null {
   if (!userMatchup || !oppMatchup || !oppTeam) return null;
 
   const labels = slotLabels(bootstrap.league.rosterPositions);
+  const priced = pricing?.available ? pricing : null;
+  const pricedLine = priced?.lines?.find((l) => l.matchupId === userMatchup.matchupId);
+  const playerMeans = priced?.playerMeans ?? {};
+  const swapsBySlot = new Map<number, NonNullable<LeaguePricing['userSwaps']>>();
+  (priced?.userSwaps ?? []).forEach((swap) => {
+    const list = swapsBySlot.get(swap.slotIndex) ?? [];
+    list.push(swap);
+    swapsBySlot.set(swap.slotIndex, list);
+  });
 
-  const buildRoster = (matchup: ApiMatchup): RosterSlot[] =>
+  const projectionFor = (playerId: string, matchup: ApiMatchup) =>
+    playerMeans[playerId]?.mean ?? matchup.playersPoints[playerId] ?? 0;
+
+  const buildRoster = (matchup: ApiMatchup, isUserSide: boolean): RosterSlot[] =>
     matchup.starters.map((playerId, index) => {
-      const projection = matchup.playersPoints[playerId] ?? 0;
+      const projection = projectionFor(playerId, matchup);
+      const yoursSide = pricedLine?.sides[String(matchup.rosterId)];
+      const swaps = isUserSide ? (swapsBySlot.get(index) ?? []) : [];
+
+      const alternatives = swaps.map((swap) => {
+        const altProjection = swap.benchMean;
+        return {
+          player: toPlayer(swap.benchId, bootstrap.players),
+          projection: altProjection,
+          floor: Number((altProjection * 0.6).toFixed(1)),
+          ceiling: Number((altProjection * 1.45).toFixed(1)),
+          resultingLine: {
+            moneyline: swap.resultingMoneyline,
+            winProbability: swap.resultingWinProb,
+            projection: swap.resultingProjection,
+            spread: Number(((yoursSide?.spread ?? 0) + altProjection - swap.starterMean).toFixed(1)),
+            total: Number(((yoursSide?.total ?? 0) + altProjection - swap.starterMean).toFixed(1)),
+          },
+          deltaWinProbability: swap.deltaWinProb,
+          gameLine: `${bootstrap.players[swap.benchId]?.team ?? 'FA'} game, line pending`,
+        };
+      });
+
       return {
         slotLabel: labels[index] ?? 'FLEX',
         starter: toPlayer(playerId, bootstrap.players),
         projection,
         floor: Number((projection * 0.6).toFixed(1)),
         ceiling: Number((projection * 1.45).toFixed(1)),
-        isDecisionSlot: false,
-        alternatives: [], // populated by the pricing engine in Phase B
+        isDecisionSlot: alternatives.length > 0,
+        alternatives,
       };
     });
 
@@ -259,10 +341,15 @@ export function toMatchupData(bootstrap: LeagueBootstrap): MatchupData | null {
       .filter((id) => !matchup.starters.includes(id))
       .map((id) => ({
         player: toPlayer(id, bootstrap.players),
-        projection: matchup.playersPoints[id] ?? 0,
+        projection: projectionFor(id, matchup),
       }));
 
-  const line = provisionalLine(teamPpg(userTeam), teamPpg(oppTeam));
+  const userSide = pricedLine?.sides[String(userTeam.rosterId)];
+  const oppSide = pricedLine?.sides[String(oppTeam.rosterId)];
+  const line =
+    userSide && oppSide
+      ? { yours: sideToLine(userSide), opponent: sideToLine(oppSide) }
+      : provisionalLine(teamPpg(userTeam), teamPpg(oppTeam));
 
   return {
     week: bootstrap.week,
@@ -271,14 +358,14 @@ export function toMatchupData(bootstrap: LeagueBootstrap): MatchupData | null {
       teamName: userTeam.teamName,
       managerName: userTeam.ownerName,
       record: recordLabel(userTeam),
-      roster: buildRoster(userMatchup),
+      roster: buildRoster(userMatchup, true),
       bench: buildBench(userTeam, userMatchup),
     },
     opponentTeam: {
       teamName: oppTeam.teamName,
       managerName: oppTeam.ownerName,
       record: recordLabel(oppTeam),
-      roster: buildRoster(oppMatchup),
+      roster: buildRoster(oppMatchup, false),
       bench: [],
     },
     baseline: line,

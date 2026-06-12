@@ -25,13 +25,13 @@ import './SeasonPage.css';
 
 export function SeasonPage() {
   const { mode } = useSeasonMode();
-  const { bootstrap, schedule } = useLeagueConnection();
+  const { bootstrap, schedule, pricing } = useLeagueConnection();
 
   const connectedSeason = useMemo(() => {
     if (!bootstrap) return null;
     const userTeam = getUserTeam(bootstrap);
     if (!userTeam) return null;
-    const futures = toLeagueFutures(bootstrap);
+    const futures = toLeagueFutures(bootstrap, pricing);
     const userRow = futures.find((row) => row.isUser) ?? null;
     const rank = futures.findIndex((row) => row.isUser) + 1;
 
@@ -41,7 +41,7 @@ export function SeasonPage() {
       rank: rank > 0 ? rank : bootstrap.league.totalTeams,
       scheduleItems: schedule ? toScheduleItems(schedule, bootstrap) : [],
     };
-  }, [bootstrap, schedule]);
+  }, [bootstrap, schedule, pricing]);
 
   const preseasonSchedule = useMemo<ScheduleGridItem[]>(
     () =>
@@ -77,10 +77,12 @@ export function SeasonPage() {
       <div className="season-page">
         <h1 className="visually-hidden">Season futures</h1>
 
-        <SeasonalNotice>
-          Season futures are provisional (scoring history only) until
-          projections are imported.
-        </SeasonalNotice>
+        {!pricing?.available ? (
+          <SeasonalNotice>
+            Season futures are provisional (scoring history only) until
+            projections are imported.
+          </SeasonalNotice>
+        ) : null}
 
         <SeasonHeadline
           championshipOdds={userRow.championOdds}

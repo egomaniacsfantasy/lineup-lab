@@ -11,6 +11,7 @@ import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSeasonMode } from '../hooks/useSeasonMode';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { toMatchupData } from '../adapters/connectedLeague';
 import { usePlayerDetail } from '../contexts/PlayerDetailContext';
 import {
@@ -79,10 +80,20 @@ function getHighestImpactDecision(roster: RosterSlot[]) {
 interface MatchupLiveProps {
   matchup: MatchupData;
   isConnected: boolean;
+  isPriced?: boolean;
+  scoringNote?: string | null;
+  unpricedStarterCount?: number;
   seasonLabel?: string;
 }
 
-function MatchupLive({ matchup, isConnected, seasonLabel }: MatchupLiveProps) {
+function MatchupLive({
+  matchup,
+  isConnected,
+  isPriced = false,
+  scoringNote = null,
+  unpricedStarterCount = 0,
+  seasonLabel,
+}: MatchupLiveProps) {
   const { isOpen: isPlayerDetailOpen, openPlayerDetail } = usePlayerDetail();
   const engine = useMatchupEngine(matchup);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
@@ -381,10 +392,18 @@ function MatchupLive({ matchup, isConnected, seasonLabel }: MatchupLiveProps) {
           <p className="matchup-page__thesis">
             Every lineup decision moves your line.
           </p>
+          {scoringNote ? <SeasonalNotice>{scoringNote}</SeasonalNotice> : null}
+          {unpricedStarterCount > 0 ? (
+            <SeasonalNotice>
+              {unpricedStarterCount} of your starters{' '}
+              {unpricedStarterCount === 1 ? 'is' : 'are'} not in the projection
+              sheet, so this line is reduced-confidence.
+            </SeasonalNotice>
+          ) : null}
           <MatchupCard
             activeLine={engine.activeLine}
             activeRoster={engine.roster}
-            isProvisional={isConnected}
+            isProvisional={isConnected && !isPriced}
             matchup={matchup}
             seasonLabel={seasonLabel}
           />
@@ -557,9 +576,9 @@ function MatchupLive({ matchup, isConnected, seasonLabel }: MatchupLiveProps) {
 
 export function MatchupPage() {
   const { mode } = useSeasonMode();
-  const { bootstrap } = useLeagueConnection();
+  const { bootstrap, pricing } = useLeagueConnection();
 
-  const connectedMatchup = bootstrap ? toMatchupData(bootstrap) : null;
+  const connectedMatchup = bootstrap ? toMatchupData(bootstrap, pricing) : null;
 
   if (!connectedMatchup && mode === 'preseason') {
     return <MatchupPreseason />;
@@ -568,6 +587,19 @@ export function MatchupPage() {
   return (
     <MatchupLive
       isConnected={connectedMatchup !== null}
+      isPriced={Boolean(pricing?.available)}
+      scoringNote={pricing?.available ? pricing.scoringNote ?? null : null}
+      unpricedStarterCount={
+        pricing?.available && bootstrap
+          ? (pricing.lines
+              ?.flatMap((l) => Object.entries(l.sides))
+              .find(([rosterId]) =>
+                bootstrap.teams.some(
+                  (t) => t.isUser && String(t.rosterId) === rosterId,
+                ),
+              )?.[1].unpricedStarters.length ?? 0)
+          : 0
+      }
       seasonLabel={
         connectedMatchup && bootstrap
           ? `${bootstrap.league.season} season`

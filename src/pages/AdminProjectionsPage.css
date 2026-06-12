@@ -1,0 +1,184 @@
+.admin-projections {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 28px);
+  display: grid;
+  gap: 16px;
+}
+
+.admin-projections__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.admin-projections__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(28px, 5vw, 38px);
+  font-weight: 600;
+}
+
+.admin-projections__subtitle {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.admin-projections__card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
+  padding: clamp(16px, 3vw, 22px);
+}
+
+.admin-projections__login {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-projections__field,
+.admin-projections__config {
+  display: grid;
+  gap: 8px;
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.admin-projections__config {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.admin-projections__config select,
+.admin-projections__input {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.admin-projections__primary {
+  justify-self: start;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-projections__primary:disabled {
+  opacity: 0.5;
+}
+
+.admin-projections__summary {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-projections__unmatched {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-projections__unmatched-row {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+}
+
+.admin-projections__unmatched-name {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-projections__candidates {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.admin-projections__candidate {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-surface-soft) 80%, transparent);
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-projections__candidate--selected {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: var(--bg-deep);
+}
+
+.admin-projections__version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.admin-projections__active-chip {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  color: var(--green);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-projections__rollback {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-inset) 82%, transparent);
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+}

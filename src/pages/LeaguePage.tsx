@@ -22,7 +22,7 @@ import './LeaguePage.css';
 
 export function LeaguePage() {
   const { mode } = useSeasonMode();
-  const { stored, bootstrap, isLoading, error, connect, disconnect } =
+  const { stored, bootstrap, pricing, isLoading, error, connect, disconnect } =
     useLeagueConnection();
   const [showWizard, setShowWizard] = useState(false);
 
@@ -30,10 +30,10 @@ export function LeaguePage() {
     if (!bootstrap) return null;
     return {
       connection: toLeagueConnection(bootstrap),
-      futures: toLeagueFutures(bootstrap),
-      slate: toWeekMatchups(bootstrap),
+      futures: toLeagueFutures(bootstrap, pricing),
+      slate: toWeekMatchups(bootstrap, pricing),
     };
-  }, [bootstrap]);
+  }, [bootstrap, pricing]);
 
   if (showWizard || (stored && !bootstrap && !isLoading && error)) {
     return (
@@ -81,11 +81,15 @@ export function LeaguePage() {
         </SeasonalNotice>
       ) : null}
 
-      {connected ? (
+      {connected && !pricing?.available ? (
         <SeasonalNotice>
           Futures and matchup odds are provisional (scoring history only) until
           projections are imported.
         </SeasonalNotice>
+      ) : null}
+
+      {connected && pricing?.available && pricing.scoringNote ? (
+        <SeasonalNotice>{pricing.scoringNote}</SeasonalNotice>
       ) : null}
 
       <LeagueFutures

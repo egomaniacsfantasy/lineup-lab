@@ -79,6 +79,69 @@ export interface ScheduleWeek {
   matchups: ApiMatchup[];
 }
 
+export interface PricedSide {
+  moneyline: number;
+  winProbability: number;
+  projection: number;
+  spread: number;
+  total: number;
+  unpricedStarters: string[];
+  zeroedStarters: string[];
+}
+
+export interface PricedLine {
+  matchupId: number;
+  week: number;
+  computedAt: number;
+  inputsHash: string;
+  sides: Record<string, PricedSide>;
+}
+
+export interface UserSwap {
+  slotIndex: number;
+  slotLabel: string;
+  starterId: string;
+  benchId: string;
+  starterMean: number;
+  benchMean: number;
+  deltaWinProb: number;
+  resultingWinProb: number;
+  resultingMoneyline: number;
+  resultingProjection: number;
+}
+
+export interface PricedFuture {
+  rosterId: number;
+  teamName: string;
+  record: { wins: number; losses: number; ties: number };
+  playoffProb: number;
+  playoffOdds: number;
+  titleProb: number;
+  championOdds: number;
+  finalsOdds: number;
+  isUser: boolean;
+}
+
+export interface LeaguePricing {
+  available: boolean;
+  reason?: string;
+  projectionVersion?: string;
+  computedAt?: number;
+  inputsHash?: string;
+  week?: number;
+  scoringNote?: string | null;
+  lines?: PricedLine[];
+  userSwaps?: UserSwap[];
+  playerMeans?: Record<string, { mean: number; stdev: number; unpriced: boolean; zeroed: boolean; derived: boolean }>;
+  futures?: PricedFuture[];
+}
+
+export function fetchLines(leagueId: string, userId: string) {
+  return get<LeaguePricing>(
+    `/api/league/${leagueId}/lines?userId=${encodeURIComponent(userId)}`,
+  );
+}
+
 export class LeagueApiError extends Error {
   code: string;
 

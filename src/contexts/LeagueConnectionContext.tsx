@@ -10,9 +10,11 @@ import {
 } from 'react';
 import {
   fetchBootstrap,
+  fetchLines,
   fetchSchedule,
   refreshLeague,
   type LeagueBootstrap,
+  type LeaguePricing,
   type ScheduleWeek,
 } from '../services/leagueApi';
 
@@ -33,6 +35,7 @@ interface LeagueConnectionValue {
   stored: StoredConnection | null;
   bootstrap: LeagueBootstrap | null;
   schedule: ScheduleWeek[] | null;
+  pricing: LeaguePricing | null;
   isLoading: boolean;
   error: string | null;
   connect: (connection: StoredConnection) => void;
@@ -55,6 +58,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const [stored, setStored] = useState<StoredConnection | null>(readStored);
   const [bootstrap, setBootstrap] = useState<LeagueBootstrap | null>(null);
   const [schedule, setSchedule] = useState<ScheduleWeek[] | null>(null);
+  const [pricing, setPricing] = useState<LeaguePricing | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(stored));
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +72,9 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       fetchSchedule(connection.leagueId)
         .then((s) => setSchedule(s.weeks))
         .catch(() => setSchedule(null));
+      fetchLines(connection.leagueId, connection.userId)
+        .then(setPricing)
+        .catch(() => setPricing(null));
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -104,6 +111,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setStored(null);
     setBootstrap(null);
     setSchedule(null);
+    setPricing(null);
     setError(null);
   }, []);
 
@@ -114,8 +122,8 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   }, [stored, hydrate]);
 
   const value = useMemo(
-    () => ({ stored, bootstrap, schedule, isLoading, error, connect, disconnect, refresh }),
-    [stored, bootstrap, schedule, isLoading, error, connect, disconnect, refresh],
+    () => ({ stored, bootstrap, schedule, pricing, isLoading, error, connect, disconnect, refresh }),
+    [stored, bootstrap, schedule, pricing, isLoading, error, connect, disconnect, refresh],
   );
 
   return (
