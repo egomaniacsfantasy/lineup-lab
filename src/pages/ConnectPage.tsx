@@ -4,7 +4,7 @@
  * The demo stays reachable, one click below.
  */
 import { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import './ConnectPage.css';
@@ -46,7 +46,8 @@ export function ConnectPage() {
         <h1 className="connect-page__title">Sync a league to begin</h1>
         <p className="connect-page__subtitle">
           One username. Every matchup, trade, and waiver claim in your league
-          priced like a betting market — updated as the week moves.
+          priced like a betting market — updated as the week moves. There is
+          no demo mode: Olympus only prices real leagues.
         </p>
       </section>
 
@@ -88,10 +89,8 @@ export function ConnectPage() {
       </div>
 
       <p className="connect-page__demo">
-        No league handy?{' '}
-        <Link className="connect-page__demo-link" to="/matchup">
-          Explore the demo
-        </Link>
+        Read-only. We never ask for your password — Olympus prices your
+        league, it can&apos;t touch it.
       </p>
     </div>
   );

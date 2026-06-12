@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import './WelcomeCard.css';
 
 interface WelcomeCardProps {
@@ -7,6 +8,8 @@ interface WelcomeCardProps {
 }
 
 export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
+  const { bootstrap } = useLeagueConnection();
+
   useEffect(() => {
     if (!isOpen) {
       return undefined;
@@ -37,7 +40,11 @@ export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
         <h2 className="welcome-card__title" id="welcome-title">
           Your lineup, priced.
         </h2>
-        <p className="welcome-card__replay-note">2024 season replay, demo data</p>
+        <p className="welcome-card__replay-note">
+          {bootstrap
+            ? `Synced to ${bootstrap.league.name} — live Sleeper data`
+            : 'Live Sleeper data, refreshed all week'}
+        </p>
 
         <div className="welcome-card__sections">
           <div className="welcome-card__section">

@@ -24,7 +24,13 @@
 }
 
 .matchup-page__module--hero {
-  padding: 16px;
+  padding: 18px 16px;
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(232, 84, 29, 0.22);
+  background:
+    radial-gradient(130% 150% at 0% 0%, rgba(232, 84, 29, 0.12), transparent 52%),
+    var(--bg-surface);
 }
 
 .matchup-page__module--desktop-copy,
@@ -125,9 +131,112 @@
 }
 
 .matchup-page__live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 24px;
-  padding: 3px 8px;
+  padding: 3px 9px;
   background: rgba(232, 84, 29, 0.14);
+}
+
+.matchup-page__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber-bright);
+  animation: matchup-live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes matchup-live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+
+/* ── Head-to-head face-off ── */
+.matchup-page__faceoff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.matchup-page__faceoff-side {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+}
+
+.matchup-page__faceoff-side--opp {
+  text-align: right;
+  justify-items: end;
+}
+
+.matchup-page__faceoff-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.matchup-page__faceoff-identity--opp {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.matchup-page__faceoff-vs {
+  align-self: center;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--ink-3);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  background: var(--bg-inset);
+}
+
+.matchup-page__hero-number--opp {
+  color: var(--text-dim);
+  text-shadow: none;
+}
+
+/* ── Shared win-probability bar ── */
+.matchup-page__winbar {
+  position: relative;
+  height: 8px;
+  margin-top: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-inset);
+}
+
+.matchup-page__winbar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--amber), var(--amber-bright));
+  box-shadow: 0 0 12px rgba(232, 84, 29, 0.55);
+  transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.matchup-page__winbar-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.matchup-page__winbar-label {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-page__winbar-label--user {
+  color: var(--text-amber);
+  font-weight: 600;
 }
 
 .matchup-page__hero-team,
@@ -159,12 +268,13 @@
 }
 
 .matchup-page__hero-number {
-  color: var(--amber);
+  color: var(--amber-bright);
   font-family: var(--font-display);
-  font-size: 54px;
+  font-size: 48px;
   font-weight: 400;
   letter-spacing: 0.01em;
   line-height: 0.95;
+  text-shadow: 0 0 24px rgba(232, 84, 29, 0.35);
 }
 
 .matchup-page__hero-winprob {
@@ -436,11 +546,42 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.matchup-page__lineup-row--pickable {
+  margin-inline: -8px;
+  padding-inline: 8px;
+  border-radius: 8px;
+  outline: 1px dashed rgba(232, 84, 29, 0.3);
+  outline-offset: -1px;
+  cursor: pointer;
+  transition: background 120ms ease, outline-color 120ms ease;
+}
+
+.matchup-page__lineup-row--pickable:hover {
+  background: rgba(232, 84, 29, 0.06);
+  outline-color: rgba(232, 84, 29, 0.6);
+}
+
 .matchup-page__lineup-row--selected {
   margin-inline: -8px;
   padding-inline: 8px;
   border-radius: 8px;
-  background: rgba(232, 84, 29, 0.07);
+  background: rgba(232, 84, 29, 0.12);
+  outline: 1px solid var(--amber);
+  outline-offset: -1px;
+}
+
+.matchup-page__pick-badge {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-weight: 700;
+  justify-self: end;
 }
 
 .matchup-page__lineup-hitbox {
@@ -538,16 +679,98 @@
   font-size: 18px;
 }
 
+.matchup-page__compare-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.matchup-page__compare-delta {
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 0.95;
+  color: var(--text-dim);
+}
+
+.matchup-page__compare-delta--live {
+  color: var(--amber-bright);
+  text-shadow: 0 0 22px rgba(232, 84, 29, 0.4);
+}
+
 .matchup-page__compare-cards {
   display: grid;
   gap: 10px;
 }
 
+.matchup-page__compare-cards--faceoff {
+  position: relative;
+  grid-template-columns: 1fr 1fr;
+}
+
+.matchup-page__compare-vs {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--ink-3);
+  font-family: var(--font-display);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
 .matchup-page__compare-card {
+  position: relative;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   background: var(--bg-surface-soft);
   padding: 12px;
+}
+
+.matchup-page__compare-card--winner {
+  border-color: var(--amber);
+  background:
+    radial-gradient(120% 130% at 50% 0%, rgba(232, 84, 29, 0.12), transparent 60%),
+    var(--bg-surface-soft);
+}
+
+.matchup-page__compare-edge-tag {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.matchup-page__compare-bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-inset);
+}
+
+.matchup-page__compare-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ink-3);
+  transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.matchup-page__compare-bar-fill--winner {
+  background: linear-gradient(90deg, var(--amber), var(--amber-bright));
 }
 
 .matchup-page__compare-stats {
@@ -601,7 +824,11 @@
     display: grid;
     gap: 12px;
     position: sticky;
-    top: calc(var(--shell-header-height) + 16px);
+    /* the app's <main> is the scrollport and already sits below the
+       header — a header-sized offset here pushes the rail out of
+       alignment with the story column even before any scroll */
+    top: 16px;
+    align-self: start;
   }
 
   .matchup-page__module--mobile {
@@ -623,5 +850,28 @@
 
   .matchup-page__compare-sheet {
     border-radius: 18px;
+  }
+}
+
+/* crest initials for real (non-mythological) team names */
+.olympus-crest__initials {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.olympus-crest--user .olympus-crest__initials {
+  color: var(--gold);
+}
+
+/* lineup row hover lift (non-compare mode) */
+@media (hover: hover) {
+  .matchup-page__lineup-row:not(.matchup-page__lineup-row--pickable):hover {
+    background: rgba(255, 255, 255, 0.02);
   }
 }

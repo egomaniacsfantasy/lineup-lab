@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { SeasonModeProvider } from './contexts/SeasonModeContext';
 import {
@@ -21,6 +21,13 @@ function HomeGate() {
   return <Navigate replace to={stored ? '/matchup' : '/connect'} />;
 }
 
+/** There is no demo: every app tab requires a synced league. */
+function RequireLeague() {
+  const { stored } = useLeagueConnection();
+  if (!stored) return <Navigate replace to="/connect" />;
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <SeasonModeProvider>
@@ -29,13 +36,15 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<HomeGate />} />
           <Route path="/connect" element={<ConnectPage />} />
-          <Route path="/matchup" element={<MatchupPage />} />
-          <Route path="/season" element={<SeasonPage />} />
-          <Route path="/draft" element={<DraftPage />} />
-          <Route path="/trade" element={<TradePage />} />
-          <Route path="/rankings" element={<RankingsPage />} />
-          <Route path="/league" element={<LeaguePage />} />
-          <Route path="/more" element={<MorePage />} />
+          <Route element={<RequireLeague />}>
+            <Route path="/matchup" element={<MatchupPage />} />
+            <Route path="/season" element={<SeasonPage />} />
+            <Route path="/draft" element={<DraftPage />} />
+            <Route path="/trade" element={<TradePage />} />
+            <Route path="/rankings" element={<RankingsPage />} />
+            <Route path="/league" element={<LeaguePage />} />
+            <Route path="/more" element={<MorePage />} />
+          </Route>
           <Route path="/admin/projections" element={<AdminProjectionsPage />} />
         </Route>
         </Routes>

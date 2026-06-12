@@ -57,10 +57,6 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function formatKickoff(kickoff: string) {
-  return kickoff.replace('pm', '').replace('am', '').replace(/\s+/g, ' ').trim();
-}
-
 function formatProjection(value: number) {
   return value.toFixed(1);
 }
@@ -78,6 +74,26 @@ function formatMatchupForMeta(gameLine: string) {
   }
 
   return `${match[1]} ${match[2]} ${match[3]}`;
+}
+
+/**
+ * Betting-convention spread label with a real minus glyph: the favorite
+ * lays points ("You −7.4"), the dog gets them ("You +7.4").
+ */
+function formatTeamSpread(spread: number) {
+  const rounded = Math.round(spread * 10) / 10;
+  if (Math.abs(rounded) < 0.05) return "Pick 'em";
+  return rounded > 0 ? `You −${rounded.toFixed(1)}` : `You +${Math.abs(rounded).toFixed(1)}`;
+}
+
+/** One line of voice that actually matches the number. */
+function heroVerdict(winProbability: number) {
+  if (winProbability >= 75) return 'Heavy favorite. Don’t get cute.';
+  if (winProbability >= 60) return 'Clear edge. Protect it with the right starts.';
+  if (winProbability >= 52) return 'Slight edge. One bad break away from sweating.';
+  if (winProbability >= 48) return 'Coin flip. Every lineup call is the ballgame.';
+  if (winProbability >= 35) return 'Underdog, but live. The right swap moves this line.';
+  return 'Long shot this week. Swing for ceiling, not floor.';
 }
 
 function formatVerdict(playerName: string, deltaWinProbability: number) {
@@ -301,6 +317,15 @@ function TeamCrest({
     ),
   };
 
+  // Real teams get their initials, not a generic glyph.
+  const initials = teamName
+    .split(/\s+/)
+    .map((word) => word[0])
+    .filter((c) => /[A-Za-z0-9]/.test(c ?? ''))
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   return (
     <span
       aria-hidden="true"
@@ -311,9 +336,13 @@ function TeamCrest({
         .filter(Boolean)
         .join(' ')}
     >
-      <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2">
-        {glyphs[teamName] ?? <path d="M12 4 18 8v8l-6 4-6-4V8l6-4Z" />}
-      </svg>
+      {glyphs[teamName] ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2">
+          {glyphs[teamName]}
+        </svg>
+      ) : (
+        <span className="olympus-crest__initials">{initials || '—'}</span>
+      )}
     </span>
   );
 }
@@ -368,6 +397,7 @@ function CompareSheet({
   onClose,
 }: {
   comparison: {
+    slotIndex: number;
     leftLine: MatchupLine;
     rightLine: MatchupLine;
     leftProjection: number;
@@ -378,6 +408,42 @@ function CompareSheet({
   rightPlayer: Player;
   onClose: () => void;
 }) {
+  // slotIndex >= 0: a real swap inside one lineup slot, priced by the
+  // engine. slotIndex === -1: the two players can't trade places (e.g. a
+  // QB vs a WR) — show an honest projection face-off, never a fake line.
+  const isSwap = comparison.slotIndex >= 0;
+  const projectionDelta = roundTo(comparison.rightProjection - comparison.leftProjection);
+  const rightWins = isSwap ? comparison.deltaWinProbability > 0 : projectionDelta > 0;
+  const leftWins = isSwap ? comparison.deltaWinProbability < 0 : projectionDelta < 0;
+
+  const headlineNumber = isSwap
+    ? formatSignedPercent(comparison.deltaWinProbability)
+    : `${projectionDelta > 0 ? '+' : ''}${projectionDelta.toFixed(1)} pts`;
+  const headlineWinner = rightWins ? rightPlayer : leftWins ? leftPlayer : null;
+
+  const verdict = isSwap
+    ? formatVerdict(rightPlayer.shortName, comparison.deltaWinProbability)
+    : headlineWinner
+      ? `${headlineWinner.shortName} projects ${Math.abs(projectionDelta).toFixed(1)} more points this week. Different slots — a pulse check, not a swap.`
+      : 'Dead even on projection. Different slots — a pulse check, not a swap.';
+
+  const maxProjection = Math.max(comparison.leftProjection, comparison.rightProjection, 1);
+
+  const sides = [
+    {
+      player: leftPlayer,
+      projection: comparison.leftProjection,
+      line: comparison.leftLine,
+      winner: leftWins,
+    },
+    {
+      player: rightPlayer,
+      projection: comparison.rightProjection,
+      line: comparison.rightLine,
+      winner: rightWins,
+    },
+  ];
+
   return (
     <div className="matchup-page__compare-scrim" onClick={onClose} role="presentation">
       <section
@@ -389,7 +455,7 @@ function CompareSheet({
           <div>
             <p className="matchup-page__eyebrow">VS compare</p>
             <h2 className="matchup-page__module-title" id="compare-sheet-title">
-              Price the swap
+              {isSwap ? 'Price the swap' : 'Tale of the tape'}
             </h2>
           </div>
           <button
@@ -402,20 +468,34 @@ function CompareSheet({
           </button>
         </div>
 
-        <div className="matchup-page__compare-cards">
-          {[
-            {
-              player: leftPlayer,
-              projection: comparison.leftProjection,
-              line: comparison.leftLine,
-            },
-            {
-              player: rightPlayer,
-              projection: comparison.rightProjection,
-              line: comparison.rightLine,
-            },
-          ].map(({ player, projection, line }) => (
-            <article className="matchup-page__compare-card" key={player.id}>
+        <div className="matchup-page__compare-headline">
+          <span
+            className={[
+              'matchup-page__compare-delta',
+              headlineWinner ? 'matchup-page__compare-delta--live' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {headlineNumber}
+          </span>
+          <span className="matchup-page__meta-copy">
+            {isSwap ? 'win probability if you swap' : 'projection gap'}
+          </span>
+        </div>
+
+        <div className="matchup-page__compare-cards matchup-page__compare-cards--faceoff">
+          {sides.map(({ player, projection, line, winner }) => (
+            <article
+              className={[
+                'matchup-page__compare-card',
+                winner ? 'matchup-page__compare-card--winner' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              key={player.id}
+            >
+              {winner ? <span className="matchup-page__compare-edge-tag">Edge</span> : null}
               <div className="matchup-page__compare-player">
                 <PlayerHeadshot
                   className="matchup-page__headshot matchup-page__headshot--compare"
@@ -433,22 +513,41 @@ function CompareSheet({
               <div className="matchup-page__compare-stats">
                 <p className="matchup-page__compare-stat">
                   <span className="matchup-page__meta-copy">Projection</span>
-                  <span className="matchup-page__inline-number">{formatProjection(projection)} pts</span>
-                </p>
-                <p className="matchup-page__compare-stat">
-                  <span className="matchup-page__meta-copy">Line if started</span>
                   <span className="matchup-page__inline-number">
-                    {formatAmericanOdds(line.moneyline)} · {line.winProbability.toFixed(1)}%
+                    {formatProjection(projection)} pts
                   </span>
                 </p>
+                <span
+                  aria-hidden="true"
+                  className="matchup-page__compare-bar"
+                >
+                  <span
+                    className={[
+                      'matchup-page__compare-bar-fill',
+                      winner ? 'matchup-page__compare-bar-fill--winner' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    style={{ width: `${Math.max(6, (projection / maxProjection) * 100)}%` }}
+                  />
+                </span>
+                {isSwap ? (
+                  <p className="matchup-page__compare-stat">
+                    <span className="matchup-page__meta-copy">Line if started</span>
+                    <span className="matchup-page__inline-number">
+                      {formatAmericanOdds(line.moneyline)} · {line.winProbability.toFixed(1)}%
+                    </span>
+                  </p>
+                ) : null}
               </div>
             </article>
           ))}
+          <span aria-hidden="true" className="matchup-page__compare-vs">
+            VS
+          </span>
         </div>
 
-        <p className="matchup-page__compare-verdict">
-          {formatVerdict(rightPlayer.shortName, comparison.deltaWinProbability)}
-        </p>
+        <p className="matchup-page__compare-verdict">{verdict}</p>
       </section>
     </div>
   );
@@ -754,57 +853,69 @@ function MatchupLive({
     selected?: boolean;
     actionLabel?: string;
     onAction?: () => void;
-  }) => (
-    <div
-      className={[
-        'matchup-page__lineup-row',
-        tone === 'bench' ? 'matchup-page__lineup-row--bench' : '',
-        selected ? 'matchup-page__lineup-row--selected' : '',
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      key={`${slotLabel}-${player.id}`}
-    >
-      <button
-        className="matchup-page__lineup-hitbox"
-        onClick={() => {
-          if (isCompareMode) {
-            handleComparePick(player);
-            return;
-          }
+  }) => {
+    const pickOrder = compareSelection.findIndex(
+      (candidate) => candidate.id === player.id,
+    );
 
-          const context = getPlayerContext(player);
-          openPlayerDetail({
-            player,
-            slug: player.slug ?? player.id,
-            projection,
-            gameLine: context.gameLine,
-          });
-        }}
-        type="button"
+    return (
+      <div
+        className={[
+          'matchup-page__lineup-row',
+          tone === 'bench' ? 'matchup-page__lineup-row--bench' : '',
+          isCompareMode ? 'matchup-page__lineup-row--pickable' : '',
+          selected ? 'matchup-page__lineup-row--selected' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        key={`${slotLabel}-${player.id}`}
       >
-        <span className="matchup-page__slot-tag">{slotLabel}</span>
-        <span className="matchup-page__lineup-player">
-          <PlayerHeadshot
-            className="matchup-page__headshot"
-            fallbackClassName="matchup-page__headshot-fallback"
-            imageClassName="matchup-page__headshot-image"
-            player={player}
-          />
-          <span className="matchup-page__lineup-copy">
-            <span className="matchup-page__row-name">{player.shortName}</span>
-            <span className="matchup-page__row-secondary">{meta}</span>
+        <button
+          aria-pressed={isCompareMode ? selected : undefined}
+          className="matchup-page__lineup-hitbox"
+          onClick={() => {
+            if (isCompareMode) {
+              handleComparePick(player);
+              return;
+            }
+
+            const context = getPlayerContext(player);
+            openPlayerDetail({
+              player,
+              slug: player.slug ?? player.id,
+              projection,
+              gameLine: context.gameLine,
+            });
+          }}
+          type="button"
+        >
+          <span className="matchup-page__slot-tag">{slotLabel}</span>
+          <span className="matchup-page__lineup-player">
+            <PlayerHeadshot
+              className="matchup-page__headshot"
+              fallbackClassName="matchup-page__headshot-fallback"
+              imageClassName="matchup-page__headshot-image"
+              player={player}
+            />
+            <span className="matchup-page__lineup-copy">
+              <span className="matchup-page__row-name">{player.shortName}</span>
+              <span className="matchup-page__row-secondary">{meta}</span>
+            </span>
           </span>
-        </span>
-        <span className="matchup-page__projection">{formatProjection(projection)}</span>
-      </button>
-      {actionLabel && onAction ? (
-        <button className="matchup-page__row-action" onClick={onAction} type="button">
-          {actionLabel}
+          {pickOrder >= 0 ? (
+            <span className="matchup-page__pick-badge">{pickOrder + 1}</span>
+          ) : (
+            <span className="matchup-page__projection">{formatProjection(projection)}</span>
+          )}
         </button>
-      ) : null}
-    </div>
-  );
+        {actionLabel && onAction ? (
+          <button className="matchup-page__row-action" onClick={onAction} type="button">
+            {actionLabel}
+          </button>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <div className="matchup-page">
@@ -817,62 +928,100 @@ function MatchupLive({
       <section className="matchup-page__story">
         <section className="matchup-page__module matchup-page__module--hero">
           <div className="matchup-page__module-row">
-            <span className="matchup-page__eyebrow">Matchup market</span>
-            <span className="matchup-page__live-chip">Live</span>
-          </div>
-
-          <div className="matchup-page__hero-team">
-            <TeamCrest isUser teamName={matchup.yourTeam.teamName} />
-            <div>
-              <p className="matchup-page__team-name">{matchup.yourTeam.teamName}</p>
-            </div>
-          </div>
-
-          <div className="matchup-page__hero-line">
-            <span className="matchup-page__hero-number">
-              {formatAmericanOdds(engine.activeLine.yours.moneyline)}
+            <span className="matchup-page__eyebrow">
+              Week {matchup.week} · head-to-head
             </span>
-            <span className="matchup-page__hero-winprob">
-              {engine.activeLine.yours.winProbability.toFixed(1)}%
+            <span className="matchup-page__live-chip">
+              <span className="matchup-page__live-dot" aria-hidden="true" />
+              Live line
             </span>
           </div>
 
-          <p className="matchup-page__meta-copy">
-            Proj {formatProjection(engine.activeLine.yours.projection)} pts ·{' '}
-            {matchup.yourTeam.managerName}, {matchup.yourTeam.record}
-          </p>
-
-          <div className="matchup-page__hero-divider" />
-
-          <div className="matchup-page__opponent-row">
-            <div className="matchup-page__opponent-copy">
-              <TeamCrest teamName={matchup.opponentTeam.teamName} />
-              <div>
-                <p className="matchup-page__opponent-name">{matchup.opponentTeam.teamName}</p>
-                <p className="matchup-page__meta-copy">
-                  Proj {formatProjection(engine.activeLine.opponent.projection)} ·{' '}
-                  {matchup.opponentTeam.managerName}, {matchup.opponentTeam.record}
-                </p>
+          <div className="matchup-page__faceoff">
+            <div className="matchup-page__faceoff-side">
+              <div className="matchup-page__faceoff-identity">
+                <TeamCrest isUser teamName={matchup.yourTeam.teamName} />
+                <div>
+                  <p className="matchup-page__team-name">{matchup.yourTeam.teamName}</p>
+                  <p className="matchup-page__meta-copy">
+                    {matchup.yourTeam.managerName} · {matchup.yourTeam.record}
+                  </p>
+                </div>
               </div>
+              <span className="matchup-page__hero-number">
+                {formatAmericanOdds(engine.activeLine.yours.moneyline)}
+              </span>
+              <p className="matchup-page__meta-copy">
+                Proj{' '}
+                <span className="matchup-page__inline-number">
+                  {formatProjection(engine.activeLine.yours.projection)}
+                </span>{' '}
+                pts
+              </p>
             </div>
-            <span className="matchup-page__opponent-odds">
-              {formatAmericanOdds(engine.activeLine.opponent.moneyline)}
-            </span>
+
+            <div className="matchup-page__faceoff-vs" aria-hidden="true">
+              VS
+            </div>
+
+            <div className="matchup-page__faceoff-side matchup-page__faceoff-side--opp">
+              <div className="matchup-page__faceoff-identity matchup-page__faceoff-identity--opp">
+                <TeamCrest teamName={matchup.opponentTeam.teamName} />
+                <div>
+                  <p className="matchup-page__team-name">{matchup.opponentTeam.teamName}</p>
+                  <p className="matchup-page__meta-copy">
+                    {matchup.opponentTeam.managerName} · {matchup.opponentTeam.record}
+                  </p>
+                </div>
+              </div>
+              <span className="matchup-page__hero-number matchup-page__hero-number--opp">
+                {formatAmericanOdds(engine.activeLine.opponent.moneyline)}
+              </span>
+              <p className="matchup-page__meta-copy">
+                Proj{' '}
+                <span className="matchup-page__inline-number">
+                  {formatProjection(engine.activeLine.opponent.projection)}
+                </span>{' '}
+                pts
+              </p>
+            </div>
           </div>
 
-          <div className="matchup-page__hero-divider" />
+          <div
+            aria-label={`Win probability ${engine.activeLine.yours.winProbability.toFixed(1)}%`}
+            className="matchup-page__winbar"
+          >
+            <span
+              className="matchup-page__winbar-fill"
+              style={{ width: `${engine.activeLine.yours.winProbability}%` }}
+            />
+          </div>
+          <div className="matchup-page__winbar-labels">
+            <span className="matchup-page__winbar-label matchup-page__winbar-label--user">
+              {engine.activeLine.yours.winProbability.toFixed(1)}% you
+            </span>
+            <span className="matchup-page__winbar-label">
+              {engine.activeLine.opponent.winProbability.toFixed(1)}% them
+            </span>
+          </div>
 
           <div className="matchup-page__hero-meta-row">
             <span className="matchup-page__meta-copy">
-              Spread <span className="matchup-page__inline-number">You -{engine.activeLine.yours.spread.toFixed(1)}</span>
+              Spread{' '}
+              <span className="matchup-page__inline-number">
+                {formatTeamSpread(engine.activeLine.yours.spread)}
+              </span>
             </span>
             <span className="matchup-page__meta-copy">
-              Total <span className="matchup-page__inline-number">{engine.activeLine.yours.total.toFixed(1)}</span>
+              Total{' '}
+              <span className="matchup-page__inline-number">
+                {engine.activeLine.yours.total.toFixed(1)}
+              </span>
             </span>
           </div>
 
           <p className="matchup-page__body-copy">
-            Slight edge. One bad break away from sweating.
+            {heroVerdict(engine.activeLine.yours.winProbability)}
           </p>
         </section>
 
@@ -1089,7 +1238,11 @@ function MatchupLive({
             <div>
               <h2 className="matchup-page__module-title">Your lineup</h2>
               {isCompareMode ? (
-                <p className="matchup-page__meta-copy">Pick any two rows to price the decision.</p>
+                <p className="matchup-page__meta-copy">
+                  {compareSelection.length === 0
+                    ? 'Tap any two players — starters or bench.'
+                    : 'One more — tap a second player to see the verdict.'}
+                </p>
               ) : null}
             </div>
             <button
@@ -1113,13 +1266,14 @@ function MatchupLive({
               }}
               type="button"
             >
-              VS compare
+              {isCompareMode
+                ? `Picking ${compareSelection.length}/2 — tap to exit`
+                : 'VS compare'}
             </button>
           </div>
 
           <div className="matchup-page__lineup-list">
             {engine.roster.map((slot, slotIndex) => {
-              const context = getPlayerContext(slot.starter);
               const selectedAlternativeIndex = engine.selectedAlternatives[slotIndex] ?? null;
               const activeAlternative =
                 selectedAlternativeIndex === null
@@ -1148,8 +1302,8 @@ function MatchupLive({
                     ? `Restore ${engine.baselineRoster[slotIndex].starter.shortName} · ${formatAmericanOdds(currentLine.moneyline)} to ${formatAmericanOdds(targetLine.moneyline)}`
                     : null;
               const meta = edgeMeta
-                ? `${context.matchup} · ${formatKickoff(context.kickoff)} · ${edgeMeta}`
-                : `${context.matchup} · ${formatKickoff(context.kickoff)}`;
+                ? `${slot.starter.position} · ${slot.starter.team} · ${edgeMeta}`
+                : `${slot.starter.position} · ${slot.starter.team}`;
 
               return renderLineupRow({
                 actionLabel:
@@ -1180,15 +1334,14 @@ function MatchupLive({
 
           <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
             {benchRows.map((benchRow) => {
-              const context = getPlayerContext(benchRow.player);
               const bestFitMeta = benchRow.bestFit
                 ? `Best fit ${benchRow.bestFit.slot.slotLabel === 'FLEX' ? 'FLX' : benchRow.bestFit.slot.slotLabel} · ${formatAmericanOdds(engine.activeLine.yours.moneyline)} to ${formatAmericanOdds(benchRow.bestFit.line.moneyline)}`
                 : null;
 
               return renderLineupRow({
                 meta: bestFitMeta
-                  ? `${context.matchup} · ${formatKickoff(context.kickoff)} · ${bestFitMeta}`
-                  : `${context.matchup} · ${formatKickoff(context.kickoff)}`,
+                  ? `${benchRow.player.position} · ${benchRow.player.team} · ${bestFitMeta}`
+                  : `${benchRow.player.position} · ${benchRow.player.team}`,
                 player: benchRow.player,
                 projection: benchRow.projection,
                 selected: compareSelection.some((candidate) => candidate.id === benchRow.player.id),
@@ -1225,7 +1378,11 @@ function MatchupLive({
             <div>
               <h2 className="matchup-page__module-title">Your lineup</h2>
               {isCompareMode ? (
-                <p className="matchup-page__meta-copy">Pick any two rows to price the decision.</p>
+                <p className="matchup-page__meta-copy">
+                  {compareSelection.length === 0
+                    ? 'Tap any two players — starters or bench.'
+                    : 'One more — tap a second player to see the verdict.'}
+                </p>
               ) : null}
             </div>
             <button
@@ -1249,16 +1406,16 @@ function MatchupLive({
               }}
               type="button"
             >
-              VS compare
+              {isCompareMode
+                ? `Picking ${compareSelection.length}/2 — tap to exit`
+                : 'VS compare'}
             </button>
           </div>
 
           <div className="matchup-page__lineup-list">
             {engine.roster.map((slot) => {
-              const context = getPlayerContext(slot.starter);
-
               return renderLineupRow({
-                meta: `${context.matchup} · ${formatKickoff(context.kickoff)}`,
+                meta: `${slot.starter.position} · ${slot.starter.team}`,
                 player: slot.starter,
                 projection: slot.projection,
                 selected: compareSelection.some((candidate) => candidate.id === slot.starter.id),
@@ -1274,10 +1431,8 @@ function MatchupLive({
 
           <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
             {benchRows.map((benchRow) => {
-              const context = getPlayerContext(benchRow.player);
-
               return renderLineupRow({
-                meta: `${context.matchup} · ${formatKickoff(context.kickoff)}`,
+                meta: `${benchRow.player.position} · ${benchRow.player.team}`,
                 player: benchRow.player,
                 projection: benchRow.projection,
                 selected: compareSelection.some((candidate) => candidate.id === benchRow.player.id),
