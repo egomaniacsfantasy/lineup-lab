@@ -3,6 +3,7 @@ import { DecisionPanel } from '../components/decision/DecisionPanel';
 import { CompareWidget } from '../components/matchup/CompareWidget';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { MatchupCard } from '../components/matchup/MatchupCard';
+import { OneMoveRow } from '../components/matchup/OneMoveRow';
 import { QuickActions } from '../components/matchup/QuickActions';
 import { WeeklyRecapCard } from '../components/matchup/WeeklyRecapCard';
 import { RosterList } from '../components/roster/RosterList';
@@ -100,6 +101,7 @@ export function MatchupPage() {
     rightId: defaultComparison?.alternative.player.id ?? null,
   }));
   const [hasActivatedCompare, setHasActivatedCompare] = useState(false);
+  const [isLineupOpen, setIsLineupOpen] = useState(false);
   const [pendingSwapSlotIndex, setPendingSwapSlotIndex] = useState<number | null>(null);
   const [highlightedSwapSlotIndex, setHighlightedSwapSlotIndex] = useState<number | null>(null);
   const [swapToast, setSwapToast] = useState<{
@@ -152,21 +154,30 @@ export function MatchupPage() {
     [],
   );
 
+  const prefillCompare = useCallback((playerId: string) => {
+    setCompareSelection((current) =>
+      current.leftId === playerId
+        ? current
+        : { leftId: playerId, rightId: current.rightId === playerId ? null : current.rightId },
+    );
+  }, []);
+
   const handleOpenBiggestSwing = useCallback((slotIndex: number) => {
     if (highlightTimerRef.current !== null) {
       window.clearTimeout(highlightTimerRef.current);
     }
 
+    setIsLineupOpen(true);
     setHighlightedSwapSlotIndex(slotIndex);
 
-    window.requestAnimationFrame(() => {
+    window.setTimeout(() => {
       document
         .querySelector(`[data-roster-slot-index="${slotIndex}"]`)
         ?.scrollIntoView({
           behavior: 'smooth',
           block: 'center',
         });
-    });
+    }, 60);
 
     highlightTimerRef.current = window.setTimeout(() => {
       setHighlightedSwapSlotIndex(null);
@@ -264,6 +275,17 @@ export function MatchupPage() {
     ) : null;
 
   const handleRosterInteraction = (slotIndex: number) => {
+    const slot = engine.baselineRoster[slotIndex];
+
+    if (slot) {
+      const selectedIndex = engine.selectedAlternatives[slotIndex] ?? null;
+      const tappedPlayer =
+        selectedIndex === null
+          ? slot.starter
+          : slot.alternatives[selectedIndex]?.player ?? slot.starter;
+      prefillCompare(tappedPlayer.id);
+    }
+
     if (!isDesktop) {
       engine.openDecision(slotIndex);
       return;
@@ -276,6 +298,14 @@ export function MatchupPage() {
     }
 
     setPendingSwapSlotIndex((current) => (current === slotIndex ? null : slotIndex));
+  };
+
+  const handleOpenPlayerDetail = (request: Parameters<typeof openPlayerDetail>[0]) => {
+    if (request.player) {
+      prefillCompare(request.player.id);
+    }
+
+    openPlayerDetail(request);
   };
 
   const handleComparePlayerChange = (side: 'left' | 'right', player: Player | null) => {
@@ -353,71 +383,104 @@ export function MatchupPage() {
             activeRoster={engine.roster}
             matchup={MOCK_MATCHUP}
           />
-          <WeeklyRecapCard />
         </div>
 
-        <RosterList
-          activeDecisionSlot={
-            isDesktop
-              ? pendingSwapSlotIndex
-              : engine.activeDecisionSlot
-          }
-          baselineRoster={engine.baselineRoster}
-          bench={engine.bench}
-          getOptionLine={engine.getOptionLine}
-          highlightedSlotIndex={highlightedSwapSlotIndex}
-          onCancelSwapConfirm={() => setPendingSwapSlotIndex(null)}
-          onConfirmSwap={handleConfirmSwap}
-          onOpenPlayerDetail={openPlayerDetail}
-          onToggleDecision={handleRosterInteraction}
-          pendingSwapSlotIndex={isDesktop ? pendingSwapSlotIndex : null}
-          roster={engine.roster}
-          selectedAlternatives={engine.selectedAlternatives}
-          starterEvaluations={starterEvaluations}
+        <OneMoveRow
+          biggestSwing={biggestSwing}
+          onExpandLineup={() => {
+            setIsLineupOpen(true);
+
+            if (biggestSwing) {
+              handleOpenBiggestSwing(biggestSwing.slotIndex);
+            }
+          }}
         />
 
         {!isDesktop ? (
-          <>
-            <div ref={compareWidgetRef}>
-              <CompareWidget
-                comparison={compareResult}
-                defaultSuggestionLabel={
-                  defaultComparison
-                    ? `${defaultComparison.slot.starter.shortName} vs ${defaultComparison.alternative.player.shortName}`
-                    : 'your biggest swing this week'
-                }
-                leftPlayer={leftPlayer}
-                onSelectLeft={(player) => handleComparePlayerChange('left', player)}
-                onSelectRight={(player) => handleComparePlayerChange('right', player)}
-                onOpenPlayerDetail={(player, projection) =>
-                  openPlayerDetail({
-                    player,
-                    slug: player.slug ?? player.id,
-                    projection,
-                    gameLine: playerContexts[player.id]?.gameLine,
-                  })
-                }
-                playerContexts={playerContexts}
-                players={availablePlayers}
-                rightPlayer={rightPlayer}
-              />
-            </div>
+          <QuickActions
+            biggestSwing={biggestSwing}
+            lineupLocks={MOCK_LINEUP_LOCKS}
+            onCompareBiggestSwing={() => {
+              if (!biggestSwing) {
+                return;
+              }
 
-            <QuickActions
-              biggestSwing={biggestSwing}
-              lineupLocks={MOCK_LINEUP_LOCKS}
-              onCompareBiggestSwing={() => {
-                if (!biggestSwing) {
-                  return;
-                }
-
-                handleOpenBiggestSwing(biggestSwing.slotIndex);
-              }}
-              topTradeTarget={topTradeTarget}
-              waiverSuggestion={MOCK_WAIVER_SUGGESTION}
-            />
-          </>
+              handleOpenBiggestSwing(biggestSwing.slotIndex);
+            }}
+            topTradeTarget={topTradeTarget}
+            waiverSuggestion={MOCK_WAIVER_SUGGESTION}
+          />
         ) : null}
+
+        <section className="matchup-page__lineup">
+          <button
+            aria-expanded={isLineupOpen}
+            className="matchup-page__lineup-toggle"
+            onClick={() => setIsLineupOpen((open) => !open)}
+            type="button"
+          >
+            <span className="matchup-page__lineup-title">Your lineup</span>
+            <span className="matchup-page__lineup-meta">
+              {starterEvaluations.filter((evaluation) => evaluation.state === 'SWAP')
+                .length}{' '}
+              swap targets · {engine.bench.length} bench
+            </span>
+            <span aria-hidden="true" className="matchup-page__lineup-chevron">
+              {isLineupOpen ? '−' : '+'}
+            </span>
+          </button>
+
+          {isLineupOpen ? (
+            <RosterList
+              activeDecisionSlot={
+                isDesktop
+                  ? pendingSwapSlotIndex
+                  : engine.activeDecisionSlot
+              }
+              baselineRoster={engine.baselineRoster}
+              bench={engine.bench}
+              getOptionLine={engine.getOptionLine}
+              highlightedSlotIndex={highlightedSwapSlotIndex}
+              onCancelSwapConfirm={() => setPendingSwapSlotIndex(null)}
+              onConfirmSwap={handleConfirmSwap}
+              onOpenPlayerDetail={handleOpenPlayerDetail}
+              onToggleDecision={handleRosterInteraction}
+              pendingSwapSlotIndex={isDesktop ? pendingSwapSlotIndex : null}
+              roster={engine.roster}
+              selectedAlternatives={engine.selectedAlternatives}
+              starterEvaluations={starterEvaluations}
+            />
+          ) : null}
+        </section>
+
+        {!isDesktop ? (
+          <div ref={compareWidgetRef}>
+            <CompareWidget
+              comparison={compareResult}
+              defaultSuggestionLabel={
+                defaultComparison
+                  ? `${defaultComparison.slot.starter.shortName} vs ${defaultComparison.alternative.player.shortName}`
+                  : 'your biggest swing this week'
+              }
+              leftPlayer={leftPlayer}
+              onSelectLeft={(player) => handleComparePlayerChange('left', player)}
+              onSelectRight={(player) => handleComparePlayerChange('right', player)}
+              onOpenPlayerDetail={(player, projection) =>
+                handleOpenPlayerDetail({
+                  player,
+                  slug: player.slug ?? player.id,
+                  projection,
+                  gameLine: playerContexts[player.id]?.gameLine,
+                })
+              }
+              playerContexts={playerContexts}
+              players={availablePlayers}
+              rightPlayer={rightPlayer}
+            />
+          </div>
+        ) : null}
+
+        <WeeklyRecapCard />
       </div>
 
       {isDesktop ? (
@@ -430,31 +493,6 @@ export function MatchupPage() {
               .filter(Boolean)
               .join(' ')}
           >
-            <div ref={compareWidgetRef}>
-              <CompareWidget
-                comparison={compareResult}
-                defaultSuggestionLabel={
-                  defaultComparison
-                    ? `${defaultComparison.slot.starter.shortName} vs ${defaultComparison.alternative.player.shortName}`
-                    : 'your biggest swing this week'
-                }
-                leftPlayer={leftPlayer}
-                onSelectLeft={(player) => handleComparePlayerChange('left', player)}
-                onSelectRight={(player) => handleComparePlayerChange('right', player)}
-                onOpenPlayerDetail={(player, projection) =>
-                  openPlayerDetail({
-                    player,
-                    slug: player.slug ?? player.id,
-                    projection,
-                    gameLine: playerContexts[player.id]?.gameLine,
-                  })
-                }
-                playerContexts={playerContexts}
-                players={availablePlayers}
-                rightPlayer={rightPlayer}
-              />
-            </div>
-
             <QuickActions
               biggestSwing={biggestSwing}
               lineupLocks={MOCK_LINEUP_LOCKS}
@@ -468,6 +506,31 @@ export function MatchupPage() {
               topTradeTarget={topTradeTarget}
               waiverSuggestion={MOCK_WAIVER_SUGGESTION}
             />
+
+            <div ref={compareWidgetRef}>
+              <CompareWidget
+                comparison={compareResult}
+                defaultSuggestionLabel={
+                  defaultComparison
+                    ? `${defaultComparison.slot.starter.shortName} vs ${defaultComparison.alternative.player.shortName}`
+                    : 'your biggest swing this week'
+                }
+                leftPlayer={leftPlayer}
+                onSelectLeft={(player) => handleComparePlayerChange('left', player)}
+                onSelectRight={(player) => handleComparePlayerChange('right', player)}
+                onOpenPlayerDetail={(player, projection) =>
+                  handleOpenPlayerDetail({
+                    player,
+                    slug: player.slug ?? player.id,
+                    projection,
+                    gameLine: playerContexts[player.id]?.gameLine,
+                  })
+                }
+                playerContexts={playerContexts}
+                players={availablePlayers}
+                rightPlayer={rightPlayer}
+              />
+            </div>
           </div>
         </aside>
       ) : null}

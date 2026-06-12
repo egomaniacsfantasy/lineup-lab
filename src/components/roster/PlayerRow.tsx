@@ -126,8 +126,6 @@ export function PlayerRow({
         {isSwapState ? (
           <span className="player-row__preview">
             <span className="player-row__preview-note">Start {alternativeShortName}</span>
-            <span className="player-row__preview-arrow">·</span>
-            <span className="player-row__preview-gain">{swingLabel}</span>
           </span>
         ) : null}
       </span>

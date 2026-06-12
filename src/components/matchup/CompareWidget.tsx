@@ -171,9 +171,8 @@ export function CompareWidget({
   return (
     <section aria-labelledby="compare-widget-title" className="compare-widget">
       <div className="compare-widget__header">
-        <p className="compare-widget__kicker">Compare players</p>
         <h2 className="compare-widget__title" id="compare-widget-title">
-          Price any lineup decision instantly
+          Compare players
         </h2>
       </div>
 
@@ -243,10 +242,12 @@ export function CompareWidget({
             ].join(' ')}
           >
             <span className="compare-widget__delta-value">
-              <Gloss term="delta">Δ</Gloss>{' '}
-              {comparison.deltaWinProbability > 0 ? '+' : ''}
-              {comparison.deltaWinProbability.toFixed(1)}%
+              {comparison.leftLine.winProbability.toFixed(1)}% →{' '}
+              {comparison.rightLine.winProbability.toFixed(1)}%
             </span>
+            <p className="compare-widget__delta-verdict">
+              win prob if {rightPlayer.shortName} starts
+            </p>
             <p className="compare-widget__delta-copy">{compareCopy}</p>
           </div>
 

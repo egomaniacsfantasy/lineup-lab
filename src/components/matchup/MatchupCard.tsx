@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import type { MatchupData, MatchupLine, RosterSlot, ScoringFormat } from '../../types';
 import { formatAmericanOdds, formatSpread } from '../../utils/formatOdds';
@@ -58,7 +57,6 @@ function getCommentary(winProbability: number) {
 }
 
 export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardProps) {
-  const winProbability = Math.max(0, Math.min(100, activeLine.yours.winProbability));
   const lineDelta = activeLine.yours.winProbability - matchup.baseline.yours.winProbability;
   const deltaTone =
     lineDelta > 0 ? 'positive' : lineDelta < 0 ? 'negative' : 'neutral';
@@ -101,12 +99,6 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
   const animatedTotal = useAnimatedNumber(activeLine.yours.total, {
     formatter: formatProjection,
   });
-  const favoredSide = winProbability >= activeLine.opponent.winProbability
-    ? 'yours'
-    : 'opponent';
-  const meterStyle = {
-    '--line-position': `${winProbability}%`,
-  } as CSSProperties;
 
   return (
     <section
@@ -198,15 +190,6 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           </div>
 
           <div className="matchup-card__odds-center">
-            <div
-              className={`matchup-card__probability-bar matchup-card__probability-bar--${favoredSide}`}
-              style={meterStyle}
-              aria-hidden="true"
-            >
-              <div className="matchup-card__probability-fill" />
-              <span className="matchup-card__probability-marker" />
-            </div>
-
             <p className="matchup-card__spread-readout">
               {animatedMeterSpread}
             </p>

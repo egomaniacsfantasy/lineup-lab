@@ -273,49 +273,6 @@
   font-weight: 600;
 }
 
-.matchup-card__probability-bar {
-  --line-position: 50%;
-  position: relative;
-  width: 100%;
-  height: 10px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-inset);
-  box-shadow: inset 0 0 0 1px var(--border-subtle);
-}
-
-.matchup-card__probability-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--line-position);
-  height: 100%;
-  border-radius: inherit;
-  background: var(--amber);
-  transition:
-    left 300ms ease-out,
-    right 300ms ease-out,
-    width 300ms ease-out;
-}
-
-.matchup-card__probability-bar--opponent .matchup-card__probability-fill {
-  right: 0;
-  left: var(--line-position);
-  width: auto;
-  background: color-mix(in srgb, var(--amber) 62%, var(--bg-inset));
-}
-
-.matchup-card__probability-marker {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  left: var(--line-position);
-  width: 2px;
-  border-radius: var(--radius-pill);
-  background: var(--text-primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg-deep) 72%, transparent);
-  transform: translateX(-50%);
-  transition: left 300ms ease-out;
-}
-
 .matchup-card__spread-readout {
   margin: 0;
   color: var(--text-muted);

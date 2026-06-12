@@ -289,3 +289,11 @@
   letter-spacing: 0.02em;
   text-transform: none;
 }
+
+.compare-widget__delta-verdict {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+}
