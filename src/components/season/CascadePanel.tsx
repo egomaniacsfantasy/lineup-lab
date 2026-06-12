@@ -40,12 +40,12 @@ export function CascadePanel({
   const allOdds = trajectory.map((point) => point.championshipOdds);
   const minOdds = Math.min(...allOdds);
   const maxOdds = Math.max(...allOdds);
-  const chartWidth = 320;
-  const chartHeight = 180;
-  const paddingLeft = 40;
-  const paddingRight = 20;
-  const paddingTop = 16;
-  const paddingBottom = 34;
+  const chartWidth = 340;
+  const chartHeight = 110;
+  const paddingLeft = 36;
+  const paddingRight = 4;
+  const paddingTop = 14;
+  const paddingBottom = 20;
   const plotWidth = chartWidth - paddingLeft - paddingRight;
   const plotHeight = chartHeight - paddingTop - paddingBottom;
 
@@ -59,25 +59,27 @@ export function CascadePanel({
     .join(' ');
   const ticks = buildTicks(allOdds);
   const currentPoint = trajectory[trajectory.length - 1];
+  const xLabelWeeks = new Set([trajectory[0]?.week, trajectory[3]?.week, currentPoint.week]);
 
   return (
     <section aria-labelledby="cascade-panel-title" className="cascade-panel">
       <div className="cascade-panel__header">
-        <p className="cascade-panel__kicker">Season trajectory</p>
         <h2 className="cascade-panel__title" id="cascade-panel-title">
-          The line moves. Week by week.
+          Title price, week by week
         </h2>
       </div>
 
       <div className="cascade-panel__chart-card">
         <div className="cascade-panel__chart-meta">
           <div>
-            <p className="cascade-panel__chart-label">Current title price</p>
             <p className="cascade-panel__chart-value">
               {formatAmericanOdds(currentPoint.championshipOdds)}
             </p>
+            <p className="cascade-panel__chart-label">
+              opened {formatAmericanOdds(trajectory[0].championshipOdds)}
+            </p>
           </div>
-          <p className="cascade-panel__chart-note">Week {currentPoint.week}, you are here</p>
+          <p className="cascade-panel__chart-note">Week {currentPoint.week}</p>
         </div>
 
         <svg
@@ -109,19 +111,6 @@ export function CascadePanel({
             );
           })}
 
-          {trajectory.map((point, index) => (
-            <text
-              className="cascade-panel__axis-label"
-              key={`week-${point.week}`}
-              x={getX(index)}
-              y={chartHeight - 10}
-              textAnchor="middle"
-            >
-              W{point.week}
-            </text>
-          ))}
-
-          <path className="cascade-panel__line-glow" d={linePath} />
           <path className="cascade-panel__line" d={linePath} />
 
           {trajectory.map((point, index) => {
@@ -129,25 +118,22 @@ export function CascadePanel({
 
             return (
               <g key={point.week}>
-                <circle
-                  className={[
-                    'cascade-panel__point',
-                    isCurrent ? 'cascade-panel__point--current' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  cx={getX(index)}
-                  cy={getY(point.championshipOdds)}
-                  r={isCurrent ? 5.5 : 3.5}
-                />
                 {isCurrent ? (
+                  <circle
+                    className="cascade-panel__point cascade-panel__point--current"
+                    cx={getX(index)}
+                    cy={getY(point.championshipOdds)}
+                    r={4}
+                  />
+                ) : null}
+                {xLabelWeeks.has(point.week) ? (
                   <text
-                    className="cascade-panel__callout"
-                    x={getX(index) - 4}
-                    y={getY(point.championshipOdds) - 10}
-                    textAnchor="end"
+                    className="cascade-panel__axis-label"
+                    x={getX(index)}
+                    y={chartHeight - 4}
+                    textAnchor="middle"
                   >
-                    You are here
+                    W{point.week}
                   </text>
                 ) : null}
               </g>

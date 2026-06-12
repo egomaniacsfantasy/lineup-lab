@@ -22,35 +22,12 @@ const BASE_TABS = [
     ),
   },
   {
-    label: 'Draft',
-    path: '/draft',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M6 4h8v2a4 4 0 0 1-8 0V4Z" />
-        <path d="M7.2 12.5h5.6M8.5 10.5v2M11.5 10.5v2M7 15.5h6" />
-        <path d="M4 5.2c0 1.7.9 3 2.5 3.4M16 5.2c0 1.7-.9 3-2.5 3.4" />
-      </svg>
-    ),
-  },
-  {
     label: 'Trade',
     path: '/trade',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M4 7h10.5M12 4.2 15 7l-3 2.8" />
         <path d="M16 13H5.5M8 10.2 5 13l3 2.8" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Rankings',
-    path: '/rankings',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M4 15.5h12" />
-        <rect x="4" y="10.5" width="2.5" height="5" rx="1" />
-        <rect x="8.75" y="7.5" width="2.5" height="8" rx="1" />
-        <rect x="13.5" y="4.5" width="2.5" height="11" rx="1" />
       </svg>
     ),
   },
@@ -63,6 +40,17 @@ const BASE_TABS = [
         <circle cx="13.2" cy="8.2" r="2" />
         <path d="M3.5 16c.7-2.6 2.5-4.1 4.7-4.1 2.1 0 3.8 1.3 4.5 3.7" />
         <path d="M11.5 16c.4-1.7 1.8-2.9 3.5-2.9 1.4 0 2.6.8 3.3 2.1" />
+      </svg>
+    ),
+  },
+  {
+    label: 'More',
+    path: '/more',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <circle cx="4.5" cy="10" r="1.5" />
+        <circle cx="10" cy="10" r="1.5" />
+        <circle cx="15.5" cy="10" r="1.5" />
       </svg>
     ),
   },

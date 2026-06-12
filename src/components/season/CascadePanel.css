@@ -4,7 +4,6 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
-  box-shadow: var(--shadow-card);
   padding: clamp(18px, 4vw, 24px);
 }
 
@@ -17,11 +16,11 @@
 .cascade-panel__summary-label,
 .cascade-panel__axis-label {
   margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
@@ -36,11 +35,10 @@
 
 .cascade-panel__title {
   color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: 0;
-  line-height: 1.2;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .cascade-panel__chart-card,
@@ -63,18 +61,18 @@
 }
 
 .cascade-panel__chart-value {
-  color: var(--amber-bright);
-  font-family: var(--font-mono);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.05em;
+  color: var(--amber);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1;
 }
 
 .cascade-panel__chart-note {
-  color: var(--text-dim);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 400;
   text-align: right;
 }
 
@@ -90,16 +88,9 @@
 }
 
 .cascade-panel__axis-label {
-  fill: var(--text-soft);
-  font-size: 8px;
-}
-
-.cascade-panel__line-glow {
-  fill: none;
-  stroke: color-mix(in srgb, var(--amber) 30%, transparent);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 8;
+  fill: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 10px;
 }
 
 .cascade-panel__line {
@@ -107,26 +98,11 @@
   stroke: var(--amber);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.5;
+  stroke-width: 2;
 }
 
 .cascade-panel__point {
-  fill: var(--amber-bright);
-}
-
-.cascade-panel__point--current {
-  fill: var(--cyan);
-  stroke: color-mix(in srgb, var(--cyan) 24%, transparent);
-  stroke-width: 4;
-}
-
-.cascade-panel__callout {
-  fill: var(--cyan);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  fill: var(--amber);
 }
 
 .cascade-panel__summary {
@@ -187,22 +163,12 @@
   }
 }
 
-.cascade-panel__kicker {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-condensed);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: none;
-}
-
 .cascade-panel__summary-kicker {
   margin: 0;
   color: var(--text-primary);
-  font-family: var(--font-condensed);
-  font-size: 16px;
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: none;
 }

@@ -12,7 +12,7 @@
 
 .bottom-tab-bar__grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .bottom-tab-bar__link {
@@ -64,10 +64,9 @@
 
 .bottom-tab-bar__label {
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 @media (min-width: 1024px) {

@@ -5,6 +5,7 @@ import { LeagueConnectionProvider } from './contexts/LeagueConnectionContext';
 import { DraftPage } from './pages/DraftPage';
 import { LeaguePage } from './pages/LeaguePage';
 import { MatchupPage } from './pages/MatchupPage';
+import { MorePage } from './pages/MorePage';
 import { RankingsPage } from './pages/RankingsPage';
 import { SeasonPage } from './pages/SeasonPage';
 import { TradePage } from './pages/TradePage';
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/trade" element={<TradePage />} />
           <Route path="/rankings" element={<RankingsPage />} />
           <Route path="/league" element={<LeaguePage />} />
+          <Route path="/more" element={<MorePage />} />
           <Route path="/admin/projections" element={<AdminProjectionsPage />} />
         </Route>
         </Routes>

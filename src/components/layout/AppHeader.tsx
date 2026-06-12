@@ -32,10 +32,9 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   const navItems = [
     { label: 'Matchup', path: '/matchup' },
     { label: 'Season', path: '/season' },
-    { label: 'Draft', path: '/draft' },
     { label: 'Trade', path: '/trade' },
-    { label: 'Rankings', path: '/rankings' },
     { label: 'League', path: '/league' },
+    { label: 'More', path: '/more' },
   ];
 
   return (
