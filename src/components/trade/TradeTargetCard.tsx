@@ -107,7 +107,7 @@ export function TradeTargetCard({
           onClick={onToggle}
           type="button"
         >
-          {isExpanded ? 'Hide trade' : 'Explore trade'}
+          {isExpanded ? 'Close' : 'Explore trade'}
         </button>
       </div>
 

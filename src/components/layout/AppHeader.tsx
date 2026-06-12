@@ -77,6 +77,7 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
             ) : null}
             Week {mode === 'preseason' ? 1 : MOCK_MATCHUP.week}
           </span>
+          <span className="app-header__replay-chip">Replay</span>
           <span className="app-header__scoring-pill">
             <Gloss term="ppr">{scoringLabel}</Gloss>
           </span>

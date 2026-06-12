@@ -123,3 +123,30 @@
   letter-spacing: 0.02em;
   text-transform: none;
 }
+
+.draft-wrapped-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.draft-wrapped-card__actions .draft-wrapped-card__share {
+  flex: 1;
+}
+
+.draft-wrapped-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-inset) 82%, transparent);
+  color: var(--text-dim);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}

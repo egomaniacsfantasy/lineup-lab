@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { DraftWrappedData } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import './DraftWrappedCard.css';
@@ -11,6 +12,8 @@ export function DraftWrappedCard({
   draftWrapped,
   onShare,
 }: DraftWrappedCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   return (
     <section aria-labelledby="draft-wrapped-title" className="draft-wrapped-card">
       <div className="draft-wrapped-card__header">
@@ -26,53 +29,69 @@ export function DraftWrappedCard({
           <span className="draft-wrapped-card__label">Roster grade</span>
           <span className="draft-wrapped-card__value">{draftWrapped.rosterGrade}</span>
         </div>
-        <div className="draft-wrapped-card__hero-block">
-          <span className="draft-wrapped-card__label">Championship</span>
-          <span className="draft-wrapped-card__value draft-wrapped-card__value--amber">
-            {formatAmericanOdds(draftWrapped.championshipOdds)}
-          </span>
-        </div>
+        {isExpanded ? (
+          <div className="draft-wrapped-card__hero-block">
+            <span className="draft-wrapped-card__label">Championship</span>
+            <span className="draft-wrapped-card__value draft-wrapped-card__value--amber">
+              {formatAmericanOdds(draftWrapped.championshipOdds)}
+            </span>
+          </div>
+        ) : null}
       </div>
 
-      <div className="draft-wrapped-card__detail-block">
-        <span className="draft-wrapped-card__label">Boldest pick</span>
-        <p className="draft-wrapped-card__body">
-          {draftWrapped.boldestPick.player.shortName}, picked{' '}
-          {draftWrapped.boldestPick.pickNumber}
-          th ({draftWrapped.boldestPick.adpDelta} above model)
-        </p>
-      </div>
+      {isExpanded ? (
+        <>
+          <div className="draft-wrapped-card__detail-block">
+            <span className="draft-wrapped-card__label">Boldest pick</span>
+            <p className="draft-wrapped-card__body">
+              {draftWrapped.boldestPick.player.shortName}, picked{' '}
+              {draftWrapped.boldestPick.pickNumber}
+              th ({draftWrapped.boldestPick.adpDelta} above model)
+            </p>
+          </div>
 
-      <div className="draft-wrapped-card__split">
-        <div className="draft-wrapped-card__split-card">
-          <span className="draft-wrapped-card__label">Toughest week</span>
-          <p className="draft-wrapped-card__body">
-            Wk {draftWrapped.toughestMatchup.week}: {' '}
-            {formatAmericanOdds(draftWrapped.toughestMatchup.odds)}
-          </p>
-          <p className="draft-wrapped-card__meta">
-            vs {draftWrapped.toughestMatchup.opponent}
-          </p>
-        </div>
-        <div className="draft-wrapped-card__split-card">
-          <span className="draft-wrapped-card__label">Easiest week</span>
-          <p className="draft-wrapped-card__body">
-            Wk {draftWrapped.easiestMatchup.week}: {' '}
-            {formatAmericanOdds(draftWrapped.easiestMatchup.odds)}
-          </p>
-          <p className="draft-wrapped-card__meta">
-            vs {draftWrapped.easiestMatchup.opponent}
-          </p>
-        </div>
-      </div>
+          <div className="draft-wrapped-card__split">
+            <div className="draft-wrapped-card__split-card">
+              <span className="draft-wrapped-card__label">Toughest week</span>
+              <p className="draft-wrapped-card__body">
+                Wk {draftWrapped.toughestMatchup.week}: {' '}
+                {formatAmericanOdds(draftWrapped.toughestMatchup.odds)}
+              </p>
+              <p className="draft-wrapped-card__meta">
+                vs {draftWrapped.toughestMatchup.opponent}
+              </p>
+            </div>
+            <div className="draft-wrapped-card__split-card">
+              <span className="draft-wrapped-card__label">Easiest week</span>
+              <p className="draft-wrapped-card__body">
+                Wk {draftWrapped.easiestMatchup.week}: {' '}
+                {formatAmericanOdds(draftWrapped.easiestMatchup.odds)}
+              </p>
+              <p className="draft-wrapped-card__meta">
+                vs {draftWrapped.easiestMatchup.opponent}
+              </p>
+            </div>
+          </div>
+        </>
+      ) : null}
 
-      <button
-        className="draft-wrapped-card__share"
-        onClick={onShare}
-        type="button"
-      >
-        Share your draft
-      </button>
+      <div className="draft-wrapped-card__actions">
+        <button
+          className="draft-wrapped-card__share"
+          onClick={onShare}
+          type="button"
+        >
+          Share your draft
+        </button>
+        <button
+          aria-expanded={isExpanded}
+          className="draft-wrapped-card__toggle"
+          onClick={() => setIsExpanded((open) => !open)}
+          type="button"
+        >
+          {isExpanded ? 'Close' : 'Full wrap-up'}
+        </button>
+      </div>
     </section>
   );
 }

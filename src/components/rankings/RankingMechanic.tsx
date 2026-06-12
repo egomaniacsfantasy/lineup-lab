@@ -114,7 +114,7 @@ export function RankingMechanic() {
 
       {toastVisible ? (
         <div className="ranking-mechanic__toast" role="status">
-          Ranking submitted! You&apos;re entered in this week&apos;s Pro raffle.
+          Ranking submitted — consensus updates hourly.
         </div>
       ) : null}
     </section>

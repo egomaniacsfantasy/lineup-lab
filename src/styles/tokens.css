@@ -19,7 +19,12 @@
   --text-amber: #ff8049;
   --text-muted: #a9aea4;
 
-  /* ── Accent Colors ── */
+  /* ── Accent Colors ──
+     Color semantics (do not repurpose):
+       ember (--amber family) = you / brand / CTA / selection
+       green (--green)        = favored / positive movement — money only
+       red (--red)            = underdog / negative movement — money only
+     Nothing else may use green or red. */
   --amber: #e8541d;
   --amber-mid: #f0662e;
   --amber-bright: #ff8049;

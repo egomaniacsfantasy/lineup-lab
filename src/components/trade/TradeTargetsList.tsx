@@ -55,6 +55,9 @@ export function TradeTargetsList({ groups }: TradeTargetsListProps) {
         <p className="trade-targets-list__subhead">
           Teams that need what you have. Pricing the fit.
         </p>
+        <p className="trade-targets-list__fit-key">
+          Fit = roster need × schedule × value match
+        </p>
       </div>
 
       <div className="trade-targets-list__needs">

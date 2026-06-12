@@ -35,9 +35,18 @@
 }
 
 .draggable-card__handle {
+  padding: 13px 10px;
+  margin: -13px -10px;
   color: var(--text-soft);
   font-size: 14px;
   letter-spacing: -0.1em;
+}
+
+/* 44px touch targets: pad the hit area, not the glyph */
+.draggable-card__move::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
 }
 
 .draggable-card__avatar {
@@ -100,6 +109,7 @@
 }
 
 .draggable-card__move {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;

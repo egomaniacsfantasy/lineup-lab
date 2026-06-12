@@ -119,3 +119,11 @@
   letter-spacing: 0.02em;
   text-transform: none;
 }
+
+.trade-targets-list__fit-key {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}

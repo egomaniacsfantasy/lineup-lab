@@ -152,27 +152,23 @@
   font-weight: 600;
 }
 
+/* Plain tabular text, not a pill: these odds are not tappable yet.
+   SCOPE: FOLLOW-UP — make each row open the team mini-book (record,
+   futures history, H2H vs you), then odds can become buttons again. */
 .league-futures__odds {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 104px;
-  min-height: 42px;
-  padding-inline: 16px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--bg-surface-soft) 92%, transparent);
+  justify-content: flex-end;
+  min-width: 88px;
   color: var(--text-primary);
   font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.05em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
 .league-futures__odds--selected {
-  border-color: var(--amber);
-  background: var(--amber);
-  color: var(--bg-deep);
+  color: var(--text-amber);
 }
 
 .league-futures__cutoff {
@@ -199,9 +195,7 @@
   }
 
   .league-futures__odds {
-    min-width: 96px;
-    min-height: 40px;
-    padding-inline: 14px;
+    min-width: 80px;
     font-size: 16px;
   }
 }
