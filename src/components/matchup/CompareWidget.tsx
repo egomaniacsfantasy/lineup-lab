@@ -9,7 +9,34 @@ import {
   getComparisonVerdict,
   getSyntheticGameContext,
 } from '../../utils/lineupComparison';
+import { parseGameLine } from '../../utils/formatGameLine';
 import './CompareWidget.css';
+
+function GameContextItem({
+  shortName,
+  gameLine,
+  withGloss = false,
+}: {
+  shortName: string;
+  gameLine?: string;
+  withGloss?: boolean;
+}) {
+  const parsed = gameLine ? parseGameLine(gameLine) : null;
+
+  return (
+    <p className="compare-widget__context-item">
+      {shortName}:{' '}
+      {parsed ? (
+        <>
+          {parsed.lead},{' '}
+          {withGloss ? <Gloss term="o-u">O/U</Gloss> : 'O/U'} {parsed.total}
+        </>
+      ) : (
+        (gameLine ?? 'Line pending')
+      )}
+    </p>
+  );
+}
 
 interface PlayerContext {
   gameLine: string;
@@ -226,27 +253,15 @@ export function CompareWidget({
           <div className="compare-widget__context">
             <span className="compare-widget__context-label">Game context</span>
             <div className="compare-widget__context-list">
-              <p className="compare-widget__context-item">
-                {leftPlayer.shortName}:{' '}
-                {(leftContext?.gameLine ?? 'Line pending').replace('O/U', '')}
-                {leftContext?.gameLine.includes('O/U') ? (
-                  <>
-                    {' '}
-                    <Gloss term="o-u">O/U</Gloss>
-                    {leftContext.gameLine.split('O/U')[1]}
-                  </>
-                ) : null}
-              </p>
-              <p className="compare-widget__context-item">
-                {rightPlayer.shortName}:{' '}
-                {(rightContext?.gameLine ?? 'Line pending').replace('O/U', '')}
-                {rightContext?.gameLine.includes('O/U') ? (
-                  <>
-                    {' '}O/U
-                    {rightContext.gameLine.split('O/U')[1]}
-                  </>
-                ) : null}
-              </p>
+              <GameContextItem
+                gameLine={leftContext?.gameLine}
+                shortName={leftPlayer.shortName}
+                withGloss
+              />
+              <GameContextItem
+                gameLine={rightContext?.gameLine}
+                shortName={rightPlayer.shortName}
+              />
             </div>
           </div>
         </>

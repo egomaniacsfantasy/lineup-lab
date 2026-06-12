@@ -17,11 +17,35 @@ interface SeasonModeContextValue {
 
 const SeasonModeContext = createContext<SeasonModeContextValue | null>(null);
 
+const MODE_STORAGE_KEY = 'og.olympus.season-mode';
+
+function readStoredMode(): SeasonMode {
+  try {
+    return window.localStorage.getItem(MODE_STORAGE_KEY) === 'inseason'
+      ? 'inseason'
+      : 'preseason';
+  } catch {
+    return 'preseason';
+  }
+}
+
+function storeMode(mode: SeasonMode) {
+  try {
+    window.localStorage.setItem(MODE_STORAGE_KEY, mode);
+  } catch {
+    // Persistence unavailable (private mode); the toggle still works in-session.
+  }
+}
+
 export function SeasonModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<SeasonMode>('preseason');
+  const [mode, setMode] = useState<SeasonMode>(readStoredMode);
 
   const toggleMode = useCallback(() => {
-    setMode((current) => (current === 'preseason' ? 'inseason' : 'preseason'));
+    setMode((current) => {
+      const next = current === 'preseason' ? 'inseason' : 'preseason';
+      storeMode(next);
+      return next;
+    });
   }, []);
 
   const value = useMemo(

@@ -23,7 +23,7 @@ export function MatchupPreseason() {
       <section className="matchup-preseason__hero">
         <p className="matchup-preseason__kicker">Your matchup line</p>
         <h2 className="matchup-preseason__title">
-          The gods return September 4.
+          The gods return September 7.
         </h2>
         <p className="matchup-preseason__body">
           Until then: preview the season, replay the draft, build your trade leverage.
@@ -52,7 +52,7 @@ export function MatchupPreseason() {
           {formatImpliedProbability(OPENING_PREVIEW.yourLine)}%)
         </p>
         <p className="matchup-preseason__preview-meta">
-          Opens live September 4
+          Opens live Sunday, September 7, 2026
         </p>
       </section>
     </div>

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DraftSlotGrid } from '../components/draft/DraftSlotGrid';
 import { PlayerAvailability } from '../components/draft/PlayerAvailability';
+import { SeasonalNotice } from '../components/layout/SeasonalNotice';
+import { useSeasonMode } from '../hooks/useSeasonMode';
 import type { DraftSlotResult, LeagueStyle } from '../types';
 import {
   MOCK_CONSENSUS_RANKINGS,
@@ -53,6 +55,7 @@ function deriveDraftSlotOdds(style: LeagueStyle): DraftSlotResult {
 }
 
 export function DraftPage() {
+  const { mode } = useSeasonMode();
   const [leagueStyle, setLeagueStyle] = useState<LeagueStyle>('competitive');
   const [selectedPosition, setSelectedPosition] = useState<number | null>(3);
 
@@ -64,6 +67,12 @@ export function DraftPage() {
   return (
     <div className="draft-page">
       <h1 className="visually-hidden">Draft tools</h1>
+
+      {mode === 'inseason' ? (
+        <SeasonalNotice>
+          Draft tools open in August. These boards replay your 2024 draft.
+        </SeasonalNotice>
+      ) : null}
 
       <DraftSlotGrid
         draftSlotResult={slotOdds}

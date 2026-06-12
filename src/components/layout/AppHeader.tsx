@@ -22,10 +22,8 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   const navItems = [
     { label: 'Matchup', path: '/matchup' },
     { label: 'Season', path: '/season' },
-    {
-      label: mode === 'preseason' ? 'Draft' : 'Trade',
-      path: mode === 'preseason' ? '/draft' : '/trade',
-    },
+    { label: 'Draft', path: '/draft' },
+    { label: 'Trade', path: '/trade' },
     { label: 'Rankings', path: '/rankings' },
     { label: 'League', path: '/league' },
   ];
@@ -58,15 +56,13 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
         </nav>
 
         <div className="app-header__actions">
-          {mode === 'inseason' ? (
-            <button
-              className="app-header__help"
-              onClick={onOpenWelcome}
-              type="button"
-            >
-              How this works
-            </button>
-          ) : null}
+          <button
+            className="app-header__help"
+            onClick={onOpenWelcome}
+            type="button"
+          >
+            How this works
+          </button>
           <SeasonToggle />
           <span
             className={[
@@ -79,7 +75,7 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
             {mode === 'inseason' ? (
               <span className="app-header__status-dot" aria-hidden="true" />
             ) : null}
-            {mode === 'preseason' ? 'Pre-season' : `Week ${MOCK_MATCHUP.week}`}
+            Week {mode === 'preseason' ? 1 : MOCK_MATCHUP.week}
           </span>
           <span className="app-header__scoring-pill">
             <Gloss term="ppr">{scoringLabel}</Gloss>

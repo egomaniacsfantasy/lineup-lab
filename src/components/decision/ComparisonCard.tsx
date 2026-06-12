@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { MatchupLine, Player } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
+import { formatGameLine } from '../../utils/formatGameLine';
 import './ComparisonCard.css';
 
 interface ComparisonCardProps {
@@ -177,17 +178,7 @@ export function ComparisonCard({
             </div>
           </div>
 
-          <p className="comparison-card__market">
-            {gameLine.includes('O/U') ? (
-              <>
-                {gameLine.split('O/U')[0]}
-                O/U
-                {gameLine.split('O/U')[1]}
-              </>
-            ) : (
-              gameLine
-            )}
-          </p>
+          <p className="comparison-card__market">{formatGameLine(gameLine)}</p>
           {playerProp ? <p className="comparison-card__prop">{playerProp}</p> : null}
         </div>
       </details>

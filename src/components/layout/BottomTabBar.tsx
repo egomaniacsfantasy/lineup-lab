@@ -1,5 +1,4 @@
 import { NavLink } from 'react-router-dom';
-import { useSeasonMode } from '../../hooks/useSeasonMode';
 import './BottomTabBar.css';
 const BASE_TABS = [
   {
@@ -34,6 +33,16 @@ const BASE_TABS = [
     ),
   },
   {
+    label: 'Trade',
+    path: '/trade',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M4 7h10.5M12 4.2 15 7l-3 2.8" />
+        <path d="M16 13H5.5M8 10.2 5 13l3 2.8" />
+      </svg>
+    ),
+  },
+  {
     label: 'Rankings',
     path: '/rankings',
     icon: (
@@ -60,16 +69,7 @@ const BASE_TABS = [
 ];
 
 export function BottomTabBar() {
-  const { mode } = useSeasonMode();
-  const tabs = BASE_TABS.map((tab) =>
-    tab.path === '/draft'
-      ? {
-          ...tab,
-          label: mode === 'preseason' ? 'Draft' : 'Trade',
-          path: mode === 'preseason' ? '/draft' : '/trade',
-        }
-      : tab,
-  );
+  const tabs = BASE_TABS;
 
   return (
     <nav className="bottom-tab-bar" aria-label="Primary">

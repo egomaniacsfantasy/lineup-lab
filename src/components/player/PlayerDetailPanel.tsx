@@ -3,6 +3,7 @@ import type { PlayerDetailRequest } from '../../contexts/PlayerDetailContext';
 import { getPlayerManifestEntry } from '../../data/playerManifest';
 import { hashString, roundTo } from '../../utils/lineupComparison';
 import { PlayerHeadshot } from './PlayerHeadshot';
+import { formatGameLine, parseGameLine } from '../../utils/formatGameLine';
 import './PlayerDetailPanel.css';
 
 interface PlayerDetailPanelProps {
@@ -83,6 +84,10 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
   const ceiling =
     playerDetail?.ceiling ?? (replayScores.length > 0 ? Math.max(...replayScores) : detail.ceiling);
   const gameLine = playerDetail?.gameLine ?? week8?.gameLine ?? detail.matchup;
+  const parsedGameLine = parseGameLine(gameLine);
+  const gameLineWithoutVenue = parsedGameLine
+    ? `${parsedGameLine.spread}, O/U ${parsedGameLine.total}`
+    : gameLine;
   const lastName = getLastName(fullName);
   const newsItems = [0, 1, 2].map((index) => {
     const sourcePool = position === 'DEF' ? DEFENSE_NEWS_TEMPLATES : NEWS_TEMPLATES;
@@ -181,7 +186,9 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
           <section className="player-detail-panel__section">
             <p className="player-detail-panel__section-label">This week</p>
             <p className="player-detail-panel__game">
-              {week8 ? `vs. ${week8.opponent} · ${week8.kickoff} · ${gameLine}` : gameLine}
+              {week8
+                ? `vs. ${week8.opponent} · ${week8.kickoff} · ${gameLineWithoutVenue}`
+                : formatGameLine(gameLine)}
             </p>
             <p className="player-detail-panel__projection">
               Projection:{' '}
