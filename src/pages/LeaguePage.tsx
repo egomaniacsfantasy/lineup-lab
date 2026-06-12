@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { LeagueFutures } from '../components/league/LeagueFutures';
 import { LeagueSettings } from '../components/league/LeagueSettings';
@@ -24,7 +25,11 @@ export function LeaguePage() {
   const { mode } = useSeasonMode();
   const { stored, bootstrap, pricing, isLoading, error, connect, disconnect } =
     useLeagueConnection();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [showWizard, setShowWizard] = useState(false);
+  // /league#connect deep-links straight into the wizard (e.g. from More).
+  const isWizardOpen = showWizard || location.hash === '#connect';
 
   const connected = useMemo(() => {
     if (!bootstrap) return null;
@@ -35,7 +40,7 @@ export function LeaguePage() {
     };
   }, [bootstrap, pricing]);
 
-  if (showWizard || (stored && !bootstrap && !isLoading && error)) {
+  if (isWizardOpen || (stored && !bootstrap && !isLoading && error)) {
     return (
       <div className="league-page">
         <h1 className="visually-hidden">League market</h1>
@@ -44,6 +49,7 @@ export function LeaguePage() {
           onConnected={(connection) => {
             connect(connection);
             setShowWizard(false);
+            navigate('/league', { replace: true });
           }}
         />
       </div>

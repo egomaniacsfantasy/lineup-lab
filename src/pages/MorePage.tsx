@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
+import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useSeasonMode } from '../hooks/useSeasonMode';
 import './MorePage.css';
 
@@ -14,10 +15,16 @@ const MORE_LINKS = [
     body: 'Consensus boards and ranking mechanics that sit outside the weekly core flow.',
     path: '/rankings',
   },
+  {
+    title: 'Projections admin',
+    body: "Owner-only: import the weekly rankings XLSX and every league's lines recompute.",
+    path: '/admin/projections',
+  },
 ];
 
 export function MorePage() {
   const { mode } = useSeasonMode();
+  const { bootstrap, stored } = useLeagueConnection();
 
   return (
     <div className="more-page">
@@ -27,6 +34,34 @@ export function MorePage() {
           Matchup, season, trade, and league stay in the main tab bar. Draft and rankings live here.
         </SeasonalNotice>
       ) : null}
+
+      <section className="more-page__module">
+        <p className="more-page__eyebrow">Your league</p>
+        {bootstrap ? (
+          <>
+            <h2 className="more-page__title">{bootstrap.league.name}</h2>
+            <p className="more-page__body">
+              Synced from Sleeper as {stored?.displayName ?? 'you'}. Manage or
+              switch leagues on the{' '}
+              <Link className="more-page__inline-link" to="/league">
+                League tab
+              </Link>
+              .
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="more-page__title">Connect your Sleeper league</h2>
+            <p className="more-page__body">
+              You&apos;re on the demo league. One username connects your real
+              rosters, matchups, and standings — read-only, no password.
+            </p>
+            <Link className="more-page__connect-cta" to="/league#connect">
+              Connect with Sleeper
+            </Link>
+          </>
+        )}
+      </section>
 
       <section className="more-page__module">
         <p className="more-page__eyebrow">More</p>
