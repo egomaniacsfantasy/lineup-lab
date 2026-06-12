@@ -141,6 +141,8 @@ export interface LeaguePricing {
   draftWrapped?: DraftWrappedReal | null;
   movers?: MarketMover[];
   leagueMedian?: { mean: number; sigma: number };
+  /** Latest recorded title odds per week (real history only). */
+  titleHistory?: { week: number; odds: Record<string, number>; at: number }[];
 }
 
 export interface DraftWrappedReal {

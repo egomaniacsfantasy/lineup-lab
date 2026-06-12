@@ -39,7 +39,8 @@ export function recordPricing(leagueId, pricing) {
   const history = readHistory(leagueId);
   const latest = history.at(-1);
 
-  if (latest && latest.inputsHash === pricing.inputsHash) {
+  // (entries from before titleOdds existed get superseded once)
+  if (latest && latest.inputsHash === pricing.inputsHash && latest.titleOdds) {
     return false;
   }
 
@@ -57,6 +58,9 @@ export function recordPricing(leagueId, pricing) {
         ]),
       ),
     })),
+    titleOdds: Object.fromEntries(
+      (pricing.futures ?? []).map((f) => [f.rosterId, f.championOdds]),
+    ),
   });
 
   fs.mkdirSync(DIR, { recursive: true });
@@ -67,4 +71,18 @@ export function recordPricing(leagueId, pricing) {
   // TODO(notifications): this is where a line-movement event would be
   // emitted to the push-notification engine.
   return true;
+}
+
+/**
+ * Title price by week — the latest recorded title odds per week, oldest
+ * week first. Real history only: weeks with no snapshot simply aren't
+ * in the series.
+ */
+export function readTitleHistory(leagueId) {
+  const byWeek = new Map();
+  for (const entry of readHistory(leagueId)) {
+    if (!entry.titleOdds || entry.week == null) continue;
+    byWeek.set(entry.week, { week: entry.week, odds: entry.titleOdds, at: entry.computedAt });
+  }
+  return [...byWeek.values()].sort((a, b) => a.week - b.week);
 }

@@ -7,7 +7,7 @@ import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import { getLeaguePricing } from '../engine/engine.js';
-import { readHistory, recordPricing } from '../engine/lineStore.js';
+import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 
@@ -233,7 +233,11 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
       recordPricing(leagueId, pricing);
     }
 
-    res.json(pricing);
+    res.json(
+      pricing.available
+        ? { ...pricing, titleHistory: readTitleHistory(leagueId) }
+        : pricing,
+    );
   } catch (error) {
     next(error);
   }
