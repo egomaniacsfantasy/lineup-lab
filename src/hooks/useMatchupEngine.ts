@@ -463,6 +463,10 @@ export function useMatchupEngine(matchup: MatchupData): MatchupEngineState {
       const nextLine = buildLineFromSelections(nextSelections);
 
       setSelectedAlternatives(nextSelections);
+      // TODO(notifications): this delta is the seam for the push-notification
+      // engine. Every line movement flows through here — emit
+      // { previousLine, nextLine, delta } to the notification source when the
+      // backend lands, instead of only flashing it in the UI.
       setLastChangeDelta(roundTo(nextLine.winProbability - previousLine.winProbability));
     },
     [baselineRoster, buildLineFromSelections, selectedAlternatives],

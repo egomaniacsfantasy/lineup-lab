@@ -201,3 +201,56 @@
     font-size: 11px;
   }
 }
+
+/* Compact the persistent status cluster on narrow phones so the brand
+   lockup never wraps; same elements, same order, both modes. */
+@media (max-width: 520px) {
+  .app-header__inner {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+
+  .app-header__brand {
+    gap: 2px;
+  }
+
+  .app-header__brand-kicker {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+  }
+
+  .app-header__brand-title {
+    font-size: 19px;
+  }
+
+  .app-header__actions {
+    gap: 4px;
+  }
+
+  .app-header__status {
+    font-size: 9px;
+    letter-spacing: 0.05em;
+  }
+
+  .app-header__replay-chip {
+    padding-inline: 5px;
+    font-size: 9px;
+  }
+
+  .app-header__scoring-pill {
+    padding-inline: 7px;
+    font-size: 9px;
+  }
+
+  .app-header__actions .season-toggle {
+    padding: 3px;
+  }
+
+  .app-header__actions .season-toggle__button {
+    min-height: 24px;
+    padding-inline: 7px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+}

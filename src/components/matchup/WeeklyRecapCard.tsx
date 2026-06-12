@@ -115,6 +115,8 @@ function drawShareImage() {
   }, 'image/png');
 }
 
+// SCOPE: POST-MVP — the recap module folds into share cards; the share-image
+// drawing above is the part that survives.
 export function WeeklyRecapCard() {
   const [isDismissed, setIsDismissed] = useState(
     () => window.sessionStorage.getItem(RECAP_SESSION_KEY) === 'true',

@@ -54,6 +54,8 @@ function deriveDraftSlotOdds(style: LeagueStyle): DraftSlotResult {
   };
 }
 
+// SCOPE: POST-MVP — draft tooling returns as a seasonal event (August),
+// not a year-round tab. Keep the route and the seasonal notice.
 export function DraftPage() {
   const { mode } = useSeasonMode();
   const [leagueStyle, setLeagueStyle] = useState<LeagueStyle>('competitive');

@@ -15,6 +15,8 @@ function formatImpliedProbability(odds: number) {
   return ((100 / (absoluteOdds + 100)) * 100).toFixed(1);
 }
 
+// SCOPE: POST-MVP — PRE mode as a parallel app state is web-only eventually;
+// the mobile MVP ships LIVE-mode flows.
 export function MatchupPreseason() {
   return (
     <div className="matchup-preseason">

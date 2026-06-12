@@ -3,6 +3,9 @@ import { RankingMechanic } from '../components/rankings/RankingMechanic';
 import { MOCK_CONSENSUS_RANKINGS } from '../mocks';
 import './RankingsPage.css';
 
+// SCOPE: POST-MVP — consensus rankings + Pro raffle are not in the mobile
+// MVP (Matchup, Season, League, Trade analyzer, share cards). Keep the route;
+// do not invest here until the MVP ships.
 export function RankingsPage() {
   return (
     <div className="rankings-page">
