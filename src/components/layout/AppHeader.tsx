@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useSeasonMode } from '../../hooks/useSeasonMode';
+import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { MOCK_MATCHUP } from '../../mocks';
 import type { ScoringFormat } from '../../types';
 import { Gloss } from '../ui/Gloss';
@@ -18,7 +19,16 @@ interface AppHeaderProps {
 
 export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   const { mode } = useSeasonMode();
-  const scoringLabel = SCORING_LABELS[MOCK_MATCHUP.scoringFormat];
+  const { bootstrap } = useLeagueConnection();
+  const isSynced = bootstrap !== null;
+  const scoringLabel = isSynced
+    ? SCORING_LABELS[bootstrap.league.scoringFamily]
+    : SCORING_LABELS[MOCK_MATCHUP.scoringFormat];
+  const displayedWeek = isSynced
+    ? bootstrap.week
+    : mode === 'preseason'
+      ? 1
+      : MOCK_MATCHUP.week;
   const navItems = [
     { label: 'Matchup', path: '/matchup' },
     { label: 'Season', path: '/season' },
@@ -75,9 +85,18 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
             {mode === 'inseason' ? (
               <span className="app-header__status-dot" aria-hidden="true" />
             ) : null}
-            Week {mode === 'preseason' ? 1 : MOCK_MATCHUP.week}
+            Week {displayedWeek}
           </span>
-          <span className="app-header__replay-chip">Replay</span>
+          {isSynced ? (
+            <span
+              className="app-header__synced-chip"
+              title={`Last updated ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}`}
+            >
+              Synced
+            </span>
+          ) : (
+            <span className="app-header__replay-chip">Replay</span>
+          )}
           <span className="app-header__scoring-pill">
             <Gloss term="ppr">{scoringLabel}</Gloss>
           </span>

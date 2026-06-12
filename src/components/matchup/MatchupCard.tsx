@@ -12,6 +12,8 @@ interface MatchupCardProps {
     yours: MatchupLine;
     opponent: MatchupLine;
   };
+  isProvisional?: boolean;
+  seasonLabel?: string;
 }
 
 const SCORING_LABELS: Record<ScoringFormat, string> = {
@@ -56,7 +58,7 @@ function getCommentary(winProbability: number) {
   return 'You are getting points. The gods love an upset.';
 }
 
-export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardProps) {
+export function MatchupCard({ matchup, activeRoster, activeLine, isProvisional = false, seasonLabel = '2024 Replay' }: MatchupCardProps) {
   const lineDelta = activeLine.yours.winProbability - matchup.baseline.yours.winProbability;
   const deltaTone =
     lineDelta > 0 ? 'positive' : lineDelta < 0 ? 'negative' : 'neutral';
@@ -110,14 +112,14 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
           <div>
             <p className="matchup-card__eyebrow">Matchup market</p>
             <h2 className="matchup-card__title" id="matchup-market-title">
-              Week {matchup.week}, {SCORING_LABELS[matchup.scoringFormat]}, 2024 Replay
+              Week {matchup.week}, {SCORING_LABELS[matchup.scoringFormat]}, {seasonLabel}
             </h2>
           </div>
 
           <div className="matchup-card__header-pills">
             <span className="matchup-card__live-pill">Live</span>
             <span className={`matchup-card__movement matchup-card__movement--${deltaTone}`}>
-              {lineDelta === 0 ? 'Baseline' : movementLabel}
+              {lineDelta === 0 ? (isProvisional ? 'Provisional' : 'Baseline') : movementLabel}
             </span>
           </div>
         </header>

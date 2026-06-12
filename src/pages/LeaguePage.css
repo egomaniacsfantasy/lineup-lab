@@ -23,3 +23,14 @@
     width: 100%;
   }
 }
+
+.league-page__connect-link {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-amber);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

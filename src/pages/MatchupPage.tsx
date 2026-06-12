@@ -10,6 +10,8 @@ import { RosterList } from '../components/roster/RosterList';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useSeasonMode } from '../hooks/useSeasonMode';
+import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { toMatchupData } from '../adapters/connectedLeague';
 import { usePlayerDetail } from '../contexts/PlayerDetailContext';
 import {
   MOCK_LINEUP_LOCKS,
@@ -24,7 +26,7 @@ import {
   evaluateStarterRoster,
   getTopSwapEvaluation,
 } from '../utils/starterEvaluation';
-import type { Player, RosterSlot } from '../types';
+import type { MatchupData, Player, RosterSlot } from '../types';
 import { getWeek8ReplayGameLine } from '../data/playerManifest';
 import './MatchupPage.css';
 
@@ -74,10 +76,15 @@ function getHighestImpactDecision(roster: RosterSlot[]) {
   }, null);
 }
 
-export function MatchupPage() {
-  const { mode } = useSeasonMode();
+interface MatchupLiveProps {
+  matchup: MatchupData;
+  isConnected: boolean;
+  seasonLabel?: string;
+}
+
+function MatchupLive({ matchup, isConnected, seasonLabel }: MatchupLiveProps) {
   const { isOpen: isPlayerDetailOpen, openPlayerDetail } = usePlayerDetail();
-  const engine = useMatchupEngine(MOCK_MATCHUP);
+  const engine = useMatchupEngine(matchup);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const compareWidgetRef = useRef<HTMLDivElement | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
@@ -235,10 +242,6 @@ export function MatchupPage() {
     };
   }, [handleOpenBiggestSwing]);
 
-  if (mode === 'preseason') {
-    return <MatchupPreseason />;
-  }
-
   const activeSlotIndex = engine.activeDecisionSlot;
   const activeSlot =
     activeSlotIndex !== null ? engine.baselineRoster[activeSlotIndex] : null;
@@ -381,7 +384,9 @@ export function MatchupPage() {
           <MatchupCard
             activeLine={engine.activeLine}
             activeRoster={engine.roster}
-            matchup={MOCK_MATCHUP}
+            isProvisional={isConnected}
+            matchup={matchup}
+            seasonLabel={seasonLabel}
           />
         </div>
 
@@ -407,8 +412,8 @@ export function MatchupPage() {
 
               handleOpenBiggestSwing(biggestSwing.slotIndex);
             }}
-            topTradeTarget={topTradeTarget}
-            waiverSuggestion={MOCK_WAIVER_SUGGESTION}
+            topTradeTarget={isConnected ? null : topTradeTarget}
+            waiverSuggestion={isConnected ? null : MOCK_WAIVER_SUGGESTION}
           />
         ) : null}
 
@@ -480,7 +485,7 @@ export function MatchupPage() {
           </div>
         ) : null}
 
-        <WeeklyRecapCard />
+        {!isConnected ? <WeeklyRecapCard /> : null}
       </div>
 
       {isDesktop ? (
@@ -503,8 +508,8 @@ export function MatchupPage() {
 
                 handleOpenBiggestSwing(biggestSwing.slotIndex);
               }}
-              topTradeTarget={topTradeTarget}
-              waiverSuggestion={MOCK_WAIVER_SUGGESTION}
+              topTradeTarget={isConnected ? null : topTradeTarget}
+              waiverSuggestion={isConnected ? null : MOCK_WAIVER_SUGGESTION}
             />
 
             <div ref={compareWidgetRef}>
@@ -546,5 +551,30 @@ export function MatchupPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+
+export function MatchupPage() {
+  const { mode } = useSeasonMode();
+  const { bootstrap } = useLeagueConnection();
+
+  const connectedMatchup = bootstrap ? toMatchupData(bootstrap) : null;
+
+  if (!connectedMatchup && mode === 'preseason') {
+    return <MatchupPreseason />;
+  }
+
+  return (
+    <MatchupLive
+      isConnected={connectedMatchup !== null}
+      seasonLabel={
+        connectedMatchup && bootstrap
+          ? `${bootstrap.league.season} season`
+          : undefined
+      }
+      key={connectedMatchup ? `league-${bootstrap?.league.id}-${bootstrap?.week}` : 'demo'}
+      matchup={connectedMatchup ?? MOCK_MATCHUP}
+    />
   );
 }

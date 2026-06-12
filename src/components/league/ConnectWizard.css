@@ -126,3 +126,92 @@
   letter-spacing: 0.02em;
   text-transform: none;
 }
+
+.connect-wizard__note,
+.connect-wizard__step-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.connect-wizard__leagues {
+  display: grid;
+  gap: 10px;
+}
+
+.connect-wizard__league-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-surface-soft) 70%, transparent);
+  text-align: left;
+  transition: border-color var(--transition-fast);
+}
+
+.connect-wizard__league-row:hover {
+  border-color: var(--border-strong);
+}
+
+.connect-wizard__league-name {
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.connect-wizard__league-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.connect-wizard__scoring-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding-inline: 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.connect-wizard__confirm {
+  display: grid;
+  gap: 14px;
+}
+
+.connect-wizard__confirm-question {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.connect-wizard__error {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--red) 32%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--red) 9%, transparent);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}

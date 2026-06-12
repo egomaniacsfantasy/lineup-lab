@@ -18,7 +18,7 @@ interface QuickActionsProps {
   biggestSwing: BiggestSwing | null;
   lineupLocks: LineupLockWindow[];
   topTradeTarget: TradeTarget | null;
-  waiverSuggestion: WaiverSuggestion;
+  waiverSuggestion: WaiverSuggestion | null;
   onCompareBiggestSwing: () => void;
 }
 
@@ -135,6 +135,7 @@ export function QuickActions({
           </button>
         </article>
 
+        {waiverSuggestion ? (
         <article className="quick-actions__item">
           <div className="quick-actions__item-head">
             <span className="quick-actions__icon" aria-hidden="true">
@@ -154,6 +155,7 @@ export function QuickActions({
             Open
           </button>
         </article>
+        ) : null}
 
         <article className="quick-actions__item">
           <div className="quick-actions__item-head">

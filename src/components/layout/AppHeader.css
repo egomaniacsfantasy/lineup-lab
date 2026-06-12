@@ -254,3 +254,27 @@
     letter-spacing: 0.08em;
   }
 }
+
+/* Real-league indicator; hover/long-press shows last-updated time. */
+.app-header__synced-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding-inline: 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  color: var(--green);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .app-header__synced-chip {
+    padding-inline: 5px;
+    font-size: 9px;
+  }
+}

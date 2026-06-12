@@ -14,10 +14,34 @@ import {
   MOCK_WEEKLY_TRAJECTORY,
 } from '../mocks';
 import { getStoredCascadeScenarioLabel } from '../utils/seasonSelection';
+import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import {
+  getUserTeam,
+  toLeagueFutures,
+  toScheduleItems,
+} from '../adapters/connectedLeague';
+import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import './SeasonPage.css';
 
 export function SeasonPage() {
   const { mode } = useSeasonMode();
+  const { bootstrap, schedule } = useLeagueConnection();
+
+  const connectedSeason = useMemo(() => {
+    if (!bootstrap) return null;
+    const userTeam = getUserTeam(bootstrap);
+    if (!userTeam) return null;
+    const futures = toLeagueFutures(bootstrap);
+    const userRow = futures.find((row) => row.isUser) ?? null;
+    const rank = futures.findIndex((row) => row.isUser) + 1;
+
+    return {
+      userTeam,
+      userRow,
+      rank: rank > 0 ? rank : bootstrap.league.totalTeams,
+      scheduleItems: schedule ? toScheduleItems(schedule, bootstrap) : [],
+    };
+  }, [bootstrap, schedule]);
 
   const preseasonSchedule = useMemo<ScheduleGridItem[]>(
     () =>
@@ -33,6 +57,51 @@ export function SeasonPage() {
   );
 
   const activeScenarioLabel = getStoredCascadeScenarioLabel();
+
+  if (connectedSeason && connectedSeason.userRow) {
+    const { userTeam, userRow, rank, scheduleItems } = connectedSeason;
+    const record = `${userTeam.record.wins}-${userTeam.record.losses}`;
+    const played = userTeam.record.wins + userTeam.record.losses + userTeam.record.ties;
+    const remaining = Math.max(
+      0,
+      (bootstrap?.league.regularSeasonWeeks ?? played) - played,
+    );
+    const losses = userTeam.record.losses;
+    const recordRange = {
+      best: `${userTeam.record.wins + remaining}-${losses}`,
+      worst: `${userTeam.record.wins}-${losses + remaining}`,
+      median: `${userTeam.record.wins + Math.round(remaining / 2)}-${losses + Math.floor(remaining / 2)}`,
+    };
+
+    return (
+      <div className="season-page">
+        <h1 className="visually-hidden">Season futures</h1>
+
+        <SeasonalNotice>
+          Season futures are provisional (scoring history only) until
+          projections are imported.
+        </SeasonalNotice>
+
+        <SeasonHeadline
+          championshipOdds={userRow.championOdds}
+          leagueRank={rank}
+          live={bootstrap !== null && bootstrap.league.status === 'in_season'}
+          playoffProbability={userRow.playoffProb}
+          recordLabel="Record"
+          recordRange={recordRange}
+          recordValue={record}
+          title={`Your ${bootstrap?.league.season} season · week ${bootstrap?.week}`}
+        />
+
+        {scheduleItems.length > 0 ? (
+          <ScheduleGrid items={scheduleItems} title="Schedule" />
+        ) : (
+          <SeasonalNotice>Loading your schedule…</SeasonalNotice>
+        )}
+      </div>
+    );
+  }
+
 
   return (
     <div className="season-page">
