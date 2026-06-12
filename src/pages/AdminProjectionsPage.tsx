@@ -21,11 +21,10 @@ interface UnmatchedRow {
   candidates: { id: string; name: string; team: string | null; score: number }[];
 }
 
-interface Preview {
-  pendingId: string;
+interface ImportResult {
+  version: string;
+  count: number;
   tabs: PreviewTab[];
-  totalRows: number;
-  matchedCount: number;
   unmatched: UnmatchedRow[];
 }
 
@@ -45,10 +44,8 @@ export function AdminProjectionsPage() {
   );
   const [isAuthed, setIsAuthed] = useState(false);
   const [history, setHistory] = useState<{ active: string | null; versions: VersionRow[] } | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [pointsAre, setPointsAre] = useState<'per-game' | 'full-season'>('per-game');
-  const [scoringBasis, setScoringBasis] = useState('ppr');
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [resolutions, setResolutions] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -85,53 +82,34 @@ export function AdminProjectionsPage() {
     else setStatus(null);
   };
 
-  const handlePreview = async () => {
-    if (!file) return;
+  const handleImport = async () => {
+    if (files.length === 0) return;
     setIsBusy(true);
     setStatus(null);
 
     const form = new FormData();
-    form.append('file', file);
-    form.append('pointsAre', pointsAre);
-    form.append('scoringBasis', scoringBasis);
+    files.forEach((file) => form.append('files', file));
+    if (Object.keys(resolutions).length > 0) {
+      form.append('resolutions', JSON.stringify(resolutions));
+    }
 
     try {
-      const response = await adminFetch('/api/admin/projections/preview', {
+      const response = await adminFetch('/api/admin/projections/import-franco', {
         method: 'POST',
         body: form,
       });
       const body = await response.json();
       if (!response.ok) {
-        setStatus(body.message ?? 'Preview failed.');
+        setStatus(body.message ?? 'Import failed.');
         return;
       }
-      setPreview(body);
+      setResult(body);
       setResolutions({});
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  const handleConfirm = async () => {
-    if (!preview) return;
-    setIsBusy(true);
-
-    try {
-      const response = await adminFetch('/api/admin/projections/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pendingId: preview.pendingId, resolutions }),
-      });
-      const body = await response.json();
-      if (!response.ok) {
-        setStatus(body.message ?? 'Confirm failed.');
-        return;
-      }
       setStatus(
-        `Imported ${body.count} projections as ${body.version}. All lines recompute automatically.`,
+        body.unmatched.length === 0
+          ? `Imported ${body.count} projections as ${body.version} and activated. All lines reprice automatically.`
+          : `Imported ${body.count} projections as ${body.version}. ${body.unmatched.length} unmatched — pick the right player below and re-import.`,
       );
-      setPreview(null);
-      setFile(null);
       await loadHistory();
     } finally {
       setIsBusy(false);
@@ -190,66 +168,57 @@ export function AdminProjectionsPage() {
 
       <section className="admin-projections__card">
         <label className="admin-projections__field">
-          <span>XLSX file (one tab per position)</span>
+          <span>
+            Drop all position files at once (qb / rb / wr / te / kicker /
+            def *_combined.xlsx). Scoring is PPR; the per-week game_level
+            sheets drive every line.
+          </span>
           <input
             accept=".xlsx"
+            multiple
             onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              setFile(event.target.files?.[0] ?? null)
+              setFiles(Array.from(event.target.files ?? []))
             }
             type="file"
           />
         </label>
 
-        <div className="admin-projections__config">
-          <label>
-            Points are{' '}
-            <select
-              onChange={(event) =>
-                setPointsAre(event.target.value as 'per-game' | 'full-season')
-              }
-              value={pointsAre}
-            >
-              <option value="per-game">per-game</option>
-              <option value="full-season">full-season</option>
-            </select>
-          </label>
-          <label>
-            Scoring basis{' '}
-            <select
-              onChange={(event) => setScoringBasis(event.target.value)}
-              value={scoringBasis}
-            >
-              <option value="ppr">PPR</option>
-              <option value="half-ppr">Half PPR</option>
-              <option value="standard">Standard</option>
-            </select>
-          </label>
-        </div>
+        {files.length > 0 ? (
+          <p className="admin-projections__summary">
+            {files.length} file{files.length === 1 ? '' : 's'} selected:{' '}
+            {files.map((file) => file.name).join(', ')}
+          </p>
+        ) : null}
 
         <button
           className="admin-projections__primary"
-          disabled={!file || isBusy}
-          onClick={() => void handlePreview()}
+          disabled={files.length === 0 || isBusy}
+          onClick={() => void handleImport()}
           type="button"
         >
-          {isBusy ? 'Parsing…' : 'Preview import'}
+          {isBusy
+            ? 'Importing…'
+            : Object.keys(resolutions).length > 0
+              ? 'Re-import with confirmed matches'
+              : 'Import and activate'}
         </button>
       </section>
 
-      {preview ? (
+      {result ? (
         <section className="admin-projections__card">
-          <h2 className="admin-projections__subtitle">Preview</h2>
+          <h2 className="admin-projections__subtitle">Last import</h2>
           <p className="admin-projections__summary">
-            {preview.tabs.map((t) => `${t.tab}: ${t.rows}`).join(' · ')} —{' '}
-            {preview.matchedCount} of {preview.totalRows} matched automatically.
+            {result.tabs.map((t) => `${t.position ?? t.tab}: ${t.rows}`).join(' · ')} —{' '}
+            {result.count} imported as <strong>{result.version}</strong>.
           </p>
 
-          {preview.unmatched.length > 0 ? (
+          {result.unmatched.length > 0 ? (
             <div className="admin-projections__unmatched">
               <h3 className="admin-projections__subtitle">
-                Needs review ({preview.unmatched.length})
+                Needs review ({result.unmatched.length}) — pick the right
+                player, then re-import the same files
               </h3>
-              {preview.unmatched.map((row) => (
+              {result.unmatched.map((row) => (
                 <div className="admin-projections__unmatched-row" key={row.key}>
                   <span className="admin-projections__unmatched-name">
                     {row.name} ({row.position}
@@ -288,15 +257,6 @@ export function AdminProjectionsPage() {
               ))}
             </div>
           ) : null}
-
-          <button
-            className="admin-projections__primary"
-            disabled={isBusy}
-            onClick={() => void handleConfirm()}
-            type="button"
-          >
-            Confirm and activate
-          </button>
         </section>
       ) : null}
 

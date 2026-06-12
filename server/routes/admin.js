@@ -159,6 +159,15 @@ adminRouter.post('/projections/import-franco', upload.array('files', 8), async (
       return;
     }
 
+    // owner-confirmed crosswalk picks from a prior attempt's unmatched list
+    let resolutions = {};
+    try {
+      resolutions = JSON.parse(req.body?.resolutions ?? '{}');
+    } catch {
+      resolutions = {};
+    }
+    if (Object.keys(resolutions).length > 0) rememberMatches(resolutions);
+
     const { tabs, rows } = parseFrancoWorkbooks(
       req.files.map((f) => ({ name: f.originalname, buffer: f.buffer })),
     );
