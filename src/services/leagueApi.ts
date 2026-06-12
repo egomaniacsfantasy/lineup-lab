@@ -25,6 +25,7 @@ export interface ApiLeague extends ApiLeagueSummary {
   scoringSettings: Record<string, number>;
   rosterPositions: string[];
   playoffWeekStart: number | null;
+  playoffTeams: number | null;
   lastScoredWeek: number | null;
   regularSeasonWeeks: number;
 }
@@ -139,6 +140,7 @@ export interface LeaguePricing {
   futures?: PricedFuture[];
   draftWrapped?: DraftWrappedReal | null;
   movers?: MarketMover[];
+  leagueMedian?: { mean: number; sigma: number };
 }
 
 export interface DraftWrappedReal {

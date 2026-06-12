@@ -456,6 +456,17 @@ function CompareSheet({
   );
 }
 
+interface OffseasonView {
+  titleOdds: number;
+  titleProb: number;
+  projRecord: string;
+  playoffProb: number;
+  movers: { kind: string; headline: string; detail: string; playerId?: string; before: number; after: number }[];
+  week1: { opponentName: string; moneyline: number; winProb: number } | 'pending';
+  kickoffLabel: string;
+  season: string;
+}
+
 interface MatchupLiveProps {
   matchup: MatchupData;
   isConnected: boolean;
@@ -464,6 +475,7 @@ interface MatchupLiveProps {
   scoringNote?: string | null;
   unpricedStarterCount?: number;
   seasonLabel?: string;
+  offseasonView?: OffseasonView | null;
 }
 
 function MatchupLive({
@@ -474,6 +486,7 @@ function MatchupLive({
   scoringNote = null,
   unpricedStarterCount = 0,
   seasonLabel,
+  offseasonView = null,
 }: MatchupLiveProps) {
   const engine = useMatchupEngine(matchup);
   const { openPlayerDetail } = usePlayerDetail();
@@ -675,6 +688,63 @@ function MatchupLive({
       />
 
       <section className="matchup-page__story">
+        {offseasonView ? (
+          <section className="matchup-page__module matchup-page__module--hero">
+            <div className="matchup-page__module-row">
+              <span className="matchup-page__eyebrow">Season futures</span>
+              <span className="matchup-page__live-chip">Pre-season {offseasonView.season}</span>
+            </div>
+
+            <div className="matchup-page__hero-team">
+              <TeamCrest isUser teamName={matchup.yourTeam.teamName} />
+              <div>
+                <p className="matchup-page__team-name">{matchup.yourTeam.teamName}</p>
+              </div>
+            </div>
+
+            <div className="matchup-page__hero-line">
+              <span className="matchup-page__hero-number">
+                {formatAmericanOdds(offseasonView.titleOdds)}
+              </span>
+              <span className="matchup-page__hero-winprob">title odds</span>
+            </div>
+
+            <p className="matchup-page__meta-copy">
+              Projected record{' '}
+              <span className="matchup-page__inline-number">{offseasonView.projRecord}</span>
+              {' '}· playoff probability{' '}
+              <span className="matchup-page__inline-number">
+                {offseasonView.playoffProb.toFixed(1)}%
+              </span>
+            </p>
+
+            <div className="matchup-page__hero-divider" />
+
+            {offseasonView.week1 === 'pending' ? (
+              <p className="matchup-page__body-copy">
+                Week 1 preview: schedule pending on Sleeper.
+              </p>
+            ) : (
+              <div className="matchup-page__opponent-row">
+                <div className="matchup-page__opponent-copy">
+                  <TeamCrest teamName={offseasonView.week1.opponentName} />
+                  <div>
+                    <p className="matchup-page__opponent-name">
+                      Week 1: vs {offseasonView.week1.opponentName}
+                    </p>
+                    <p className="matchup-page__meta-copy">
+                      {offseasonView.week1.winProb.toFixed(1)}% win probability · opens{' '}
+                      {offseasonView.kickoffLabel}
+                    </p>
+                  </div>
+                </div>
+                <span className="matchup-page__opponent-odds">
+                  {formatAmericanOdds(offseasonView.week1.moneyline)}
+                </span>
+              </div>
+            )}
+          </section>
+        ) : (
         <section className="matchup-page__module matchup-page__module--hero">
           <div className="matchup-page__module-row">
             <span className="matchup-page__eyebrow">Matchup market</span>
@@ -735,6 +805,7 @@ function MatchupLive({
             Slight edge. One bad break away from sweating.
           </p>
         </section>
+        )}
 
         {scoringNote ? <SeasonalNotice>{scoringNote}</SeasonalNotice> : null}
         {unpricedStarterCount > 0 ? (
@@ -812,6 +883,45 @@ function MatchupLive({
           </section>
         ) : null}
 
+        {isConnected && offseasonView ? (
+          offseasonView.movers.length > 0 ? (
+            <section className="matchup-page__module">
+              <div className="matchup-page__module-row">
+                <h2 className="matchup-page__module-title">Market movers</h2>
+                <p className="matchup-page__meta-copy">
+                  title odds{' '}
+                  <span className="matchup-page__inline-number">
+                    {formatAmericanOdds(offseasonView.movers[0].before)}
+                  </span>
+                </p>
+              </div>
+              {offseasonView.movers.map((mover) => (
+                <MarketMoverRow
+                  avatar={
+                    mover.playerId
+                      ? ({
+                          id: mover.playerId,
+                          name: mover.headline,
+                          shortName: mover.headline,
+                          position: 'WR',
+                          team: '',
+                          headshotUrl: `/api/img/headshot/${mover.playerId}`,
+                          teamLogoUrl: '',
+                          bye: 0,
+                          isActive: true,
+                        } as Player)
+                      : null
+                  }
+                  from={mover.before}
+                  key={mover.headline}
+                  label={mover.headline}
+                  sublabel={mover.detail}
+                  to={mover.after}
+                />
+              ))}
+            </section>
+          ) : null
+        ) : !isConnected ? (
         <section className="matchup-page__module">
           <div className="matchup-page__module-row">
             <h2 className="matchup-page__module-title">Market movers</h2>
@@ -837,7 +947,9 @@ function MatchupLive({
             />
           ) : null}
         </section>
+        ) : null}
 
+        {!isConnected ? (
         <section className="matchup-page__module">
           <div className="matchup-page__module-row">
             <h2 className="matchup-page__module-title">When your week locks</h2>
@@ -899,6 +1011,7 @@ function MatchupLive({
             </p>
           ) : null}
         </section>
+        ) : null}
 
         <section className="matchup-page__module matchup-page__module--trajectory matchup-page__module--mobile">
           <div className="matchup-page__module-row">
@@ -1064,7 +1177,7 @@ function MatchupLive({
           </div>
         </section>
 
-        {!isRecapDismissed ? (
+        {!isConnected && !isRecapDismissed ? (
           <section className="matchup-page__module matchup-page__module--recap">
             <div className="matchup-page__module-row">
               <span className="matchup-page__eyebrow">Week 7 recap</span>
@@ -1216,7 +1329,7 @@ function MatchupLive({
 }
 
 export function MatchupPage() {
-  const { mode } = useSeasonMode();
+  const { mode, seasonState, anchors, season } = useSeasonMode();
   const { bootstrap, pricing, lineHistory } = useLeagueConnection();
 
   const lineMovement = (() => {
@@ -1240,12 +1353,51 @@ export function MatchupPage() {
 
   const connectedMatchup = bootstrap ? toMatchupData(bootstrap, pricing) : null;
 
+  // Off-season reality for connected leagues: futures-first hero,
+  // Week 1 preview (real or "schedule pending"), priced market movers.
+  const offseasonView = (() => {
+    if (!connectedMatchup || !bootstrap || !pricing?.available) return null;
+    if (seasonState !== 'OFFSEASON') return null;
+
+    const userFuture = pricing.futures?.find((future) => future.isUser);
+    if (!userFuture) return null;
+
+    const hasSchedule = bootstrap.matchups.some(
+      (m) => m.matchupId != null && m.rosterId === bootstrap.teams.find((t) => t.isUser)?.rosterId,
+    );
+
+    return {
+      titleOdds: userFuture.championOdds,
+      titleProb: userFuture.titleProb,
+      projRecord: userFuture.projRecord ?? `${userFuture.projWins ?? 0}-${userFuture.projLosses ?? 0}`,
+      playoffProb: userFuture.playoffProb,
+      movers: (pricing.movers ?? []).map((mover) => ({
+        kind: mover.kind,
+        headline: mover.headline,
+        detail: mover.detail,
+        playerId: mover.playerId,
+        before: mover.titleOddsBefore,
+        after: mover.titleOddsAfter,
+      })),
+      week1: hasSchedule
+        ? {
+            opponentName: connectedMatchup.opponentTeam.teamName,
+            moneyline: connectedMatchup.baseline.yours.moneyline,
+            winProb: connectedMatchup.baseline.yours.winProbability,
+          }
+        : ('pending' as const),
+      kickoffLabel: anchors.kickoffLabel,
+      season,
+    };
+  })();
+
   if (!connectedMatchup && mode === 'preseason') {
     return <MatchupPreseason />;
   }
 
   return (
     <MatchupLive
+      offseasonView={offseasonView}
       isConnected={connectedMatchup !== null}
       isPriced={Boolean(pricing?.available)}
       lineMovement={connectedMatchup ? lineMovement : null}

@@ -11,6 +11,7 @@ interface LeagueFuturesProps {
   scoringFormat: ScoringFormat;
   currentWeek: number;
   mode: 'preseason' | 'inseason';
+  playoffTeams?: number;
 }
 
 type LeagueMarket = 'champion' | 'finals' | 'playoffs';
@@ -52,6 +53,7 @@ export function LeagueFutures({
   scoringFormat,
   currentWeek,
   mode,
+  playoffTeams = 6,
 }: LeagueFuturesProps) {
   const [market, setMarket] = useState<LeagueMarket>('champion');
   const sortedFutures = useMemo(
@@ -104,7 +106,7 @@ export function LeagueFutures({
       <div className="league-futures__board">
         {sortedFutures.map((team, index) => (
           <div className="league-futures__slot" key={team.teamName}>
-            {index === 6 ? (
+            {index === playoffTeams ? (
               <div className="league-futures__cutoff" role="presentation">
                 <span className="league-futures__cutoff-line" />
                 <span className="league-futures__cutoff-label">{cutoffLabel}</span>

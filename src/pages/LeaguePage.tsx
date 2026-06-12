@@ -103,6 +103,7 @@ export function LeaguePage() {
         futures={futures}
         leagueName={connection.leagueName}
         mode={connected ? 'inseason' : mode}
+        playoffTeams={bootstrap?.league.playoffTeams ?? 6}
         scoringFormat={connection.scoringFormat}
         totalTeams={connection.totalTeams}
       />

@@ -14,10 +14,12 @@ import {
   MOCK_WEEKLY_TRAJECTORY,
 } from '../mocks';
 import { getStoredCascadeScenarioLabel } from '../utils/seasonSelection';
+import type { DraftWrappedData } from '../types';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import {
   getUserTeam,
   toLeagueFutures,
+  toPlayer,
   toScheduleItems,
 } from '../adapters/connectedLeague';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -61,6 +63,7 @@ export function SeasonPage() {
   if (connectedSeason && connectedSeason.userRow) {
     const { userTeam, userRow, rank, scheduleItems } = connectedSeason;
     const record = `${userTeam.record.wins}-${userTeam.record.losses}`;
+
     const played = userTeam.record.wins + userTeam.record.losses + userTeam.record.ties;
     const remaining = Math.max(
       0,
@@ -72,6 +75,33 @@ export function SeasonPage() {
       worst: `${userTeam.record.wins}-${losses + remaining}`,
       median: `${userTeam.record.wins + Math.round(remaining / 2)}-${losses + Math.floor(remaining / 2)}`,
     };
+    const userFuture = pricing?.available
+      ? pricing.futures?.find((future) => future.isUser)
+      : undefined;
+    const real = pricing?.available ? pricing.draftWrapped : null;
+    const realWrapped: DraftWrappedData | null =
+      real && real.boldestPick && bootstrap
+        ? {
+            teamName: real.teamName,
+            leagueName: real.leagueName,
+            championshipOdds: userFuture?.championOdds ?? userRow.championOdds,
+            projectedRecord: userFuture?.projRecord ?? record,
+            recordRange,
+            leagueRank: rank,
+            boldestPick: {
+              player: toPlayer(real.boldestPick.playerId, bootstrap.players),
+              pickNumber: real.boldestPick.pickNo,
+              adpDelta: real.boldestPick.reach,
+            },
+            toughestMatchup: real.toughestWeek
+              ? { week: real.toughestWeek.week, odds: real.toughestWeek.odds, opponent: real.toughestWeek.opponent }
+              : { week: 0, odds: 100, opponent: '—' },
+            easiestMatchup: real.easiestWeek
+              ? { week: real.easiestWeek.week, odds: real.easiestWeek.odds, opponent: real.easiestWeek.opponent }
+              : { week: 0, odds: -100, opponent: '—' },
+            rosterGrade: real.grade,
+          }
+        : null;
 
     return (
       <div className="season-page">
@@ -89,11 +119,22 @@ export function SeasonPage() {
           leagueRank={rank}
           live={bootstrap !== null && bootstrap.league.status === 'in_season'}
           playoffProbability={userRow.playoffProb}
-          recordLabel="Record"
+          recordLabel={userFuture ? 'Projected record' : 'Record'}
           recordRange={recordRange}
-          recordValue={record}
-          title={`Your ${bootstrap?.league.season} season · week ${bootstrap?.week}`}
+          recordValue={userFuture?.projRecord ?? record}
+          title={`Your ${bootstrap?.league.season} season futures`}
         />
+
+        {realWrapped ? (
+          <DraftWrappedCard draftWrapped={realWrapped} onShare={() => {}} />
+        ) : null}
+
+        {real && real.unpricedPicks > 0 ? (
+          <SeasonalNotice>
+            {real.unpricedPicks} of your {real.totalPicks} draft picks are
+            outside the projection sheet, so the grade is reduced-confidence.
+          </SeasonalNotice>
+        ) : null}
 
         {scheduleItems.length > 0 ? (
           <ScheduleGrid items={scheduleItems} title="Schedule" />

@@ -4,6 +4,9 @@ import './ConsensusTable.css';
 
 interface ConsensusTableProps {
   rankings: ConsensusRanking[];
+  /** Real source label for connected leagues ("Olympus model · franco-…");
+   *  the submissions fiction stays demo-only. */
+  sourceLabel?: string;
 }
 
 function getPositionClass(position: Position) {
@@ -25,15 +28,17 @@ function getPositionClass(position: Position) {
   }
 }
 
-export function ConsensusTable({ rankings }: ConsensusTableProps) {
+export function ConsensusTable({ rankings, sourceLabel }: ConsensusTableProps) {
   const { openPlayerDetail } = usePlayerDetail();
 
   return (
     <section aria-labelledby="consensus-table-title" className="consensus-table">
       <div className="consensus-table__header">
-        <p className="consensus-table__kicker">Consensus redraft rankings</p>
+        <p className="consensus-table__kicker">
+          {sourceLabel ? 'Olympus model rankings' : 'Consensus redraft rankings'}
+        </p>
         <h2 className="consensus-table__title" id="consensus-table-title">
-          Updated from 142,417 submissions
+          {sourceLabel ?? 'Updated from 142,417 submissions'}
         </h2>
       </div>
 

@@ -196,16 +196,24 @@ export function priceLeague(ctx) {
         )
       : null;
 
-    if (userMatchup && oppMatchup) {
+    // Off-season fallback: no scheduled opponent yet — price swaps against
+    // the league-median team so the board never fabricates an opponent.
+    const fallbackStarters = userTeam.starters;
+    const usingFallback = !(userMatchup && oppMatchup) && fallbackStarters.length > 0;
+
+    if ((userMatchup && oppMatchup) || usingFallback) {
       const baseDist = distByRoster.get(userTeam.rosterId);
-      const oppDist = distByRoster.get(oppMatchup.rosterId);
+      const oppDist = usingFallback
+        ? leagueMedianDistribution(distByRoster)
+        : distByRoster.get(oppMatchup.rosterId);
       const baseWinProb = normalCdf(
         (baseDist.mean - oppDist.mean) /
           Math.sqrt(baseDist.sigma ** 2 + oppDist.sigma ** 2 || 1),
       );
-      const bench = userTeam.players.filter((id) => !userMatchup.starters.includes(id));
+      const starterIds = usingFallback ? fallbackStarters : userMatchup.starters;
+      const bench = userTeam.players.filter((id) => !starterIds.includes(id));
 
-      userMatchup.starters.forEach((starterId, slotIndex) => {
+      starterIds.forEach((starterId, slotIndex) => {
         const slotLabel = slotLabels[slotIndex] ?? 'FLEX';
         const starterDist = playerDistribution(starterId, projectionMap, catalog[starterId]);
 
@@ -297,7 +305,16 @@ export function priceLeague(ctx) {
     futures,
     draftWrapped,
     movers,
+    leagueMedian: leagueMedianDistribution(distByRoster),
   };
+}
+
+/** Median team distribution across the league (honest stand-in opponent). */
+function leagueMedianDistribution(distByRoster) {
+  const dists = [...distByRoster.values()].sort((a, b) => a.mean - b.mean);
+  if (dists.length === 0) return { mean: 100, sigma: 25 };
+  const mid = dists[Math.floor(dists.length / 2)];
+  return { mean: Number(mid.mean.toFixed(1)), sigma: Number(mid.sigma.toFixed(1)) };
 }
 
 const GRADE_SCALE = [

@@ -60,7 +60,7 @@ function toPosition(position: string | null): Position {
     : 'WR') as Position;
 }
 
-function toPlayer(id: string, catalog: Record<string, ApiCatalogPlayer>): Player {
+export function toPlayer(id: string, catalog: Record<string, ApiCatalogPlayer>): Player {
   const entry = catalog[id];
   const name = entry?.name ?? `Player ${id}`;
   const team = entry?.team ?? 'FA';
@@ -284,7 +284,13 @@ export function toMatchupData(
     ? bootstrap.teams.find((t) => t.rosterId === oppMatchup.rosterId)
     : undefined;
 
-  if (!userMatchup || !oppMatchup || !oppTeam) return null;
+  // Off-season / schedule-pending: no scheduled opponent. Build the board
+  // from the real roster, priced against the league-median team (honest
+  // stand-in; the UI never names a fabricated opponent).
+  if (!userMatchup || !oppMatchup || !oppTeam) {
+    if (!pricing?.available || userTeam.starters.length === 0) return null;
+    return buildOffseasonMatchupData(bootstrap, pricing, userTeam);
+  }
 
   const labels = slotLabels(bootstrap.league.rosterPositions);
   const priced = pricing?.available ? pricing : null;
@@ -369,6 +375,102 @@ export function toMatchupData(
       bench: [],
     },
     baseline: line,
+  };
+}
+
+function buildOffseasonMatchupData(
+  bootstrap: LeagueBootstrap,
+  pricing: LeaguePricing,
+  userTeam: ApiTeam,
+): MatchupData {
+  const labels = slotLabels(bootstrap.league.rosterPositions);
+  const playerMeans = pricing.playerMeans ?? {};
+  const median = pricing.leagueMedian ?? { mean: 100, sigma: 25 };
+  const swapsBySlot = new Map<number, NonNullable<LeaguePricing['userSwaps']>>();
+  (pricing.userSwaps ?? []).forEach((swap) => {
+    const list = swapsBySlot.get(swap.slotIndex) ?? [];
+    list.push(swap);
+    swapsBySlot.set(swap.slotIndex, list);
+  });
+
+  const userMean = userTeam.starters.reduce(
+    (sum, id) => sum + (playerMeans[id]?.mean ?? 0),
+    0,
+  );
+  const diff = userMean - median.mean;
+  const sigma = Math.sqrt(2) * Math.max(10, median.sigma);
+  const winProb = normalCdf(diff / sigma);
+
+  const yours: MatchupLine = {
+    moneyline: probabilityToAmerican(winProb),
+    winProbability: Number((winProb * 100).toFixed(1)),
+    projection: Number(userMean.toFixed(1)),
+    spread: Number(diff.toFixed(1)),
+    total: Number((userMean + median.mean).toFixed(1)),
+  };
+  const opponent: MatchupLine = {
+    moneyline: probabilityToAmerican(1 - winProb),
+    winProbability: Number(((1 - winProb) * 100).toFixed(1)),
+    projection: median.mean,
+    spread: Number((-diff).toFixed(1)),
+    total: yours.total,
+  };
+
+  const roster: RosterSlot[] = userTeam.starters.map((playerId, index) => {
+    const projection = playerMeans[playerId]?.mean ?? 0;
+    const swaps = swapsBySlot.get(index) ?? [];
+    const alternatives = swaps.map((swap) => ({
+      player: toPlayer(swap.benchId, bootstrap.players),
+      projection: swap.benchMean,
+      floor: Number((swap.benchMean * 0.6).toFixed(1)),
+      ceiling: Number((swap.benchMean * 1.45).toFixed(1)),
+      resultingLine: {
+        moneyline: swap.resultingMoneyline,
+        winProbability: swap.resultingWinProb,
+        projection: swap.resultingProjection,
+        spread: Number((diff + swap.benchMean - swap.starterMean).toFixed(1)),
+        total: Number((yours.total + swap.benchMean - swap.starterMean).toFixed(1)),
+      },
+      deltaWinProbability: swap.deltaWinProb,
+      gameLine: `${bootstrap.players[swap.benchId]?.team ?? 'FA'} game, line pending`,
+    }));
+
+    return {
+      slotLabel: labels[index] ?? 'FLEX',
+      starter: toPlayer(playerId, bootstrap.players),
+      projection,
+      floor: Number((projection * 0.6).toFixed(1)),
+      ceiling: Number((projection * 1.45).toFixed(1)),
+      isDecisionSlot: alternatives.length > 0,
+      alternatives,
+    };
+  });
+
+  const bench: BenchPlayer[] = userTeam.players
+    .filter((id) => !userTeam.starters.includes(id))
+    .map((id) => ({
+      player: toPlayer(id, bootstrap.players),
+      projection: playerMeans[id]?.mean ?? 0,
+    }));
+
+  return {
+    week: 1,
+    scoringFormat: bootstrap.league.scoringFamily,
+    yourTeam: {
+      teamName: userTeam.teamName,
+      managerName: userTeam.ownerName,
+      record: recordLabel(userTeam),
+      roster,
+      bench,
+    },
+    opponentTeam: {
+      teamName: 'League median',
+      managerName: 'Field',
+      record: '—',
+      roster: [],
+      bench: [],
+    },
+    baseline: { yours, opponent },
   };
 }
 

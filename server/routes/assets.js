@@ -22,6 +22,8 @@ const BROWSER_CACHE = 'public, max-age=86400';
 const SOURCES = {
   headshot: {
     url: (id) => `https://sleepercdn.com/content/nfl/players/thumb/${id}.jpg`,
+    // some rookies only have the full-size shot — try it before giving up
+    fallbackUrl: (id) => `https://sleepercdn.com/content/nfl/players/${id}.jpg`,
     type: 'image/jpeg',
     safe: /^[A-Za-z0-9_-]{1,24}$/,
   },
@@ -72,7 +74,11 @@ async function serveCached(kind, key, res) {
   }
 
   try {
-    const upstream = await fetch(source.url(key));
+    let upstream = await fetch(source.url(key));
+
+    if (!upstream.ok && source.fallbackUrl) {
+      upstream = await fetch(source.fallbackUrl(key));
+    }
 
     if (!upstream.ok) {
       fs.mkdirSync(dir, { recursive: true });
