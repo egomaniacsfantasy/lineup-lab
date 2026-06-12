@@ -27,6 +27,7 @@ a {
 
 button {
   font-family: inherit;
+  font-variant-numeric: inherit;
   cursor: pointer;
   border: none;
   background: none;
@@ -45,6 +46,7 @@ img {
 input, select, textarea {
   font-family: inherit;
   font-size: inherit;
+  font-variant-numeric: inherit;
   color: inherit;
   background: none;
   border: none;

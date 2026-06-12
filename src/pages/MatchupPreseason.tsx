@@ -31,13 +31,13 @@ export function MatchupPreseason() {
 
         <div className="matchup-preseason__links">
           <Link className="matchup-preseason__link" to="/season">
-            Preview the season →
+            Preview the season
           </Link>
           <Link className="matchup-preseason__link" to="/draft">
-            Replay the draft →
+            Replay the draft
           </Link>
           <Link className="matchup-preseason__link" to="/rankings">
-            Rank players →
+            Rank players
           </Link>
         </div>
       </section>

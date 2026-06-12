@@ -47,7 +47,7 @@ export function SuggestedPackage({
         type="button"
       >
         <span>Analyze this trade</span>
-        <span className="suggested-package__toggle-icon">{isExpanded ? '−' : '→'}</span>
+        <span className="suggested-package__toggle-icon">{isExpanded ? '−' : '+'}</span>
       </button>
 
       <div className="suggested-package__body-wrap">

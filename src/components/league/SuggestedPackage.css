@@ -4,7 +4,6 @@
 }
 
 .suggested-package__toggle,
-.suggested-package__kicker,
 .suggested-package__label,
 .suggested-package__player-meta,
 .suggested-package__impact-values,
@@ -62,7 +61,6 @@
   gap: 6px;
 }
 
-.suggested-package__kicker,
 .suggested-package__label,
 .suggested-package__note {
   color: var(--text-muted);
@@ -72,7 +70,6 @@
   text-transform: uppercase;
 }
 
-.suggested-package__kicker,
 .suggested-package__note {
   margin: 0;
 }
@@ -183,4 +180,14 @@
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
   }
+}
+
+.suggested-package__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }

@@ -23,15 +23,11 @@
   display: none;
 }
 
-.league-settings__kicker,
-.league-settings__toggle,
 .league-settings__label,
 .league-settings__action {
   font-family: var(--font-mono);
 }
 
-.league-settings__kicker,
-.league-settings__toggle,
 .league-settings__label {
   color: var(--text-muted);
   font-size: 11px;
@@ -80,14 +76,30 @@
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--bg-inset) 82%, transparent);
   color: var(--text-muted);
+  font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .league-settings__action--primary {
   border-color: color-mix(in srgb, var(--amber) 30%, transparent);
   background: color-mix(in srgb, var(--amber) 10%, transparent);
   color: var(--text-amber);
+}
+
+.league-settings__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.league-settings__toggle {
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+  text-transform: none;
 }

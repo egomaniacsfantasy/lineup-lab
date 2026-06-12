@@ -103,9 +103,9 @@ export function ConsensusTable({ rankings }: ConsensusTableProps) {
                       .join(' ')}
                   >
                     {ranking.trend === 'up'
-                      ? `↑ ${ranking.trendDelta}`
+                      ? `+${ranking.trendDelta}`
                       : ranking.trend === 'down'
-                        ? `↓ ${Math.abs(ranking.trendDelta)}`
+                        ? `−${Math.abs(ranking.trendDelta)}`
                         : '—'}
                   </span>
                 </td>

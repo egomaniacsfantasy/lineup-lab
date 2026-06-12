@@ -13,8 +13,6 @@
   gap: 8px;
 }
 
-.league-futures__kicker,
-.league-futures__meta,
 .league-futures__market-option,
 .league-futures__odds,
 .league-futures__record,
@@ -22,8 +20,6 @@
   font-family: var(--font-mono);
 }
 
-.league-futures__kicker,
-.league-futures__meta,
 .league-futures__cutoff-label {
   margin: 0;
   color: var(--text-muted);
@@ -73,12 +69,7 @@
 }
 
 .league-futures__market-option--active {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--amber-bright) 70%, var(--amber)),
-    color-mix(in srgb, var(--amber) 88%, var(--bg-surface-soft))
-  );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 28%, transparent);
+  background: var(--amber);
   color: var(--bg-deep);
 }
 
@@ -107,16 +98,7 @@
 }
 
 .league-futures__row--user {
-  background: transparent;
-}
-
-.league-futures__row--user::before {
-  content: '';
-  position: absolute;
-  inset: 10px auto 10px 0;
-  width: 3px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  background: linear-gradient(180deg, var(--amber), var(--amber-bright));
+  background: var(--bg-surface-soft);
 }
 
 .league-futures__identity {
@@ -152,14 +134,13 @@
   align-items: center;
   min-height: 20px;
   padding-inline: 8px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--glass-border);
-  background: color-mix(in srgb, var(--bg-inset) 78%, transparent);
-  color: var(--text-muted);
+  border-radius: 4px;
+  background: var(--amber);
+  color: var(--bg-deep);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -188,14 +169,9 @@
 }
 
 .league-futures__odds--selected {
-  border-color: color-mix(in srgb, var(--amber) 72%, transparent);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--amber-bright) 70%, var(--amber)),
-    color-mix(in srgb, var(--amber) 88%, var(--bg-surface-soft))
-  );
+  border-color: var(--amber);
+  background: var(--amber);
   color: var(--bg-deep);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 28%, transparent);
 }
 
 .league-futures__cutoff {
@@ -238,4 +214,22 @@
   .league-futures__odds {
     align-self: flex-start;
   }
+}
+
+.league-futures__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.league-futures__meta {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
 }

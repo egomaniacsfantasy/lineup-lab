@@ -45,15 +45,6 @@
   background: color-mix(in srgb, var(--amber) 9%, var(--bg-surface-soft));
 }
 
-.player-row--state-swap::before {
-  content: '';
-  position: absolute;
-  inset: 12px auto 12px 0;
-  width: 3px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  background: linear-gradient(180deg, var(--amber), var(--amber-bright));
-}
-
 .player-row--state-swap:hover {
   border-color: color-mix(in srgb, var(--amber) 36%, var(--glass-border));
   background: color-mix(in srgb, var(--amber) 13%, var(--bg-surface-soft));

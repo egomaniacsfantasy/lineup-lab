@@ -20,12 +20,12 @@
 }
 
 .ranking-mechanic__kicker {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .ranking-mechanic__title {
@@ -48,11 +48,10 @@
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--amber) 10%, transparent);
   color: var(--text-amber);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .ranking-mechanic__meta {

@@ -73,8 +73,8 @@ export function LeagueFutures({
           {leagueName}
         </h2>
         <p className="league-futures__meta">
-          {totalTeams} teams · {formatScoring(scoringFormat)} ·{' '}
-          {mode === 'inseason' ? `Week ${currentWeek}` : 'Pre-season market'}
+          {totalTeams} teams, {formatScoring(scoringFormat)},{' '}
+          {mode === 'inseason' ? `Week ${currentWeek}` : 'pre-season market'}
         </p>
       </div>
 

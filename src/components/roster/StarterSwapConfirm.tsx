@@ -70,7 +70,7 @@ export function StarterSwapConfirm({
           onClick={onViewTargetDetails}
           type="button"
         >
-          View {targetPlayerName.split(/\s+/).at(-1) ?? targetPlayerName} →
+          View {targetPlayerName.split(/\s+/).at(-1) ?? targetPlayerName}
         </button>
       ) : null}
 

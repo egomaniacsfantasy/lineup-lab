@@ -116,9 +116,9 @@ export function MatchupCard({ matchup, activeRoster, activeLine }: MatchupCardPr
       <div className="matchup-card__content">
         <header className="matchup-card__header">
           <div>
-            <p className="matchup-card__eyebrow">Matchup Market</p>
+            <p className="matchup-card__eyebrow">Matchup market</p>
             <h2 className="matchup-card__title" id="matchup-market-title">
-              Week {matchup.week} · {SCORING_LABELS[matchup.scoringFormat]} · 2024 Replay
+              Week {matchup.week}, {SCORING_LABELS[matchup.scoringFormat]}, 2024 Replay
             </h2>
           </div>
 

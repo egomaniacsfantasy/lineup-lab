@@ -33,9 +33,9 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   return (
     <header className="app-header">
       <div className="app-header__inner">
-        <div className="app-header__brand" aria-label="Odds Gods The Lineup Lab">
+        <div className="app-header__brand" aria-label="Odds Gods Olympus">
           <span className="app-header__brand-kicker">ODDS GODS</span>
-          <span className="app-header__brand-title">Lineup Lab</span>
+          <span className="app-header__brand-title">OLYMPUS</span>
         </div>
 
         <nav className="app-header__nav" aria-label="Primary">

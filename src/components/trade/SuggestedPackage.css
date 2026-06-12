@@ -30,7 +30,6 @@
   background: color-mix(in srgb, var(--bg-inset) 84%, transparent);
 }
 
-.trade-suggested-package__kicker,
 .trade-suggested-package__column-label,
 .trade-suggested-package__player-meta,
 .trade-suggested-package__impact-values,
@@ -39,7 +38,6 @@
   font-family: var(--font-mono);
 }
 
-.trade-suggested-package__kicker,
 .trade-suggested-package__column-label,
 .trade-suggested-package__note {
   margin: 0;
@@ -166,4 +164,14 @@
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
   }
+}
+
+.trade-suggested-package__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }

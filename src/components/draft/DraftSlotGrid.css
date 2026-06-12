@@ -20,12 +20,12 @@
 
 .draft-slot-grid__kicker {
   margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .draft-slot-grid__title {
@@ -71,15 +71,11 @@
 }
 
 .draft-slot-grid__cell--premium {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--amber) 10%, transparent), transparent 70%),
-    color-mix(in srgb, var(--bg-inset) 84%, transparent);
+  background: color-mix(in srgb, var(--amber) 9%, var(--bg-inset));
 }
 
 .draft-slot-grid__cell--strong {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--amber) 6%, transparent), transparent 70%),
-    color-mix(in srgb, var(--bg-inset) 84%, transparent);
+  background: color-mix(in srgb, var(--amber) 5%, var(--bg-inset));
 }
 
 .draft-slot-grid__cell--balanced {
@@ -87,9 +83,7 @@
 }
 
 .draft-slot-grid__cell--thin {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--red) 4%, transparent), transparent 70%),
-    color-mix(in srgb, var(--bg-inset) 84%, transparent);
+  background: color-mix(in srgb, var(--red) 4%, var(--bg-inset));
 }
 
 .draft-slot-grid__position,
@@ -134,11 +128,10 @@
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--amber) 10%, transparent);
   color: var(--text-amber);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 @media (min-width: 640px) {

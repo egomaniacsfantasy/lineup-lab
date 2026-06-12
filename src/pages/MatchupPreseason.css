@@ -18,15 +18,14 @@
   padding: clamp(20px, 4vw, 28px);
 }
 
-.matchup-preseason__kicker,
 .matchup-preseason__preview-kicker {
   margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .matchup-preseason__title,
@@ -112,4 +111,14 @@
   .matchup-preseason {
     padding: var(--space-xl);
   }
+}
+
+.matchup-preseason__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }

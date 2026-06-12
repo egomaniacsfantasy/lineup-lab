@@ -16,7 +16,6 @@
   gap: 12px;
 }
 
-.season-headline__kicker,
 .season-headline__label {
   margin: 0;
   color: var(--text-muted);
@@ -108,7 +107,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--amber), var(--amber-bright));
+  background: var(--amber);
 }
 
 .season-headline__rank {
@@ -127,4 +126,14 @@
   .season-headline__grid {
     grid-template-columns: 1fr;
   }
+}
+
+.season-headline__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }

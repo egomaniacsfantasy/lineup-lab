@@ -236,7 +236,7 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
               onClick={handleComparedClick}
               type="button"
             >
-              Compared in this week&apos;s swap →
+              Compared in this week&apos;s swap
             </button>
           ) : null}
         </div>

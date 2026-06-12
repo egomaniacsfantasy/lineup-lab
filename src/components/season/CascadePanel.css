@@ -13,8 +13,6 @@
   gap: 8px;
 }
 
-.cascade-panel__kicker,
-.cascade-panel__summary-kicker,
 .cascade-panel__chart-label,
 .cascade-panel__summary-label,
 .cascade-panel__axis-label {
@@ -187,4 +185,24 @@
   .cascade-panel__summary-metrics {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+.cascade-panel__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.cascade-panel__summary-kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }

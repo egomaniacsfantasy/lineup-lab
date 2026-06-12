@@ -349,8 +349,7 @@
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   cursor: pointer;
   list-style: none;
 }
@@ -394,11 +393,7 @@
   inset: 0 auto 0 var(--comparison-range-start);
   width: var(--comparison-range-width);
   border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--amber) 24%, transparent),
-    color-mix(in srgb, var(--amber-hot) 48%, transparent)
-  );
+  background: color-mix(in srgb, var(--amber) 36%, transparent);
 }
 
 .comparison-card__range-tick {

@@ -3,7 +3,7 @@
   inset: auto 0 0;
   z-index: 21;
   border-top: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
+  background: var(--bg-surface);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   padding-bottom: env(safe-area-inset-bottom, var(--space-sm));
@@ -37,7 +37,7 @@
   width: 20px;
   height: 3px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, var(--amber), var(--amber-bright));
+  background: var(--amber);
   opacity: 0;
   transform: translateY(2px);
   transition: opacity var(--transition-fast), transform var(--transition-fast);

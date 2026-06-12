@@ -33,11 +33,11 @@ export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
     <div className="welcome-card" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
       <div className="welcome-card__scrim" onClick={onDismiss} />
       <section className="welcome-card__panel">
-        <p className="welcome-card__kicker">Welcome to Lineup Lab</p>
+        <p className="welcome-card__kicker">Welcome to Olympus</p>
         <h2 className="welcome-card__title" id="welcome-title">
           Your lineup, priced.
         </h2>
-        <p className="welcome-card__replay-note">2024 season replay · demo data</p>
+        <p className="welcome-card__replay-note">2024 season replay, demo data</p>
 
         <div className="welcome-card__sections">
           <div className="welcome-card__section">
@@ -66,7 +66,7 @@ export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
         </div>
 
         <button className="welcome-card__primary" onClick={onDismiss} type="button">
-          Got it — show me my matchup
+          Got it, show me my matchup
         </button>
         <button className="welcome-card__secondary" onClick={onDismiss} type="button">
           I&apos;ll explore on my own.

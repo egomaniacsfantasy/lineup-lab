@@ -88,7 +88,7 @@ export function DraftPage() {
             Rank 5 players to shape consensus values and enter the weekly Pro raffle.
           </h2>
           <Link className="draft-page__cta-link" to="/rankings">
-            Rank players →
+            Rank players
           </Link>
         </section>
       </div>

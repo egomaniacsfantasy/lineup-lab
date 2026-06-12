@@ -77,7 +77,7 @@ export function CascadePanel({
               {formatAmericanOdds(currentPoint.championshipOdds)}
             </p>
           </div>
-          <p className="cascade-panel__chart-note">Week {currentPoint.week} · you are here</p>
+          <p className="cascade-panel__chart-note">Week {currentPoint.week}, you are here</p>
         </div>
 
         <svg

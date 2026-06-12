@@ -4,7 +4,7 @@
   z-index: 21;
   height: var(--shell-header-height);
   border-bottom: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  background: var(--bg-surface);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
@@ -39,7 +39,8 @@
   color: var(--text-primary);
   font-family: var(--font-serif);
   font-size: 22px;
-  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   line-height: 0.92;
 }
 

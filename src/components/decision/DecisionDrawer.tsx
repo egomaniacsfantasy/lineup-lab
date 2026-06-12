@@ -159,7 +159,7 @@ export function DecisionDrawer({
 
         <div className="decision-drawer__header">
           <div>
-            <p className="decision-drawer__eyebrow">{slot.slotLabel} Decision</p>
+            <p className="decision-drawer__eyebrow">{slot.slotLabel} decision</p>
             <h2 className="decision-drawer__title" id={titleId}>
               {getDecisionTitle(slot)}
             </h2>

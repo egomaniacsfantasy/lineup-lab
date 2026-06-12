@@ -64,7 +64,7 @@ export function RankingMechanic() {
       <div className="ranking-mechanic__header">
         <p className="ranking-mechanic__kicker">Rank these players</p>
         <h2 className="ranking-mechanic__title" id="ranking-mechanic-title">
-          Rank these. Move the line.
+          Rank these five and the consensus line moves.
         </h2>
       </div>
 

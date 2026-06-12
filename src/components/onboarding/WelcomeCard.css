@@ -36,30 +36,28 @@
 }
 
 .welcome-card__kicker {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .welcome-card__title {
   color: var(--text-primary);
   font-family: var(--font-serif);
   font-size: clamp(44px, 7vw, 64px);
-  font-style: italic;
-  letter-spacing: -0.05em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   line-height: 0.9;
 }
 
 .welcome-card__replay-note {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  color: var(--text-soft);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .welcome-card__sections {
@@ -73,12 +71,12 @@
 }
 
 .welcome-card__label {
-  color: var(--text-amber);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .welcome-card__copy {
@@ -92,11 +90,10 @@
 .welcome-card__primary,
 .welcome-card__secondary {
   justify-self: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .welcome-card__primary {

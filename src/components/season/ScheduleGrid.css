@@ -11,12 +11,12 @@
 
 .schedule-grid__kicker {
   margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .schedule-grid__rows {
@@ -33,40 +33,17 @@
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
-  border-left: 3px solid transparent;
 }
 
 .schedule-grid__row + .schedule-grid__row {
   border-top: 1px solid var(--border-subtle);
 }
 
-.schedule-grid__row--projected {
-  border-left-color: color-mix(in srgb, var(--green) 28%, transparent);
-}
-
-.schedule-grid__row--favored {
-  border-left-color: color-mix(in srgb, var(--green) 28%, transparent);
-}
-
-.schedule-grid__row--underdog {
-  border-left-color: color-mix(in srgb, var(--red) 28%, transparent);
-}
-
 .schedule-grid__row--live {
-  border-left-color: color-mix(in srgb, var(--text-muted) 32%, transparent);
-  background: color-mix(in srgb, var(--bg-inset) 66%, transparent);
-}
-
-.schedule-grid__row--win {
-  border-left-color: var(--green);
-}
-
-.schedule-grid__row--loss {
-  border-left-color: var(--red);
+  background: var(--bg-surface-soft);
 }
 
 .schedule-grid__row--bye {
-  border-left-color: color-mix(in srgb, var(--text-muted) 28%, transparent);
   background: color-mix(in srgb, var(--bg-inset) 80%, transparent);
 }
 

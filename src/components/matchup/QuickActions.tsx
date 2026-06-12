@@ -131,7 +131,7 @@ export function QuickActions({
             onClick={onCompareBiggestSwing}
             type="button"
           >
-            OPEN →
+            Open
           </button>
         </article>
 
@@ -151,7 +151,7 @@ export function QuickActions({
           </div>
 
           <button className="quick-actions__button" type="button">
-            OPEN →
+            Open
           </button>
         </article>
 
@@ -182,7 +182,7 @@ export function QuickActions({
             onClick={() => navigate('/league')}
             type="button"
           >
-            OPEN →
+            Open
           </button>
         </article>
 

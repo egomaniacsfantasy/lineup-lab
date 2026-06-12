@@ -36,7 +36,7 @@ export function SeasonPage() {
 
   return (
     <div className="season-page">
-      <h1 className="visually-hidden">Season outlook</h1>
+      <h1 className="visually-hidden">Season futures</h1>
 
       {mode === 'preseason' ? (
         <>
@@ -47,7 +47,7 @@ export function SeasonPage() {
             recordLabel="Projected record"
             recordRange={MOCK_SEASON_OUTLOOK.recordRange}
             recordValue={`${MOCK_SEASON_OUTLOOK.projectedRecord.wins}-${MOCK_SEASON_OUTLOOK.projectedRecord.losses}`}
-            title="Your 2026 season outlook"
+            title="Your 2026 season futures"
           />
 
           <DraftWrappedCard

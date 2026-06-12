@@ -38,37 +38,31 @@ function drawShareImage() {
     return;
   }
 
-  ctx.fillStyle = '#070b12';
+  ctx.fillStyle = '#08090b';
   ctx.fillRect(0, 0, size, size);
 
-  const glow = ctx.createRadialGradient(880, 120, 0, 880, 120, 520);
-  glow.addColorStop(0, 'rgba(215, 154, 36, 0.18)');
-  glow.addColorStop(1, 'rgba(215, 154, 36, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, size, size);
-
-  ctx.strokeStyle = 'rgba(140, 156, 184, 0.22)';
+  ctx.strokeStyle = '#2a2f34';
   ctx.lineWidth = 2;
   ctx.roundRect(90, 110, 900, 760, 32);
   ctx.stroke();
-  ctx.fillStyle = '#111826';
+  ctx.fillStyle = '#15181b';
   ctx.fill();
 
-  ctx.fillStyle = '#8d99ae';
-  ctx.font = '700 28px IBM Plex Mono, monospace';
+  ctx.fillStyle = '#a9aea4';
+  ctx.font = '700 28px Saira, sans-serif';
   ctx.letterSpacing = '4px';
   ctx.fillText('WEEK 7 RECAP', 150, 190);
 
-  ctx.fillStyle = '#f4f7fb';
-  ctx.font = 'italic 84px Instrument Serif, serif';
+  ctx.fillStyle = '#f4f5f2';
+  ctx.font = '700 84px Saira Condensed, sans-serif';
   ctx.fillText('You closed at -180.', 150, 300);
   ctx.fillText('You won by 12.', 150, 385);
 
-  ctx.fillStyle = 'rgba(220, 227, 238, 0.78)';
-  ctx.font = '500 34px Manrope, sans-serif';
+  ctx.fillStyle = '#cdd1c9';
+  ctx.font = '500 34px Hanken Grotesk, sans-serif';
   ctx.fillText('The book called it. So did you.', 150, 455);
 
-  ctx.strokeStyle = '#d79a24';
+  ctx.strokeStyle = '#e8541d';
   ctx.lineWidth = 7;
   ctx.beginPath();
   ctx.moveTo(180, 585);
@@ -79,32 +73,32 @@ function drawShareImage() {
   WEEKLY_RECAP.movement.forEach((point, index) => {
     const x = 180 + index * 360;
     const y = index === 1 ? 540 : 585;
-    ctx.fillStyle = '#d79a24';
+    ctx.fillStyle = '#e8541d';
     ctx.beginPath();
     ctx.arc(x, y, 12, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#8d99ae';
-    ctx.font = '700 24px IBM Plex Mono, monospace';
+    ctx.fillStyle = '#a9aea4';
+    ctx.font = '700 24px Saira, sans-serif';
     ctx.fillText(point.label, x - 24, y + 56);
-    ctx.fillStyle = '#f4f7fb';
+    ctx.fillStyle = '#f4f5f2';
     ctx.fillText(String(point.value), x - 34, y - 28);
   });
 
-  ctx.fillStyle = '#8d99ae';
-  ctx.font = '700 22px IBM Plex Mono, monospace';
+  ctx.fillStyle = '#a9aea4';
+  ctx.font = '700 22px Saira, sans-serif';
   ctx.fillText('FINAL SCORE', 150, 725);
   ctx.fillText('BIGGEST CONTRIBUTOR', 405, 725);
   ctx.fillText('BEST DECISION', 710, 725);
 
-  ctx.fillStyle = '#f4f7fb';
-  ctx.font = '800 28px Manrope, sans-serif';
+  ctx.fillStyle = '#f4f5f2';
+  ctx.font = '800 28px Hanken Grotesk, sans-serif';
   ctx.fillText(WEEKLY_RECAP.finalScore, 150, 770);
   ctx.fillText('D. Henry', 405, 770);
   ctx.fillText('London > Smith', 710, 770);
 
-  ctx.fillStyle = '#8d99ae';
-  ctx.font = '700 24px IBM Plex Mono, monospace';
-  ctx.fillText('ODDS GODS / LINEUP LAB', 90, 965);
+  ctx.fillStyle = '#a9aea4';
+  ctx.font = '700 24px Saira, sans-serif';
+  ctx.fillText('ODDS GODS / OLYMPUS', 90, 965);
   ctx.fillText('lineuplab.oddsgods.net', 690, 965);
 
   canvas.toBlob((blob) => {

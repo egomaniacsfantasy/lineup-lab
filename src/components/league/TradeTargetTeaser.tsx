@@ -41,7 +41,7 @@ export function TradeTargetTeaser({ groups }: TradeTargetTeaserProps) {
         </div>
 
         <Link className="trade-target-teaser__link" to="/trade">
-          See all in trade →
+          See all in trade
         </Link>
       </div>
 

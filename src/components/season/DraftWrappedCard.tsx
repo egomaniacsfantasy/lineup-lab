@@ -37,7 +37,7 @@ export function DraftWrappedCard({
       <div className="draft-wrapped-card__detail-block">
         <span className="draft-wrapped-card__label">Boldest pick</span>
         <p className="draft-wrapped-card__body">
-          {draftWrapped.boldestPick.player.shortName} — picked{' '}
+          {draftWrapped.boldestPick.player.shortName}, picked{' '}
           {draftWrapped.boldestPick.pickNumber}
           th ({draftWrapped.boldestPick.adpDelta} above model)
         </p>

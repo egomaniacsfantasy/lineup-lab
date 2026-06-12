@@ -24,7 +24,7 @@ export interface LeagueWeekMatchup {
 export const MOCK_LEAGUE: LeagueConnection = {
   platform: 'sleeper',
   leagueId: 'mount-olympus-2024-replay',
-  leagueName: 'Mount Olympus League · 2024 Replay',
+  leagueName: 'Mount Olympus League (2024 Replay)',
   teamName: "Zeus's Bolts",
   teamId: 'zeus-01',
   scoringFormat: 'ppr',

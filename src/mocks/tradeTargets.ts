@@ -112,7 +112,7 @@ export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
         playoffProb: 96.2,
         player: tradePlayer('l-jackson', 'QB1', 'starter'),
         theirNeed: 'WR',
-        tradeLine: 'They need WR — Lamb gives them a weekly ceiling piece.',
+        tradeLine: 'They need WR. Lamb gives them a weekly ceiling piece.',
         fitScore: 94,
         suggestedPackage: {
           youSend: [
@@ -138,7 +138,7 @@ export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
         playoffProb: 76.8,
         player: tradePlayer('j-allen', 'QB2', 'starter'),
         theirNeed: 'RB',
-        tradeLine: 'They need RB — Barkley is the cleanest match.',
+        tradeLine: 'They need RB. Barkley is the cleanest match.',
         fitScore: 88,
         suggestedPackage: {
           youSend: [
@@ -175,7 +175,7 @@ export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
         playoffProb: 76.8,
         player: tradePlayer('j-jacobs', 'RB8', 'bench'),
         theirNeed: 'WR',
-        tradeLine: 'They need WR — Smith gives them a Week 8 spike option.',
+        tradeLine: 'They need WR. Smith gives them a Week 8 spike option.',
         fitScore: 86,
         suggestedPackage: {
           youSend: [
@@ -201,7 +201,7 @@ export const MOCK_TRADE_TARGET_GROUPS: TradeTargetGroup[] = [
         playoffProb: 68.1,
         player: tradePlayer('j-gibbs', 'RB2', 'starter'),
         theirNeed: 'TE',
-        tradeLine: 'They need TE — McBride is a real positional fit.',
+        tradeLine: 'They need TE. McBride is a real positional fit.',
         fitScore: 79,
         suggestedPackage: {
           youSend: [

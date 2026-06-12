@@ -41,12 +41,11 @@
 
 .matchup-page__thesis {
   margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 .matchup-page__toast {

@@ -15,7 +15,6 @@
   gap: 10px;
 }
 
-.player-availability__kicker,
 .player-availability__label {
   margin: 0;
   color: var(--text-muted);
@@ -63,9 +62,7 @@
   align-content: center;
   border: 1px solid color-mix(in srgb, var(--amber) 18%, var(--border-subtle));
   border-radius: var(--radius-md);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--amber) 6%, transparent), transparent 68%),
-    color-mix(in srgb, var(--bg-inset) 84%, transparent);
+  background: color-mix(in srgb, var(--bg-inset) 84%, transparent);
   padding: 18px;
 }
 
@@ -105,4 +102,14 @@
     grid-template-columns: minmax(0, 1fr) 132px;
     align-items: end;
   }
+}
+
+.player-availability__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }

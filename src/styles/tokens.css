@@ -1,38 +1,40 @@
 :root {
   /* ── Backgrounds ── */
-  --bg: #0b1018;
-  --bg-deep: #070b12;
-  --bg-surface: #111826;
-  --bg-surface-soft: #162032;
-  --bg-raised: rgba(26, 36, 55, 0.88);
-  --bg-inset: rgba(9, 13, 21, 0.92);
-  --bg-overlay: rgba(6, 10, 16, 0.78);
-  --bg-positive: rgba(18, 53, 38, 0.72);
-  --bg-negative: rgba(70, 23, 28, 0.64);
+  --bg: #0d0f11;
+  --bg-deep: #08090b;
+  --bg-surface: #15181b;
+  --bg-surface-soft: #1d2125;
+  --bg-raised: #1d2125;
+  --bg-inset: #0b0d0f;
+  --bg-overlay: rgba(7, 8, 10, 0.78);
+  --bg-positive: #11271b;
+  --bg-negative: #2e1512;
   /* Canvas texture: near-background solid tone so atmospheric text tints, not reads. */
-  --canvas-numeral: #070b12;
+  --canvas-numeral: #08090b;
 
   /* ── Text ── */
-  --text-primary: #f4f7fb;
-  --text-dim: rgba(220, 227, 238, 0.78);
-  --text-soft: rgba(177, 188, 205, 0.56);
-  --text-amber: #ffd36c;
-  --text-muted: #8d99ae;
+  --text-primary: #f4f5f2;
+  --text-dim: #cdd1c9;
+  --text-soft: #b9bdb4;
+  --text-amber: #ff8049;
+  --text-muted: #a9aea4;
 
   /* ── Accent Colors ── */
-  --amber: #d79a24;
-  --amber-mid: #e2ad47;
-  --amber-bright: #ffd36c;
-  --amber-hot: #fff0b8;
-  --green: #4ad89a;
-  --red: #ff6f7d;
+  --amber: #e8541d;
+  --amber-mid: #f0662e;
+  --amber-bright: #ff8049;
+  --amber-hot: #ffa37d;
+  --green: #34d27b;
+  --red: #ff5c4d;
   --cyan: #6dc8ff;
   --blue: #7da2ff;
+  --gold: #c9a227;
 
   /* ── Typography ── */
-  --font-serif: "Instrument Serif", serif;
-  --font-sans: "Manrope", sans-serif;
-  --font-mono: "IBM Plex Mono", monospace;
+  --font-serif: "Saira Condensed", "Hanken Grotesk", sans-serif;
+  --font-condensed: "Saira Condensed", "Hanken Grotesk", sans-serif;
+  --font-sans: "Hanken Grotesk", sans-serif;
+  --font-mono: "Saira", "Hanken Grotesk", sans-serif;
 
   /* ── Position Colors ── */
   --pos-qb: #5b9bd5;
@@ -84,20 +86,19 @@
   /* ── Shadows ── */
   --shadow-card: 0 12px 36px rgba(0, 0, 0, 0.34);
   --shadow-elevated: 0 22px 60px rgba(0, 0, 0, 0.44);
-  --shadow-glow-amber: 0 0 0 1px rgba(215, 154, 36, 0.1),
-    0 20px 48px rgba(215, 154, 36, 0.08);
+  --shadow-glow-amber: 0 0 0 1px var(--border-subtle);
 
   /* ── Glass Effect ── */
-  --glass-bg: rgba(17, 24, 38, 0.84);
-  --glass-border: rgba(140, 156, 184, 0.18);
-  --glass-blur: 14px;
+  --glass-bg: #15181b;
+  --glass-border: #2a2f34;
+  --glass-blur: 0px;
 
   /* ── Borders ── */
-  --border-subtle: rgba(255, 255, 255, 0.05);
-  --border-strong: rgba(215, 154, 36, 0.32);
+  --border-subtle: #2a2f34;
+  --border-strong: rgba(232, 84, 29, 0.38);
 
   /* ── Focus ── */
-  --focus-ring: rgba(255, 211, 108, 0.42);
+  --focus-ring: rgba(232, 84, 29, 0.45);
 
   /* ── Layers ── */
   --z-dropdown: 50;

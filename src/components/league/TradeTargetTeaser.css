@@ -18,17 +18,13 @@
   align-items: start;
 }
 
-.trade-target-teaser__kicker,
 .trade-target-teaser__meta,
 .trade-target-teaser__stat,
-.trade-target-teaser__fit,
-.trade-target-teaser__link {
+.trade-target-teaser__fit {
   font-family: var(--font-mono);
 }
 
-.trade-target-teaser__kicker,
-.trade-target-teaser__meta,
-.trade-target-teaser__link {
+.trade-target-teaser__meta {
   margin: 0;
   color: var(--text-muted);
   font-size: 11px;
@@ -171,4 +167,20 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     overflow: visible;
   }
+}
+
+.trade-target-teaser__kicker {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.trade-target-teaser__link {
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+  text-transform: none;
 }

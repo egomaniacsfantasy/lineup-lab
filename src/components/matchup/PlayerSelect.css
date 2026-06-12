@@ -6,15 +6,13 @@
 
 .player-select__label,
 .player-select__group-label,
-.player-select__option-meta,
-.player-select__clear {
+.player-select__option-meta {
   font-family: var(--font-mono);
 }
 
 .player-select__label,
 .player-select__group-label,
 .player-select__option-meta,
-.player-select__clear,
 .player-select__empty {
   color: var(--text-muted);
   font-size: 10px;
@@ -246,4 +244,10 @@
   text-transform: none;
   letter-spacing: 0;
   font-family: var(--font-sans);
+}
+
+.player-select__clear {
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+  text-transform: none;
 }

@@ -336,7 +336,7 @@ export function MatchupPage() {
 
   return (
     <div className="matchup-page">
-      <h1 className="visually-hidden">The Lineup Lab matchup dashboard</h1>
+      <h1 className="visually-hidden">The Olympus matchup dashboard</h1>
 
       <div className="matchup-page__main">
         <LineChangeFlash
@@ -346,7 +346,7 @@ export function MatchupPage() {
 
         <div className="matchup-page__market-stack">
           <p className="matchup-page__thesis">
-            THE LINE MOVES WITH YOUR LINEUP. PRICE EVERY DECISION.
+            Every lineup decision moves your line.
           </p>
           <MatchupCard
             activeLine={engine.activeLine}
