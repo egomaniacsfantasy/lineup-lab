@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { MOCK_SCHEDULE_PREVIEW } from '../mocks';
+import { useSeasonMode } from '../hooks/useSeasonMode';
 import { formatAmericanOdds } from '../utils/formatOdds';
 import './MatchupPreseason.css';
 
@@ -18,6 +19,8 @@ function formatImpliedProbability(odds: number) {
 // SCOPE: POST-MVP — PRE mode as a parallel app state is web-only eventually;
 // the mobile MVP ships LIVE-mode flows.
 export function MatchupPreseason() {
+  const { anchors } = useSeasonMode();
+
   return (
     <div className="matchup-preseason">
       <h1 className="visually-hidden">Pre-season matchup preview</h1>
@@ -25,7 +28,7 @@ export function MatchupPreseason() {
       <section className="matchup-preseason__hero">
         <p className="matchup-preseason__kicker">Your matchup line</p>
         <h2 className="matchup-preseason__title">
-          The gods return September 7.
+          The gods return {anchors.kickoffShort}.
         </h2>
         <p className="matchup-preseason__body">
           Until then: preview the season, replay the draft, build your trade leverage.
@@ -54,7 +57,7 @@ export function MatchupPreseason() {
           {formatImpliedProbability(OPENING_PREVIEW.yourLine)}%)
         </p>
         <p className="matchup-preseason__preview-meta">
-          Opens live Sunday, September 7, 2026
+          Opens live {anchors.kickoffLabel}
         </p>
       </section>
     </div>

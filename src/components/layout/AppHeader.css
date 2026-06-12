@@ -242,16 +242,7 @@
     font-size: 9px;
   }
 
-  .app-header__actions .season-toggle {
-    padding: 3px;
-  }
 
-  .app-header__actions .season-toggle__button {
-    min-height: 24px;
-    padding-inline: 7px;
-    font-size: 9px;
-    letter-spacing: 0.08em;
-  }
 }
 
 /* Real-league indicator; hover/long-press shows last-updated time. */

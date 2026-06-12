@@ -188,7 +188,7 @@ export const sleeperProvider = {
       ownerId: u.user_id,
       ownerName: u.display_name,
       teamName: u.metadata?.team_name || `${u.display_name}'s Team`,
-      avatarUrl: u.avatar ? `https://sleepercdn.com/avatars/thumbs/${u.avatar}` : null,
+      avatarUrl: u.avatar ? `/api/img/avatar/${u.avatar}` : null,
     }));
   },
 
@@ -222,6 +222,34 @@ export const sleeperProvider = {
       if (catalog[id]) subset[id] = catalog[id];
     }
     return subset;
+  },
+
+  async getDrafts(leagueId) {
+    const raw = await cached(`sleeper:drafts:${leagueId}`, DAY, () =>
+      sleeperGet(`/league/${leagueId}/drafts`, 'league/drafts'),
+    );
+    return (raw ?? []).map((d) => ({
+      draftId: d.draft_id,
+      status: d.status, // pre_draft | drafting | complete
+      type: d.type,
+      rounds: d.settings?.rounds ?? null,
+      startTime: d.start_time ?? null,
+    }));
+  },
+
+  async getDraftPicks(draftId) {
+    const raw = await cached(`sleeper:draftpicks:${draftId}`, DAY, () =>
+      sleeperGet(`/draft/${draftId}/picks`, 'draft/picks'),
+    );
+    return (raw ?? []).map((p) => ({
+      pickNo: p.pick_no,
+      round: p.round,
+      draftSlot: p.draft_slot,
+      rosterId: p.roster_id,
+      pickedBy: p.picked_by,
+      playerId: p.player_id,
+      isKeeper: Boolean(p.is_keeper),
+    }));
   },
 
   async getSeasonState() {

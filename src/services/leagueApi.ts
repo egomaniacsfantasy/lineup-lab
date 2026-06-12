@@ -114,6 +114,9 @@ export interface PricedFuture {
   rosterId: number;
   teamName: string;
   record: { wins: number; losses: number; ties: number };
+  projWins?: number;
+  projLosses?: number;
+  projRecord?: string;
   playoffProb: number;
   playoffOdds: number;
   titleProb: number;
@@ -134,6 +137,29 @@ export interface LeaguePricing {
   userSwaps?: UserSwap[];
   playerMeans?: Record<string, { mean: number; stdev: number; unpriced: boolean; zeroed: boolean; derived: boolean }>;
   futures?: PricedFuture[];
+  draftWrapped?: DraftWrappedReal | null;
+  movers?: MarketMover[];
+}
+
+export interface DraftWrappedReal {
+  teamName: string;
+  leagueName: string;
+  grade: string;
+  ratio: number;
+  boldestPick: { playerId: string; name: string; pickNo: number; reach: number } | null;
+  unpricedPicks: number;
+  totalPicks: number;
+  toughestWeek: { week: number; opponent: string; odds: number; winProb: number } | null;
+  easiestWeek: { week: number; opponent: string; odds: number; winProb: number } | null;
+}
+
+export interface MarketMover {
+  kind: 'waiver' | 'trade';
+  headline: string;
+  detail: string;
+  playerId?: string;
+  titleOddsBefore: number;
+  titleOddsAfter: number;
 }
 
 export interface LineHistoryEntry {

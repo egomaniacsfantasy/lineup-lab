@@ -8,6 +8,8 @@ import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import { getLeaguePricing } from '../engine/engine.js';
 import { readHistory, recordPricing } from '../engine/lineStore.js';
+import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
+import { getActiveProjections } from '../projections/store.js';
 
 const DAY = 24 * 60 * 60_000;
 
@@ -35,10 +37,43 @@ apiRouter.get('/metrics', (_req, res) => {
 
 apiRouter.get('/state', async (req, res, next) => {
   try {
-    res.json(await getProvider(req).getSeasonState());
+    const state = await getProvider(req).getSeasonState();
+    res.json({
+      ...state,
+      anchors: SEASON_ANCHORS,
+      seasonState: computeSeasonState(state),
+      serverTime: Date.now(),
+    });
   } catch (error) {
     next(error);
   }
+});
+
+/** Active projection model served as a ranking board ("Olympus model"). */
+apiRouter.get('/rankings', (req, res) => {
+  const active = getActiveProjections();
+
+  if (!active) {
+    res.json({ available: false, rankings: [] });
+    return;
+  }
+
+  const limit = Math.min(Number(req.query.limit ?? 100), 300);
+  const rankings = [...active.projections]
+    .sort((a, b) => b.mean - a.mean)
+    .slice(0, limit)
+    .map((p, index) => ({
+      rank: index + 1,
+      playerId: p.playerId,
+      name: p.name,
+      position: p.position,
+      team: p.team,
+      mean: p.mean,
+      tier: p.tier,
+      derived: p.derived,
+    }));
+
+  res.json({ available: true, source: 'Olympus model', version: active.version, rankings });
 });
 
 /**
@@ -121,7 +156,29 @@ async function loadLeagueContext(provider, leagueId, userId) {
   const rosteredIds = [...new Set(teams.flatMap((t) => t.players))];
   const players = await provider.getPlayerCatalog(rosteredIds);
 
-  return { league, teams, week, matchups, players, state };
+  // real draft (when complete): picks feed the computed Draft Wrapped
+  let draftPicks = null;
+  try {
+    const drafts = await provider.getDrafts(leagueId);
+    const done = drafts.find((d) => d.status === 'complete');
+    if (done) {
+      draftPicks = await provider.getDraftPicks(done.draftId);
+    }
+  } catch {
+    draftPicks = null;
+  }
+
+  return {
+    league,
+    teams,
+    week,
+    matchups,
+    players,
+    state,
+    draftPicks,
+    seasonState: computeSeasonState(state, league),
+    anchors: SEASON_ANCHORS,
+  };
 }
 
 /** Everything one league needs to render: league, teams, week matchups, players. */

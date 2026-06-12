@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
 import { adminRouter } from './routes/admin.js';
+import { assetsRouter } from './routes/assets.js';
 import { callLog, callsInLastMinute } from './cache.js';
 import { isGameWindow } from './gameWindows.js';
 
@@ -18,6 +19,7 @@ const app = express();
 app.use(express.json());
 
 app.use('/api/admin', adminRouter);
+app.use('/api/img', assetsRouter);
 app.use('/api', apiRouter);
 
 app.use('/api', (error, _req, res, _next) => {

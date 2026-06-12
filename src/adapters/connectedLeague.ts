@@ -73,9 +73,9 @@ function toPlayer(id: string, catalog: Record<string, ApiCatalogPlayer>): Player
     team,
     headshotUrl:
       entry?.position === 'DEF'
-        ? `https://sleepercdn.com/images/team_logos/nfl/${id.toLowerCase()}.png`
-        : `https://sleepercdn.com/content/nfl/players/${id}.jpg`,
-    teamLogoUrl: `https://sleepercdn.com/images/team_logos/nfl/${team.toLowerCase()}.png`,
+        ? `/api/img/logo/${id.toLowerCase()}`
+        : `/api/img/headshot/${id}`,
+    teamLogoUrl: `/api/img/logo/${team.toLowerCase()}`,
     bye: 0,
     isActive: entry?.status !== 'Inactive',
     injuryStatus: entry?.injuryStatus ?? undefined,

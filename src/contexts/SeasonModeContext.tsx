@@ -1,60 +1,143 @@
 /* eslint-disable react-refresh/only-export-components */
+/**
+ * Season state is COMPUTED from the server (/api/state ← Sleeper
+ * /state/nfl), never chosen by the user. The old PRE/LIVE demo toggle is
+ * retired — reality has no mode switch.
+ *
+ * Dev override (testing other states): append ?season-state=IN_SEASON
+ * (or OFFSEASON / LEAGUE_PLAYOFFS / COMPLETE) to any URL; it persists in
+ * sessionStorage until ?season-state=clear.
+ */
 import {
   createContext,
-  useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
 
+export type SeasonState =
+  | 'OFFSEASON'
+  | 'IN_SEASON'
+  | 'LEAGUE_PLAYOFFS'
+  | 'COMPLETE';
+
 export type SeasonMode = 'preseason' | 'inseason';
 
+export interface SeasonAnchors {
+  season: string;
+  kickoffIso: string;
+  kickoffLabel: string;
+  kickoffShort: string;
+  kickoffWeekday: string;
+  firstSundayIso: string;
+  firstSundayLabel: string;
+}
+
+/** Client fallback only until /api/state answers — same values as the
+ *  server's single source (server/config/season.js). */
+const FALLBACK_ANCHORS: SeasonAnchors = {
+  season: '2026',
+  kickoffIso: '2026-09-09T20:20:00-04:00',
+  kickoffLabel: 'Wednesday, September 9, 2026',
+  kickoffShort: 'September 9',
+  kickoffWeekday: 'Wednesday',
+  firstSundayIso: '2026-09-13',
+  firstSundayLabel: 'Sunday, September 13, 2026',
+};
+
 interface SeasonModeContextValue {
+  /** Legacy two-state view kept for existing consumers. */
   mode: SeasonMode;
-  toggleMode: () => void;
+  seasonState: SeasonState;
+  anchors: SeasonAnchors;
+  season: string;
+  nflWeek: number;
+  isDevOverride: boolean;
 }
 
 const SeasonModeContext = createContext<SeasonModeContextValue | null>(null);
 
-const MODE_STORAGE_KEY = 'og.olympus.season-mode';
+const DEV_KEY = 'og.olympus.dev-season-state';
+const VALID_STATES: SeasonState[] = [
+  'OFFSEASON',
+  'IN_SEASON',
+  'LEAGUE_PLAYOFFS',
+  'COMPLETE',
+];
 
-function readStoredMode(): SeasonMode {
+function readDevOverride(): SeasonState | null {
   try {
-    return window.localStorage.getItem(MODE_STORAGE_KEY) === 'inseason'
-      ? 'inseason'
-      : 'preseason';
-  } catch {
-    return 'preseason';
-  }
-}
+    const fromQuery = new URLSearchParams(window.location.search).get('season-state');
 
-function storeMode(mode: SeasonMode) {
-  try {
-    window.localStorage.setItem(MODE_STORAGE_KEY, mode);
+    if (fromQuery === 'clear') {
+      window.sessionStorage.removeItem(DEV_KEY);
+      return null;
+    }
+
+    if (fromQuery && VALID_STATES.includes(fromQuery.toUpperCase() as SeasonState)) {
+      const value = fromQuery.toUpperCase() as SeasonState;
+      window.sessionStorage.setItem(DEV_KEY, value);
+      return value;
+    }
+
+    const stored = window.sessionStorage.getItem(DEV_KEY);
+    return stored && VALID_STATES.includes(stored as SeasonState)
+      ? (stored as SeasonState)
+      : null;
   } catch {
-    // Persistence unavailable (private mode); the toggle still works in-session.
+    return null;
   }
 }
 
 export function SeasonModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<SeasonMode>(readStoredMode);
+  const [serverState, setServerState] = useState<{
+    seasonState: SeasonState;
+    anchors: SeasonAnchors;
+    season: string;
+    week: number;
+  } | null>(null);
+  const [devOverride] = useState<SeasonState | null>(readDevOverride);
 
-  const toggleMode = useCallback(() => {
-    setMode((current) => {
-      const next = current === 'preseason' ? 'inseason' : 'preseason';
-      storeMode(next);
-      return next;
-    });
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch('/api/state')
+      .then((response) => response.json())
+      .then((state) => {
+        if (cancelled) return;
+        setServerState({
+          seasonState: state.seasonState ?? 'OFFSEASON',
+          anchors: state.anchors ?? FALLBACK_ANCHORS,
+          season: state.season ?? FALLBACK_ANCHORS.season,
+          week: state.displayWeek || state.week || 0,
+        });
+      })
+      .catch(() => {
+        // keep fallbacks; the next mount retries
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const value = useMemo(
-    () => ({
-      mode,
-      toggleMode,
-    }),
-    [mode, toggleMode],
-  );
+  const value = useMemo<SeasonModeContextValue>(() => {
+    const seasonState = devOverride ?? serverState?.seasonState ?? 'OFFSEASON';
+
+    return {
+      seasonState,
+      mode:
+        seasonState === 'IN_SEASON' || seasonState === 'LEAGUE_PLAYOFFS'
+          ? 'inseason'
+          : 'preseason',
+      anchors: serverState?.anchors ?? FALLBACK_ANCHORS,
+      season: serverState?.season ?? FALLBACK_ANCHORS.season,
+      nflWeek: devOverride === 'IN_SEASON' ? Math.max(1, serverState?.week ?? 1) : (serverState?.week ?? 0),
+      isDevOverride: devOverride !== null,
+    };
+  }, [serverState, devOverride]);
 
   return (
     <SeasonModeContext.Provider value={value}>

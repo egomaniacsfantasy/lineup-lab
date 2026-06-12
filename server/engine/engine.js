@@ -250,6 +250,31 @@ export function priceLeague(ctx) {
   // ── season futures: simulate the remaining schedule ──
   const futures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week });
 
+  // ── real Draft Wrapped (computed, not fiction) ──
+  const draftWrapped = computeDraftWrapped({
+    league,
+    teams,
+    draftPicks: ctx.draftPicks ?? null,
+    projectionMap,
+    distByRoster,
+    scheduleWeeks,
+    week,
+    catalog,
+  });
+
+  // ── off-season market movers: real FA claim + trade lane, priced ──
+  const movers = computeMovers({
+    league,
+    teams,
+    matchups,
+    projections: active.projections,
+    projectionMap,
+    distByRoster,
+    scheduleWeeks,
+    week,
+    catalog,
+  });
+
   // ── scoring honesty ──
   const basis = active.meta?.scoringBasis ?? 'ppr';
   let scoringNote = null;
@@ -270,7 +295,226 @@ export function priceLeague(ctx) {
     userSwaps,
     playerMeans,
     futures,
+    draftWrapped,
+    movers,
   };
+}
+
+const GRADE_SCALE = [
+  [1.15, 'A+'], [1.08, 'A'], [1.04, 'A-'], [1.0, 'B+'],
+  [0.96, 'B'], [0.92, 'B-'], [0.88, 'C+'], [0, 'C'],
+];
+
+/**
+ * Draft Wrapped, computed from the league's real draft:
+ * - boldest pick = the user's biggest reach vs the model's overall rank
+ * - roster grade = user's projected starter points vs the league median
+ */
+function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByRoster, scheduleWeeks, week, catalog }) {
+  if (!draftPicks || draftPicks.length === 0) return null;
+
+  const userTeam = teams.find((t) => t.isUser);
+  if (!userTeam) return null;
+
+  // model overall rank: every projected player sorted by mean
+  const ranked = [...projectionMap.values()].sort((a, b) => b.mean - a.mean);
+  const modelRank = new Map(ranked.map((p, i) => [p.playerId, i + 1]));
+
+  const userPicks = draftPicks.filter((p) => p.rosterId === userTeam.rosterId);
+  let boldest = null;
+  let unpricedPicks = 0;
+
+  for (const pick of userPicks) {
+    const rank = modelRank.get(pick.playerId);
+    if (rank === undefined) {
+      unpricedPicks += 1;
+      continue;
+    }
+    const reach = rank - pick.pickNo; // positive = drafted above the model
+    if (!boldest || reach > boldest.reach) {
+      boldest = {
+        playerId: pick.playerId,
+        name: catalog[pick.playerId]?.name ?? `Player ${pick.playerId}`,
+        pickNo: pick.pickNo,
+        reach,
+      };
+    }
+  }
+
+  // roster grade: projected starter points vs league median
+  const totals = teams
+    .map((t) => distByRoster.get(t.rosterId)?.mean ?? 0)
+    .sort((a, b) => a - b);
+  const median = totals.length
+    ? (totals[Math.floor((totals.length - 1) / 2)] + totals[Math.ceil((totals.length - 1) / 2)]) / 2
+    : 1;
+  const userMean = distByRoster.get(userTeam.rosterId)?.mean ?? 0;
+  const ratio = median > 0 ? userMean / median : 1;
+  const grade = GRADE_SCALE.find(([min]) => ratio >= min)?.[1] ?? 'C';
+
+  // toughest / easiest scheduled week by opponent strength
+  let toughest = null;
+  let easiest = null;
+  const teamsByRoster = new Map(teams.map((t) => [t.rosterId, t]));
+  for (const entry of scheduleWeeks ?? []) {
+    const mine = entry.matchups.find((m) => m.rosterId === userTeam.rosterId && m.matchupId != null);
+    if (!mine) continue;
+    const theirs = entry.matchups.find(
+      (m) => m.matchupId === mine.matchupId && m.rosterId !== mine.rosterId,
+    );
+    if (!theirs) continue;
+    const opp = distByRoster.get(theirs.rosterId);
+    const me = distByRoster.get(userTeam.rosterId);
+    if (!opp || !me) continue;
+    const winProb = normalCdf((me.mean - opp.mean) / Math.sqrt((me.sigma ** 2 + opp.sigma ** 2) || 1));
+    const row = {
+      week: entry.week,
+      opponent: teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`,
+      odds: probToAmerican(winProb),
+      winProb: Number((winProb * 100).toFixed(1)),
+    };
+    if (!toughest || row.winProb < toughest.winProb) toughest = row;
+    if (!easiest || row.winProb > easiest.winProb) easiest = row;
+  }
+
+  return {
+    teamName: userTeam.teamName,
+    leagueName: league.name,
+    grade,
+    ratio: Number(ratio.toFixed(3)),
+    boldestPick: boldest,
+    unpricedPicks,
+    totalPicks: userPicks.length,
+    toughestWeek: toughest,
+    easiestWeek: easiest,
+  };
+}
+
+/** Re-run the futures sim with the user's team mean shifted by delta. */
+function titleOddsWithUserDelta({ league, teams, distByRoster, scheduleWeeks, week }, userRosterId, deltaMean) {
+  const shifted = new Map(distByRoster);
+  const base = distByRoster.get(userRosterId);
+  if (base) {
+    shifted.set(userRosterId, { ...base, mean: Math.max(1, base.mean + deltaMean) });
+  }
+  const futures = simulateFutures({ league, teams, distByRoster: shifted, scheduleWeeks, week });
+  return futures.find((f) => f.rosterId === userRosterId) ?? null;
+}
+
+/**
+ * Off-season market movers, priced in title-odds movement:
+ *  1. best free-agent claim that upgrades a user starter slot
+ *  2. best mutually-positive 1-for-1 trade lane against a real roster
+ */
+function computeMovers(ctx) {
+  const { league, teams, matchups, projections, projectionMap, distByRoster, scheduleWeeks, week, catalog } = ctx;
+  const userTeam = teams.find((t) => t.isUser);
+  if (!userTeam) return [];
+
+  const baseFutures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week });
+  const baseUser = baseFutures.find((f) => f.rosterId === userTeam.rosterId);
+  if (!baseUser) return [];
+
+  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+  const userMatchup = matchups.find((m) => m.rosterId === userTeam.rosterId);
+  const starters = userMatchup?.starters?.length ? userMatchup.starters : userTeam.starters;
+  const rostered = new Set(teams.flatMap((t) => t.players));
+
+  const movers = [];
+
+  // 1) waiver / free-agent claim
+  const starterMeans = starters.map((id, i) => ({
+    id,
+    slot: slotLabels[i] ?? 'FLEX',
+    mean: projectionMap.get(id)?.mean ?? 0,
+  }));
+  let bestClaim = null;
+  for (const candidate of projections) {
+    if (rostered.has(candidate.playerId)) continue;
+    if (!['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(candidate.position)) continue;
+    for (const starter of starterMeans) {
+      const allowed = FLEX_ELIGIBILITY[starter.slot] ?? [starter.slot];
+      if (!allowed.includes(candidate.position)) continue;
+      const delta = candidate.mean - starter.mean;
+      if (delta <= 0.5) continue;
+      if (!bestClaim || delta > bestClaim.delta) {
+        bestClaim = { candidate, starter, delta };
+      }
+    }
+  }
+  if (bestClaim) {
+    const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, bestClaim.delta);
+    movers.push({
+      kind: 'waiver',
+      headline: `Claim ${bestClaim.candidate.name} off waivers`,
+      detail: `Slots ${bestClaim.candidate.position}, +${bestClaim.delta.toFixed(1)} proj over ${catalog[bestClaim.starter.id]?.name ?? 'current starter'}`,
+      playerId: bestClaim.candidate.playerId,
+      titleOddsBefore: baseUser.championOdds,
+      titleOddsAfter: after?.championOdds ?? baseUser.championOdds,
+    });
+  }
+
+  // 2) mutual-need 1-for-1 trade lane
+  const benchOf = (team) => {
+    const teamStarters = new Set(
+      (matchups.find((m) => m.rosterId === team.rosterId)?.starters?.length
+        ? matchups.find((m) => m.rosterId === team.rosterId).starters
+        : team.starters),
+    );
+    return team.players.filter((id) => !teamStarters.has(id) && projectionMap.has(id));
+  };
+  const startersOf = (team) => {
+    const ids = matchups.find((m) => m.rosterId === team.rosterId)?.starters?.length
+      ? matchups.find((m) => m.rosterId === team.rosterId).starters
+      : team.starters;
+    return ids.map((id, i) => ({ id, slot: slotLabels[i] ?? 'FLEX', mean: projectionMap.get(id)?.mean ?? 0 }));
+  };
+
+  const userBench = benchOf(userTeam);
+  const userStarters = startersOf(userTeam);
+  let bestTrade = null;
+
+  for (const opp of teams) {
+    if (opp.rosterId === userTeam.rosterId) continue;
+    const oppBench = benchOf(opp);
+    const oppStarters = startersOf(opp);
+
+    for (const giveId of userBench) {
+      const give = projectionMap.get(giveId);
+      const oppWeakest = oppStarters
+        .filter((st) => (FLEX_ELIGIBILITY[st.slot] ?? [st.slot]).includes(give.position))
+        .sort((a, b) => a.mean - b.mean)[0];
+      const oppGain = oppWeakest ? give.mean - oppWeakest.mean : -1;
+      if (oppGain <= 0.5) continue;
+
+      for (const getId of oppBench) {
+        const get = projectionMap.get(getId);
+        const userWeakest = userStarters
+          .filter((st) => (FLEX_ELIGIBILITY[st.slot] ?? [st.slot]).includes(get.position))
+          .sort((a, b) => a.mean - b.mean)[0];
+        const userGain = userWeakest ? get.mean - userWeakest.mean : -1;
+        if (userGain <= 0.5) continue;
+
+        const score = userGain + oppGain;
+        if (!bestTrade || score > bestTrade.score) {
+          bestTrade = { opp, give, get, userGain, oppGain, score };
+        }
+      }
+    }
+  }
+
+  if (bestTrade) {
+    const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, bestTrade.userGain);
+    movers.push({
+      kind: 'trade',
+      headline: `Trade lane: ${bestTrade.opp.teamName} want ${bestTrade.give.position}`,
+      detail: `${bestTrade.give.name} for ${bestTrade.get.name} prices at`,
+      titleOddsBefore: baseUser.championOdds,
+      titleOddsAfter: after?.championOdds ?? baseUser.championOdds,
+    });
+  }
+
+  return movers;
 }
 
 function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week }) {
@@ -287,6 +531,7 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week }) {
 
   const playoffCounts = new Map(rosterIds.map((id) => [id, 0]));
   const titleCounts = new Map(rosterIds.map((id) => [id, 0]));
+  const winSums = new Map(rosterIds.map((id) => [id, 0]));
 
   for (let sim = 0; sim < FUTURES_SIMS; sim += 1) {
     const wins = new Map(teams.map((t) => [t.rosterId, t.record.wins]));
@@ -316,6 +561,8 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week }) {
       });
     }
 
+    rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + (wins.get(id) ?? 0)));
+
     const standings = [...rosterIds].sort(
       (x, y) => (wins.get(y) - wins.get(x)) || (pf.get(y) - pf.get(x)),
     );
@@ -334,12 +581,19 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week }) {
     }
   }
 
+  const totalGames = (league.regularSeasonWeeks ?? 14);
+
   return teams.map((t) => {
     const playoffProb = playoffCounts.get(t.rosterId) / FUTURES_SIMS;
     const titleProb = Math.max(0.005, titleCounts.get(t.rosterId) / FUTURES_SIMS);
+    const projWins = Math.round(winSums.get(t.rosterId) / FUTURES_SIMS);
+    const projLosses = Math.max(0, totalGames - projWins);
 
     return {
       rosterId: t.rosterId,
+      projWins,
+      projLosses,
+      projRecord: `${projWins}-${projLosses}`,
       teamName: t.teamName,
       record: t.record,
       playoffProb: Number((playoffProb * 100).toFixed(1)),

@@ -4,7 +4,6 @@ import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { MOCK_MATCHUP } from '../../mocks';
 import type { ScoringFormat } from '../../types';
 import { Gloss } from '../ui/Gloss';
-import { SeasonToggle } from './SeasonToggle';
 import './AppHeader.css';
 
 const SCORING_LABELS: Record<ScoringFormat, string> = {
@@ -17,18 +16,25 @@ interface AppHeaderProps {
   onOpenWelcome: () => void;
 }
 
+const STATE_LABELS: Record<string, (season: string, week: number) => string> = {
+  OFFSEASON: (season) => `Pre-season ${season}`,
+  IN_SEASON: (_season, week) => `Week ${week}`,
+  LEAGUE_PLAYOFFS: (_season, week) => `Playoffs · Week ${week}`,
+  COMPLETE: (season) => `${season} final`,
+};
+
 export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
-  const { mode } = useSeasonMode();
+  const { mode, seasonState, season, nflWeek } = useSeasonMode();
   const { bootstrap } = useLeagueConnection();
   const isSynced = bootstrap !== null;
   const scoringLabel = isSynced
     ? SCORING_LABELS[bootstrap.league.scoringFamily]
     : SCORING_LABELS[MOCK_MATCHUP.scoringFormat];
-  const displayedWeek = isSynced
-    ? bootstrap.week
-    : mode === 'preseason'
-      ? 1
-      : MOCK_MATCHUP.week;
+  const displayedWeek = isSynced ? Math.max(bootstrap.week, nflWeek) : Math.max(1, nflWeek);
+  const stateLabel = (STATE_LABELS[seasonState] ?? STATE_LABELS.OFFSEASON)(
+    season,
+    displayedWeek,
+  );
   const navItems = [
     { label: 'Matchup', path: '/matchup' },
     { label: 'Season', path: '/season' },
@@ -72,7 +78,6 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
           >
             How this works
           </button>
-          <SeasonToggle />
           <span
             className={[
               'app-header__status',
@@ -84,7 +89,7 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
             {mode === 'inseason' ? (
               <span className="app-header__status-dot" aria-hidden="true" />
             ) : null}
-            Week {displayedWeek}
+            {stateLabel}
           </span>
           {isSynced ? (
             <span
@@ -94,7 +99,7 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
               Synced
             </span>
           ) : (
-            <span className="app-header__replay-chip">Replay</span>
+            <span className="app-header__replay-chip">Demo</span>
           )}
           <span className="app-header__scoring-pill">
             <Gloss term="ppr">{scoringLabel}</Gloss>
