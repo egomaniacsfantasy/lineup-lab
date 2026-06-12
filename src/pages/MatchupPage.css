@@ -576,6 +576,20 @@
 }
 
 @media (min-width: 1024px) {
+
+  /* Pin the two columns explicitly: the page renders a visually-hidden
+     h1 sibling, and grid auto-placement would otherwise shove the story
+     into the 400px rail column (story right, rail wrapped below). */
+  .matchup-page__story {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .matchup-page__rail {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .matchup-page {
     grid-template-columns: minmax(0, 1fr) 400px;
     align-items: start;
