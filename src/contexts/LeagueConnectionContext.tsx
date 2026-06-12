@@ -10,11 +10,13 @@ import {
 } from 'react';
 import {
   fetchBootstrap,
+  fetchLineHistory,
   fetchLines,
   fetchSchedule,
   refreshLeague,
   type LeagueBootstrap,
   type LeaguePricing,
+  type LineHistoryEntry,
   type ScheduleWeek,
 } from '../services/leagueApi';
 
@@ -36,6 +38,7 @@ interface LeagueConnectionValue {
   bootstrap: LeagueBootstrap | null;
   schedule: ScheduleWeek[] | null;
   pricing: LeaguePricing | null;
+  lineHistory: LineHistoryEntry[] | null;
   isLoading: boolean;
   error: string | null;
   connect: (connection: StoredConnection) => void;
@@ -59,6 +62,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const [bootstrap, setBootstrap] = useState<LeagueBootstrap | null>(null);
   const [schedule, setSchedule] = useState<ScheduleWeek[] | null>(null);
   const [pricing, setPricing] = useState<LeaguePricing | null>(null);
+  const [lineHistory, setLineHistory] = useState<LineHistoryEntry[] | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(stored));
   const [error, setError] = useState<string | null>(null);
 
@@ -74,6 +78,8 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
         .catch(() => setSchedule(null));
       fetchLines(connection.leagueId, connection.userId)
         .then(setPricing)
+        .then(() => fetchLineHistory(connection.leagueId))
+        .then((h) => setLineHistory(h?.history ?? null))
         .catch(() => setPricing(null));
     } catch (caught) {
       setError(
@@ -112,8 +118,55 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setBootstrap(null);
     setSchedule(null);
     setPricing(null);
+    setLineHistory(null);
     setError(null);
   }, []);
+
+  /**
+   * Freshness loop: poll fast (90s) inside NFL game windows, hourly
+   * outside. The server decides the window and gates its own upstream
+   * TTLs the same way; this only refreshes the client's view.
+   */
+  useEffect(() => {
+    if (!stored) return undefined;
+
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const tick = async () => {
+      let delay = 60 * 60_000;
+
+      try {
+        const health = await fetch('/api/health').then((r) => r.json());
+        delay = health.gameWindow ? 90_000 : 60 * 60_000;
+
+        const data = await fetchBootstrap(stored.leagueId, stored.userId);
+        if (cancelled) return;
+        setBootstrap(data);
+
+        const lines = await fetchLines(stored.leagueId, stored.userId);
+        if (cancelled) return;
+        setPricing(lines);
+
+        const history = await fetchLineHistory(stored.leagueId);
+        if (cancelled) return;
+        setLineHistory(history?.history ?? null);
+      } catch {
+        // keep showing the last good data; try again next cycle
+      }
+
+      if (!cancelled) {
+        timer = window.setTimeout(() => void tick(), delay);
+      }
+    };
+
+    timer = window.setTimeout(() => void tick(), 90_000);
+
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [stored]);
 
   const refresh = useCallback(async () => {
     if (!stored) return;
@@ -122,8 +175,8 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   }, [stored, hydrate]);
 
   const value = useMemo(
-    () => ({ stored, bootstrap, schedule, pricing, isLoading, error, connect, disconnect, refresh }),
-    [stored, bootstrap, schedule, pricing, isLoading, error, connect, disconnect, refresh],
+    () => ({ stored, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect, disconnect, refresh }),
+    [stored, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect, disconnect, refresh],
   );
 
   return (

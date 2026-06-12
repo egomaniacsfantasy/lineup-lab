@@ -19,6 +19,7 @@ interface QuickActionsProps {
   lineupLocks: LineupLockWindow[];
   topTradeTarget: TradeTarget | null;
   waiverSuggestion: WaiverSuggestion | null;
+  lineMovement?: { from: number; to: number; at: number } | null;
   onCompareBiggestSwing: () => void;
 }
 
@@ -70,6 +71,7 @@ function HourglassIcon() {
 }
 
 export function QuickActions({
+  lineMovement = null,
   biggestSwing,
   lineupLocks,
   topTradeTarget,
@@ -134,6 +136,30 @@ export function QuickActions({
             Open
           </button>
         </article>
+
+        {lineMovement ? (
+        <article className="quick-actions__item">
+          <div className="quick-actions__item-head">
+            <div className="quick-actions__copy">
+              <p className="quick-actions__label">Line moved</p>
+              <p className="quick-actions__headline">
+                <s className="quick-actions__old-line">
+                  {lineMovement.from > 0 ? `+${lineMovement.from}` : lineMovement.from}
+                </s>{' '}
+                → {lineMovement.to > 0 ? `+${lineMovement.to}` : lineMovement.to}
+              </p>
+              <p className="quick-actions__context">
+                Your matchup line since{' '}
+                {new Date(lineMovement.at).toLocaleTimeString([], {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+                .
+              </p>
+            </div>
+          </div>
+        </article>
+        ) : null}
 
         {waiverSuggestion ? (
         <article className="quick-actions__item">

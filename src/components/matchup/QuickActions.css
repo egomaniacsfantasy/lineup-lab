@@ -149,3 +149,9 @@
   letter-spacing: 0.02em;
   text-transform: none;
 }
+
+
+.quick-actions__old-line {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}

@@ -81,6 +81,7 @@ interface MatchupLiveProps {
   matchup: MatchupData;
   isConnected: boolean;
   isPriced?: boolean;
+  lineMovement?: { from: number; to: number; at: number } | null;
   scoringNote?: string | null;
   unpricedStarterCount?: number;
   seasonLabel?: string;
@@ -90,6 +91,7 @@ function MatchupLive({
   matchup,
   isConnected,
   isPriced = false,
+  lineMovement = null,
   scoringNote = null,
   unpricedStarterCount = 0,
   seasonLabel,
@@ -422,6 +424,7 @@ function MatchupLive({
 
         {!isDesktop ? (
           <QuickActions
+            lineMovement={lineMovement}
             biggestSwing={biggestSwing}
             lineupLocks={MOCK_LINEUP_LOCKS}
             onCompareBiggestSwing={() => {
@@ -518,6 +521,7 @@ function MatchupLive({
               .join(' ')}
           >
             <QuickActions
+              lineMovement={lineMovement}
               biggestSwing={biggestSwing}
               lineupLocks={MOCK_LINEUP_LOCKS}
               onCompareBiggestSwing={() => {
@@ -576,7 +580,26 @@ function MatchupLive({
 
 export function MatchupPage() {
   const { mode } = useSeasonMode();
-  const { bootstrap, pricing } = useLeagueConnection();
+  const { bootstrap, pricing, lineHistory } = useLeagueConnection();
+
+  const lineMovement = (() => {
+    if (!bootstrap || !lineHistory || lineHistory.length < 2) return null;
+    const userTeam = bootstrap.teams.find((t) => t.isUser);
+    if (!userTeam) return null;
+    const latest = lineHistory.at(-1);
+    const previous = lineHistory.at(-2);
+    if (!latest || !previous || latest.week !== previous.week) return null;
+
+    const find = (entry: typeof latest) =>
+      entry.lines
+        .map((l) => l.sides[String(userTeam.rosterId)])
+        .find((side) => side !== undefined);
+
+    const from = find(previous)?.moneyline;
+    const to = find(latest)?.moneyline;
+    if (from === undefined || to === undefined || from === to) return null;
+    return { from, to, at: latest.computedAt };
+  })();
 
   const connectedMatchup = bootstrap ? toMatchupData(bootstrap, pricing) : null;
 
@@ -588,6 +611,7 @@ export function MatchupPage() {
     <MatchupLive
       isConnected={connectedMatchup !== null}
       isPriced={Boolean(pricing?.available)}
+      lineMovement={connectedMatchup ? lineMovement : null}
       scoringNote={pricing?.available ? pricing.scoringNote ?? null : null}
       unpricedStarterCount={
         pricing?.available && bootstrap

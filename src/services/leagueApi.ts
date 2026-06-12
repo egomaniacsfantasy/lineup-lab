@@ -136,6 +136,21 @@ export interface LeaguePricing {
   futures?: PricedFuture[];
 }
 
+export interface LineHistoryEntry {
+  computedAt: number;
+  inputsHash: string;
+  projectionVersion: string;
+  week: number;
+  lines: {
+    matchupId: number;
+    sides: Record<string, { moneyline: number; winProbability: number }>;
+  }[];
+}
+
+export function fetchLineHistory(leagueId: string) {
+  return get<{ history: LineHistoryEntry[] }>(`/api/league/${leagueId}/line-history`);
+}
+
 export function fetchLines(leagueId: string, userId: string) {
   return get<LeaguePricing>(
     `/api/league/${leagueId}/lines?userId=${encodeURIComponent(userId)}`,

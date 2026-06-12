@@ -7,6 +7,7 @@ import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import { getLeaguePricing } from '../engine/engine.js';
+import { readHistory, recordPricing } from '../engine/lineStore.js';
 
 const DAY = 24 * 60 * 60_000;
 
@@ -169,6 +170,10 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
       return { ...ctx, catalog: ctx.players, scheduleWeeks };
     }, `${leagueId}:${userId}`);
 
+    if (pricing.available) {
+      recordPricing(leagueId, pricing);
+    }
+
     res.json(pricing);
   } catch (error) {
     next(error);
@@ -226,6 +231,11 @@ apiRouter.get('/league/:leagueId/transactions/:week', async (req, res, next) => 
   } catch (error) {
     next(error);
   }
+});
+
+/** Line-movement history (inputsHash diffs) for the digest + notifications. */
+apiRouter.get('/league/:leagueId/line-history', (req, res) => {
+  res.json({ history: readHistory(req.params.leagueId) });
 });
 
 /** Force-refresh a league (drops caches); used by the manual refresh affordance. */

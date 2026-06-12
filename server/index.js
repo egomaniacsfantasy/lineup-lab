@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
 import { adminRouter } from './routes/admin.js';
+import { callLog, callsInLastMinute } from './cache.js';
+import { isGameWindow } from './gameWindows.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(__dirname, '..', 'dist');
@@ -34,3 +36,11 @@ app.get(/.*/, (_req, res) => {
 app.listen(PORT, () => {
   console.log(`[olympus] server on :${PORT}`);
 });
+
+// Call-volume heartbeat: Sleeper asks < 1000 calls/min per IP — ours
+// aggregates all users, so the rate is logged from day one.
+setInterval(() => {
+  console.log(
+    `[metrics] upstream calls total=${callLog.total} lastMinute=${callsInLastMinute()} gameWindow=${isGameWindow()}`,
+  );
+}, 5 * 60_000).unref();
