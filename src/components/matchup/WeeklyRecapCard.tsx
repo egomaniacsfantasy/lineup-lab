@@ -54,7 +54,7 @@ function drawShareImage() {
   ctx.fillText('WEEK 7 RECAP', 150, 190);
 
   ctx.fillStyle = '#f4f5f2';
-  ctx.font = '700 84px Saira Condensed, sans-serif';
+  ctx.font = '700 84px Oswald, sans-serif';
   ctx.fillText('You closed at -180.', 150, 300);
   ctx.fillText('You won by 12.', 150, 385);
 

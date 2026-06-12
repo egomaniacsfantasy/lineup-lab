@@ -64,10 +64,10 @@
 .season-headline__value {
   margin: 0;
   color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: clamp(28px, 7vw, 40px);
+  font-family: var(--font-display);
+  font-size: clamp(31px, 7.7vw, 44px);
   font-weight: 700;
-  letter-spacing: -0.06em;
+  letter-spacing: 0;
   line-height: 1;
 }
 
@@ -132,8 +132,8 @@
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-condensed);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   text-transform: none;
 }

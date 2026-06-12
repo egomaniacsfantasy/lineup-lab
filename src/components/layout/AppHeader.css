@@ -37,9 +37,9 @@
 
 .app-header__brand-title {
   color: var(--text-primary);
-  font-family: var(--font-serif);
-  font-size: 22px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
   letter-spacing: 0.08em;
   line-height: 0.92;
 }
@@ -125,7 +125,7 @@
   }
 
   .app-header__brand-title {
-    font-size: 24px;
+    font-size: 26px;
   }
 
   .app-header__nav {

@@ -282,7 +282,7 @@
 
 .player-row--state-swap .player-row__value-stack {
   align-self: stretch;
-  min-width: 88px;
+  min-width: 96px;
   align-content: center;
   justify-items: end;
   gap: var(--space-xs);
@@ -327,10 +327,10 @@
   border-radius: 0;
   background: transparent;
   color: var(--text-amber);
-  font-family: var(--font-mono);
-  font-size: clamp(31px, 5vw, 38px);
-  font-weight: 600;
-  letter-spacing: -0.06em;
+  font-family: var(--font-display);
+  font-size: clamp(34px, 5.5vw, 42px);
+  font-weight: 700;
+  letter-spacing: 0;
   line-height: 0.95;
 }
 

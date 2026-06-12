@@ -46,19 +46,19 @@
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-condensed);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   text-transform: none;
 }
 
 .matchup-card__title {
   margin: 6px 0 0;
   color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .matchup-card__live-pill,
@@ -169,10 +169,11 @@
 .matchup-card__team-name {
   margin: 4px 0 0;
   color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1.15;
+  letter-spacing: 0.02em;
 }
 
 .matchup-card__team-record {
@@ -190,10 +191,11 @@
 .matchup-card__projection {
   margin: 0;
   color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 26px;
+  font-family: var(--font-display);
+  font-size: 29px;
   font-weight: 700;
-  letter-spacing: -0.05em;
+  letter-spacing: 0;
+  min-width: 4ch;
 }
 
 .matchup-card__projection-label {
@@ -247,11 +249,12 @@
 
 .matchup-card__moneyline {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 32px;
+  font-family: var(--font-display);
+  font-size: 35px;
   font-weight: 700;
-  letter-spacing: -0.05em;
+  letter-spacing: 0;
   line-height: 1;
+  min-width: 4ch;
 }
 
 .matchup-card__moneyline--yours {
@@ -390,14 +393,14 @@
   }
 
   .matchup-card__team-name {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   .matchup-card__projection {
-    font-size: 30px;
+    font-size: 33px;
   }
 
   .matchup-card__moneyline {
-    font-size: 40px;
+    font-size: 44px;
   }
 }

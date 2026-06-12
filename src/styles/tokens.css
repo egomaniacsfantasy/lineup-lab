@@ -31,10 +31,17 @@
   --gold: #c9a227;
 
   /* ── Typography ── */
-  --font-serif: "Saira Condensed", "Hanken Grotesk", sans-serif;
-  --font-condensed: "Saira Condensed", "Hanken Grotesk", sans-serif;
-  --font-sans: "Hanken Grotesk", sans-serif;
-  --font-mono: "Saira", "Hanken Grotesk", sans-serif;
+  /* Display face is licensed Tungsten (Hoefler&Co). Oswald is the live
+     stand-in until the owner supplies licensed WOFF2s; the swap is a
+     single @font-face block, nothing else. Do not bundle Tungsten files. */
+  --font-display: "Tungsten Narrow", "Oswald", "Arial Narrow", sans-serif;
+  --font-ui: "Hanken Grotesk", sans-serif;
+  --font-num: "Saira", "Hanken Grotesk", sans-serif;
+  /* Legacy role aliases (existing rules reference these) */
+  --font-serif: var(--font-display);
+  --font-condensed: var(--font-display);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-num);
 
   /* ── Position Colors ── */
   --pos-qb: #5b9bd5;

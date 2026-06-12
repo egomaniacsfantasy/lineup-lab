@@ -36,10 +36,10 @@
 
 .player-availability__title {
   color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.25;
 }
 
@@ -75,11 +75,12 @@
 
 .player-availability__odds {
   color: var(--text-amber);
-  font-family: var(--font-mono);
-  font-size: clamp(34px, 8vw, 46px);
+  font-family: var(--font-display);
+  font-size: clamp(37px, 8.8vw, 51px);
   font-weight: 700;
-  letter-spacing: -0.06em;
+  letter-spacing: 0;
   line-height: 1;
+  min-width: 3ch;
 }
 
 .player-availability__probability {
@@ -108,8 +109,8 @@
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-condensed);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   text-transform: none;
 }

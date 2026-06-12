@@ -36,10 +36,10 @@
 .trade-target-teaser__title {
   margin: 0;
   color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: clamp(22px, 4vw, 28px);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 4.4vw, 31px);
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.15;
 }
 
@@ -173,9 +173,9 @@
   margin: 0;
   color: var(--text-primary);
   font-family: var(--font-condensed);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   text-transform: none;
 }
 

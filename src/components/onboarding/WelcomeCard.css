@@ -38,18 +38,18 @@
 .welcome-card__kicker {
   color: var(--text-primary);
   font-family: var(--font-condensed);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   text-transform: none;
 }
 
 .welcome-card__title {
   color: var(--text-primary);
-  font-family: var(--font-serif);
-  font-size: clamp(44px, 7vw, 64px);
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: clamp(48px, 7.7vw, 70px);
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 0.9;
 }
 
@@ -73,9 +73,9 @@
 .welcome-card__label {
   color: var(--text-primary);
   font-family: var(--font-condensed);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   text-transform: none;
 }
 
