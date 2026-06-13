@@ -262,6 +262,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                 onConnected({
                   provider: 'espn',
                   leagueId: step.leagueId,
+                  leagueName: step.leagueName,
                   userId: team.ownerId ?? '',
                   username: team.ownerName,
                   displayName: team.ownerName,

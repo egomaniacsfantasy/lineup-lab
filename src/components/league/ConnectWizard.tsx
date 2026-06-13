@@ -172,6 +172,7 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
             onConnected({
               provider: 'sleeper',
               leagueId: step.league.id,
+              leagueName: step.league.name,
               userId: step.user.id,
               username: step.user.username,
               displayName: step.user.displayName,

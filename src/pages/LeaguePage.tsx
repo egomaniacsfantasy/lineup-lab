@@ -118,8 +118,9 @@ export function LeaguePage() {
         <LeagueSettings
           connection={connection}
           onDisconnect={() => {
+            // Removes this league; the context falls through to the next saved
+            // one, or to the demo prompt when none remain.
             disconnect();
-            setShowWizard(true);
           }}
           onSwitchLeague={() => setShowWizard(true)}
         />

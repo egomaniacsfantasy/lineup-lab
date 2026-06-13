@@ -1,0 +1,200 @@
+.account-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.account-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 200px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--border-subtle, #23272b);
+  border-radius: 999px;
+  background: var(--bg-inset, #0b0d0f);
+  color: var(--text-soft, #b9bdb4);
+  cursor: pointer;
+}
+
+.account-menu__trigger:hover {
+  border-color: var(--amber, #e8541d);
+}
+
+.account-menu__avatar {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--amber, #e8541d);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-menu__league-name {
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__chevron {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--ink-3, #787c75);
+}
+
+.account-menu__popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: 264px;
+  padding: 6px;
+  border: 1px solid var(--border-subtle, #23272b);
+  border-radius: 14px;
+  background: var(--bg-surface, #15181b);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.account-menu__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 10px 12px;
+  border-bottom: 1px solid var(--border-subtle, #23272b);
+}
+
+.account-menu__identity-label {
+  color: var(--ink-3, #787c75);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-menu__identity-email {
+  color: var(--text-primary, #f4f5f2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.account-menu__section {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle, #23272b);
+}
+
+.account-menu__section-label {
+  margin: 4px 10px 6px;
+  color: var(--ink-3, #787c75);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-menu__league {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-soft, #b9bdb4);
+  cursor: pointer;
+  text-align: left;
+}
+
+.account-menu__league:hover {
+  background: var(--bg-inset, #0b0d0f);
+}
+
+.account-menu__league--active {
+  background: rgba(232, 84, 29, 0.1);
+}
+
+.account-menu__league-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-menu__league-title {
+  color: var(--text-primary, #f4f5f2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__league--active .account-menu__league-title {
+  color: var(--amber-bright, #ff6a33);
+}
+
+.account-menu__league-sub {
+  color: var(--ink-3, #787c75);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.account-menu__league-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--amber-bright, #ff6a33);
+}
+
+.account-menu__actions {
+  display: flex;
+  flex-direction: column;
+  padding-top: 6px;
+}
+
+.account-menu__action {
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-primary, #f4f5f2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-menu__action:hover {
+  background: var(--bg-inset, #0b0d0f);
+}
+
+.account-menu__action--quiet {
+  color: var(--text-muted, #a9aea4);
+  font-weight: 500;
+}
+
+/* On narrow screens the league name collapses; the avatar stays as the
+   signed-in indicator. */
+@media (max-width: 560px) {
+  .account-menu__league-name {
+    display: none;
+  }
+}

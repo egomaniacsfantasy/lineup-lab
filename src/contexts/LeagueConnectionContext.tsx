@@ -29,6 +29,10 @@ const STORAGE_KEY = 'og.olympus.connected-league';
 export interface StoredConnection {
   provider: 'sleeper' | 'espn';
   leagueId: string;
+  /** Friendly league name for the switcher. Persisted locally; not yet a DB
+   *  column, so leagues loaded fresh on another device fall back to the
+   *  manager name until they're opened once. */
+  leagueName?: string;
   userId: string;
   username: string;
   displayName: string;
@@ -57,6 +61,8 @@ function applyApiContext(connection: StoredConnection | null) {
 
 interface LeagueConnectionValue {
   stored: StoredConnection | null;
+  /** Every league saved to this account; `stored` is the active one. */
+  leagues: StoredConnection[];
   bootstrap: LeagueBootstrap | null;
   schedule: ScheduleWeek[] | null;
   pricing: LeaguePricing | null;
@@ -64,8 +70,14 @@ interface LeagueConnectionValue {
   isLoading: boolean;
   error: string | null;
   connect: (connection: StoredConnection) => void;
+  switchLeague: (leagueId: string) => void;
   disconnect: () => void;
   refresh: () => Promise<void>;
+}
+
+/** Stable identity for a saved league across providers. */
+function leagueKey(c: { provider: string; leagueId: string }) {
+  return `${c.provider}:${c.leagueId}`;
 }
 
 const LeagueConnectionContext = createContext<LeagueConnectionValue | null>(null);
@@ -125,8 +137,19 @@ async function saveLeagueRow(userId: string, c: StoredConnection) {
   );
 }
 
+/** Make one league the active one for the account: clear every flag, then
+ *  set this league's. Used on connect (add) and on switch. */
+async function activateLeagueRow(userId: string, c: StoredConnection) {
+  await supabase.from('olympus_leagues').update({ is_active: false }).eq('user_id', userId);
+  await saveLeagueRow(userId, c);
+}
+
 export function LeagueConnectionProvider({ children }: { children: ReactNode }) {
   const [stored, setStored] = useState<StoredConnection | null>(readStored);
+  const [leagues, setLeagues] = useState<StoredConnection[]>(() => {
+    const initial = readStored();
+    return initial ? [initial] : [];
+  });
   const [bootstrap, setBootstrap] = useState<LeagueBootstrap | null>(null);
   const [schedule, setSchedule] = useState<ScheduleWeek[] | null>(null);
   const [pricing, setPricing] = useState<LeaguePricing | null>(null);
@@ -153,18 +176,22 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
         if (rows.length === 0) {
           // First login on this account: migrate a league synced before sign-in.
           const local = readStored();
-          if (local) void saveLeagueRow(user.id, local);
+          if (local) {
+            void saveLeagueRow(user.id, local);
+            setLeagues([local]);
+          }
           return;
         }
-        const active = rows.find((r) => r.is_active) ?? rows[0];
-        const connection = rowToConnection(active);
-        applyApiContext(connection);
+        const all = rows.map(rowToConnection);
+        const active = all.find((c, i) => rows[i].is_active) ?? all[0];
+        applyApiContext(active);
         try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(connection));
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(active));
         } catch {
           // ignore
         }
-        setStored(connection);
+        setLeagues(all);
+        setStored(active);
       });
     return () => {
       cancelled = true;
@@ -221,7 +248,8 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     }
   }, [stored, hydrate]);
 
-  const connect = useCallback((connection: StoredConnection) => {
+  /** Make a connection the active league locally (api context + cache + state). */
+  const activateLocal = useCallback((connection: StoredConnection) => {
     applyApiContext(connection);
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(connection));
@@ -229,24 +257,63 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       // private mode: connection lives for the session only
     }
     setStored(connection);
-    // Persist to the account so it's there on every device.
-    if (userIdRef.current) void saveLeagueRow(userIdRef.current, connection);
   }, []);
 
+  // Add a league (or re-sync an existing one) and make it active.
+  const connect = useCallback(
+    (connection: StoredConnection) => {
+      activateLocal(connection);
+      setLeagues((prev) => [
+        connection,
+        ...prev.filter((l) => leagueKey(l) !== leagueKey(connection)),
+      ]);
+      // Persist to the account so it's there on every device.
+      if (userIdRef.current) void activateLeagueRow(userIdRef.current, connection);
+    },
+    [activateLocal],
+  );
+
+  // Switch the active league to another one already saved on the account.
+  const switchLeague = useCallback(
+    (leagueId: string) => {
+      const target = leagues.find((l) => l.leagueId === leagueId);
+      if (!target || (stored && leagueKey(target) === leagueKey(stored))) return;
+      activateLocal(target);
+      if (userIdRef.current) void activateLeagueRow(userIdRef.current, target);
+    },
+    [leagues, stored, activateLocal],
+  );
+
   const disconnect = useCallback(() => {
+    const removing = stored;
+    const remaining = removing
+      ? leagues.filter((l) => leagueKey(l) !== leagueKey(removing))
+      : leagues;
+
+    if (userIdRef.current && removing) {
+      void supabase
+        .from('olympus_leagues')
+        .delete()
+        .eq('user_id', userIdRef.current)
+        .eq('provider', removing.provider)
+        .eq('league_id', removing.leagueId);
+    }
+
+    setLeagues(remaining);
+
+    const next = remaining[0] ?? null;
+    if (next) {
+      // Fall through to the next saved league instead of dropping to nothing.
+      activateLocal(next);
+      if (userIdRef.current) void activateLeagueRow(userIdRef.current, next);
+      return;
+    }
+
     applyApiContext(null);
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch {
       // ignore
-    }
-    if (userIdRef.current && stored) {
-      void supabase
-        .from('olympus_leagues')
-        .delete()
-        .eq('user_id', userIdRef.current)
-        .eq('provider', stored.provider)
-        .eq('league_id', stored.leagueId);
     }
     setStored(null);
     setBootstrap(null);
@@ -254,7 +321,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setPricing(null);
     setLineHistory(null);
     setError(null);
-  }, [stored]);
+  }, [stored, leagues, activateLocal]);
 
   /**
    * Freshness loop: poll fast (90s) inside NFL game windows, hourly
@@ -309,8 +376,8 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   }, [stored, hydrate]);
 
   const value = useMemo(
-    () => ({ stored, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect, disconnect, refresh }),
-    [stored, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect, disconnect, refresh],
+    () => ({ stored, leagues, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect, switchLeague, disconnect, refresh }),
+    [stored, leagues, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect, switchLeague, disconnect, refresh],
   );
 
   return (

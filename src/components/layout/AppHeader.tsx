@@ -6,6 +6,7 @@ import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { MOCK_MATCHUP } from '../../mocks';
 import type { ScoringFormat } from '../../types';
 import { Gloss } from '../ui/Gloss';
+import { AccountMenu } from './AccountMenu';
 import './AppHeader.css';
 
 const SCORING_LABELS: Record<ScoringFormat, string> = {
@@ -146,6 +147,7 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
           >
             {format === 'american' ? '+/−' : '%'}
           </button>
+          <AccountMenu />
         </div>
       </div>
     </header>
