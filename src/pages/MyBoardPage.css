@@ -466,6 +466,24 @@
   text-align: left;
 }
 
+.myboard__rowbtn:hover {
+  background: var(--bg-inset, #0b0d0f);
+}
+
+.myboard__caret {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-left: 2px;
+  color: var(--ink-3, #787c75);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.myboard__caret--open {
+  transform: rotate(90deg);
+  color: var(--amber-bright, #ff6a33);
+}
+
 .myboard__rank {
   width: 22px;
   color: var(--ink-3, #787c75);

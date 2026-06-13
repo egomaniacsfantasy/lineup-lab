@@ -281,7 +281,7 @@ export function MyBoardPage() {
   } = useModelOverlay();
   const [board, setBoard] = useState<BoardRow[] | null>(null);
   const [version, setVersion] = useState<string | null>(null);
-  const [mode, setMode] = useState<'rapid' | 'board'>('rapid');
+  const [mode, setMode] = useState<'board' | 'rapid'>('board');
   const [position, setPosition] = useState<(typeof BOARD_POSITIONS)[number]>('RB');
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -359,20 +359,12 @@ export function MyBoardPage() {
       </header>
 
       <p className="myboard__sub">
-        Your numbers set your line. Franco sits underneath as the anchor; your
-        matchup and season odds price off your board.
+        This is your board to edit, not a printout. Tap any player to set your
+        own number, or run Rapid fire to build it fast. Your matchup and season
+        odds price off it, with Franco as the anchor.
       </p>
 
       <div className="myboard__modes" role="tablist">
-        <button
-          aria-selected={mode === 'rapid'}
-          className={mode === 'rapid' ? 'myboard__mode myboard__mode--on' : 'myboard__mode'}
-          onClick={() => setMode('rapid')}
-          role="tab"
-          type="button"
-        >
-          Rapid fire
-        </button>
         <button
           aria-selected={mode === 'board'}
           className={mode === 'board' ? 'myboard__mode myboard__mode--on' : 'myboard__mode'}
@@ -381,6 +373,15 @@ export function MyBoardPage() {
           type="button"
         >
           Board
+        </button>
+        <button
+          aria-selected={mode === 'rapid'}
+          className={mode === 'rapid' ? 'myboard__mode myboard__mode--on' : 'myboard__mode'}
+          onClick={() => setMode('rapid')}
+          role="tab"
+          type="button"
+        >
+          Rapid fire
         </button>
       </div>
 
@@ -655,6 +656,18 @@ function BoardView({
                     <span className="myboard__drift">{Math.round(total)} pts proj</span>
                   )}
                 </span>
+                <svg
+                  className={isOpen ? 'myboard__caret myboard__caret--open' : 'myboard__caret'}
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 4l4 4-4 4" />
+                </svg>
               </button>
               {isOpen && godScale ? (
                 <Dial
