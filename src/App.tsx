@@ -5,6 +5,7 @@ import {
   LeagueConnectionProvider,
   useLeagueConnection,
 } from './contexts/LeagueConnectionContext';
+import { OddsFormatProvider } from './contexts/OddsFormatContext';
 import { ConnectPage } from './pages/ConnectPage';
 import { DraftPage } from './pages/DraftPage';
 import { LeaguePage } from './pages/LeaguePage';
@@ -32,6 +33,7 @@ export default function App() {
   return (
     <SeasonModeProvider>
       <LeagueConnectionProvider>
+        <OddsFormatProvider>
         <Routes>
         <Route element={<AppShell />}>
           <Route path="/" element={<HomeGate />} />
@@ -48,6 +50,7 @@ export default function App() {
           <Route path="/admin/projections" element={<AdminProjectionsPage />} />
         </Route>
         </Routes>
+        </OddsFormatProvider>
       </LeagueConnectionProvider>
     </SeasonModeProvider>
   );

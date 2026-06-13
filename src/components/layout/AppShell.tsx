@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { AmbientCanvas } from '../matchup/AmbientCanvas';
 import { WelcomeCard } from '../onboarding/WelcomeCard';
 import { PlayerDetailProvider } from '../../contexts/PlayerDetailContext';
+import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { useSeasonMode } from '../../hooks/useSeasonMode';
 import { AppHeader } from './AppHeader';
 import { BottomTabBar } from './BottomTabBar';
@@ -13,6 +14,7 @@ const WELCOME_STORAGE_KEY = 'og.lineuplab.welcome.dismissed';
 export function AppShell() {
   const location = useLocation();
   const { mode } = useSeasonMode();
+  const { format } = useOddsFormat();
   const [isWelcomeManuallyOpen, setIsWelcomeManuallyOpen] = useState(false);
   const [isWelcomeDismissedThisSession, setIsWelcomeDismissedThisSession] = useState(false);
   const shouldAutoOpenWelcome =
@@ -36,7 +38,8 @@ export function AppShell() {
       <AmbientCanvas />
       <PlayerDetailProvider>
         <AppHeader onOpenWelcome={() => setIsWelcomeManuallyOpen(true)} />
-        <main className="app-content" id="main-content" tabIndex={-1}>
+        {/* keyed on odds format: flipping it re-renders every number */}
+        <main className="app-content" id="main-content" key={format} tabIndex={-1}>
           <Outlet />
         </main>
         <WelcomeCard isOpen={isWelcomeOpen} onDismiss={dismissWelcome} />

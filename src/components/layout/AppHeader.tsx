@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useSeasonMode } from '../../hooks/useSeasonMode';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
+import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { MOCK_MATCHUP } from '../../mocks';
 import type { ScoringFormat } from '../../types';
 import { Gloss } from '../ui/Gloss';
@@ -26,6 +27,7 @@ const STATE_LABELS: Record<string, (season: string, week: number) => string> = {
 export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   const { mode, seasonState, season, nflWeek } = useSeasonMode();
   const { bootstrap, refresh } = useLeagueConnection();
+  const { format, toggleFormat } = useOddsFormat();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isSynced = bootstrap !== null;
   const scoringLabel = isSynced
@@ -111,6 +113,18 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
           <span className="app-header__scoring-pill">
             <Gloss term="ppr">{scoringLabel}</Gloss>
           </span>
+          <button
+            className="app-header__odds-toggle"
+            onClick={toggleFormat}
+            title={
+              format === 'american'
+                ? 'Showing betting odds. Click for plain win percentages.'
+                : 'Showing win percentages. Click for betting odds.'
+            }
+            type="button"
+          >
+            {format === 'american' ? '+/−' : '%'}
+          </button>
         </div>
       </div>
     </header>

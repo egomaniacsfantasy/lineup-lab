@@ -279,3 +279,22 @@ button.app-header__synced-chip:disabled {
   opacity: 0.6;
   cursor: default;
 }
+
+.app-header__odds-toggle {
+  min-height: 20px;
+  padding-inline: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-surface-soft);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.app-header__odds-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--ink-3);
+}
