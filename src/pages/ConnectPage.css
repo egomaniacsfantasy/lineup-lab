@@ -85,13 +85,15 @@
 }
 
 .connect-page__provider-logo--sleeper {
-  height: 34px;
-  max-width: 170px;
+  height: 38px;
+  max-width: 180px;
 }
 
+/* ESPN is a compact square mark, so it needs more height to carry the same
+   visual weight as Sleeper's wide wordmark. */
 .connect-page__provider-logo--espn {
-  height: 40px;
-  max-width: 120px;
+  height: 56px;
+  max-width: 110px;
 }
 
 .connect-page__provider-action {

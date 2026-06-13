@@ -121,7 +121,9 @@ export interface PricedFuture {
   projLosses?: number;
   projRecord?: string;
   playoffProb: number;
+  playoffClinched?: boolean;
   playoffOdds: number;
+  finalsProb?: number;
   titleProb: number;
   championOdds: number;
   finalsOdds: number;

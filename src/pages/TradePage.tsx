@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
@@ -55,8 +55,8 @@ const APPETITE_TAGS = (v: number) =>
   v <= 3 ? 'Ghosts offers' : v <= 6 ? 'Selective' : v <= 8 ? 'Active' : 'Wheeler-dealer';
 const FANDOM_TAGS = (v: number) => (v <= 3 ? 'Casual' : v <= 6 ? 'Fan' : v <= 8 ? 'Diehard' : 'Homer');
 
-/** Ten-notch 1–10 dial in the ember identity. */
-function NotchSlider({
+/** Draggable 1–10 dial in the ember identity. */
+function RangeDial({
   label,
   value,
   onChange,
@@ -75,24 +75,17 @@ function NotchSlider({
         <span className="trade-cc__dial-label">{label}</span>
         <span className="trade-cc__dial-tag">{tag(value)}</span>
       </div>
-      <div
+      <input
         aria-label={label}
-        aria-valuemax={10}
-        aria-valuemin={1}
-        aria-valuenow={value}
-        className="trade-cc__notches"
-        role="slider"
-      >
-        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-          <button
-            aria-label={`${label} ${n} of 10`}
-            className={['trade-cc__notch', n <= value ? 'trade-cc__notch--on' : ''].join(' ')}
-            key={n}
-            onClick={() => onChange(n)}
-            type="button"
-          />
-        ))}
-      </div>
+        className="trade-cc__range"
+        max={10}
+        min={1}
+        onChange={(event) => onChange(Number(event.target.value))}
+        step={1}
+        style={{ '--fill': `${((value - 1) / 9) * 100}%` } as CSSProperties}
+        type="range"
+        value={value}
+      />
       <div className="trade-cc__dial-ends">
         <span>{ends[0]}</span>
         <span>{ends[1]}</span>
@@ -134,6 +127,27 @@ export function TradePage() {
   });
   const [result, setResult] = useState<TradeResult | null>(null);
   const [isPricing, setIsPricing] = useState(false);
+  const [giveSearch, setGiveSearch] = useState('');
+  const [getSearch, setGetSearch] = useState('');
+
+  // Live re-price when you adjust the scouting dials, so the acceptance read
+  // (and the meter) update as you drag — no need to hit the button again.
+  useEffect(() => {
+    if (!result || !result.available) return;
+    if (!stored || partnerRosterId == null || give.length === 0 || getIds.length === 0) return;
+    const timer = setTimeout(async () => {
+      const priced = await priceTrade(stored.leagueId, {
+        userId: stored.userId,
+        partnerRosterId,
+        give,
+        get: getIds,
+        traits,
+      });
+      setResult(priced);
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [traits.toughness, traits.dealAppetite, traits.fandomTeam, traits.fandomLevel]);
 
   // Connected leagues get the Trade Command Center; the mock targets are
   // demo-only and never render next to a real roster.
@@ -201,12 +215,28 @@ export function TradePage() {
 
   const canPrice = partnerRosterId != null && give.length > 0 && getIds.length > 0;
 
-  const renderPool = (rosterId: number, list: string[], set: (v: string[]) => void) => {
-    const rows = rosterRows(bootstrap, rosterId);
+  const renderPool = (
+    rosterId: number,
+    list: string[],
+    set: (v: string[]) => void,
+    search: string,
+    setSearch: (v: string) => void,
+  ) => {
+    const q = search.trim().toLowerCase();
+    const allRows = rosterRows(bootstrap, rosterId);
+    const rows = q ? allRows.filter((r) => r.player.name.toLowerCase().includes(q)) : allRows;
     const firstBenchIndex = rows.findIndex((r) => !r.isStarter);
     return (
-      <div className="trade-cc__pool">
-        {rows.map((row, index) => (
+      <>
+        <input
+          className="trade-cc__pool-search"
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search players"
+          type="search"
+          value={search}
+        />
+        <div className="trade-cc__pool">
+          {rows.map((row, index) => (
           <div key={row.id}>
             {index === firstBenchIndex && firstBenchIndex > 0 ? (
               <p className="trade-cc__pool-divider">Bench</p>
@@ -230,8 +260,9 @@ export function TradePage() {
               <span className="trade-cc__pill-name">{row.player.name}</span>
             </button>
           </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </>
     );
   };
 
@@ -275,7 +306,7 @@ export function TradePage() {
         <div className="trade-cc__columns">
           <div className="trade-cc__column">
             <p className="trade-cc__column-label">You send</p>
-            {renderPool(userTeam.rosterId, give, setGive)}
+            {renderPool(userTeam.rosterId, give, setGive, giveSearch, setGiveSearch)}
           </div>
 
           <div className="trade-cc__column">
@@ -297,7 +328,7 @@ export function TradePage() {
               ))}
             </select>
             {partnerRosterId != null ? (
-              renderPool(partnerRosterId, getIds, setGetIds)
+              renderPool(partnerRosterId, getIds, setGetIds, getSearch, setGetSearch)
             ) : (
               <p className="trade-cc__hint">Pick a manager to see their roster.</p>
             )}
@@ -310,14 +341,14 @@ export function TradePage() {
         <div className="trade-cc__traits">
           <p className="trade-cc__traits-label">Scout the other manager</p>
 
-          <NotchSlider
+          <RangeDial
             ends={['Pushover', 'Shark']}
             label="Negotiator"
             onChange={(v) => setTraits({ ...traits, toughness: v })}
             tag={TOUGH_TAGS}
             value={traits.toughness}
           />
-          <NotchSlider
+          <RangeDial
             ends={['Ghosts offers', 'Wheeler-dealer']}
             label="Deal appetite"
             onChange={(v) => setTraits({ ...traits, dealAppetite: v })}
@@ -344,7 +375,7 @@ export function TradePage() {
               </select>
             </div>
             {traits.fandomTeam ? (
-              <NotchSlider
+              <RangeDial
                 ends={['Casual fan', 'Diehard homer']}
                 label={`${traits.fandomTeam} bias`}
                 onChange={(v) => setTraits({ ...traits, fandomLevel: v })}

@@ -8,6 +8,7 @@ export interface LeagueFutureRow {
   finalsOdds: number;
   playoffOdds: number;
   playoffProb: number;
+  playoffClinched?: boolean;
   isUser: boolean;
 }
 

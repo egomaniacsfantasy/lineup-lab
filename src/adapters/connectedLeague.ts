@@ -156,6 +156,7 @@ export function toLeagueFutures(
         finalsOdds: f.finalsOdds,
         playoffOdds: f.playoffOdds,
         playoffProb: f.playoffProb,
+        playoffClinched: f.playoffClinched,
         isUser: f.isUser,
       }));
   }

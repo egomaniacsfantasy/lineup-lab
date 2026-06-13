@@ -722,6 +722,8 @@
 .matchup-page__compare-cards--faceoff {
   position: relative;
   grid-template-columns: 1fr 1fr;
+  /* leave a clear lane down the middle so the VS badge never crowds a stat */
+  column-gap: 40px;
 }
 
 .matchup-page__compare-vs {
@@ -729,14 +731,18 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  padding: 4px 8px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: 50%;
   background: var(--bg-surface);
   color: var(--ink-3);
   font-family: var(--font-display);
   font-size: 12px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 
 .matchup-page__compare-card {

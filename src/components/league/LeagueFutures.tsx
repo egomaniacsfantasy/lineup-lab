@@ -140,7 +140,9 @@ export function LeagueFutures({
                   .filter(Boolean)
                   .join(' ')}
               >
-                {formatAmericanOdds(getMarketOdds(team, market))}
+                {market === 'playoffs' && team.playoffClinched
+                  ? 'Clinched'
+                  : formatAmericanOdds(getMarketOdds(team, market))}
               </span>
             </article>
           </div>

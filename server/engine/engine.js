@@ -668,7 +668,7 @@ function computeMovers(ctx) {
     const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, lane.userGain);
     movers.push({
       kind: 'trade',
-      headline: `${lane.opp.teamName} want ${lane.give.position}, you want ${lane.get.position}`,
+      headline: `${lane.opp.teamName} wants ${lane.give.position}, you want ${lane.get.position}`,
       detail: `Send ${lane.give.name}, get ${lane.get.name}`,
       givePlayerId: lane.give.playerId,
       getPlayerId: lane.get.playerId,
@@ -687,7 +687,8 @@ function computeMovers(ctx) {
 function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, distForWeek = null, seed = 1 }) {
   const rng = mulberry32(seed);
   const regularWeeks = league.regularSeasonWeeks ?? 14;
-  const playoffTeams = league.playoffTeams ?? 6;
+  // Can't seat more playoff teams than exist — a small league clinches everyone.
+  const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
   const remaining = (scheduleWeeks ?? []).filter(
     (w) => w.week >= week && w.week <= regularWeeks,
   );
@@ -698,8 +699,20 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
   );
 
   const playoffCounts = new Map(rosterIds.map((id) => [id, 0]));
+  const finalsCounts = new Map(rosterIds.map((id) => [id, 0]));
   const titleCounts = new Map(rosterIds.map((id) => [id, 0]));
   const winSums = new Map(rosterIds.map((id) => [id, 0]));
+
+  // Weighted draw (by strength) from a pool — the bracket stand-in.
+  const drawByStrength = (pool) => {
+    const total = pool.reduce((sum, id) => sum + strength.get(id), 0);
+    let draw = rng() * total;
+    for (const id of pool) {
+      draw -= strength.get(id);
+      if (draw <= 0) return id;
+    }
+    return pool[pool.length - 1];
+  };
 
   for (let sim = 0; sim < FUTURES_SIMS; sim += 1) {
     const wins = new Map(teams.map((t) => [t.rosterId, t.record.wins]));
@@ -741,22 +754,29 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
     const playoff = standings.slice(0, playoffTeams);
     playoff.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
 
-    // Title within the sim: strength-share draw among playoff teams.
-    const totalStrength = playoff.reduce((sum, id) => sum + strength.get(id), 0);
-    let draw = rng() * totalStrength;
-    for (const id of playoff) {
-      draw -= strength.get(id);
-      if (draw <= 0) {
-        titleCounts.set(id, titleCounts.get(id) + 1);
-        break;
-      }
+    // Reach the final: draw two finalists by strength (no replacement). This
+    // keeps the league's finals probabilities summing to exactly 2 of N — so
+    // when only two teams make the final, they can't all be favorites.
+    const finalist1 = drawByStrength(playoff);
+    finalsCounts.set(finalist1, finalsCounts.get(finalist1) + 1);
+    const rest = playoff.filter((id) => id !== finalist1);
+    let champion = finalist1;
+    if (rest.length > 0) {
+      const finalist2 = drawByStrength(rest);
+      finalsCounts.set(finalist2, finalsCounts.get(finalist2) + 1);
+      // Championship game: the stronger finalist is favored.
+      const s1 = strength.get(finalist1);
+      const s2 = strength.get(finalist2);
+      champion = rng() < s1 / (s1 + s2) ? finalist1 : finalist2;
     }
+    titleCounts.set(champion, titleCounts.get(champion) + 1);
   }
 
   const totalGames = (league.regularSeasonWeeks ?? 14);
 
   return teams.map((t) => {
     const playoffProb = playoffCounts.get(t.rosterId) / FUTURES_SIMS;
+    const finalsProb = finalsCounts.get(t.rosterId) / FUTURES_SIMS;
     const titleProb = Math.max(0.005, titleCounts.get(t.rosterId) / FUTURES_SIMS);
     const projWins = Math.round(winSums.get(t.rosterId) / FUTURES_SIMS);
     const projLosses = Math.max(0, totalGames - projWins);
@@ -769,10 +789,13 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
       teamName: t.teamName,
       record: t.record,
       playoffProb: Number((playoffProb * 100).toFixed(1)),
+      // Everyone makes a small league's playoffs — that's clinched, not a price.
+      playoffClinched: playoffProb >= 0.999,
       playoffOdds: probToAmerican(playoffProb),
+      finalsProb: Number((finalsProb * 100).toFixed(1)),
+      finalsOdds: probToAmerican(finalsProb),
       titleProb: Number((titleProb * 100).toFixed(1)),
       championOdds: probToAmerican(titleProb),
-      finalsOdds: probToAmerican(Math.min(0.92, titleProb * 2.2)),
       isUser: t.isUser,
     };
   });
@@ -883,16 +906,48 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const yourValueDelta = Number((userAfter.mean - baseDist.get(userRosterId).mean).toFixed(1));
   const theirValueDelta = Number((partnerAfter.mean - baseDist.get(partnerRosterId).mean).toFixed(1));
 
-  // best player in the deal — who's getting the headliner
+  // Best player in the deal by VALUE, not raw points. QBs put up the most
+  // fantasy points but are the most replaceable (everyone starts one), so raw
+  // mean would crown a streamer QB over an elite WR. Value-over-replacement —
+  // a player's points above the worst starter the league fields at his
+  // position — fixes that: an elite WR rightly outranks a mid QB.
+  const startersPerTeam = (pos) => {
+    const ded = slotLabels.filter((s) => s === pos).length;
+    const flex = slotLabels.filter((s) => FLEX_ELIGIBILITY[s]?.includes(pos)).length;
+    return ded + flex / 3; // flex shared among RB/WR/TE
+  };
+  const meansByPos = {};
+  const replacementMean = (pos) => {
+    if (!meansByPos[pos]) {
+      meansByPos[pos] = active.projections
+        .filter((p) => p.position === pos)
+        .map((p) => p.mean)
+        .sort((a, b) => b - a);
+    }
+    const list = meansByPos[pos];
+    const idx = Math.min(list.length - 1, Math.max(0, Math.round(teams.length * startersPerTeam(pos)) - 1));
+    return list[idx] ?? 0;
+  };
+  const valueOf = (id) => {
+    const p = projectionMap.get(id);
+    return p ? p.mean - replacementMean(p.position) : 0;
+  };
+
   const everyPlayer = [...give, ...get]
     .map((id) => ({
       id,
       name: catalog[id]?.name ?? `Player ${id}`,
-      mean: projectionMap.get(id)?.mean ?? 0,
+      value: valueOf(id),
       toThem: give.includes(id),
     }))
-    .sort((a, b) => b.mean - a.mean);
+    .sort((a, b) => b.value - a.value);
   const bestPlayer = everyPlayer[0];
+
+  // Does the deal leave the other side without a starter at a required spot?
+  const partnerDepthAfter = depthByPosition(partnerPoolAfter, catalog);
+  const partnerHole = ['QB', 'RB', 'WR', 'TE'].find(
+    (pos) => slotLabels.includes(pos) && (partnerDepthAfter[pos] ?? 0) === 0,
+  );
 
   // depth picture for the user
   const depthBefore = depthByPosition(user.players, catalog);
@@ -925,6 +980,13 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   } else {
     score -= 3;
     reasons.push(`They give up the best player in the deal (${bestPlayer.name}).`);
+  }
+
+  // The honest reason a "great value" offer still gets declined: it would
+  // leave them unable to field a starter somewhere.
+  if (partnerHole) {
+    score -= 3;
+    reasons.push(`It leaves them with no ${partnerHole} to start — they'd need one back in the deal.`);
   }
 
   // their thin spots: positions where they sit at or below the slot need
