@@ -60,8 +60,16 @@ apiRouter.get('/rankings', (req, res) => {
     return;
   }
 
+  // Dedupe by playerId — a player can land in the sheet twice (depth-chart
+  // quirks); the rankings board must show each exactly once or React key
+  // collisions glitch the list.
+  const byId = new Map();
+  for (const p of active.projections) {
+    if (!byId.has(p.playerId)) byId.set(p.playerId, p);
+  }
+
   const limit = Math.min(Number(req.query.limit ?? 100), 800);
-  const rankings = [...active.projections]
+  const rankings = [...byId.values()]
     .sort((a, b) => b.mean - a.mean)
     .slice(0, limit)
     .map((p, index) => ({

@@ -317,7 +317,17 @@ export function crosswalk(rows, catalog, confirmedMatches = {}) {
 export function buildProjections(matched, { source, scoringBasis }) {
   const variance = CURVES.variance;
 
-  return matched.map((row) => {
+  // One record per player: a name can match the same Sleeper id from two
+  // sheet rows (depth-chart duplicates). Keep the higher-mean row.
+  const byId = new Map();
+  for (const row of matched) {
+    const existing = byId.get(row.playerId);
+    if (!existing || (row.points ?? 0) > (existing.points ?? 0)) {
+      byId.set(row.playerId, row);
+    }
+  }
+
+  return [...byId.values()].map((row) => {
     const derived = row.points == null;
     const mean = row.points ?? rankToPoints(row.position, row.rank);
     const stdev =

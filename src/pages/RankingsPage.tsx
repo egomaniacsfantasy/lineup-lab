@@ -56,8 +56,10 @@ export function RankingsPage() {
     return [...set].sort((a, b) => a - b);
   }, [model]);
 
+  // Season view ranks by TOTAL points; a specific week shows that week's
+  // projection.
   const valueOf = (row: ModelRanking) =>
-    scope === 'season' ? row.mean : row.weekly?.[String(scope)] ?? null;
+    scope === 'season' ? row.seasonTotal ?? null : row.weekly?.[String(scope)] ?? null;
 
   const rows = useMemo(() => {
     if (!model) return [];
@@ -136,7 +138,7 @@ export function RankingsPage() {
           <span>#</span>
           <span>Player</span>
           <span className="rankings-model__num">
-            {scope === 'season' ? 'Pts/wk' : `Wk ${scope}`}
+            {scope === 'season' ? 'Total' : `Wk ${scope}`}
           </span>
         </div>
 
