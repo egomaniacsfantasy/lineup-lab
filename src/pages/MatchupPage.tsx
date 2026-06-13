@@ -110,6 +110,43 @@ function formatVerdict(playerName: string, deltaWinProbability: number) {
   return `Starting ${playerName} leaves your win probability unchanged.`;
 }
 
+/**
+ * Explains WHY a start helps or hurts when projection and win probability
+ * disagree. The honest fantasy logic: while you're favored, a steadier
+ * floor can lift your odds even at fewer projected points; while you're
+ * behind, a boom-or-bust ceiling can lift your odds even though it lowers
+ * the floor. A bare percentage hides that, which is what made the
+ * "lower projection, better odds" swap read as nonsense.
+ */
+function swapVerdict(
+  playerName: string,
+  projectionDelta: number,
+  deltaWinProbability: number,
+  userWinProbability: number,
+) {
+  const projUp = projectionDelta > 0.3;
+  const projDown = projectionDelta < -0.3;
+  const oddsUp = deltaWinProbability > 0.2;
+  const oddsDown = deltaWinProbability < -0.2;
+  const favored = userWinProbability >= 50;
+
+  if (projDown && oddsUp) {
+    return `${playerName} projects ${Math.abs(projectionDelta).toFixed(1)} fewer points but a steadier floor. ${
+      favored ? "You're favored, so protecting that floor" : 'In a tight spot, the safer week'
+    } actually lifts your odds ${formatSignedPercent(deltaWinProbability)}. The boring start is the right one here.`;
+  }
+
+  if (projUp && oddsDown) {
+    return `${playerName} projects ${projectionDelta.toFixed(1)} more points, but it's a boom-or-bust week. ${
+      favored
+        ? "While you're favored that added swing costs you"
+        : 'Even chasing points it nets out negative'
+    } (${formatSignedPercent(deltaWinProbability)}). Only start the ceiling if you expect to be chasing.`;
+  }
+
+  return formatVerdict(playerName, deltaWinProbability);
+}
+
 function getPlayerContext(player: Player) {
   const entry = getPlayerManifestEntry(player.slug ?? player.id);
   const kickoff = entry?.week8_2024.kickoff ?? 'Sun 1pm';
@@ -395,6 +432,7 @@ function CompareSheet({
   leftPlayer,
   rightPlayer,
   tapeNote = '',
+  userWinProbability = 50,
   onClose,
 }: {
   comparison: {
@@ -408,6 +446,7 @@ function CompareSheet({
   leftPlayer: Player;
   rightPlayer: Player;
   tapeNote?: string;
+  userWinProbability?: number;
   onClose: () => void;
 }) {
   // slotIndex >= 0: a real swap inside one lineup slot, priced by the
@@ -424,7 +463,12 @@ function CompareSheet({
   const headlineWinner = rightWins ? rightPlayer : leftWins ? leftPlayer : null;
 
   const verdict = isSwap
-    ? formatVerdict(rightPlayer.shortName, comparison.deltaWinProbability)
+    ? swapVerdict(
+        rightPlayer.shortName,
+        projectionDelta,
+        comparison.deltaWinProbability,
+        userWinProbability,
+      )
     : headlineWinner
       ? `${headlineWinner.shortName} projects ${Math.abs(projectionDelta).toFixed(1)} more points this week. ${tapeNote}`.trim()
       : `Dead even on projection. ${tapeNote}`.trim();
@@ -729,6 +773,7 @@ function MatchupLive({
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [compareSelection, setCompareSelection] = useState<Player[]>([]);
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
+  const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
   const [isRecapDismissed, setIsRecapDismissed] = useState(false);
 
   const playerMap = useMemo(
@@ -823,6 +868,8 @@ function MatchupLive({
     a.position === b.position ||
     (hasFlexSlot && FLEX_GROUP.includes(a.position) && FLEX_GROUP.includes(b.position));
 
+  const MAX_COMPARE = 4;
+
   const handleComparePick = (player: Player) => {
     setIsCompareMode(true);
     setCompareSelection((current) => {
@@ -830,29 +877,40 @@ function MatchupLive({
         return current.filter((candidate) => candidate.id !== player.id);
       }
 
-      if (current.length === 1 && !isComparable(current[0], player)) {
+      // every pick must be comparable to the first (same position, or
+      // flex-vs-flex), so the whole set stays mutually weighable
+      if (current.length >= 1 && !isComparable(current[0], player)) {
         return current; // ineligible rows are disabled; belt and braces
       }
 
-      const nextSelection = [...current, player].slice(-2);
+      if (current.length >= MAX_COMPARE) return current;
 
-      if (nextSelection.length === 2) {
-        setCompareModalPlayers([nextSelection[0], nextSelection[1]]);
-      }
-
-      return nextSelection;
+      return [...current, player];
     });
+  };
+
+  // Open the verdict: a pair gets the rich, slot-aware swap card; three or
+  // four players get a ranked board (projection is the honest currency
+  // once you're past a single swap decision).
+  const openVerdict = () => {
+    if (compareSelection.length === 2) {
+      setCompareModalPlayers([compareSelection[0], compareSelection[1]]);
+    } else if (compareSelection.length >= 3) {
+      setCompareBoardPlayers(compareSelection);
+    }
   };
 
   // Closing the verdict keeps your first pick on the slip, so trying a
   // different second player is one tap, not a restart.
   const closeVerdict = () => {
     setCompareModalPlayers(null);
+    setCompareBoardPlayers(null);
     setCompareSelection((current) => current.slice(0, 1));
   };
 
   const exitCompare = () => {
     setCompareModalPlayers(null);
+    setCompareBoardPlayers(null);
     setCompareSelection([]);
     setIsCompareMode(false);
   };
@@ -861,10 +919,20 @@ function MatchupLive({
     setCompareSelection((current) => current.filter((candidate) => candidate.id !== playerId));
   };
 
+  // Projected points for any rostered player (starter slot or bench row).
+  const projectionForPlayer = (playerId: string) => {
+    const slot = engine.roster.find((s) => s.starter.id === playerId);
+    if (slot) return slot.projection;
+    const benchRow = benchRows.find((b) => b.player.id === playerId);
+    return benchRow?.projection ?? 0;
+  };
+
   const eligibleCount =
-    compareSelection.length === 1
+    compareSelection.length >= 1
       ? [...engine.roster.map((slot) => slot.starter), ...engine.bench.map((b) => b.player)].filter(
-          (p) => p.id !== compareSelection[0].id && isComparable(compareSelection[0], p),
+          (p) =>
+            !compareSelection.some((c) => c.id === p.id) &&
+            isComparable(compareSelection[0], p),
         ).length
       : null;
 
@@ -1476,7 +1544,7 @@ function MatchupLive({
         <TitlePriceChart series={titleSeries} variant="desktop" />
       </aside>
 
-      {isCompareMode && !compareModalPlayers ? (
+      {isCompareMode && !compareModalPlayers && !compareBoardPlayers ? (
         <div aria-label="Start or sit slip" className="matchup-page__slip" role="region">
           <div className="matchup-page__slip-header">
             <span className="matchup-page__slip-title">Who do I start?</span>
@@ -1484,14 +1552,16 @@ function MatchupLive({
               Exit
             </button>
           </div>
-          <div className="matchup-page__slip-slots">
-            {[0, 1].map((slotIndex) => {
-              const pick = compareSelection[slotIndex];
-              return pick ? (
-                <div
-                  className="matchup-page__slip-slot matchup-page__slip-slot--filled"
-                  key={slotIndex}
-                >
+
+          {compareSelection.length === 0 ? (
+            <p className="matchup-page__slip-empty">
+              Tap up to four players you&apos;re deciding between. Same position
+              only.
+            </p>
+          ) : (
+            <div className="matchup-page__slip-chips">
+              {compareSelection.map((pick) => (
+                <span className="matchup-page__slip-chip" key={pick.id}>
                   <PlayerHeadshot
                     className="matchup-page__headshot matchup-page__headshot--slip"
                     fallbackClassName="matchup-page__headshot-fallback"
@@ -1507,26 +1577,36 @@ function MatchupLive({
                   >
                     ✕
                   </button>
-                </div>
-              ) : (
-                <div className="matchup-page__slip-slot" key={slotIndex}>
-                  <span className="matchup-page__slip-number">{slotIndex + 1}</span>
-                  <span className="matchup-page__slip-empty">
-                    {compareSelection.length === 0
-                      ? slotIndex === 0
-                        ? 'Tap any player'
-                        : 'Then a second'
-                      : eligibleCount === 0
-                        ? `${compareSelection[0].shortName} is your only ${compareSelection[0].position}. Remove him to weigh a different spot.`
-                        : `Who are you weighing against ${compareSelection[0].shortName}?`}
-                  </span>
-                </div>
-              );
-            })}
-            <span aria-hidden="true" className="matchup-page__slip-vs">
-              VS
-            </span>
-          </div>
+                </span>
+              ))}
+              {compareSelection.length < MAX_COMPARE && eligibleCount !== 0 ? (
+                <span className="matchup-page__slip-ghost">
+                  + add {compareSelection.length === 1 ? 'a rival' : 'another'}
+                </span>
+              ) : null}
+            </div>
+          )}
+
+          {compareSelection.length >= 1 && eligibleCount === 0 ? (
+            <p className="matchup-page__slip-note">
+              {compareSelection[0].shortName} is your only{' '}
+              {compareSelection[0].position}. Remove a pick to weigh a different
+              spot.
+            </p>
+          ) : null}
+
+          <button
+            className="matchup-page__slip-cta"
+            disabled={compareSelection.length < 2}
+            onClick={openVerdict}
+            type="button"
+          >
+            {compareSelection.length < 2
+              ? 'Pick at least two'
+              : compareSelection.length === 2
+                ? 'See the verdict'
+                : `Rank these ${compareSelection.length}`}
+          </button>
         </div>
       ) : null}
 
@@ -1536,6 +1616,7 @@ function MatchupLive({
           leftPlayer={compareModalPlayers[0]}
           onClose={closeVerdict}
           rightPlayer={compareModalPlayers[1]}
+          userWinProbability={engine.activeLine.yours.winProbability}
           tapeNote={(() => {
             const starterIds = new Set(engine.roster.map((slot) => slot.starter.id));
             const bothIn = compareModalPlayers.every((p) => starterIds.has(p.id));
@@ -1548,6 +1629,117 @@ function MatchupLive({
           })()}
         />
       ) : null}
+
+      {compareBoardPlayers ? (
+        <CompareBoard
+          onClose={closeVerdict}
+          players={compareBoardPlayers}
+          projectionFor={projectionForPlayer}
+          starterIds={new Set(engine.roster.map((slot) => slot.starter.id))}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Three or four players, ranked. Past a single swap decision, projected
+ * points are the honest currency: we don't fabricate a moneyline for a
+ * three-way slot battle that only has one opening.
+ */
+function CompareBoard({
+  players,
+  projectionFor,
+  starterIds,
+  onClose,
+}: {
+  players: Player[];
+  projectionFor: (playerId: string) => number;
+  starterIds: Set<string>;
+  onClose: () => void;
+}) {
+  const ranked = [...players]
+    .map((player) => ({ player, projection: projectionFor(player.id) }))
+    .sort((a, b) => b.projection - a.projection);
+  const top = ranked[0];
+  const maxProjection = Math.max(top.projection, 1);
+  const gap = roundTo(top.projection - ranked[1].projection);
+
+  return (
+    <div className="matchup-page__compare-scrim" onClick={onClose} role="presentation">
+      <section
+        aria-labelledby="compare-board-title"
+        className="matchup-page__compare-sheet"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="matchup-page__compare-header">
+          <div>
+            <p className="matchup-page__eyebrow">Who do I start?</p>
+            <h2 className="matchup-page__module-title" id="compare-board-title">
+              The pecking order
+            </h2>
+          </div>
+          <button
+            aria-label="Close compare"
+            className="matchup-page__sheet-close"
+            onClick={onClose}
+            type="button"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="matchup-page__board-rows">
+          {ranked.map((entry, index) => (
+            <div
+              className={[
+                'matchup-page__board-row',
+                index === 0 ? 'matchup-page__board-row--top' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              key={entry.player.id}
+            >
+              <span className="matchup-page__board-rank">{index + 1}</span>
+              <PlayerHeadshot
+                className="matchup-page__headshot matchup-page__headshot--slip"
+                fallbackClassName="matchup-page__headshot-fallback"
+                imageClassName="matchup-page__headshot-image"
+                player={entry.player}
+              />
+              <div className="matchup-page__board-copy">
+                <span className="matchup-page__row-name">
+                  {entry.player.shortName}
+                  {index === 0 ? (
+                    <span className="matchup-page__board-tag">Start</span>
+                  ) : null}
+                  {starterIds.has(entry.player.id) ? (
+                    <span className="matchup-page__board-instarter">in lineup</span>
+                  ) : null}
+                </span>
+                <span className="matchup-page__board-bar">
+                  <span
+                    className={[
+                      'matchup-page__compare-bar-fill',
+                      index === 0 ? 'matchup-page__compare-bar-fill--winner' : '',
+                    ].join(' ')}
+                    style={{ width: `${Math.max(6, (entry.projection / maxProjection) * 100)}%` }}
+                  />
+                </span>
+              </div>
+              <span className="matchup-page__projection">
+                {formatProjection(entry.projection)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <p className="matchup-page__compare-verdict">
+          {gap >= 0.3
+            ? `${top.player.shortName} is the start, ${gap.toFixed(1)} projected points clear of the next man up.`
+            : `Too close to call on projection — ${top.player.shortName} edges it, but this is a gut-feel week.`}
+        </p>
+      </section>
     </div>
   );
 }

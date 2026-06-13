@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { DraftWrappedCard } from '../components/season/DraftWrappedCard';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
 import { SeasonHeadline } from '../components/season/SeasonHeadline';
+import { WeekDetailModal } from '../components/season/WeekDetailModal';
 import {
   MOCK_DRAFT_WRAPPED,
   MOCK_SEASON_OUTLOOK,
@@ -20,6 +21,7 @@ import './SeasonPage.css';
 
 export function SeasonPage() {
   const { bootstrap, schedule, pricing } = useLeagueConnection();
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
 
   const connectedSeason = useMemo(() => {
     if (!bootstrap) return null;
@@ -128,10 +130,27 @@ export function SeasonPage() {
         ) : null}
 
         {scheduleItems.length > 0 ? (
-          <ScheduleGrid items={scheduleItems} title="Schedule" />
+          <ScheduleGrid
+            items={scheduleItems}
+            onSelectWeek={(item) => setSelectedWeek(item.week)}
+            title="Schedule"
+          />
         ) : (
           <SeasonalNotice>Loading your schedule…</SeasonalNotice>
         )}
+
+        {selectedWeek !== null ? (
+          <WeekDetailModal
+            line={
+              pricing?.available
+                ? pricing.weeklyLines?.find((w) => w.week === selectedWeek) ?? null
+                : null
+            }
+            onClose={() => setSelectedWeek(null)}
+            userTeamName={userTeam.teamName}
+            week={selectedWeek}
+          />
+        ) : null}
       </div>
     );
   }

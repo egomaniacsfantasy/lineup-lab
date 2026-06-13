@@ -1051,3 +1051,135 @@
   gap: 14px;
   margin-top: 10px;
 }
+
+/* ── Start/Sit slip: chip tray + CTA (up to four players) ── */
+.matchup-page__slip-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.matchup-page__slip-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px 5px 5px;
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  background: rgba(232, 84, 29, 0.12);
+  animation: slot-pop 220ms cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+
+.matchup-page__slip-ghost {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border: 1px dashed rgba(232, 84, 29, 0.4);
+  border-radius: 999px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.matchup-page__slip-note {
+  margin: 0 0 10px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.matchup-page__slip-cta {
+  width: 100%;
+  min-height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 140ms ease, opacity 140ms ease;
+}
+
+.matchup-page__slip-cta:hover:not(:disabled) {
+  background: var(--amber-mid);
+}
+
+.matchup-page__slip-cta:disabled {
+  background: var(--bg-surface-soft);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+/* ── Ranking board (3-4 players) ── */
+.matchup-page__board-rows {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.matchup-page__board-row {
+  display: grid;
+  grid-template-columns: 20px 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-surface-soft);
+}
+
+.matchup-page__board-row--top {
+  border-color: var(--amber);
+  background:
+    radial-gradient(120% 140% at 0% 50%, rgba(232, 84, 29, 0.12), transparent 60%),
+    var(--bg-surface-soft);
+}
+
+.matchup-page__board-rank {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.matchup-page__board-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.matchup-page__board-bar {
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-inset);
+}
+
+.matchup-page__board-tag {
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.matchup-page__board-instarter {
+  margin-left: 7px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 400;
+}

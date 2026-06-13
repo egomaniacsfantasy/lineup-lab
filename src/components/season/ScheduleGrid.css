@@ -138,3 +138,29 @@
     justify-items: start;
   }
 }
+
+.schedule-grid__row--clickable {
+  position: relative;
+  cursor: pointer;
+  padding-right: 34px;
+  transition: background 120ms ease;
+}
+
+.schedule-grid__row--clickable:hover {
+  background: var(--bg-surface-soft);
+}
+
+.schedule-grid__row--clickable:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+.schedule-grid__chevron {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  font-size: 20px;
+  line-height: 1;
+}

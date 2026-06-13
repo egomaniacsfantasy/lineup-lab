@@ -14,9 +14,10 @@ export interface ScheduleGridItem {
 interface ScheduleGridProps {
   title: string;
   items: ScheduleGridItem[];
+  onSelectWeek?: (item: ScheduleGridItem) => void;
 }
 
-export function ScheduleGrid({ title, items }: ScheduleGridProps) {
+export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) {
   return (
     <section aria-labelledby="schedule-grid-title" className="schedule-grid">
       <div className="schedule-grid__header">
@@ -26,11 +27,14 @@ export function ScheduleGrid({ title, items }: ScheduleGridProps) {
       </div>
 
       <div className="schedule-grid__rows">
-        {items.map((item) => (
+        {items.map((item) => {
+          const clickable = Boolean(onSelectWeek) && item.status !== 'bye';
+          return (
           <article
             className={[
               'schedule-grid__row',
               `schedule-grid__row--${item.status}`,
+              clickable ? 'schedule-grid__row--clickable' : '',
               item.status === 'projected' && typeof item.yourLine === 'number'
                 ? item.yourLine < 0
                   ? 'schedule-grid__row--favored'
@@ -38,6 +42,19 @@ export function ScheduleGrid({ title, items }: ScheduleGridProps) {
                 : '',
             ].join(' ')}
             key={`${item.week}-${item.opponent}`}
+            onClick={clickable ? () => onSelectWeek?.(item) : undefined}
+            role={clickable ? 'button' : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            onKeyDown={
+              clickable
+                ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelectWeek?.(item);
+                    }
+                  }
+                : undefined
+            }
           >
             <div className="schedule-grid__week">
               <span className="schedule-grid__week-label">WK {item.week}</span>
@@ -73,8 +90,14 @@ export function ScheduleGrid({ title, items }: ScheduleGridProps) {
                 </>
               )}
             </div>
+            {clickable ? (
+              <span aria-hidden="true" className="schedule-grid__chevron">
+                ›
+              </span>
+            ) : null}
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
