@@ -158,3 +158,406 @@
   font-size: 18px;
   flex-shrink: 0;
 }
+
+/* ── Trade Command Center ── */
+.trade-cc__finder,
+.trade-cc__builder,
+.trade-cc__verdict {
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.trade-cc__kicker {
+  margin: 0 0 2px;
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.trade-cc__title {
+  margin: 0 0 4px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.02em;
+}
+
+.trade-cc__sub,
+.trade-cc__hint {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.trade-cc__lane {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  margin-top: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-surface-soft);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.trade-cc__lane:hover {
+  border-color: var(--amber);
+}
+
+.trade-cc__lane-headline {
+  display: block;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.trade-cc__lane-detail {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.trade-cc__lane-price {
+  flex-shrink: 0;
+  font-family: var(--font-num);
+  font-size: 14px;
+}
+
+.trade-cc__lane-price s {
+  color: var(--ink-3);
+}
+
+.trade-cc__lane-price strong {
+  color: var(--amber-bright);
+}
+
+.trade-cc__columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 600px) {
+  .trade-cc__columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.trade-cc__column-label {
+  margin: 0 0 8px;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trade-cc__partner-select {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.trade-cc__pool {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.trade-cc__pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 100ms ease, background 100ms ease;
+}
+
+.trade-cc__pill--on {
+  border-color: var(--amber);
+  background: rgba(232, 84, 29, 0.12);
+}
+
+.trade-cc__pill-pos {
+  flex-shrink: 0;
+  width: 30px;
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.trade-cc__traits {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.trade-cc__traits-label {
+  margin: 0 0 10px;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.trade-cc__trait {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.trade-cc__trait > span {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.trade-cc__seg {
+  display: inline-flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.trade-cc__seg button {
+  padding: 5px 10px;
+  border: none;
+  background: var(--bg-inset);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.trade-cc__seg button + button {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.trade-cc__seg .trade-cc__seg-on {
+  background: var(--amber);
+  color: #fff;
+}
+
+.trade-cc__price-btn {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.trade-cc__price-btn:disabled {
+  background: var(--bg-surface-soft);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+/* verdict */
+.trade-cc__verdict-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.trade-cc__verdict-tag {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.trade-cc__band {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trade-cc__verdict-tag--good { background: rgba(52, 210, 123, 0.16); color: var(--green); }
+.trade-cc__verdict-tag--neutral { background: var(--bg-surface-soft); color: var(--text-dim); }
+.trade-cc__verdict-tag--warn { background: rgba(232, 84, 29, 0.16); color: var(--amber-bright); }
+.trade-cc__verdict-tag--bad { background: rgba(255, 92, 77, 0.16); color: var(--red); }
+
+.trade-cc__band--good { color: var(--green); }
+.trade-cc__band--neutral { color: var(--text-muted); }
+.trade-cc__band--warn { color: var(--amber-bright); }
+.trade-cc__band--bad { color: var(--red); }
+
+.trade-cc__rail {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--red), var(--text-dim) 50%, var(--green));
+  opacity: 0.6;
+}
+
+.trade-cc__rail-marker {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--bg-deep);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+}
+
+.trade-cc__rail-labels {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0 16px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trade-cc__odds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.trade-cc__odds-side {
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-surface-soft);
+}
+
+.trade-cc__odds-name {
+  margin: 0 0 6px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trade-cc__odds-value {
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.trade-cc__odds-value s { color: var(--ink-3); }
+.trade-cc__odds-value strong { color: var(--amber-bright); }
+
+.trade-cc__odds-meta {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 12px;
+}
+
+.trade-cc__reasons {
+  margin-bottom: 14px;
+}
+
+.trade-cc__reasons-title {
+  margin: 0 0 6px;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trade-cc__reasons ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.trade-cc__reasons li {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.trade-cc__fit-rows {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.trade-cc__fit-row {
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-inset);
+  text-align: center;
+}
+
+.trade-cc__fit-pos {
+  display: block;
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.trade-cc__fit-count {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 13px;
+}
+
+.trade-cc__fit-count--thin {
+  color: var(--amber-bright);
+}

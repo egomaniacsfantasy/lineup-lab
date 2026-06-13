@@ -761,6 +761,231 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
   });
 }
 
+/**
+ * Best legal starting lineup from a pool of players: greedily fill each
+ * starting slot with the highest-projection eligible player left. Used to
+ * value a roster before and after a trade — a trade is only worth what it
+ * does to the lineup you'd actually start, not your bench.
+ */
+function bestLineupDistribution(playerIds, slotLabels, projectionMap, catalog, week) {
+  const pool = playerIds
+    .map((id) => ({
+      id,
+      position: catalog[id]?.position,
+      dist: playerDistribution(id, projectionMap, catalog[id], week),
+    }))
+    .filter((p) => p.position);
+
+  const used = new Set();
+  let mean = 0;
+  let variance = 0;
+  const starters = [];
+
+  for (const slot of slotLabels) {
+    let best = null;
+    for (const p of pool) {
+      if (used.has(p.id)) continue;
+      if (!slotAllows(slot, p.position)) continue;
+      if (!best || p.dist.mean > best.dist.mean) best = p;
+    }
+    if (best) {
+      used.add(best.id);
+      mean += best.dist.mean;
+      variance += best.dist.stdev * best.dist.stdev;
+      starters.push(best.id);
+    }
+  }
+
+  return { mean, sigma: Math.sqrt(variance), starters };
+}
+
+const FANTASY_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+
+function depthByPosition(playerIds, catalog) {
+  const counts = Object.fromEntries(FANTASY_POSITIONS.map((p) => [p, 0]));
+  for (const id of playerIds) {
+    const pos = catalog[id]?.position;
+    if (pos && counts[pos] != null) counts[pos] += 1;
+  }
+  return counts;
+}
+
+/**
+ * Price a proposed trade for BOTH sides. Honest by construction: every
+ * number is recomputed from the real rosters and the active projections.
+ * The only subjective inputs are the partner-trait knobs, supplied by the
+ * user (the one person who actually knows their league), so the
+ * acceptance read is parameterized truth, never fabricated psychology.
+ */
+export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get = [], traits = {} }) {
+  const active = getActiveProjections();
+  if (!active) return { available: false, reason: 'no_projections' };
+
+  const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
+  const { league, teams, catalog, scheduleWeeks, week } = ctx;
+  const slotLabels = (league.rosterPositions ?? []).filter(
+    (p) => !['BN', 'IR', 'TAXI'].includes(p),
+  );
+
+  const user = teams.find((t) => t.rosterId === userRosterId);
+  const partner = teams.find((t) => t.rosterId === partnerRosterId);
+  if (!user || !partner) return { available: false, reason: 'roster_not_found' };
+  if (give.length === 0 || get.length === 0) {
+    return { available: false, reason: 'empty_side' };
+  }
+
+  const seed = parseInt(
+    crypto.createHash('sha1').update([userRosterId, partnerRosterId, ...give, ...get].join('|')).digest('hex').slice(0, 8),
+    16,
+  );
+
+  // baseline best-lineup distributions for the whole league
+  const baseDist = new Map(
+    teams.map((t) => [t.rosterId, bestLineupDistribution(t.players, slotLabels, projectionMap, catalog, week)]),
+  );
+
+  const userPoolAfter = user.players.filter((id) => !give.includes(id)).concat(get);
+  const partnerPoolAfter = partner.players.filter((id) => !get.includes(id)).concat(give);
+  const userAfter = bestLineupDistribution(userPoolAfter, slotLabels, projectionMap, catalog, week);
+  const partnerAfter = bestLineupDistribution(partnerPoolAfter, slotLabels, projectionMap, catalog, week);
+
+  const futuresBefore = simulateFutures({ league, teams, distByRoster: baseDist, scheduleWeeks, week, seed });
+  const afterDist = new Map(baseDist);
+  afterDist.set(userRosterId, userAfter);
+  afterDist.set(partnerRosterId, partnerAfter);
+  const futuresAfter = simulateFutures({ league, teams, distByRoster: afterDist, scheduleWeeks, week, seed });
+
+  const find = (futures, rosterId) => futures.find((f) => f.rosterId === rosterId);
+  const yourBefore = find(futuresBefore, userRosterId);
+  const yourAfter = find(futuresAfter, userRosterId);
+  const theirBefore = find(futuresBefore, partnerRosterId);
+  const theirAfter = find(futuresAfter, partnerRosterId);
+
+  const yourValueDelta = Number((userAfter.mean - baseDist.get(userRosterId).mean).toFixed(1));
+  const theirValueDelta = Number((partnerAfter.mean - baseDist.get(partnerRosterId).mean).toFixed(1));
+
+  // best player in the deal — who's getting the headliner
+  const everyPlayer = [...give, ...get]
+    .map((id) => ({
+      id,
+      name: catalog[id]?.name ?? `Player ${id}`,
+      mean: projectionMap.get(id)?.mean ?? 0,
+      toThem: give.includes(id),
+    }))
+    .sort((a, b) => b.mean - a.mean);
+  const bestPlayer = everyPlayer[0];
+
+  // depth picture for the user
+  const depthBefore = depthByPosition(user.players, catalog);
+  const depthAfter = depthByPosition(userPoolAfter, catalog);
+
+  // ── acceptance read: computable facts, nudged by the trait knobs ──
+  const stinginess = Math.min(100, Math.max(0, traits.stinginess ?? 50));
+  const starBias = Math.min(100, Math.max(0, traits.starBias ?? 0));
+  const mode = traits.mode ?? 'balanced';
+
+  const reasons = [];
+  let score = 0;
+
+  if (theirValueDelta > 0.5) {
+    score += theirValueDelta;
+    reasons.push(`Upgrades their starting lineup by ${theirValueDelta} projected points.`);
+  } else if (theirValueDelta < -0.5) {
+    score += theirValueDelta;
+    reasons.push(`Downgrades their starting lineup by ${Math.abs(theirValueDelta)} projected points.`);
+  } else {
+    reasons.push("Barely moves their starting lineup, so there's little reason to say yes.");
+  }
+
+  if (bestPlayer.toThem) {
+    score += 2;
+    reasons.push(`They land the best player in the deal (${bestPlayer.name}).`);
+  } else {
+    score -= 3;
+    reasons.push(`They give up the best player in the deal (${bestPlayer.name}).`);
+  }
+
+  // their thin spots: positions where they sit at or below the slot need
+  const partnerDepth = depthByPosition(partner.players, catalog);
+  const getPositions = get.map((id) => catalog[id]?.position).filter(Boolean);
+  const slotNeed = (pos) => slotLabels.filter((s) => slotAllows(s, pos)).length;
+  const fillsNeed = give.some((id) => {
+    const pos = catalog[id]?.position;
+    return pos && partnerDepth[pos] != null && partnerDepth[pos] <= slotNeed(pos);
+  });
+  if (fillsNeed) {
+    score += 2;
+    reasons.push('It plugs a position they are thin at.');
+  }
+
+  // win-now partners want startable help; rebuilders are colder on it
+  if (mode === 'win-now' && theirValueDelta > 0.5) {
+    score += 1;
+  } else if (mode === 'rebuild') {
+    score -= 1;
+    reasons.push('You marked them as rebuilding, so win-now value lands softer.');
+  }
+
+  // star bias: reluctance to part with their own stud
+  const givingUpStud = get.some((id) => (projectionMap.get(id)?.mean ?? 0) >= 14);
+  if (givingUpStud && starBias > 40) {
+    score -= starBias / 25;
+    reasons.push('You flagged them as attached to their stars, and a stud is leaving their side.');
+  }
+
+  // stinginess raises the bar to clear
+  score -= (stinginess - 50) / 15;
+  if (stinginess >= 70) {
+    reasons.push('You marked them as a tough negotiator, so the bar is higher.');
+  }
+
+  const acceptanceBand =
+    score >= 5 ? 'Smash accept'
+      : score >= 2.5 ? 'Likely'
+        : score >= 0 ? 'Coin flip'
+          : score >= -2.5 ? 'Unlikely'
+            : 'Long shot';
+
+  // ── your-side verdict from your title-odds + value movement ──
+  const titleGain = (yourAfter?.titleProb ?? 0) - (yourBefore?.titleProb ?? 0);
+  let verdict;
+  if (yourValueDelta >= 4 && titleGain >= 0) verdict = 'Smash accept';
+  else if (yourValueDelta >= 1) verdict = 'Good value';
+  else if (yourValueDelta > -1) verdict = 'Fair';
+  else if (fillsNeed || depthAfter) verdict = yourValueDelta >= -3 ? 'Justifiable overpay' : 'Overpay';
+  else verdict = 'Overpay';
+
+  const isDepthPackage =
+    give.length >= 2 &&
+    get.length === 1 &&
+    give.filter((id) => bestLineupDistribution([...user.players.filter((p) => !give.includes(p)), id], slotLabels, projectionMap, catalog, week).starters.includes(id)).length <= 1;
+
+  return {
+    available: true,
+    projectionVersion: active.version,
+    you: {
+      teamName: user.teamName,
+      titleBefore: yourBefore?.championOdds ?? 0,
+      titleAfter: yourAfter?.championOdds ?? 0,
+      titleProbBefore: yourBefore?.titleProb ?? 0,
+      titleProbAfter: yourAfter?.titleProb ?? 0,
+      valueDelta: yourValueDelta,
+      depthBefore,
+      depthAfter,
+    },
+    them: {
+      teamName: partner.teamName,
+      titleBefore: theirBefore?.championOdds ?? 0,
+      titleAfter: theirAfter?.championOdds ?? 0,
+      valueDelta: theirValueDelta,
+    },
+    verdict,
+    acceptance: { band: acceptanceBand, reasons },
+    bestPlayer: { name: bestPlayer.name, toThem: bestPlayer.toThem },
+    isDepthPackage,
+  };
+}
+
 /** Cached league pricing keyed by the league id; recomputes when inputs change. */
 export async function getLeaguePricing(ctxLoader, leagueId) {
   return cached(`pricing:${leagueId}`, 60_000, async () => {

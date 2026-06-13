@@ -208,8 +208,8 @@ export class LeagueApiError extends Error {
   }
 }
 
-async function get<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+async function get<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, init);
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
@@ -242,4 +242,52 @@ export function fetchSchedule(leagueId: string) {
 
 export function refreshLeague(leagueId: string) {
   return fetch(`/api/league/${leagueId}/refresh`, { method: 'POST' });
+}
+
+export interface TradeTraits {
+  stinginess: number;
+  starBias: number;
+  mode: 'rebuild' | 'balanced' | 'win-now';
+}
+
+export interface TradeResult {
+  available: boolean;
+  reason?: string;
+  you?: {
+    teamName: string;
+    titleBefore: number;
+    titleAfter: number;
+    titleProbBefore: number;
+    titleProbAfter: number;
+    valueDelta: number;
+    depthBefore: Record<string, number>;
+    depthAfter: Record<string, number>;
+  };
+  them?: {
+    teamName: string;
+    titleBefore: number;
+    titleAfter: number;
+    valueDelta: number;
+  };
+  verdict?: string;
+  acceptance?: { band: string; reasons: string[] };
+  bestPlayer?: { name: string; toThem: boolean };
+  isDepthPackage?: boolean;
+}
+
+export function priceTrade(
+  leagueId: string,
+  body: {
+    userId: string;
+    partnerRosterId: number;
+    give: string[];
+    get: string[];
+    traits: TradeTraits;
+  },
+): Promise<TradeResult> {
+  return get<TradeResult>(`/api/league/${leagueId}/trade`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
