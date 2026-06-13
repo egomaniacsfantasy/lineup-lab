@@ -441,6 +441,55 @@
   text-transform: uppercase;
 }
 
+.myboard__legend-god {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--amber-bright, #ff6a33);
+  cursor: help;
+}
+
+.myboard__info {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-family: var(--font-num, monospace);
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.myboard__tip {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 50;
+  width: 250px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle, #23272b);
+  border-radius: 10px;
+  background: var(--bg-surface, #15181b);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+  color: var(--text-soft, #b9bdb4);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.myboard__legend-god:hover .myboard__tip,
+.myboard__legend-god:focus .myboard__tip,
+.myboard__legend-god:focus-within .myboard__tip {
+  display: block;
+}
+
 .myboard__list {
   display: flex;
   flex-direction: column;

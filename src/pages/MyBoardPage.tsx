@@ -608,8 +608,16 @@ function BoardView({
       </div>
 
       <div className="myboard__legend">
-        <span>{position === 'ALL' ? 'Overall · by GOD rating' : 'Your order · by GOD'}</span>
-        <span>GOD / 100</span>
+        <span>{position === 'ALL' ? 'Overall · by GOD' : 'Your order · by GOD'}</span>
+        <span className="myboard__legend-god" tabIndex={0} role="button" aria-label="What is the GOD score?">
+          GOD score
+          <i className="myboard__info" aria-hidden="true">i</i>
+          <span className="myboard__tip" role="tooltip">
+            GOD is one 1–100 rating per player: Franco&apos;s projection, value over
+            replacement, and position scarcity combined. 100 is the best player on
+            the board; ~50 is replacement level. Tap any player to set your own.
+          </span>
+        </span>
       </div>
 
       <div className="myboard__list">
