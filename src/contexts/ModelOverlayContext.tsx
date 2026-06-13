@@ -23,27 +23,59 @@ export type Overlay = Record<string, PlayerOverride>;
 /** "I want to revisit this guy" — too high / too low. Does not move the line. */
 export type Flags = Record<string, 'high' | 'low'>;
 
-const LS_KEY = 'og.olympus.model-overlay';
-
-interface Persisted {
+/** A named ranking set: a whole model the user can save, switch, and load. */
+export interface ModelSet {
+  id: string;
+  name: string;
   overlay: Overlay;
   flags: Flags;
+}
+
+interface Persisted {
+  sets: ModelSet[];
+  activeId: string;
+}
+
+const LS_KEY = 'og.olympus.model-overlay';
+
+function newId() {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `set-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  }
+}
+
+function freshSet(name = 'My board'): ModelSet {
+  return { id: newId(), name, overlay: {}, flags: {} };
 }
 
 function readLocal(): Persisted {
   try {
     const raw = window.localStorage.getItem(LS_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Partial<Persisted>) : null;
-    return { overlay: parsed?.overlay ?? {}, flags: parsed?.flags ?? {} };
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed?.sets?.length) {
+      return { sets: parsed.sets as ModelSet[], activeId: parsed.activeId ?? parsed.sets[0].id };
+    }
+    // Migrate the old single-overlay shape ({ overlay, flags }) into one set.
+    if (parsed?.overlay) {
+      const s: ModelSet = { ...freshSet(), overlay: parsed.overlay, flags: parsed.flags ?? {} };
+      return { sets: [s], activeId: s.id };
+    }
   } catch {
-    return { overlay: {}, flags: {} };
+    // fall through to a default
   }
+  const s = freshSet();
+  return { sets: [s], activeId: s.id };
+}
+
+function activeOf(p: Persisted): ModelSet {
+  return p.sets.find((s) => s.id === p.activeId) ?? p.sets[0];
 }
 
 /** base64(UTF-8 JSON) for the x-olympus-overlay header. null = pure Franco. */
 export function encodeOverlay(overlay: Overlay): string | null {
-  const keys = Object.keys(overlay);
-  if (keys.length === 0) return null;
+  if (Object.keys(overlay).length === 0) return null;
   try {
     return btoa(unescape(encodeURIComponent(JSON.stringify(overlay))));
   } catch {
@@ -51,33 +83,34 @@ export function encodeOverlay(overlay: Overlay): string | null {
   }
 }
 
-function pushHeader(overlay: Overlay) {
-  setProjectionOverlay(encodeOverlay(overlay));
-}
-
 interface ModelOverlayValue {
+  // ── Active set (drives the book) ──
   overlay: Overlay;
   flags: Flags;
-  /** Bumps on every change; the league context watches it to reprice. */
   overlayVersion: number;
-  /** How many players the user has moved off Franco. */
   overrideCount: number;
   setPlayerBase: (playerId: string, base: number | null) => void;
   setPlayerWeekly: (playerId: string, week: number, points: number | null) => void;
   clearPlayer: (playerId: string) => void;
   toggleFlag: (playerId: string, kind: 'high' | 'low') => void;
   reset: () => void;
+  // ── Named sets ──
+  sets: Array<{ id: string; name: string; count: number }>;
+  activeSetId: string;
+  activeSetName: string;
+  createSet: (name?: string) => void;
+  renameSet: (id: string, name: string) => void;
+  deleteSet: (id: string) => void;
+  switchSet: (id: string) => void;
 }
 
 const ModelOverlayContext = createContext<ModelOverlayValue | null>(null);
 
 export function ModelOverlayProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  // Read local + set the header synchronously on first render, so the very
-  // first pricing fetch (a child effect) already carries the user's model.
-  const [{ overlay, flags }, setState] = useState<Persisted>(() => {
+  const [state, setState] = useState<Persisted>(() => {
     const initial = readLocal();
-    pushHeader(initial.overlay);
+    setProjectionOverlay(encodeOverlay(activeOf(initial).overlay));
     return initial;
   });
   const [overlayVersion, setOverlayVersion] = useState(0);
@@ -85,51 +118,72 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     userIdRef.current = user?.id ?? null;
   }, [user]);
-  // Always-fresh snapshot so setters can read current state without stale
-  // closures. Updated only in commit + the login load, never during render.
-  const stateRef = useRef<Persisted>({ overlay, flags });
+  const stateRef = useRef<Persisted>(state);
 
-  // Persist (local now, Supabase best-effort) and re-push the header on change.
-  const commit = useCallback((next: Persisted) => {
-    stateRef.current = next;
-    setState(next);
-    pushHeader(next.overlay);
-    setOverlayVersion((v) => v + 1);
-    try {
-      window.localStorage.setItem(LS_KEY, JSON.stringify(next));
-    } catch {
-      // private mode: lives for the session
-    }
+  const persistRemote = useCallback((sets: ModelSet[], activeId: string) => {
     const uid = userIdRef.current;
-    if (uid) {
-      void supabase
-        .from('olympus_models')
-        .upsert(
-          { user_id: uid, overlay: next.overlay, flags: next.flags, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id' },
-        )
-        .then(() => undefined, () => undefined);
-    }
+    if (!uid) return;
+    const rows = sets.map((s) => ({
+      id: s.id,
+      user_id: uid,
+      name: s.name,
+      overlay: s.overlay,
+      flags: s.flags,
+      is_active: s.id === activeId,
+      updated_at: new Date().toISOString(),
+    }));
+    void supabase
+      .from('olympus_models')
+      .upsert(rows, { onConflict: 'id' })
+      .then(() => undefined, () => undefined);
   }, []);
 
-  // On login, the account's saved model is the source of truth (cross-device).
+  // Commit a whole new sets-state: header (from active overlay) + persistence.
+  const commit = useCallback(
+    (next: Persisted) => {
+      stateRef.current = next;
+      setState(next);
+      setProjectionOverlay(encodeOverlay(activeOf(next).overlay));
+      setOverlayVersion((v) => v + 1);
+      try {
+        window.localStorage.setItem(LS_KEY, JSON.stringify(next));
+      } catch {
+        // private mode: session-only
+      }
+      persistRemote(next.sets, next.activeId);
+    },
+    [persistRemote],
+  );
+
+  // On login, the account's saved sets are the source of truth (cross-device).
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     void supabase
       .from('olympus_models')
-      .select('overlay, flags')
+      .select('id, name, overlay, flags, is_active, created_at')
       .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled || !data) return;
-        const next = {
-          overlay: (data.overlay as Overlay) ?? {},
-          flags: (data.flags as Flags) ?? {},
-        };
+      .order('created_at', { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled || error) return;
+        const rows = data ?? [];
+        if (rows.length === 0) {
+          // First login: push whatever's local up to the account.
+          const local = stateRef.current;
+          persistRemote(local.sets, local.activeId);
+          return;
+        }
+        const sets: ModelSet[] = rows.map((r) => ({
+          id: r.id as string,
+          name: (r.name as string) ?? 'My board',
+          overlay: (r.overlay as Overlay) ?? {},
+          flags: (r.flags as Flags) ?? {},
+        }));
+        const activeRow = rows.find((r) => r.is_active) ?? rows[0];
+        const next: Persisted = { sets, activeId: activeRow.id as string };
         stateRef.current = next;
         setState(next);
-        pushHeader(next.overlay);
+        setProjectionOverlay(encodeOverlay(activeOf(next).overlay));
         setOverlayVersion((v) => v + 1);
         try {
           window.localStorage.setItem(LS_KEY, JSON.stringify(next));
@@ -140,79 +194,159 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, persistRemote]);
+
+  // Apply an edit to the active set's overlay/flags.
+  const editActive = useCallback(
+    (fn: (set: ModelSet) => ModelSet) => {
+      const prev = stateRef.current;
+      const act = activeOf(prev);
+      const nextSet = fn(act);
+      commit({ sets: prev.sets.map((s) => (s.id === act.id ? nextSet : s)), activeId: prev.activeId });
+    },
+    [commit],
+  );
 
   const setPlayerBase = useCallback(
     (playerId: string, base: number | null) => {
-      const prev = stateRef.current;
-      const current = prev.overlay[playerId] ?? {};
-      const nextPlayer: PlayerOverride = { ...current };
-      if (base == null) delete nextPlayer.base;
-      else nextPlayer.base = Math.round(base * 10) / 10;
-      const overlayNext = { ...prev.overlay };
-      if (nextPlayer.base == null && !nextPlayer.weekly) delete overlayNext[playerId];
-      else overlayNext[playerId] = nextPlayer;
-      commit({ overlay: overlayNext, flags: prev.flags });
+      editActive((set) => {
+        const current = set.overlay[playerId] ?? {};
+        const nextPlayer: PlayerOverride = { ...current };
+        if (base == null) delete nextPlayer.base;
+        else nextPlayer.base = Math.round(base * 10) / 10;
+        const overlay = { ...set.overlay };
+        if (nextPlayer.base == null && !nextPlayer.weekly) delete overlay[playerId];
+        else overlay[playerId] = nextPlayer;
+        return { ...set, overlay };
+      });
     },
-    [commit],
+    [editActive],
   );
 
   const setPlayerWeekly = useCallback(
     (playerId: string, week: number, points: number | null) => {
-      const prev = stateRef.current;
-      const current = prev.overlay[playerId] ?? {};
-      const weekly = { ...(current.weekly ?? {}) };
-      if (points == null) delete weekly[String(week)];
-      else weekly[String(week)] = Math.round(points * 10) / 10;
-      const nextPlayer: PlayerOverride = { ...current };
-      if (Object.keys(weekly).length === 0) delete nextPlayer.weekly;
-      else nextPlayer.weekly = weekly;
-      const overlayNext = { ...prev.overlay };
-      if (nextPlayer.base == null && !nextPlayer.weekly) delete overlayNext[playerId];
-      else overlayNext[playerId] = nextPlayer;
-      commit({ overlay: overlayNext, flags: prev.flags });
+      editActive((set) => {
+        const current = set.overlay[playerId] ?? {};
+        const weekly = { ...(current.weekly ?? {}) };
+        if (points == null) delete weekly[String(week)];
+        else weekly[String(week)] = Math.round(points * 10) / 10;
+        const nextPlayer: PlayerOverride = { ...current };
+        if (Object.keys(weekly).length === 0) delete nextPlayer.weekly;
+        else nextPlayer.weekly = weekly;
+        const overlay = { ...set.overlay };
+        if (nextPlayer.base == null && !nextPlayer.weekly) delete overlay[playerId];
+        else overlay[playerId] = nextPlayer;
+        return { ...set, overlay };
+      });
     },
-    [commit],
+    [editActive],
   );
 
   const clearPlayer = useCallback(
     (playerId: string) => {
-      const prev = stateRef.current;
-      const overlayNext = { ...prev.overlay };
-      delete overlayNext[playerId];
-      commit({ overlay: overlayNext, flags: prev.flags });
+      editActive((set) => {
+        const overlay = { ...set.overlay };
+        delete overlay[playerId];
+        return { ...set, overlay };
+      });
     },
-    [commit],
+    [editActive],
   );
 
   const toggleFlag = useCallback(
     (playerId: string, kind: 'high' | 'low') => {
+      editActive((set) => {
+        const flags = { ...set.flags };
+        if (flags[playerId] === kind) delete flags[playerId];
+        else flags[playerId] = kind;
+        return { ...set, flags };
+      });
+    },
+    [editActive],
+  );
+
+  const reset = useCallback(() => {
+    editActive((set) => ({ ...set, overlay: {}, flags: {} }));
+  }, [editActive]);
+
+  const createSet = useCallback(
+    (name?: string) => {
       const prev = stateRef.current;
-      const flagsNext = { ...prev.flags };
-      if (flagsNext[playerId] === kind) delete flagsNext[playerId];
-      else flagsNext[playerId] = kind;
-      commit({ overlay: prev.overlay, flags: flagsNext });
+      const s = freshSet(name?.trim() || `Board ${prev.sets.length + 1}`);
+      commit({ sets: [...prev.sets, s], activeId: s.id });
     },
     [commit],
   );
 
-  const reset = useCallback(() => {
-    commit({ overlay: {}, flags: {} });
-  }, [commit]);
+  const renameSet = useCallback(
+    (id: string, name: string) => {
+      const prev = stateRef.current;
+      commit({
+        sets: prev.sets.map((s) => (s.id === id ? { ...s, name: name.trim() || s.name } : s)),
+        activeId: prev.activeId,
+      });
+    },
+    [commit],
+  );
 
-  const value = useMemo(
+  const deleteSet = useCallback(
+    (id: string) => {
+      const prev = stateRef.current;
+      const remaining = prev.sets.filter((s) => s.id !== id);
+      const sets = remaining.length ? remaining : [freshSet()];
+      const activeId = prev.activeId === id ? sets[0].id : prev.activeId;
+      const uid = userIdRef.current;
+      if (uid) {
+        void supabase.from('olympus_models').delete().eq('id', id).then(() => undefined, () => undefined);
+      }
+      commit({ sets, activeId });
+    },
+    [commit],
+  );
+
+  const switchSet = useCallback(
+    (id: string) => {
+      const prev = stateRef.current;
+      if (id === prev.activeId || !prev.sets.some((s) => s.id === id)) return;
+      commit({ sets: prev.sets, activeId: id });
+    },
+    [commit],
+  );
+
+  const active = activeOf(state);
+  const value = useMemo<ModelOverlayValue>(
     () => ({
-      overlay,
-      flags,
+      overlay: active.overlay,
+      flags: active.flags,
       overlayVersion,
-      overrideCount: Object.keys(overlay).length,
+      overrideCount: Object.keys(active.overlay).length,
       setPlayerBase,
       setPlayerWeekly,
       clearPlayer,
       toggleFlag,
       reset,
+      sets: state.sets.map((s) => ({ id: s.id, name: s.name, count: Object.keys(s.overlay).length })),
+      activeSetId: active.id,
+      activeSetName: active.name,
+      createSet,
+      renameSet,
+      deleteSet,
+      switchSet,
     }),
-    [overlay, flags, overlayVersion, setPlayerBase, setPlayerWeekly, clearPlayer, toggleFlag, reset],
+    [
+      active,
+      state.sets,
+      overlayVersion,
+      setPlayerBase,
+      setPlayerWeekly,
+      clearPlayer,
+      toggleFlag,
+      reset,
+      createSet,
+      renameSet,
+      deleteSet,
+      switchSet,
+    ],
   );
 
   return <ModelOverlayContext.Provider value={value}>{children}</ModelOverlayContext.Provider>;

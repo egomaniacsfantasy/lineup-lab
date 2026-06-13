@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { RankingMechanic } from '../components/rankings/RankingMechanic';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
@@ -42,9 +42,154 @@ function scaleFor(row: BoardRow) {
   return { floor, ceiling, min: Math.max(0, floor - 0.3 * span), max: ceiling + 0.3 * span };
 }
 
+/** Save / name / switch / delete named ranking sets, from the board title. */
+function SetSwitcher({
+  sets,
+  activeSetId,
+  activeSetName,
+  createSet,
+  renameSet,
+  deleteSet,
+  switchSet,
+}: {
+  sets: Array<{ id: string; name: string; count: number }>;
+  activeSetId: string;
+  activeSetName: string;
+  createSet: (name?: string) => void;
+  renameSet: (id: string, name: string) => void;
+  deleteSet: (id: string) => void;
+  switchSet: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(activeSetName);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDraftName(activeSetName);
+  }, [activeSetName]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onClick = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setRenaming(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        setRenaming(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const commitRename = () => {
+    renameSet(activeSetId, draftName);
+    setRenaming(false);
+  };
+
+  return (
+    <div className="setsw" ref={ref}>
+      <button className="setsw__trigger" onClick={() => setOpen((v) => !v)} type="button">
+        <span className="setsw__name">{activeSetName}</span>
+        <svg className="setsw__chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 6l4 4 4-4" />
+        </svg>
+      </button>
+
+      {open ? (
+        <div className="setsw__pop" role="menu">
+          <p className="setsw__poplabel">Your boards</p>
+          {sets.map((s) => (
+            <button
+              className={s.id === activeSetId ? 'setsw__set setsw__set--on' : 'setsw__set'}
+              key={s.id}
+              onClick={() => {
+                switchSet(s.id);
+                setOpen(false);
+              }}
+              type="button"
+            >
+              <span className="setsw__set-name">{s.name}</span>
+              <span className="setsw__set-count">{s.count === 0 ? 'Franco' : `${s.count} moved`}</span>
+            </button>
+          ))}
+
+          <div className="setsw__actions">
+            {renaming ? (
+              <form
+                className="setsw__renameform"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  commitRename();
+                }}
+              >
+                <input
+                  autoFocus
+                  className="setsw__input"
+                  onBlur={commitRename}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  value={draftName}
+                />
+              </form>
+            ) : (
+              <button className="setsw__action" onClick={() => setRenaming(true)} type="button">
+                Rename
+              </button>
+            )}
+            <button
+              className="setsw__action"
+              onClick={() => {
+                createSet();
+                setOpen(false);
+              }}
+              type="button"
+            >
+              + New board
+            </button>
+            {sets.length > 1 ? (
+              <button
+                className="setsw__action setsw__action--danger"
+                onClick={() => {
+                  deleteSet(activeSetId);
+                  setOpen(false);
+                }}
+                type="button"
+              >
+                Delete this board
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function MyBoardPage() {
   const { bootstrap } = useLeagueConnection();
-  const { overlay, setPlayerBase, clearPlayer, overrideCount, reset } = useModelOverlay();
+  const {
+    overlay,
+    setPlayerBase,
+    clearPlayer,
+    overrideCount,
+    reset,
+    sets,
+    activeSetId,
+    activeSetName,
+    createSet,
+    renameSet,
+    deleteSet,
+    switchSet,
+  } = useModelOverlay();
   const [board, setBoard] = useState<BoardRow[] | null>(null);
   const [version, setVersion] = useState<string | null>(null);
   const [mode, setMode] = useState<'rapid' | 'board'>('rapid');
@@ -85,7 +230,15 @@ export function MyBoardPage() {
           <p className="myboard__kicker">
             Your model{version ? ` · on Franco ${version}` : ''}
           </p>
-          <h1 className="myboard__title">Your board</h1>
+          <SetSwitcher
+            sets={sets}
+            activeSetId={activeSetId}
+            activeSetName={activeSetName}
+            createSet={createSet}
+            renameSet={renameSet}
+            deleteSet={deleteSet}
+            switchSet={switchSet}
+          />
         </div>
         <div className="myboard__head-right">
           <span className="myboard__count">
