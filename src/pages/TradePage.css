@@ -561,3 +561,53 @@
 .trade-cc__fit-count--thin {
   color: var(--amber-bright);
 }
+
+.trade-cc__pool-divider {
+  margin: 8px 0 4px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.trade-cc__pill {
+  width: 100%;
+}
+
+.trade-cc__pill--bench {
+  opacity: 0.82;
+}
+
+.trade-cc__pill-headshot {
+  position: relative;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-surface-soft);
+}
+
+.trade-cc__pill-headshot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trade-cc__pill-headshot-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--ink-3);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.trade-cc__pill-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

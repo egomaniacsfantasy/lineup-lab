@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
+import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { toPlayer } from '../adapters/connectedLeague';
 import {
   priceTrade,
   type TradeResult,
@@ -37,13 +39,17 @@ const VERDICT_RAIL: Record<string, number> = {
   'Smash accept': 0.9,
 };
 
+// Starters first, in their lineup order, then the bench — the way a manager
+// reads a roster.
 function rosterRows(bootstrap: LeagueBootstrap, rosterId: number) {
   const team = bootstrap.teams.find((t) => t.rosterId === rosterId);
   if (!team) return [];
-  return team.players
-    .map((id) => ({ id, player: bootstrap.players[id] }))
-    .filter((row) => row.player)
-    .sort((a, b) => a.player.position.localeCompare(b.player.position));
+  const starters = (team.starters ?? []).filter((id) => id && id !== '0');
+  const starterSet = new Set(starters);
+  const bench = team.players.filter((id) => !starterSet.has(id));
+  return [...starters, ...bench]
+    .map((id) => ({ id, player: bootstrap.players[id], isStarter: starterSet.has(id) }))
+    .filter((row) => row.player);
 }
 
 export function TradePage() {
@@ -132,6 +138,40 @@ export function TradePage() {
 
   const canPrice = partnerRosterId != null && give.length > 0 && getIds.length > 0;
 
+  const renderPool = (rosterId: number, list: string[], set: (v: string[]) => void) => {
+    const rows = rosterRows(bootstrap, rosterId);
+    const firstBenchIndex = rows.findIndex((r) => !r.isStarter);
+    return (
+      <div className="trade-cc__pool">
+        {rows.map((row, index) => (
+          <div key={row.id}>
+            {index === firstBenchIndex && firstBenchIndex > 0 ? (
+              <p className="trade-cc__pool-divider">Bench</p>
+            ) : null}
+            <button
+              className={[
+                'trade-cc__pill',
+                list.includes(row.id) ? 'trade-cc__pill--on' : '',
+                row.isStarter ? '' : 'trade-cc__pill--bench',
+              ].join(' ')}
+              onClick={() => toggle(list, set, row.id)}
+              type="button"
+            >
+              <PlayerHeadshot
+                className="trade-cc__pill-headshot"
+                fallbackClassName="trade-cc__pill-headshot-fallback"
+                imageClassName="trade-cc__pill-headshot-image"
+                player={toPlayer(row.id, bootstrap.players)}
+              />
+              <span className="trade-cc__pill-pos">{row.player.position}</span>
+              <span className="trade-cc__pill-name">{row.player.name}</span>
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="trade-page">
       <h1 className="visually-hidden">Trade Command Center</h1>
@@ -172,22 +212,7 @@ export function TradePage() {
         <div className="trade-cc__columns">
           <div className="trade-cc__column">
             <p className="trade-cc__column-label">You send</p>
-            <div className="trade-cc__pool">
-              {rosterRows(bootstrap, userTeam.rosterId).map((row) => (
-                <button
-                  className={[
-                    'trade-cc__pill',
-                    give.includes(row.id) ? 'trade-cc__pill--on' : '',
-                  ].join(' ')}
-                  key={row.id}
-                  onClick={() => toggle(give, setGive, row.id)}
-                  type="button"
-                >
-                  <span className="trade-cc__pill-pos">{row.player.position}</span>
-                  {row.player.name}
-                </button>
-              ))}
-            </div>
+            {renderPool(userTeam.rosterId, give, setGive)}
           </div>
 
           <div className="trade-cc__column">
@@ -209,22 +234,7 @@ export function TradePage() {
               ))}
             </select>
             {partnerRosterId != null ? (
-              <div className="trade-cc__pool">
-                {rosterRows(bootstrap, partnerRosterId).map((row) => (
-                  <button
-                    className={[
-                      'trade-cc__pill',
-                      getIds.includes(row.id) ? 'trade-cc__pill--on' : '',
-                    ].join(' ')}
-                    key={row.id}
-                    onClick={() => toggle(getIds, setGetIds, row.id)}
-                    type="button"
-                  >
-                    <span className="trade-cc__pill-pos">{row.player.position}</span>
-                    {row.player.name}
-                  </button>
-                ))}
-              </div>
+              renderPool(partnerRosterId, getIds, setGetIds)
             ) : (
               <p className="trade-cc__hint">Pick a manager to see their roster.</p>
             )}

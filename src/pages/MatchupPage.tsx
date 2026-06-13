@@ -3,7 +3,6 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
-import { usePlayerDetail } from '../contexts/PlayerDetailContext';
 import { getPlayerManifestEntry } from '../data/playerManifest';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import {
@@ -11,7 +10,6 @@ import {
   MOCK_PLAYER_POOL,
   MOCK_TRADE_TARGET_GROUPS,
   MOCK_WAIVER_SUGGESTION,
-  MOCK_WEEKLY_TRAJECTORY,
 } from '../mocks';
 import { toMatchupData } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
@@ -275,10 +273,23 @@ function buildBenchImpactRows(
 function TeamCrest({
   teamName,
   isUser = false,
+  avatarUrl,
 }: {
   teamName: string;
   isUser?: boolean;
+  avatarUrl?: string | null;
 }) {
+  // Real Sleeper team avatar wins over initials/glyph when the league set one.
+  if (avatarUrl) {
+    return (
+      <span
+        aria-hidden="true"
+        className={['olympus-crest', isUser ? 'olympus-crest--user' : ''].filter(Boolean).join(' ')}
+      >
+        <img alt="" className="olympus-crest__avatar" src={avatarUrl} />
+      </span>
+    );
+  }
   const stroke = isUser ? 'var(--gold)' : 'var(--ink-3)';
 
   const glyphs: Record<string, ReactNode> = {
@@ -618,134 +629,6 @@ interface PricedMover {
   after: number;
 }
 
-interface TitlePoint {
-  week: number;
-  odds: number;
-}
-
-/**
- * Title price, week by week. Real points only — never invents weeks that
- * haven't happened. Y axis is inverted so a SHORTER price (better odds)
- * plots higher.
- */
-function TitlePriceChart({
-  series,
-  variant,
-}: {
-  series: TitlePoint[];
-  variant: 'mobile' | 'desktop';
-}) {
-  if (series.length === 0) return null;
-
-  const current = series[series.length - 1];
-  const opened = series[0];
-
-  const headline = (
-    <>
-      <div className="matchup-page__module-row">
-        <h2 className="matchup-page__module-title">Title price, week by week</h2>
-        <p className="matchup-page__meta-copy">Week {current.week}</p>
-      </div>
-
-      <div className="matchup-page__trajectory-headline">
-        <span className="matchup-page__trajectory-price">
-          {formatAmericanOdds(current.odds)}
-        </span>
-        <span className="matchup-page__meta-copy">
-          opened{' '}
-          <span className="matchup-page__inline-number">
-            {formatAmericanOdds(opened.odds)}
-          </span>
-        </span>
-      </div>
-    </>
-  );
-
-  if (series.length < 2) {
-    return (
-      <section
-        className={`matchup-page__module matchup-page__module--trajectory matchup-page__module--${variant}`}
-      >
-        {headline}
-        <p className="matchup-page__meta-copy">
-          Your title price charts here week by week once games start.
-        </p>
-      </section>
-    );
-  }
-
-  // inverted axis: best (lowest) price on top
-  const best = Math.min(...series.map((p) => p.odds));
-  const worst = Math.max(...series.map((p) => p.odds));
-  const span = Math.max(1, worst - best);
-  const mid = Math.round((best + worst) / 2);
-  const top = 14;
-  const bottom = 90;
-  const left = 44;
-  const right = 324;
-
-  const xFor = (index: number) =>
-    series.length === 1
-      ? left
-      : left + (index / (series.length - 1)) * (right - left);
-  const yFor = (odds: number) => top + ((odds - best) / span) * (bottom - top);
-
-  const midIndex = Math.floor((series.length - 1) / 2);
-  const last = series[series.length - 1];
-
-  return (
-    <section
-      className={`matchup-page__module matchup-page__module--trajectory matchup-page__module--${variant}`}
-    >
-      {headline}
-
-      <svg className="matchup-page__trajectory-chart" viewBox="0 0 340 110">
-        <line className="matchup-page__chart-grid" x1="36" x2="336" y1={top} y2={top} />
-        <line className="matchup-page__chart-grid" x1="36" x2="336" y1="52" y2="52" />
-        <line className="matchup-page__chart-grid" x1="36" x2="336" y1={bottom} y2={bottom} />
-        <text className="matchup-page__chart-axis" textAnchor="end" x="30" y={top + 3}>
-          {formatAmericanOdds(best)}
-        </text>
-        <text className="matchup-page__chart-axis" textAnchor="end" x="30" y="55">
-          {formatAmericanOdds(mid)}
-        </text>
-        <text className="matchup-page__chart-axis" textAnchor="end" x="30" y={bottom + 3}>
-          {formatAmericanOdds(worst)}
-        </text>
-        <polyline
-          className="matchup-page__chart-line"
-          fill="none"
-          points={series
-            .map((point, index) => `${xFor(index)},${yFor(point.odds)}`)
-            .join(' ')}
-        />
-        <circle
-          className="matchup-page__chart-point"
-          cx={xFor(series.length - 1)}
-          cy={yFor(last.odds)}
-          r="4"
-        />
-        <text className="matchup-page__chart-axis" textAnchor="middle" x={left} y="106">
-          W{series[0].week}
-        </text>
-        {series.length > 2 ? (
-          <text
-            className="matchup-page__chart-axis"
-            textAnchor="middle"
-            x={xFor(midIndex)}
-            y="106"
-          >
-            W{series[midIndex].week}
-          </text>
-        ) : null}
-        <text className="matchup-page__chart-axis" textAnchor="middle" x={right} y="106">
-          W{last.week}
-        </text>
-      </svg>
-    </section>
-  );
-}
-
 interface MatchupLiveProps {
   matchup: MatchupData;
   isConnected: boolean;
@@ -755,7 +638,6 @@ interface MatchupLiveProps {
   unpricedStarterCount?: number;
   seasonLabel?: string;
   movers?: PricedMover[];
-  titleSeries?: TitlePoint[];
 }
 
 function MatchupLive({
@@ -767,10 +649,8 @@ function MatchupLive({
   unpricedStarterCount = 0,
   seasonLabel,
   movers = [],
-  titleSeries = [],
 }: MatchupLiveProps) {
   const engine = useMatchupEngine(matchup);
-  const { openPlayerDetail } = usePlayerDetail();
   const { stored } = useLeagueConnection();
   const starterEvaluations = useMemo(
     () => evaluateStarterRoster(engine.baselineRoster),
@@ -992,20 +872,9 @@ function MatchupLive({
           aria-pressed={isCompareMode ? selected : undefined}
           className="matchup-page__lineup-hitbox"
           disabled={ineligible}
-          onClick={() => {
-            if (isCompareMode) {
-              handleComparePick(player);
-              return;
-            }
-
-            const context = getPlayerContext(player);
-            openPlayerDetail({
-              player,
-              slug: player.slug ?? player.id,
-              projection,
-              gameLine: context.gameLine,
-            });
-          }}
+          // Tapping any player IS the start/sit flow: it picks them and
+          // shows who you can weigh them against.
+          onClick={() => handleComparePick(player)}
           type="button"
         >
           <span className="matchup-page__slot-tag">{slotLabel}</span>
@@ -1059,7 +928,11 @@ function MatchupLive({
           <div className="matchup-page__faceoff">
             <div className="matchup-page__faceoff-side">
               <div className="matchup-page__faceoff-identity">
-                <TeamCrest isUser teamName={matchup.yourTeam.teamName} />
+                <TeamCrest
+                  avatarUrl={matchup.yourTeam.avatarUrl}
+                  isUser
+                  teamName={matchup.yourTeam.teamName}
+                />
                 <div>
                   <p className="matchup-page__team-name">{matchup.yourTeam.teamName}</p>
                   <p className="matchup-page__meta-copy">
@@ -1085,7 +958,10 @@ function MatchupLive({
 
             <div className="matchup-page__faceoff-side matchup-page__faceoff-side--opp">
               <div className="matchup-page__faceoff-identity matchup-page__faceoff-identity--opp">
-                <TeamCrest teamName={matchup.opponentTeam.teamName} />
+                <TeamCrest
+                  avatarUrl={matchup.opponentTeam.avatarUrl}
+                  teamName={matchup.opponentTeam.teamName}
+                />
                 <div>
                   <p className="matchup-page__team-name">{matchup.opponentTeam.teamName}</p>
                   <p className="matchup-page__meta-copy">
@@ -1367,13 +1243,16 @@ function MatchupLive({
         </section>
         ) : null}
 
-        <TitlePriceChart series={titleSeries} variant="mobile" />
 
         <section className="matchup-page__module matchup-page__module--lineup">
           <div className="matchup-page__module-row matchup-page__module-row--lineup">
             <div>
               <h2 className="matchup-page__module-title">Your lineup</h2>
-
+              <p className="matchup-page__lineup-hint">
+                {isCompareMode
+                  ? 'Tap a second player to see who to start.'
+                  : 'Tap any player: who do I start?'}
+              </p>
             </div>
             <button
               className={[
@@ -1497,7 +1376,11 @@ function MatchupLive({
           <div className="matchup-page__module-row matchup-page__module-row--lineup">
             <div>
               <h2 className="matchup-page__module-title">Your lineup</h2>
-
+              <p className="matchup-page__lineup-hint">
+                {isCompareMode
+                  ? 'Tap a second player to see who to start.'
+                  : 'Tap any player: who do I start?'}
+              </p>
             </div>
             <button
               className={[
@@ -1547,7 +1430,6 @@ function MatchupLive({
           </div>
         </section>
 
-        <TitlePriceChart series={titleSeries} variant="desktop" />
       </aside>
 
       {isCompareMode && !compareModalPlayers && !compareBoardPlayers ? (
@@ -1587,7 +1469,7 @@ function MatchupLive({
               ))}
               {compareSelection.length < MAX_COMPARE && eligibleCount !== 0 ? (
                 <span className="matchup-page__slip-ghost">
-                  + add {compareSelection.length === 1 ? 'a rival' : 'another'}
+                  + add {compareSelection.length === 1 ? 'who to compare' : 'another'}
                 </span>
               ) : null}
             </div>
@@ -1788,28 +1670,9 @@ export function MatchupPage() {
         }))
       : [];
 
-  // Title price by week: real recorded history for connected leagues,
-  // the demo trajectory otherwise.
-  const titleSeries: { week: number; odds: number }[] = (() => {
-    if (!connectedMatchup) {
-      return MOCK_WEEKLY_TRAJECTORY.map((point) => ({
-        week: point.week,
-        odds: point.championshipOdds,
-      }));
-    }
-    if (!pricing?.available || !bootstrap) return [];
-    const userRosterId = String(
-      bootstrap.teams.find((team) => team.isUser)?.rosterId ?? '',
-    );
-    return (pricing.titleHistory ?? [])
-      .map((entry) => ({ week: entry.week, odds: entry.odds[userRosterId] }))
-      .filter((point): point is { week: number; odds: number } => point.odds != null);
-  })();
-
   return (
     <MatchupLive
       movers={movers}
-      titleSeries={titleSeries}
       isConnected={connectedMatchup !== null}
       isPriced={Boolean(pricing?.available)}
       lineMovement={connectedMatchup ? lineMovement : null}

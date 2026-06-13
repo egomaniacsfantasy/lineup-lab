@@ -27,6 +27,8 @@ export interface TeamMatchupData {
   teamName: string;
   managerName: string;
   record: string;
+  /** Sleeper team avatar (the league's "team logo"), proxied. */
+  avatarUrl?: string | null;
   roster: RosterSlot[];
   bench?: BenchPlayer[];
 }
