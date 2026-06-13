@@ -267,8 +267,10 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                   displayName: team.ownerName,
                   allLeagueIds: [step.leagueId],
                   season: step.season,
-                  espnS2: step.espnS2,
-                  swid: step.swid,
+                  // Cookies now live (encrypted) on the server, keyed by league.
+                  // The connection stays cookie-free so it works on any device.
+                  espnS2: null,
+                  swid: null,
                 })
               }
               type="button"

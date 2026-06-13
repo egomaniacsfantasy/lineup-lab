@@ -18,6 +18,7 @@
 import { cached } from '../cache.js';
 import { sleeperProvider } from './sleeperProvider.js';
 import { normalizeName } from '../projections/importer.js';
+import { getEspnCreds } from './espnCredStore.js';
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -129,9 +130,20 @@ export function createEspnProvider({ season, espnS2, swid }) {
       .map((v) => `view=${v}`)
       .join('&')}`;
     const headers = {};
-    if (espnS2 && swid) {
-      const cleanSwid = swid.startsWith('{') ? swid : `{${swid}}`;
-      headers.Cookie = `espn_s2=${espnS2}; SWID=${cleanSwid}`;
+    // Request cookies win; otherwise fall back to the server store so any
+    // device works after the league's been linked once (the mobile path).
+    let s2 = espnS2;
+    let sw = swid;
+    if (!s2 || !sw) {
+      const stored = getEspnCreds(leagueId);
+      if (stored) {
+        s2 = stored.espnS2;
+        sw = stored.swid;
+      }
+    }
+    if (s2 && sw) {
+      const cleanSwid = sw.startsWith('{') ? sw : `{${sw}}`;
+      headers.Cookie = `espn_s2=${s2}; SWID=${cleanSwid}`;
     }
     const response = await fetch(url, { headers });
     if (!response.ok) {
@@ -143,12 +155,15 @@ export function createEspnProvider({ season, espnS2, swid }) {
     return response.json();
   };
 
-  // Whole league, cached. Cache key folds in whether we're authed so a
-  // public-then-private retry doesn't serve a stale 404.
-  const loadLeague = (leagueId) =>
-    cached(`espn:league:${season}:${leagueId}:${espnS2 ? 'auth' : 'pub'}`, 5 * MINUTE, () =>
+  // Whole league, cached. Cache key folds in whether we're authed (by request
+  // cookie OR the server store) so a public-then-private retry doesn't serve a
+  // stale 404.
+  const loadLeague = (leagueId) => {
+    const authed = (espnS2 && swid) || getEspnCreds(leagueId);
+    return cached(`espn:league:${season}:${leagueId}:${authed ? 'auth' : 'pub'}`, 5 * MINUTE, () =>
       espnGet(leagueId, ['mSettings', 'mTeam', 'mRoster', 'mMatchup', 'mNav']),
     );
+  };
 
   const buildTeams = async (leagueId) => {
     const [blob, crosswalk] = await Promise.all([loadLeague(leagueId), getCrosswalk()]);

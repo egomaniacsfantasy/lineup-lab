@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
+import { saveEspnCreds } from '../providers/espnCredStore.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import { getLeaguePricing, priceTrade } from '../engine/engine.js';
@@ -148,11 +149,14 @@ apiRouter.get('/connect/:username', async (req, res, next) => {
  */
 apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
   try {
+    const leagueId = req.params.leagueId.trim();
+    const espnS2 = req.get('x-espn-s2') || null;
+    const swid = req.get('x-espn-swid') || null;
     const result = await espnConnect({
       season: req.query.season ?? String(new Date().getUTCFullYear()),
-      leagueId: req.params.leagueId.trim(),
-      espnS2: req.get('x-espn-s2') || null,
-      swid: req.get('x-espn-swid') || null,
+      leagueId,
+      espnS2,
+      swid,
     });
 
     if (!result) {
@@ -163,6 +167,10 @@ apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
       });
       return;
     }
+
+    // Linked with fresh cookies → persist them so every later request (any
+    // device, no extension) authenticates from the server store.
+    if (espnS2 && swid) saveEspnCreds(leagueId, { espnS2, swid });
 
     res.json(result);
   } catch (error) {
