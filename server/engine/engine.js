@@ -159,13 +159,42 @@ function lineFromDistributions(a, b, winProb) {
   };
 }
 
-export function computeInputsHash({ projectionVersion, teams, week }) {
+export function computeInputsHash({ projectionVersion, teams, week, overlay }) {
   const payload = JSON.stringify({
     projectionVersion,
     week,
     starters: teams.map((t) => [t.rosterId, t.starters]),
+    // A user's projection overlay is part of the inputs: their adjusted lines
+    // must cache and seed independently of the house line.
+    overlay: overlay ?? null,
   });
   return crypto.createHash('sha1').update(payload).digest('hex').slice(0, 16);
+}
+
+/**
+ * Apply a user's projection overlay onto a base projection. The overlay holds
+ * absolute points the user set ({ base, weekly }), not deltas — Franco is the
+ * starting point, the user's number wins where present, everything else stays
+ * Franco. This is the "my book, my line" merge: Franco → user.
+ */
+export function applyOverlay(projectionMap, overlay) {
+  if (!overlay || typeof overlay !== 'object') return projectionMap;
+  for (const [playerId, ov] of Object.entries(overlay)) {
+    if (!ov || typeof ov !== 'object') continue;
+    const base = projectionMap.get(playerId) ?? {
+      playerId,
+      mean: 0,
+      stdev: 6,
+      weekly: {},
+    };
+    const next = { ...base };
+    if (typeof ov.base === 'number' && Number.isFinite(ov.base)) next.mean = ov.base;
+    if (ov.weekly && typeof ov.weekly === 'object') {
+      next.weekly = { ...(base.weekly ?? {}), ...ov.weekly };
+    }
+    projectionMap.set(playerId, next);
+  }
+  return projectionMap;
 }
 
 /**
@@ -179,13 +208,17 @@ export function priceLeague(ctx) {
     return { available: false, reason: 'no_projections' };
   }
 
+  const { league, teams, matchups, week, catalog, scheduleWeeks, overlay } = ctx;
+
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
-  const { league, teams, matchups, week, catalog, scheduleWeeks } = ctx;
+  // Layer the user's own numbers on top of Franco before any sim runs.
+  applyOverlay(projectionMap, overlay);
 
   const inputsHash = computeInputsHash({
     projectionVersion: active.version,
     teams,
     week,
+    overlay: overlay ?? null,
   });
 
   // ── matchup lines ──
@@ -861,8 +894,9 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const active = getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
 
+  const { league, teams, catalog, scheduleWeeks, week, overlay } = ctx;
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
-  const { league, teams, catalog, scheduleWeeks, week } = ctx;
+  applyOverlay(projectionMap, overlay);
   const slotLabels = (league.rosterPositions ?? []).filter(
     (p) => !['BN', 'IR', 'TAXI'].includes(p),
   );

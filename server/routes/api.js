@@ -2,6 +2,7 @@
  * Provider-agnostic API surface for the client.
  * The client only ever talks to these routes — never to provider APIs.
  */
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
@@ -14,6 +15,27 @@ import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 
 const DAY = 24 * 60 * 60_000;
+
+/**
+ * A user's "Build Your Own Rankings" overlay rides on a base64 JSON header so
+ * the polled GET /lines stays a GET. Deltas-only (just the players the user
+ * touched), so it stays small. Shape: { [playerId]: { base?, weekly? } }.
+ */
+function parseOverlayHeader(req) {
+  const raw = req.get('x-olympus-overlay');
+  if (!raw) return null;
+  try {
+    const obj = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+    return obj && typeof obj === 'object' && Object.keys(obj).length ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+function overlayHash(overlay) {
+  if (!overlay) return 'base';
+  return crypto.createHash('sha1').update(JSON.stringify(overlay)).digest('hex').slice(0, 12);
+}
 
 /**
  * Pick the provider for this request. ESPN needs a per-request instance bound
@@ -90,6 +112,9 @@ apiRouter.get('/rankings', (req, res) => {
       position: p.position,
       team: p.team,
       mean: p.mean,
+      stdev: p.stdev ?? null,
+      floor: p.floor ?? null,
+      ceiling: p.ceiling ?? null,
       seasonTotal: p.seasonTotal ?? null,
       weekly: p.weekly ?? {},
       tier: p.tier,
@@ -286,6 +311,7 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
     const provider = getProvider(req);
     const { leagueId } = req.params;
     const userId = req.query.userId ?? null;
+    const overlay = parseOverlayHeader(req);
 
     const pricing = await getLeaguePricing(async () => {
       const ctx = await loadLeagueContext(provider, leagueId, userId);
@@ -300,8 +326,8 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
         return all;
       });
 
-      return { ...ctx, catalog: ctx.players, scheduleWeeks };
-    }, `${leagueId}:${userId}`);
+      return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay };
+    }, `${leagueId}:${userId}:${overlayHash(overlay)}`);
 
     if (pricing.available) {
       recordPricing(leagueId, pricing);
@@ -322,7 +348,8 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const { leagueId } = req.params;
-    const { userId, partnerRosterId, give = [], get = [], traits = {} } = req.body ?? {};
+    const { userId, partnerRosterId, give = [], get = [], traits = {}, overlay = null } =
+      req.body ?? {};
 
     const ctxBase = await loadLeagueContext(provider, leagueId, userId);
     if (!ctxBase) throw new Error('league_not_found');
@@ -336,7 +363,7 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
       return all;
     });
 
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks };
+    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay };
     const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
 
     res.json(
