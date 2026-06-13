@@ -391,7 +391,8 @@ export interface TradeResult {
   fairCounter?: {
     whoAdds: 'you' | 'them';
     teamName: string;
-    add: { id: string; name: string; value: number }[];
+    allDepth: boolean;
+    add: { id: string; name: string; value: number; starter: boolean }[];
     gapBefore: number;
     gapAfter: number;
   } | null;

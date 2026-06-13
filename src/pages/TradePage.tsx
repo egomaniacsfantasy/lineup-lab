@@ -448,12 +448,13 @@ export function TradePage() {
               </p>
               <p className="trade-cc__counter-body">
                 {result.fairCounter.whoAdds === 'them'
-                  ? `Even it out: ask for ${result.fairCounter.add
+                  ? `Even it out: ask ${result.fairCounter.teamName} to add ${result.fairCounter.add
                       .map((a) => a.name)
-                      .join(' + ')} from ${result.fairCounter.teamName}.`
+                      .join(' + ')}`
                   : `Make it fair: add ${result.fairCounter.add
                       .map((a) => a.name)
-                      .join(' + ')} to your side.`}
+                      .join(' + ')}`}
+                {result.fairCounter.allDepth ? ' — bench depth, not starters.' : '.'}
               </p>
               <button
                 className="trade-cc__counter-btn"

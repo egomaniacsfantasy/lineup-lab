@@ -1100,31 +1100,66 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   let fairCounter = null;
   if (Math.abs(valueGap) > FAIR_TOL) {
     const youAdd = valueGap < 0; // they overpay → you even it up; else they add
-    const pool = (youAdd
-      ? user.players.filter((id) => !give.includes(id))
-      : partner.players.filter((id) => !get.includes(id))
-    )
-      .map((id) => ({ id, name: catalog[id]?.name ?? `Player ${id}`, value: valueOf(id) }))
-      .filter((c) => c.value > 0.3)
-      .sort((a, b) => b.value - a.value);
+    const addingTeam = youAdd ? user : partner;
+    const inDeal = new Set(youAdd ? give : get);
+    // Who the adding side actually starts — we draw throw-ins from depth first so
+    // a counter doesn't ask them to gut their lineup to balance the math.
+    const addingStarters = new Set(
+      bestLineupDistribution(addingTeam.players, slotLabels, projectionMap, catalog, null).starters,
+    );
+    const candidates = addingTeam.players
+      .filter((id) => !inDeal.has(id))
+      .map((id) => ({
+        id,
+        name: catalog[id]?.name ?? `Player ${id}`,
+        value: valueOf(id),
+        starter: addingStarters.has(id),
+      }))
+      .filter((c) => c.value > 0.3);
+    const byValueDesc = (a, b) => b.value - a.value;
+    const depth = candidates.filter((c) => !c.starter).sort(byValueDesc);
+    const starters = candidates.filter((c) => c.starter).sort(byValueDesc);
+
     const add = [];
     let remaining = Math.abs(valueGap);
-    for (const c of pool) {
-      if (remaining <= FAIR_TOL) break;
-      if (c.value <= remaining + FAIR_TOL) {
-        add.push(c);
-        remaining -= c.value;
+    const draw = (pool) => {
+      for (const c of pool) {
+        if (remaining <= FAIR_TOL || add.length >= 3) break;
+        if (c.value <= remaining + FAIR_TOL) {
+          add.push(c);
+          remaining -= c.value;
+        }
+      }
+    };
+    draw(depth); // bench/depth first
+    if (remaining > FAIR_TOL) draw(starters); // reach into starters only if needed
+    // The gap is bigger than any single fitting piece: offer the closest match.
+    if (add.length === 0) {
+      const all = [...depth, ...starters];
+      if (all.length) {
+        const target = Math.abs(valueGap);
+        const best = all.reduce((b, c) =>
+          Math.abs(c.value - target) < Math.abs(b.value - target) ? c : b,
+        );
+        add.push(best);
+        remaining = target - best.value;
       }
     }
-    if (add.length === 0 && pool.length) add.push(pool[pool.length - 1]); // smallest throw-in
+
     if (add.length) {
       const added = add.reduce((s, c) => s + c.value, 0);
       fairCounter = {
         whoAdds: youAdd ? 'you' : 'them',
-        teamName: youAdd ? user.teamName : partner.teamName,
-        add: add.map((c) => ({ id: c.id, name: c.name, value: Number(c.value.toFixed(1)) })),
+        teamName: addingTeam.teamName,
+        allDepth: add.every((c) => !c.starter),
+        add: add.map((c) => ({
+          id: c.id,
+          name: c.name,
+          value: Number(c.value.toFixed(0)),
+          starter: c.starter,
+        })),
         gapBefore: Math.abs(valueGap),
-        gapAfter: Number(Math.abs(Math.abs(valueGap) - added).toFixed(1)),
+        gapAfter: Number(Math.abs(Math.abs(valueGap) - added).toFixed(0)),
       };
     }
   }
