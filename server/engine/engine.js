@@ -47,12 +47,43 @@ function probToAmerican(prob) {
   return ml === -100 ? 100 : ml;
 }
 
-function gaussian() {
+function americanToProb(ml) {
+  return ml <= -100 ? -ml / (-ml + 100) : 100 / (ml + 100);
+}
+
+/**
+ * Every mover is a positive-gain move by construction, so its quoted
+ * "after" must never read worse than "before". Residual sim noise of a
+ * count or two could otherwise flip the sign on tiny upgrades.
+ */
+function noWorseThan(before, after) {
+  return americanToProb(after) >= americanToProb(before) ? after : before;
+}
+
+/**
+ * Deterministic RNG (mulberry32), seeded from the pricing inputsHash.
+ * Two sim runs with the same seed see identical random draws, so a
+ * before/after comparison (movers, swap pricing) differs ONLY by the
+ * input change. Without this, Monte Carlo noise could make adding a
+ * better player look like it hurt your title odds.
+ */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function rng() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gaussian(rng) {
   // Box-Muller
   let u = 0;
   let v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
@@ -107,11 +138,11 @@ function teamDistribution(starterIds, projectionMap, catalog, week = null) {
 }
 
 /** 10k-sim win probability between two team distributions. */
-function simulateWinProb(a, b) {
+function simulateWinProb(a, b, rng) {
   let wins = 0;
   for (let i = 0; i < SIMS; i += 1) {
-    const scoreA = Math.max(0, a.mean + a.sigma * gaussian());
-    const scoreB = Math.max(0, b.mean + b.sigma * gaussian());
+    const scoreA = Math.max(0, a.mean + a.sigma * gaussian(rng));
+    const scoreB = Math.max(0, b.mean + b.sigma * gaussian(rng));
     if (scoreA > scoreB) wins += 1;
     else if (scoreA === scoreB) wins += 0.5;
   }
@@ -189,13 +220,17 @@ export function priceLeague(ctx) {
     byMatchup.set(m.matchupId, list);
   });
 
+  // one seed per inputs state: identical inputs always price identically
+  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const linesRng = mulberry32(seed);
+
   const lines = [];
   byMatchup.forEach((pair, matchupId) => {
     if (pair.length !== 2) return;
     const [a, b] = pair;
     const distA = distByRoster.get(a.rosterId);
     const distB = distByRoster.get(b.rosterId);
-    const winProbA = simulateWinProb(distA, distB);
+    const winProbA = simulateWinProb(distA, distB, linesRng);
 
     lines.push({
       matchupId,
@@ -293,7 +328,37 @@ export function priceLeague(ctx) {
   }
 
   // ── season futures: simulate the remaining schedule ──
-  const futures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, distForWeek });
+  const futures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, distForWeek, seed });
+
+  // ── the user's line for every scheduled week (Season tab schedule) ──
+  const weeklyLines = [];
+  const userTeamForWeekly = teams.find((t) => t.isUser);
+  if (userTeamForWeekly) {
+    for (const entry of scheduleWeeks ?? []) {
+      const mine = entry.matchups.find(
+        (m) => m.rosterId === userTeamForWeekly.rosterId && m.matchupId != null,
+      );
+      if (!mine) continue;
+      const theirs = entry.matchups.find(
+        (m) => m.matchupId === mine.matchupId && m.rosterId !== mine.rosterId,
+      );
+      if (!theirs) continue;
+      const me = distForWeek(userTeamForWeekly.rosterId, entry.week);
+      const opp = distForWeek(theirs.rosterId, entry.week);
+      const winProb = normalCdf(
+        (me.mean - opp.mean) / Math.sqrt((me.sigma ** 2 + opp.sigma ** 2) || 1),
+      );
+      weeklyLines.push({
+        week: entry.week,
+        opponentRosterId: theirs.rosterId,
+        opponentName: teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`,
+        moneyline: probToAmerican(winProb),
+        winProb: Number((winProb * 100).toFixed(1)),
+        projection: Number(me.mean.toFixed(1)),
+        opponentProjection: Number(opp.mean.toFixed(1)),
+      });
+    }
+  }
 
   // ── real Draft Wrapped (computed, not fiction) ──
   const draftWrapped = computeDraftWrapped({
@@ -307,7 +372,7 @@ export function priceLeague(ctx) {
     catalog,
   });
 
-  // ── off-season market movers: real FA claim + trade lane, priced ──
+  // ── market movers: real FA claim + trade lanes, priced ──
   const movers = computeMovers({
     league,
     teams,
@@ -318,6 +383,7 @@ export function priceLeague(ctx) {
     scheduleWeeks,
     week,
     catalog,
+    seed,
   });
 
   // ── scoring honesty ──
@@ -340,6 +406,7 @@ export function priceLeague(ctx) {
     userSwaps,
     playerMeans,
     futures,
+    weeklyLines,
     draftWrapped,
     movers,
     leagueMedian: leagueMedianDistribution(distByRoster),
@@ -444,14 +511,18 @@ function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByR
   };
 }
 
-/** Re-run the futures sim with the user's team mean shifted by delta. */
-function titleOddsWithUserDelta({ league, teams, distByRoster, scheduleWeeks, week }, userRosterId, deltaMean) {
+/**
+ * Re-run the futures sim with the user's team mean shifted by delta.
+ * Same seed as the baseline run: the only difference between before and
+ * after is the roster change itself, never sim noise.
+ */
+function titleOddsWithUserDelta({ league, teams, distByRoster, scheduleWeeks, week, seed }, userRosterId, deltaMean) {
   const shifted = new Map(distByRoster);
   const base = distByRoster.get(userRosterId);
   if (base) {
     shifted.set(userRosterId, { ...base, mean: Math.max(1, base.mean + deltaMean) });
   }
-  const futures = simulateFutures({ league, teams, distByRoster: shifted, scheduleWeeks, week });
+  const futures = simulateFutures({ league, teams, distByRoster: shifted, scheduleWeeks, week, seed });
   return futures.find((f) => f.rosterId === userRosterId) ?? null;
 }
 
@@ -461,11 +532,11 @@ function titleOddsWithUserDelta({ league, teams, distByRoster, scheduleWeeks, we
  *  2. best mutually-positive 1-for-1 trade lane against a real roster
  */
 function computeMovers(ctx) {
-  const { league, teams, matchups, projections, projectionMap, distByRoster, scheduleWeeks, week, catalog } = ctx;
+  const { league, teams, matchups, projections, projectionMap, distByRoster, scheduleWeeks, week, catalog, seed } = ctx;
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return [];
 
-  const baseFutures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week });
+  const baseFutures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, seed });
   const baseUser = baseFutures.find((f) => f.rosterId === userTeam.rosterId);
   if (!baseUser) return [];
 
@@ -504,7 +575,10 @@ function computeMovers(ctx) {
       detail: `Slots ${bestClaim.candidate.position}, +${bestClaim.delta.toFixed(1)} proj over ${catalog[bestClaim.starter.id]?.name ?? 'current starter'}`,
       playerId: bestClaim.candidate.playerId,
       titleOddsBefore: baseUser.championOdds,
-      titleOddsAfter: after?.championOdds ?? baseUser.championOdds,
+      titleOddsAfter: noWorseThan(
+        baseUser.championOdds,
+        after?.championOdds ?? baseUser.championOdds,
+      ),
     });
   }
 
@@ -526,7 +600,18 @@ function computeMovers(ctx) {
 
   const userBench = benchOf(userTeam);
   const userStarters = startersOf(userTeam);
-  let bestTrade = null;
+
+  // Only skill positions trade (nobody trades kickers or defenses), and
+  // both players must be in the same value band: no kicker-for-WR1
+  // nonsense, no lanes a real manager would laugh out of the chat.
+  const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
+  const sameValueBand = (a, b) => {
+    const low = Math.min(a.mean, b.mean);
+    const high = Math.max(a.mean, b.mean);
+    return high > 0 && low / high >= 0.65;
+  };
+
+  const lanes = [];
 
   for (const opp of teams) {
     if (opp.rosterId === userTeam.rosterId) continue;
@@ -535,6 +620,7 @@ function computeMovers(ctx) {
 
     for (const giveId of userBench) {
       const give = projectionMap.get(giveId);
+      if (!TRADEABLE.includes(give.position)) continue;
       const oppWeakest = oppStarters
         .filter((st) => (FLEX_ELIGIBILITY[st.slot] ?? [st.slot]).includes(give.position))
         .sort((a, b) => a.mean - b.mean)[0];
@@ -543,35 +629,46 @@ function computeMovers(ctx) {
 
       for (const getId of oppBench) {
         const get = projectionMap.get(getId);
+        if (!TRADEABLE.includes(get.position)) continue;
+        if (!sameValueBand(give, get)) continue;
         const userWeakest = userStarters
           .filter((st) => (FLEX_ELIGIBILITY[st.slot] ?? [st.slot]).includes(get.position))
           .sort((a, b) => a.mean - b.mean)[0];
         const userGain = userWeakest ? get.mean - userWeakest.mean : -1;
         if (userGain <= 0.5) continue;
 
-        const score = userGain + oppGain;
-        if (!bestTrade || score > bestTrade.score) {
-          bestTrade = { opp, give, get, userGain, oppGain, score };
-        }
+        lanes.push({ opp, give, get, userGain, oppGain, score: userGain + oppGain });
       }
     }
   }
 
-  if (bestTrade) {
-    const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, bestTrade.userGain);
+  // top lane per opponent, best three overall
+  const bestPerOpponent = new Map();
+  for (const lane of lanes.sort((a, b) => b.score - a.score)) {
+    if (!bestPerOpponent.has(lane.opp.rosterId)) bestPerOpponent.set(lane.opp.rosterId, lane);
+  }
+
+  for (const lane of [...bestPerOpponent.values()].slice(0, 3)) {
+    const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, lane.userGain);
     movers.push({
       kind: 'trade',
-      headline: `Trade lane: ${bestTrade.opp.teamName} want ${bestTrade.give.position}`,
-      detail: `${bestTrade.give.name} for ${bestTrade.get.name} prices at`,
+      headline: `${lane.opp.teamName} need ${lane.give.position}`,
+      detail: `You send ${lane.give.name}, you get ${lane.get.name}`,
+      givePlayerId: lane.give.playerId,
+      getPlayerId: lane.get.playerId,
       titleOddsBefore: baseUser.championOdds,
-      titleOddsAfter: after?.championOdds ?? baseUser.championOdds,
+      titleOddsAfter: noWorseThan(
+        baseUser.championOdds,
+        after?.championOdds ?? baseUser.championOdds,
+      ),
     });
   }
 
   return movers;
 }
 
-function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, distForWeek = null }) {
+function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, distForWeek = null, seed = 1 }) {
+  const rng = mulberry32(seed);
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffTeams = league.playoffTeams ?? 6;
   const remaining = (scheduleWeeks ?? []).filter(
@@ -610,8 +707,8 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
           ? distForWeek(b.rosterId, weekEntry.week)
           : distByRoster.get(b.rosterId);
         if (!distA || !distB) return;
-        const scoreA = Math.max(0, distA.mean + distA.sigma * gaussian());
-        const scoreB = Math.max(0, distB.mean + distB.sigma * gaussian());
+        const scoreA = Math.max(0, distA.mean + distA.sigma * gaussian(rng));
+        const scoreB = Math.max(0, distB.mean + distB.sigma * gaussian(rng));
         pf.set(a.rosterId, (pf.get(a.rosterId) ?? 0) + scoreA);
         pf.set(b.rosterId, (pf.get(b.rosterId) ?? 0) + scoreB);
         wins.set(a.rosterId, (wins.get(a.rosterId) ?? 0) + (scoreA > scoreB ? 1 : 0));
@@ -629,7 +726,7 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
 
     // Title within the sim: strength-share draw among playoff teams.
     const totalStrength = playoff.reduce((sum, id) => sum + strength.get(id), 0);
-    let draw = Math.random() * totalStrength;
+    let draw = rng() * totalStrength;
     for (const id of playoff) {
       draw -= strength.get(id);
       if (draw <= 0) {

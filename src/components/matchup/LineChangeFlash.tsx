@@ -55,7 +55,7 @@ export function LineChangeFlash({ delta, visible }: LineChangeFlashProps) {
       setIsVisible(true);
       hideTimer = window.setTimeout(() => {
         setIsVisible(false);
-      }, 2000);
+      }, 3500);
     }, 0);
 
     return () => {

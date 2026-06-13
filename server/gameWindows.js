@@ -41,5 +41,7 @@ export function isGameWindow(date = new Date()) {
 
 /** Cache TTL for live matchup data given the current window state. */
 export function matchupTtlMs(date = new Date()) {
-  return isGameWindow(date) ? 90_000 : 60 * 60_000;
+  // Off-window still needs to catch lineup edits made in Sleeper within
+  // minutes, not an hour. Sleeper's API is fine with this cadence.
+  return isGameWindow(date) ? 90_000 : 10 * 60_000;
 }

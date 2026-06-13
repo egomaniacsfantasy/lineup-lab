@@ -54,7 +54,7 @@ export function MorePage() {
             <h2 className="more-page__title">Connect your Sleeper league</h2>
             <p className="more-page__body">
               You&apos;re on the demo league. One username connects your real
-              rosters, matchups, and standings — read-only, no password.
+              rosters, matchups, and standings. Read-only, no password.
             </p>
             <Link className="more-page__connect-cta" to="/league#connect">
               Connect with Sleeper

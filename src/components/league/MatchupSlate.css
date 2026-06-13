@@ -64,6 +64,9 @@
 
 .matchup-slate__row--user {
   background: var(--bg-surface-soft);
+  box-shadow: inset 2px 0 0 var(--amber);
+  /* headroom for the absolute "Your game" chip so it never sits on a name */
+  padding-top: 40px;
 }
 
 .matchup-slate__team {

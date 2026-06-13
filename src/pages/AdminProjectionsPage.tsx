@@ -108,7 +108,7 @@ export function AdminProjectionsPage() {
       setStatus(
         body.unmatched.length === 0
           ? `Imported ${body.count} projections as ${body.version} and activated. All lines reprice automatically.`
-          : `Imported ${body.count} projections as ${body.version}. ${body.unmatched.length} unmatched — pick the right player below and re-import.`,
+          : `Imported ${body.count} projections as ${body.version}. ${body.unmatched.length} unmatched. Pick the right player below and re-import.`,
       );
       await loadHistory();
     } finally {
@@ -215,7 +215,7 @@ export function AdminProjectionsPage() {
           {result.unmatched.length > 0 ? (
             <div className="admin-projections__unmatched">
               <h3 className="admin-projections__subtitle">
-                Needs review ({result.unmatched.length}) — pick the right
+                Needs review ({result.unmatched.length}): pick the right
                 player, then re-import the same files
               </h3>
               {result.unmatched.map((row) => (
@@ -226,7 +226,7 @@ export function AdminProjectionsPage() {
                   </span>
                   <span className="admin-projections__candidates">
                     {row.candidates.length === 0 ? (
-                      <em>No candidates — will be skipped</em>
+                      <em>No candidates, will be skipped</em>
                     ) : (
                       row.candidates.map((candidate) => (
                         <button

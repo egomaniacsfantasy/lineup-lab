@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useSeasonMode } from '../../hooks/useSeasonMode';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
@@ -24,7 +25,8 @@ const STATE_LABELS: Record<string, (season: string, week: number) => string> = {
 
 export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   const { mode, seasonState, season, nflWeek } = useSeasonMode();
-  const { bootstrap } = useLeagueConnection();
+  const { bootstrap, refresh } = useLeagueConnection();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const isSynced = bootstrap !== null;
   const scoringLabel = isSynced
     ? SCORING_LABELS[bootstrap.league.scoringFamily]
@@ -91,14 +93,20 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
             {stateLabel}
           </span>
           {isSynced ? (
-            <span
+            <button
               className="app-header__synced-chip"
-              title={`Last updated ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}`}
+              disabled={isRefreshing}
+              onClick={() => {
+                setIsRefreshing(true);
+                void refresh().finally(() => setIsRefreshing(false));
+              }}
+              title={`Last updated ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}. Click to pull the latest from Sleeper.`}
+              type="button"
             >
-              Synced
-            </span>
+              {isRefreshing ? 'Syncing…' : 'Synced'}
+            </button>
           ) : (
-            <span className="app-header__replay-chip">Demo</span>
+            <span className="app-header__replay-chip">Not synced</span>
           )}
           <span className="app-header__scoring-pill">
             <Gloss term="ppr">{scoringLabel}</Gloss>

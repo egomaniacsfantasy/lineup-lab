@@ -306,5 +306,6 @@ apiRouter.post('/league/:leagueId/refresh', (req, res) => {
   invalidate(`sleeper:rosters:${req.params.leagueId}`);
   invalidate(`sleeper:matchups:${req.params.leagueId}`);
   invalidate(`agg:schedule:${req.params.leagueId}`);
+  invalidate(`pricing:${req.params.leagueId}`);
   res.json({ ok: true });
 });

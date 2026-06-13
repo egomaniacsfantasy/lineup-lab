@@ -1,17 +1,25 @@
+/* Fixed toast: stays in view wherever you are on the page, instead of
+   flashing at the document top where nobody is looking. */
 .line-change-flash {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: calc(var(--z-dropdown) + 10);
   min-height: 24px;
-  padding: 8px 12px;
+  padding: 10px 18px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 999px;
   background: transparent;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
   line-height: 1.4;
   text-align: center;
   opacity: 0;
-  transform: translateY(-8px);
+  pointer-events: none;
+  transform: translate(-50%, -12px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
   transition:
     opacity var(--transition-fast),
     transform var(--transition-fast),
@@ -21,7 +29,7 @@
 
 .line-change-flash--visible {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 .line-change-flash--positive {

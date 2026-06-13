@@ -42,7 +42,7 @@ export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
         </h2>
         <p className="welcome-card__replay-note">
           {bootstrap
-            ? `Synced to ${bootstrap.league.name} — live Sleeper data`
+            ? `Synced to ${bootstrap.league.name}, live Sleeper data`
             : 'Live Sleeper data, refreshed all week'}
         </p>
 

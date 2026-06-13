@@ -44,11 +44,6 @@ export function ConnectPage() {
       <section className="connect-page__hero">
         <p className="connect-page__kicker">Welcome to Olympus</p>
         <h1 className="connect-page__title">Sync a league to begin</h1>
-        <p className="connect-page__subtitle">
-          One username. Every matchup, trade, and waiver claim in your league
-          priced like a betting market — updated as the week moves. There is
-          no demo mode: Olympus only prices real leagues.
-        </p>
       </section>
 
       <div className="connect-page__providers">
@@ -57,40 +52,26 @@ export function ConnectPage() {
           onClick={() => setShowWizard(true)}
           type="button"
         >
-          <span className="connect-page__provider-mark connect-page__provider-mark--sleeper" aria-hidden="true">
-            <svg fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-              <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />
-            </svg>
-          </span>
-          <span className="connect-page__provider-copy">
-            <span className="connect-page__provider-name">Sleeper</span>
-            <span className="connect-page__provider-note">
-              Connect with your username — no password, read-only
-            </span>
-          </span>
+          <img
+            alt="Sleeper"
+            className="connect-page__provider-logo connect-page__provider-logo--sleeper"
+            src="/providers/sleeper-logo.png"
+          />
           <span className="connect-page__provider-action">Connect</span>
         </button>
 
         <div aria-disabled="true" className="connect-page__provider connect-page__provider--soon">
-          <span className="connect-page__provider-mark" aria-hidden="true">
-            <svg fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="8.5" />
-              <path d="M3.5 12h17M12 3.5c2.5 2.3 2.5 14.7 0 17M12 3.5c-2.5 2.3-2.5 14.7 0 17" />
-            </svg>
-          </span>
-          <span className="connect-page__provider-copy">
-            <span className="connect-page__provider-name">ESPN</span>
-            <span className="connect-page__provider-note">
-              On the roadmap — Sleeper first
-            </span>
-          </span>
+          <img
+            alt="ESPN"
+            className="connect-page__provider-logo connect-page__provider-logo--espn"
+            src="/providers/espn-logo.png"
+          />
           <span className="connect-page__provider-chip">Coming soon</span>
         </div>
       </div>
 
       <p className="connect-page__demo">
-        Read-only. We never ask for your password — Olympus prices your
-        league, it can&apos;t touch it.
+        Read-only. We never ask for your password.
       </p>
     </div>
   );

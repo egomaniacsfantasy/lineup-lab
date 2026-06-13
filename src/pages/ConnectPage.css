@@ -77,45 +77,21 @@
   opacity: 0.55;
 }
 
-.connect-page__provider-mark {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--bg-inset);
-  color: var(--text-dim);
-}
-
-.connect-page__provider-mark svg {
-  width: 22px;
-  height: 22px;
-}
-
-.connect-page__provider-mark--sleeper {
-  color: var(--amber-bright);
-}
-
-.connect-page__provider-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+.connect-page__provider-logo {
   flex: 1;
+  min-width: 0;
+  object-fit: contain;
+  object-position: left center;
 }
 
-.connect-page__provider-name {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-primary);
+.connect-page__provider-logo--sleeper {
+  height: 34px;
+  max-width: 170px;
 }
 
-.connect-page__provider-note {
-  font-size: 0.85rem;
-  color: var(--text-muted);
+.connect-page__provider-logo--espn {
+  height: 40px;
+  max-width: 120px;
 }
 
 .connect-page__provider-action {

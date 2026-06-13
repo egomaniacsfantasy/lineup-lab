@@ -424,8 +424,8 @@ function CompareSheet({
   const verdict = isSwap
     ? formatVerdict(rightPlayer.shortName, comparison.deltaWinProbability)
     : headlineWinner
-      ? `${headlineWinner.shortName} projects ${Math.abs(projectionDelta).toFixed(1)} more points this week. Different slots — a pulse check, not a swap.`
-      : 'Dead even on projection. Different slots — a pulse check, not a swap.';
+      ? `${headlineWinner.shortName} projects ${Math.abs(projectionDelta).toFixed(1)} more points this week. They play different slots, so this is a pulse check, not a swap.`
+      : 'Dead even on projection. They play different slots, so this is a pulse check, not a swap.';
 
   const maxProjection = Math.max(comparison.leftProjection, comparison.rightProjection, 1);
 
@@ -612,8 +612,7 @@ function TitlePriceChart({
       >
         {headline}
         <p className="matchup-page__meta-copy">
-          The chart draws itself as the weeks run — one point per week,
-          nothing invented.
+          Your title price charts here week by week once games start.
         </p>
       </section>
     );

@@ -189,7 +189,7 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
       ) : null}
 
       <p className="connect-wizard__privacy">
-        Read-only. We never ask for your Sleeper password — Olympus prices your
+        Read-only. We never ask for your Sleeper password. Olympus prices your
         league, it can&apos;t touch it.
       </p>
     </section>
@@ -224,15 +224,15 @@ function ConfirmStep({
         </p>
       ) : (
         <p className="connect-wizard__confirm-question">
-          We couldn&apos;t match a roster to your account in this league — you can
+          We couldn&apos;t match a roster to your account in this league. You can
           still connect and browse it.
         </p>
       )}
 
       {isPreDraft ? (
         <p className="connect-wizard__step-note">
-          This league hasn&apos;t drafted yet. It connects fully after your draft —
-          until then you&apos;ll see league settings and members only.
+          This league hasn&apos;t drafted yet. It connects fully after your draft.
+          Until then you&apos;ll see league settings and members only.
         </p>
       ) : null}
 
