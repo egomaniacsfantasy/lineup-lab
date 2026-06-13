@@ -3,6 +3,8 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { useModelOverlay } from '../contexts/ModelOverlayContext';
+import { fetchLines } from '../services/leagueApi';
 import { getPlayerManifestEntry } from '../data/playerManifest';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import {
@@ -641,7 +643,30 @@ function MatchupLive({
   movers = [],
 }: MatchupLiveProps) {
   const engine = useMatchupEngine(matchup);
-  const { stored } = useLeagueConnection();
+  const { stored, bootstrap } = useLeagueConnection();
+  const { overrideCount } = useModelOverlay();
+
+  // When the user's model is live, fetch the pure-Franco (house) line for the
+  // same matchup so we can show it as the quiet baseline ("Franco +154").
+  const [houseYours, setHouseYours] = useState<{ moneyline: number; winProbability: number } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!stored || !bootstrap || overrideCount === 0) return;
+    const rid = bootstrap.teams.find((t) => t.isUser)?.rosterId;
+    if (rid == null) return;
+    let cancelled = false;
+    fetchLines(stored.leagueId, stored.userId, { house: true })
+      .then((p) => {
+        if (cancelled) return;
+        const side = p.lines?.find((l) => l.sides[String(rid)])?.sides[String(rid)];
+        setHouseYours(side ? { moneyline: side.moneyline, winProbability: side.winProbability } : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [stored, bootstrap, overrideCount]);
 
   // A "preview" lineup: you've swapped someone in here but not in Sleeper, so
   // every number below is hypothetical until you make it official.
@@ -951,6 +976,11 @@ function MatchupLive({
             </span>
             {isPreview ? (
               <span className="matchup-page__preview-chip">Preview lineup</span>
+            ) : overrideCount > 0 ? (
+              <span className="matchup-page__model-chip">
+                <span className="matchup-page__live-dot" aria-hidden="true" />
+                Your model
+              </span>
             ) : (
               <span className="matchup-page__live-chip">
                 <span className="matchup-page__live-dot" aria-hidden="true" />
@@ -977,6 +1007,13 @@ function MatchupLive({
               <span className="matchup-page__hero-number">
                 {formatAmericanOdds(engine.activeLine.yours.moneyline)}
               </span>
+              {overrideCount > 0 &&
+              houseYours &&
+              houseYours.moneyline !== engine.activeLine.yours.moneyline ? (
+                <p className="matchup-page__house-line">
+                  Franco {formatAmericanOdds(houseYours.moneyline)}
+                </p>
+              ) : null}
               <p className="matchup-page__meta-copy">
                 Proj{' '}
                 <span className="matchup-page__inline-number">

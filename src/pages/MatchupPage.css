@@ -155,6 +155,28 @@
   background: rgba(232, 84, 29, 0.14);
 }
 
+.matchup-page__model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid var(--amber);
+  border-radius: 6px;
+  background: rgba(232, 84, 29, 0.18);
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.matchup-page__house-line {
+  margin: 2px 0 0;
+  color: var(--ink-3, #787c75);
+  font-family: var(--font-num, monospace);
+  font-size: 12px;
+}
+
 .matchup-page__live-dot {
   width: 6px;
   height: 6px;

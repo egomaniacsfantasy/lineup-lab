@@ -270,6 +270,19 @@
   color: #fff;
 }
 
+.myboard__legend {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 6px;
+  color: var(--ink-3, #787c75);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
 .myboard__list {
   display: flex;
   flex-direction: column;

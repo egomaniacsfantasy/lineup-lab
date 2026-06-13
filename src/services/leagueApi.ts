@@ -199,9 +199,10 @@ export function fetchLineHistory(leagueId: string) {
   return get<{ history: LineHistoryEntry[] }>(`/api/league/${leagueId}/line-history`);
 }
 
-export function fetchLines(leagueId: string, userId: string) {
+export function fetchLines(leagueId: string, userId: string, opts?: { house?: boolean }) {
   return get<LeaguePricing>(
     `/api/league/${leagueId}/lines?userId=${encodeURIComponent(userId)}`,
+    opts?.house ? { headers: { 'x-skip-overlay': '1' } } : undefined,
   );
 }
 
@@ -268,7 +269,10 @@ export function setProjectionOverlay(encoded: string | null) {
 /** Decorate a request path + init with the active provider + overlay context. */
 function withContext(path: string, init: RequestInit = {}): [string, RequestInit] {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
-  if (overlayHeader) headers['x-olympus-overlay'] = overlayHeader;
+  // Opt-out sentinel: fetch the house (pure-Franco) line for side-by-side baselines.
+  const skipOverlay = headers['x-skip-overlay'];
+  delete headers['x-skip-overlay'];
+  if (overlayHeader && !skipOverlay) headers['x-olympus-overlay'] = overlayHeader;
 
   if (apiContext.provider !== 'espn') return [path, { ...init, headers }];
 

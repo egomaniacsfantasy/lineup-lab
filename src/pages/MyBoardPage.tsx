@@ -7,8 +7,19 @@ import { fetchBoard, type BoardRow } from '../services/leagueApi';
 import { toPlayer } from '../adapters/connectedLeague';
 import './MyBoardPage.css';
 
-const BOARD_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
+const BOARD_POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
 const RAPID_POSITIONS = ['QB', 'RB', 'WR', 'TE'] as const;
+
+/** Roughly where the replacement player sits per position in a redraft league;
+ *  used only to order the Overall board by value over replacement. */
+const REPLACEMENT_RANK: Record<string, number> = {
+  QB: 12,
+  RB: 24,
+  WR: 30,
+  TE: 12,
+  K: 12,
+  DEF: 12,
+};
 
 type Conviction = 'lean' | 'clear' | 'huge';
 const MARGIN: Record<Conviction, number> = { lean: 0.5, clear: 1.5, huge: 3.5 };
@@ -55,12 +66,6 @@ export function MyBoardPage() {
       cancelled = true;
     };
   }, [bootstrap]);
-
-  const byId = useMemo(() => {
-    const map = new Map<string, BoardRow>();
-    (board ?? []).forEach((r) => map.set(r.playerId, r));
-    return map;
-  }, [board]);
 
   const effective = (row: BoardRow) => overlay[row.playerId]?.base ?? row.mean;
 
@@ -137,7 +142,7 @@ export function MyBoardPage() {
       ) : (
         <BoardView
           board={board}
-          byId={byId}
+          overlay={overlay}
           bootstrap={bootstrap}
           position={position}
           setPosition={setPosition}
@@ -269,7 +274,7 @@ function RapidFire({
 
 function BoardView({
   board,
-  byId,
+  overlay,
   bootstrap,
   position,
   setPosition,
@@ -280,7 +285,7 @@ function BoardView({
   clearPlayer,
 }: {
   board: BoardRow[];
-  byId: Map<string, BoardRow>;
+  overlay: Record<string, { base?: number }>;
   bootstrap: NonNullable<ReturnType<typeof useLeagueConnection>['bootstrap']>;
   position: (typeof BOARD_POSITIONS)[number];
   setPosition: (p: (typeof BOARD_POSITIONS)[number]) => void;
@@ -290,15 +295,37 @@ function BoardView({
   setPlayerBase: (id: string, base: number | null) => void;
   clearPlayer: (id: string) => void;
 }) {
-  const rows = useMemo(
-    () =>
-      board
-        .filter((r) => r.position === position)
-        .map((r) => ({ row: r, value: effective(r) }))
-        .sort((x, y) => y.value - x.value),
+  // Replacement level per position (from Franco's means) for Overall ordering.
+  const replacement = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const pos of Object.keys(REPLACEMENT_RANK)) {
+      const sorted = board.filter((r) => r.position === pos).sort((a, b) => b.mean - a.mean);
+      out[pos] = sorted[REPLACEMENT_RANK[pos]]?.mean ?? 0;
+    }
+    return out;
+  }, [board]);
+
+  // Order: by the user's number within a position, or by value-over-replacement
+  // for Overall. Recomputes when the model changes...
+  const ordered = useMemo(() => {
+    if (position === 'ALL') {
+      return board
+        .filter((r) => REPLACEMENT_RANK[r.position] != null)
+        .slice()
+        .sort((a, b) => effective(b) - replacement[b.position] - (effective(a) - replacement[a.position]))
+        .slice(0, 120);
+    }
+    return board.filter((r) => r.position === position).slice().sort((a, b) => effective(b) - effective(a));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [board, position, byId],
-  );
+  }, [board, position, overlay, replacement]);
+
+  // ...but freeze that order while a dial is open, so dragging the slider
+  // doesn't re-sort the list and yank the row out from under your finger.
+  const [frozen, setFrozen] = useState<BoardRow[]>(ordered);
+  useEffect(() => {
+    if (!expanded) setFrozen(ordered);
+  }, [ordered, expanded]);
+  const rows = expanded ? frozen : ordered;
 
   return (
     <>
@@ -307,16 +334,25 @@ function BoardView({
           <button
             className={position === pos ? 'myboard__pos myboard__pos--on' : 'myboard__pos'}
             key={pos}
-            onClick={() => setPosition(pos)}
+            onClick={() => {
+              setExpanded(null);
+              setPosition(pos);
+            }}
             type="button"
           >
-            {pos}
+            {pos === 'ALL' ? 'Overall' : pos}
           </button>
         ))}
       </div>
 
+      <div className="myboard__legend">
+        <span>{position === 'ALL' ? 'Ranked by value over replacement' : 'Your order'}</span>
+        <span>Proj pts / game</span>
+      </div>
+
       <div className="myboard__list">
-        {rows.map(({ row, value }, index) => {
+        {rows.map((row, index) => {
+          const value = effective(row);
           const drift = value - row.mean;
           const isOpen = expanded === row.playerId;
           return (
