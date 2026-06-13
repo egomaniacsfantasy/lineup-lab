@@ -1,11 +1,13 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SeasonModeProvider } from './contexts/SeasonModeContext';
 import {
   LeagueConnectionProvider,
   useLeagueConnection,
 } from './contexts/LeagueConnectionContext';
 import { OddsFormatProvider } from './contexts/OddsFormatContext';
+import { AuthLanding } from './pages/AuthLanding';
 import { ConnectPage } from './pages/ConnectPage';
 import { DraftPage } from './pages/DraftPage';
 import { LeaguePage } from './pages/LeaguePage';
@@ -29,29 +31,45 @@ function RequireLeague() {
   return <Outlet />;
 }
 
-export default function App() {
+function AppRoutes() {
   return (
     <SeasonModeProvider>
       <LeagueConnectionProvider>
         <OddsFormatProvider>
-        <Routes>
-        <Route element={<AppShell />}>
-          <Route path="/" element={<HomeGate />} />
-          <Route path="/connect" element={<ConnectPage />} />
-          <Route element={<RequireLeague />}>
-            <Route path="/matchup" element={<MatchupPage />} />
-            <Route path="/season" element={<SeasonPage />} />
-            <Route path="/draft" element={<DraftPage />} />
-            <Route path="/trade" element={<TradePage />} />
-            <Route path="/rankings" element={<RankingsPage />} />
-            <Route path="/league" element={<LeaguePage />} />
-            <Route path="/more" element={<MorePage />} />
-          </Route>
-          <Route path="/admin/projections" element={<AdminProjectionsPage />} />
-        </Route>
-        </Routes>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<HomeGate />} />
+              <Route path="/connect" element={<ConnectPage />} />
+              <Route element={<RequireLeague />}>
+                <Route path="/matchup" element={<MatchupPage />} />
+                <Route path="/season" element={<SeasonPage />} />
+                <Route path="/draft" element={<DraftPage />} />
+                <Route path="/trade" element={<TradePage />} />
+                <Route path="/rankings" element={<RankingsPage />} />
+                <Route path="/league" element={<LeaguePage />} />
+                <Route path="/more" element={<MorePage />} />
+              </Route>
+              <Route path="/admin/projections" element={<AdminProjectionsPage />} />
+            </Route>
+          </Routes>
         </OddsFormatProvider>
       </LeagueConnectionProvider>
     </SeasonModeProvider>
+  );
+}
+
+/** Nothing in the app is reachable without an account. */
+function AuthGate() {
+  const { session, loading } = useAuth();
+  if (loading) return <div className="app-boot" aria-hidden="true" />;
+  if (!session) return <AuthLanding />;
+  return <AppRoutes />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }

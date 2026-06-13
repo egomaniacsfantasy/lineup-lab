@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -20,6 +21,8 @@ import {
   type LineHistoryEntry,
   type ScheduleWeek,
 } from '../services/leagueApi';
+import { supabase } from '../services/supabase';
+import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
 
@@ -79,6 +82,49 @@ function readStored(): StoredConnection | null {
   }
 }
 
+interface DbLeagueRow {
+  provider: string;
+  league_id: string;
+  season: string | null;
+  member_id: string | null;
+  username: string | null;
+  display_name: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** A saved-league row from Supabase becomes a connection (cookies live
+ *  server-side, so they stay null here). */
+function rowToConnection(row: DbLeagueRow): StoredConnection {
+  return {
+    provider: row.provider === 'espn' ? 'espn' : 'sleeper',
+    leagueId: row.league_id,
+    userId: row.member_id ?? '',
+    username: row.username ?? '',
+    displayName: row.display_name ?? '',
+    allLeagueIds: [row.league_id],
+    season: row.season ?? undefined,
+    espnS2: null,
+    swid: null,
+  };
+}
+
+async function saveLeagueRow(userId: string, c: StoredConnection) {
+  await supabase.from('olympus_leagues').upsert(
+    {
+      user_id: userId,
+      provider: c.provider,
+      league_id: c.leagueId,
+      season: c.season ?? null,
+      member_id: c.userId,
+      username: c.username,
+      display_name: c.displayName,
+      is_active: true,
+    },
+    { onConflict: 'user_id,provider,league_id' },
+  );
+}
+
 export function LeagueConnectionProvider({ children }: { children: ReactNode }) {
   const [stored, setStored] = useState<StoredConnection | null>(readStored);
   const [bootstrap, setBootstrap] = useState<LeagueBootstrap | null>(null);
@@ -87,6 +133,43 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const [lineHistory, setLineHistory] = useState<LineHistoryEntry[] | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(stored));
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = user?.id ?? null;
+
+  // Saved leagues live on the account, so they follow you to any device.
+  // On login, Supabase is the source of truth for which league is active.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    supabase
+      .from('olympus_leagues')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = (data ?? []) as DbLeagueRow[];
+        if (rows.length === 0) {
+          // First login on this account: migrate a league synced before sign-in.
+          const local = readStored();
+          if (local) void saveLeagueRow(user.id, local);
+          return;
+        }
+        const active = rows.find((r) => r.is_active) ?? rows[0];
+        const connection = rowToConnection(active);
+        applyApiContext(connection);
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(connection));
+        } catch {
+          // ignore
+        }
+        setStored(connection);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const hydrate = useCallback(async (connection: StoredConnection) => {
     setIsLoading(true);
@@ -146,6 +229,8 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       // private mode: connection lives for the session only
     }
     setStored(connection);
+    // Persist to the account so it's there on every device.
+    if (userIdRef.current) void saveLeagueRow(userIdRef.current, connection);
   }, []);
 
   const disconnect = useCallback(() => {
@@ -155,13 +240,21 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     } catch {
       // ignore
     }
+    if (userIdRef.current && stored) {
+      void supabase
+        .from('olympus_leagues')
+        .delete()
+        .eq('user_id', userIdRef.current)
+        .eq('provider', stored.provider)
+        .eq('league_id', stored.leagueId);
+    }
     setStored(null);
     setBootstrap(null);
     setSchedule(null);
     setPricing(null);
     setLineHistory(null);
     setError(null);
-  }, []);
+  }, [stored]);
 
   /**
    * Freshness loop: poll fast (90s) inside NFL game windows, hourly

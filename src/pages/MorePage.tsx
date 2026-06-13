@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
+import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useSeasonMode } from '../hooks/useSeasonMode';
 import './MorePage.css';
@@ -25,10 +26,27 @@ const MORE_LINKS = [
 export function MorePage() {
   const { mode } = useSeasonMode();
   const { bootstrap, stored } = useLeagueConnection();
+  const { user, signOut } = useAuth();
 
   return (
     <div className="more-page">
       <h1 className="visually-hidden">More</h1>
+
+      <section className="more-page__module">
+        <p className="more-page__eyebrow">Account</p>
+        <h2 className="more-page__title">{user?.email ?? 'Signed in'}</h2>
+        <p className="more-page__body">
+          Your leagues are saved to your account, so they&apos;re here on any
+          device you log in from.
+        </p>
+        <button
+          className="more-page__connect-cta more-page__signout"
+          onClick={() => void signOut()}
+          type="button"
+        >
+          Log out
+        </button>
+      </section>
       {mode === 'inseason' ? (
         <SeasonalNotice>
           Matchup, season, trade, and league stay in the main tab bar. Draft and rankings live here.

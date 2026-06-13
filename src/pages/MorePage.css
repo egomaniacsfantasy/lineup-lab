@@ -97,3 +97,14 @@
   font-size: 14px;
   font-weight: 700;
 }
+
+.more-page__signout {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-soft);
+  color: var(--text-soft);
+}
+
+.more-page__signout:hover {
+  border-color: var(--ink-3);
+  color: var(--text-primary);
+}
