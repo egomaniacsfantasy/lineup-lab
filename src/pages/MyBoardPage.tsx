@@ -11,45 +11,81 @@ const BOARD_POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
 const RAPID_POSITIONS = ['QB', 'RB', 'WR', 'TE'] as const;
 
 const SKILL = ['QB', 'RB', 'WR', 'TE'];
-/** Replacement rank per position (≈ starters × teams) for value over replacement. */
-const REPL_RANK: Record<string, number> = { QB: 12, RB: 30, WR: 36, TE: 12 };
+/** Nudge the order toward consensus/ESPN: QBs and TEs carry a bit more draft
+ *  value than raw VOR alone implies. */
+const POS_MULT: Record<string, number> = { QB: 1.4, RB: 1, WR: 1, TE: 1.05 };
+
+type Starters = Record<'QB' | 'RB' | 'WR' | 'TE', number>;
+
+/** How many of each position a league effectively starts (FLEX/superflex split
+ *  out), from the roster slots — this is what makes the board league-aware. */
+function computeStarters(slots: string[] | undefined): Starters {
+  if (!slots?.length) return { QB: 1, RB: 3, WR: 3, TE: 1.3 };
+  const c = { QB: 0, RB: 0, WR: 0, TE: 0, FLEX: 0, SF: 0, REC: 0 };
+  for (const s of slots) {
+    if (s === 'QB') c.QB += 1;
+    else if (s === 'RB') c.RB += 1;
+    else if (s === 'WR') c.WR += 1;
+    else if (s === 'TE') c.TE += 1;
+    else if (s === 'FLEX') c.FLEX += 1;
+    else if (s === 'SUPER_FLEX') c.SF += 1;
+    else if (s === 'WRRB_FLEX' || s === 'REC_FLEX') c.REC += 1;
+  }
+  return {
+    QB: c.QB + c.SF * 0.7 || 1,
+    RB: c.RB + c.FLEX * 0.5 + c.SF * 0.1 + c.REC * 0.4,
+    WR: c.WR + c.FLEX * 0.4 + c.SF * 0.1 + c.REC * 0.4,
+    TE: c.TE + c.FLEX * 0.1 + c.SF * 0.1 + c.REC * 0.2,
+  };
+}
 
 /**
- * The "GOD" rating: one 1–100 number per player that combines Franco's
- * projection with value over replacement, on SEASON TOTALS (not per-game, so a
- * backup who scores well in spot duty doesn't read as elite). Skill players are
- * scored by normalized VOR; DEF and K — low, streamable, draft-them-last — ride
- * a compressed low band so they never crowd the top of the board.
+ * The "GOD" rating: one 1–100 number per player combining Franco's projection
+ * with value over replacement, on SEASON TOTALS (not per-game, so a no-snaps
+ * backup like a QB3 doesn't read as elite). The scale is league-aware
+ * (replacement = starters × a 12-team reference, so superflex lifts QBs) and
+ * uses a compressed-top curve so the elite tier clusters near 100. DEF and K —
+ * streamable, draft-them-last — are anchored just outside the top 120 the way a
+ * real big board treats them, never buried hundreds of spots down.
  */
-function buildGodScale(board: BoardRow[]) {
+function buildGodScale(board: BoardRow[], starters: Starters) {
   const replTotal: Record<string, number> = {};
   for (const pos of SKILL) {
+    const rank = Math.max(1, Math.round(starters[pos as keyof Starters] * 12));
     const sorted = board.filter((r) => r.position === pos).sort((a, b) => (b.seasonTotal ?? 0) - (a.seasonTotal ?? 0));
-    replTotal[pos] = sorted[REPL_RANK[pos]]?.seasonTotal ?? 0;
+    replTotal[pos] = sorted[rank]?.seasonTotal ?? 0;
   }
-  let wmin = Infinity;
-  let wmax = -Infinity;
-  for (const r of board) {
-    if (!SKILL.includes(r.position)) continue;
-    const v = (r.seasonTotal ?? 0) - (replTotal[r.position] ?? 0);
-    if (v < wmin) wmin = v;
-    if (v > wmax) wmax = v;
-  }
+  const vorAdj = (pos: string, total: number) => (total - (replTotal[pos] ?? 0)) * (POS_MULT[pos] ?? 1);
+
+  const skillVors = board
+    .filter((r) => SKILL.includes(r.position))
+    .map((r) => vorAdj(r.position, r.seasonTotal ?? 0))
+    .sort((a, b) => b - a);
+  const maxV = skillVors[0] ?? 1;
+  const floorV = skillVors[Math.min(skillVors.length - 1, 320)] ?? 0;
+  const skillGod = (pos: string, total: number) => {
+    const x = Math.max(0, Math.min(1, (vorAdj(pos, total) - floorV) / (maxV - floorV || 1)));
+    return Math.max(1, Math.min(100, 1 + 99 * Math.pow(x, 0.82)));
+  };
+
+  // Anchor DEF/K to a target overall rank (~129 / ~154) so they sit just
+  // outside the top 120, then spread within position from there.
+  const skillGodSorted = board
+    .filter((r) => SKILL.includes(r.position))
+    .map((r) => skillGod(r.position, r.seasonTotal ?? 0))
+    .sort((a, b) => b - a);
+  const capAt = (idx: number) => skillGodSorted[Math.min(idx, skillGodSorted.length - 1)] ?? 20;
   const band = (pos: string, cap: number) => {
     const totals = board.filter((r) => r.position === pos).map((r) => r.seasonTotal ?? 0);
     return { cap, tmin: Math.min(...totals, 0), tmax: Math.max(...totals, 1) };
   };
-  const defB = band('DEF', 28);
-  const kB = band('K', 26);
+  const defB = band('DEF', capAt(127));
+  const kB = band('K', capAt(151));
 
   return (position: string, total: number) => {
-    if (SKILL.includes(position)) {
-      const vor = total - (replTotal[position] ?? 0);
-      const g = 1 + (99 * (vor - wmin)) / (wmax - wmin || 1);
-      return Math.max(1, Math.min(100, g));
-    }
+    if (SKILL.includes(position)) return skillGod(position, total);
     const b = position === 'DEF' ? defB : kB;
-    const g = 4 + ((b.cap - 4) * (total - b.tmin)) / (b.tmax - b.tmin || 1);
+    const g = b.cap * 0.6 + (b.cap - b.cap * 0.6) * ((total - b.tmin) / (b.tmax - b.tmin || 1));
     return Math.max(1, Math.min(b.cap, g));
   };
 }
@@ -247,9 +283,16 @@ export function MyBoardPage() {
 
   const effective = (row: BoardRow) => overlay[row.playerId]?.base ?? row.mean;
 
-  // GOD rating: built from the whole board (season totals + VOR), recomputed
-  // live as the user's overrides change a player's implied season total.
-  const godScale = useMemo(() => (board ? buildGodScale(board) : null), [board]);
+  // GOD rating: built from the whole board (season totals + VOR), league-aware
+  // via the roster slots, recomputed live as overrides change implied totals.
+  const starters = useMemo(
+    () => computeStarters(bootstrap?.league.rosterPositions),
+    [bootstrap],
+  );
+  const godScale = useMemo(
+    () => (board ? buildGodScale(board, starters) : null),
+    [board, starters],
+  );
   const gamesOf = (row: BoardRow) => (row.seasonTotal && row.mean ? row.seasonTotal / row.mean : 17);
   const effTotalOf = (row: BoardRow) => {
     const ov = overlay[row.playerId]?.base;
@@ -284,16 +327,14 @@ export function MyBoardPage() {
             switchSet={switchSet}
           />
         </div>
-        <div className="myboard__head-right">
-          <span className="myboard__count">
-            {overrideCount === 0 ? 'All Franco' : `${overrideCount} moved`}
-          </span>
-          {overrideCount > 0 ? (
+        {overrideCount > 0 ? (
+          <div className="myboard__head-right">
+            <span className="myboard__count">{overrideCount} moved</span>
             <button className="myboard__reset" onClick={() => reset()} type="button">
               Reset to Franco
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </header>
 
       <p className="myboard__sub">
