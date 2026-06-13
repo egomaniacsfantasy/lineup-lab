@@ -82,12 +82,26 @@ function buildGodScale(board: BoardRow[], starters: Starters) {
   const defB = band('DEF', capAt(127));
   const kB = band('K', capAt(151));
 
-  return (position: string, total: number) => {
+  const score = (position: string, total: number) => {
     if (SKILL.includes(position)) return skillGod(position, total);
     const b = position === 'DEF' ? defB : kB;
     const g = b.cap * 0.6 + (b.cap - b.cap * 0.6) * ((total - b.tmin) / (b.tmax - b.tmin || 1));
     return Math.max(1, Math.min(b.cap, g));
   };
+  // Inverse: the season total that produces a given GOD — lets the dial be
+  // GOD-native (drag the rating, back out the implied projection).
+  const totalForGod = (position: string, god: number) => {
+    const gg = Math.max(1, Math.min(100, god));
+    if (SKILL.includes(position)) {
+      const x = Math.pow((gg - 1) / 99, 1 / 0.82);
+      const vor = floorV + x * (maxV - floorV);
+      return (replTotal[position] ?? 0) + vor / (POS_MULT[position] ?? 1);
+    }
+    const b = position === 'DEF' ? defB : kB;
+    const denom = b.cap - b.cap * 0.6 || 1;
+    return b.tmin + ((Math.min(gg, b.cap) - b.cap * 0.6) / denom) * (b.tmax - b.tmin);
+  };
+  return { score, totalForGod };
 }
 
 type Conviction = 'lean' | 'clear' | 'huge';
@@ -168,7 +182,13 @@ function SetSwitcher({
   return (
     <div className="setsw" ref={ref}>
       <button className="setsw__trigger" onClick={() => setOpen((v) => !v)} type="button">
-        <span className="setsw__name">{activeSetName}</span>
+        <span className="setsw__namewrap">
+          <span className="setsw__name">{activeSetName}</span>
+          <span className="setsw__hint">
+            {sets.length} {sets.length === 1 ? 'board' : 'boards'} · auto-saved · tap to switch or
+            add
+          </span>
+        </span>
         <svg className="setsw__chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M4 6l4 4 4-4" />
         </svg>
@@ -298,8 +318,9 @@ export function MyBoardPage() {
     const ov = overlay[row.playerId]?.base;
     return ov == null ? row.seasonTotal ?? 0 : ov * gamesOf(row);
   };
-  const godOf = (row: BoardRow) => (godScale ? godScale(row.position, effTotalOf(row)) : 0);
-  const francoGodOf = (row: BoardRow) => (godScale ? godScale(row.position, row.seasonTotal ?? 0) : 0);
+  const godOf = (row: BoardRow) => (godScale ? godScale.score(row.position, effTotalOf(row)) : 0);
+  const francoGodOf = (row: BoardRow) =>
+    godScale ? godScale.score(row.position, row.seasonTotal ?? 0) : 0;
 
   if (!bootstrap) {
     return (
@@ -388,6 +409,7 @@ export function MyBoardPage() {
           godOf={godOf}
           francoGodOf={francoGodOf}
           effTotalOf={effTotalOf}
+          godScale={godScale}
           expanded={expanded}
           setExpanded={setExpanded}
           setPlayerBase={setPlayerBase}
@@ -528,6 +550,7 @@ function BoardView({
   godOf,
   francoGodOf,
   effTotalOf,
+  godScale,
   expanded,
   setExpanded,
   setPlayerBase,
@@ -542,6 +565,7 @@ function BoardView({
   godOf: (row: BoardRow) => number;
   francoGodOf: (row: BoardRow) => number;
   effTotalOf: (row: BoardRow) => number;
+  godScale: ReturnType<typeof buildGodScale> | null;
   expanded: string | null;
   setExpanded: (id: string | null) => void;
   setPlayerBase: (id: string, base: number | null) => void;
@@ -632,11 +656,12 @@ function BoardView({
                   )}
                 </span>
               </button>
-              {isOpen ? (
+              {isOpen && godScale ? (
                 <Dial
                   row={row}
                   value={value}
                   god={god}
+                  godScale={godScale}
                   onSet={(v) => setPlayerBase(row.playerId, v)}
                   onReset={() => clearPlayer(row.playerId)}
                 />
@@ -653,52 +678,63 @@ function Dial({
   row,
   value,
   god,
+  godScale,
   onSet,
   onReset,
 }: {
   row: BoardRow;
   value: number;
   god: number;
+  godScale: ReturnType<typeof buildGodScale>;
   onSet: (v: number) => void;
   onReset: () => void;
 }) {
-  const { floor, ceiling, min, max } = scaleFor(row);
-  const offBook = value > ceiling + 0.01 || value < floor - 0.01;
-  const pct = (v: number) => `${((v - min) / (max - min)) * 100}%`;
+  // The slider is GOD-native: you drag the rating, and the implied projection
+  // (what the engine actually prices off) is backed out from it.
+  const pts = scaleFor(row);
+  const games = row.seasonTotal && row.mean ? row.seasonTotal / row.mean : 17;
+  const godAt = (p: number) => godScale.score(row.position, p * games);
+  const ptsAt = (g: number) => godScale.totalForGod(row.position, g) / games;
+  const gMin = godAt(pts.min);
+  const gMax = godAt(pts.max);
+  const gFloor = godAt(pts.floor);
+  const gCeil = godAt(pts.ceiling);
+  const gFranco = godAt(row.mean);
+  const span = gMax - gMin || 1;
+  const pct = (g: number) => `${Math.max(0, Math.min(100, ((g - gMin) / span) * 100))}%`;
+  const offBook = god > gCeil + 0.1 || god < gFloor - 0.1;
 
   return (
     <div className="dial">
       <input
         className="dial__slider"
-        max={max}
-        min={min}
-        onChange={(e) => onSet(parseFloat(e.target.value))}
+        max={gMax}
+        min={gMin}
+        onChange={(e) => onSet(Math.round(ptsAt(parseFloat(e.target.value)) * 10) / 10)}
         step={0.1}
         type="range"
-        value={value}
-        aria-label={`Set your projection for ${row.name}`}
+        value={god}
+        aria-label={`Set the GOD rating for ${row.name}`}
       />
       <div className="dial__scale">
-        <span style={{ left: pct(floor) }}>
+        <span style={{ left: pct(gFloor) }}>
           floor<br />
-          {floor.toFixed(0)}
+          {gFloor.toFixed(0)}
         </span>
-        <span className="dial__scale-franco" style={{ left: pct(row.mean) }}>
+        <span className="dial__scale-franco" style={{ left: pct(gFranco) }}>
           Franco<br />
-          {row.mean.toFixed(1)}
+          {gFranco.toFixed(1)}
         </span>
-        <span style={{ left: pct(ceiling) }}>
+        <span style={{ left: pct(gCeil) }}>
           ceiling<br />
-          {ceiling.toFixed(0)}
+          {gCeil.toFixed(0)}
         </span>
       </div>
       <div className="dial__foot">
         <span className="dial__readout">
           <span className="dial__god">GOD {god.toFixed(1)}</span>
           {offBook ? (
-            <span className="dial__offbook">
-              Off-book · Franco has him {row.mean.toFixed(1)} pts/gm
-            </span>
+            <span className="dial__offbook">Off-book · Franco {gFranco.toFixed(1)}</span>
           ) : (
             <span className="dial__pts">{value.toFixed(1)} proj pts/game</span>
           )}
