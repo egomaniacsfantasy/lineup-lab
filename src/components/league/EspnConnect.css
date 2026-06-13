@@ -187,3 +187,51 @@
   font-size: 13px;
   line-height: 1.45;
 }
+
+.espn-connect__steps {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.espn-connect__bookmarklet {
+  display: inline-block;
+  padding: 3px 10px;
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  background: rgba(232, 84, 29, 0.14);
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: grab;
+  white-space: nowrap;
+}
+
+.espn-connect__linkbtn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.espn-connect__linkbtn--block {
+  display: block;
+  margin-top: 8px;
+}
+
+.espn-connect__manual {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}

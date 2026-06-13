@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   connectEspn,
   LeagueApiError,
@@ -12,6 +12,10 @@ interface EspnConnectProps {
 }
 
 const CURRENT_SEASON = String(new Date().getFullYear());
+
+// One-click cookie grab: run on espn.com, copies a token to the clipboard.
+const BOOKMARKLET =
+  "javascript:(function(){var g=function(n){var m=document.cookie.match(new RegExp(n+'=([^;]+)'));return m?m[1]:''};var s=g('espn_s2'),w=g('SWID');if(!s||!w){alert('Open espn.com (logged in) first, then click this. If it still fails, your browser hides the cookie — use manual entry in Olympus.');return}var t=btoa(s+'~~'+w);if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){alert('ESPN access copied. Paste it back in Olympus.')},function(){prompt('Copy this token into Olympus:',t)})}else{prompt('Copy this token into Olympus:',t)}})()";
 
 type Step =
   | { name: 'league' }
@@ -28,12 +32,37 @@ type Step =
 export function EspnConnect({ onConnected }: EspnConnectProps) {
   const [step, setStep] = useState<Step>({ name: 'league' });
   const [leagueId, setLeagueId] = useState('');
-  const [season, setSeason] = useState(CURRENT_SEASON);
+  // Season is the current NFL year — no need to ask. (Past seasons are an
+  // advanced case we can add later.)
+  const season = CURRENT_SEASON;
   const [needsCookies, setNeedsCookies] = useState(false);
   const [espnS2, setEspnS2] = useState('');
   const [swid, setSwid] = useState('');
+  const [tokenInput, setTokenInput] = useState('');
+  const [manual, setManual] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // React 19 blocks javascript: hrefs in JSX, so set the bookmarklet via ref.
+  const bookmarkletRef = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (bookmarkletRef.current) bookmarkletRef.current.setAttribute('href', BOOKMARKLET);
+  }, [needsCookies]);
+
+  // Decode the clipboard token from the bookmarklet into the two cookies.
+  const applyToken = (raw: string) => {
+    try {
+      const [s2, sw] = atob(raw.trim()).split('~~');
+      if (s2 && sw) {
+        setEspnS2(s2);
+        setSwid(sw);
+        return true;
+      }
+    } catch {
+      // not a valid token yet
+    }
+    return false;
+  };
 
   const attemptConnect = async () => {
     if (leagueId.trim().length === 0 || isLoading) return;
@@ -99,48 +128,85 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
               value={leagueId}
             />
             <span className="espn-connect__hint">
-              On ESPN, open your league and copy the number after{' '}
-              <code>leagueId=</code> in the address bar.
+              In ESPN, open your league and copy the number after{' '}
+              <code>leagueId=</code> in the address bar. Most leagues connect
+              with just this.
             </span>
-          </label>
-
-          <label className="espn-connect__field">
-            <span className="espn-connect__label">Season</span>
-            <input
-              className="espn-connect__input espn-connect__input--short"
-              inputMode="numeric"
-              onChange={(event) => setSeason(event.target.value.replace(/[^0-9]/g, ''))}
-              value={season}
-            />
           </label>
 
           {needsCookies ? (
             <div className="espn-connect__cookies">
               <p className="espn-connect__cookies-note">
-                This league is private. Paste two cookies from your own ESPN
-                session — they stay on your device and are read-only. In your
-                browser, open espn.com while logged in, then DevTools →
-                Application → Cookies → <code>espn_s2</code> and{' '}
-                <code>SWID</code>.
+                This league is private, so ESPN needs to know it&apos;s really
+                you. One click does it — no passwords, read-only, stays on your
+                device:
               </p>
-              <label className="espn-connect__field">
-                <span className="espn-connect__label">espn_s2</span>
-                <input
-                  className="espn-connect__input"
-                  onChange={(event) => setEspnS2(event.target.value)}
-                  placeholder="Long value starting with AEB..."
-                  value={espnS2}
-                />
-              </label>
-              <label className="espn-connect__field">
-                <span className="espn-connect__label">SWID</span>
-                <input
-                  className="espn-connect__input"
-                  onChange={(event) => setSwid(event.target.value)}
-                  placeholder="{XXXXXXXX-XXXX-...}"
-                  value={swid}
-                />
-              </label>
+              <ol className="espn-connect__steps">
+                <li>
+                  Drag this to your bookmarks bar:{' '}
+                  <a
+                    className="espn-connect__bookmarklet"
+                    onClick={(event) => event.preventDefault()}
+                    ref={bookmarkletRef}
+                  >
+                    🔑 Grab ESPN access
+                  </a>
+                </li>
+                <li>Open espn.com (logged in) and click that bookmark.</li>
+                <li>Come back here and paste:</li>
+              </ol>
+              <input
+                className="espn-connect__input"
+                onChange={(event) => {
+                  setTokenInput(event.target.value);
+                  applyToken(event.target.value);
+                }}
+                placeholder="Paste your ESPN access token"
+                value={tokenInput}
+              />
+              {tokenInput && !espnS2 ? (
+                <p className="espn-connect__hint">
+                  That token didn&apos;t read. Use{' '}
+                  <button
+                    className="espn-connect__linkbtn"
+                    onClick={() => setManual((m) => !m)}
+                    type="button"
+                  >
+                    manual entry
+                  </button>{' '}
+                  instead.
+                </p>
+              ) : (
+                <button
+                  className="espn-connect__linkbtn espn-connect__linkbtn--block"
+                  onClick={() => setManual((m) => !m)}
+                  type="button"
+                >
+                  {manual ? 'Hide manual entry' : 'Or paste the two cookies manually'}
+                </button>
+              )}
+              {manual ? (
+                <div className="espn-connect__manual">
+                  <label className="espn-connect__field">
+                    <span className="espn-connect__label">espn_s2</span>
+                    <input
+                      className="espn-connect__input"
+                      onChange={(event) => setEspnS2(event.target.value)}
+                      placeholder="Long value starting with AEB..."
+                      value={espnS2}
+                    />
+                  </label>
+                  <label className="espn-connect__field">
+                    <span className="espn-connect__label">SWID</span>
+                    <input
+                      className="espn-connect__input"
+                      onChange={(event) => setSwid(event.target.value)}
+                      placeholder="{XXXXXXXX-XXXX-...}"
+                      value={swid}
+                    />
+                  </label>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
