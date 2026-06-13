@@ -6,31 +6,41 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
+import { EspnConnect } from '../components/league/EspnConnect';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import './ConnectPage.css';
 
 export function ConnectPage() {
   const { stored, connect } = useLeagueConnection();
   const navigate = useNavigate();
-  const [showWizard, setShowWizard] = useState(false);
+  const [flow, setFlow] = useState<'none' | 'sleeper' | 'espn'>('none');
 
   // already connected — straight to the board
   if (stored) {
     return <Navigate replace to="/matchup" />;
   }
 
-  if (showWizard) {
+  if (flow !== 'none') {
     return (
       <div className="connect-page">
-        <ConnectWizard
-          onConnected={(connection) => {
-            connect(connection);
-            navigate('/matchup', { replace: true });
-          }}
-        />
+        {flow === 'sleeper' ? (
+          <ConnectWizard
+            onConnected={(connection) => {
+              connect(connection);
+              navigate('/matchup', { replace: true });
+            }}
+          />
+        ) : (
+          <EspnConnect
+            onConnected={(connection) => {
+              connect(connection);
+              navigate('/matchup', { replace: true });
+            }}
+          />
+        )}
         <button
           className="connect-page__back"
-          onClick={() => setShowWizard(false)}
+          onClick={() => setFlow('none')}
           type="button"
         >
           Back to providers
@@ -49,7 +59,7 @@ export function ConnectPage() {
       <div className="connect-page__providers">
         <button
           className="connect-page__provider connect-page__provider--live"
-          onClick={() => setShowWizard(true)}
+          onClick={() => setFlow('sleeper')}
           type="button"
         >
           <img
@@ -60,14 +70,18 @@ export function ConnectPage() {
           <span className="connect-page__provider-action">Connect</span>
         </button>
 
-        <div aria-disabled="true" className="connect-page__provider connect-page__provider--soon">
+        <button
+          className="connect-page__provider connect-page__provider--live"
+          onClick={() => setFlow('espn')}
+          type="button"
+        >
           <img
             alt="ESPN"
             className="connect-page__provider-logo connect-page__provider-logo--espn"
             src="/providers/espn-logo.png"
           />
-          <span className="connect-page__provider-chip">Coming soon</span>
-        </div>
+          <span className="connect-page__provider-action">Connect</span>
+        </button>
       </div>
 
       <p className="connect-page__demo">

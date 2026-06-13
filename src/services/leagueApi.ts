@@ -212,8 +212,41 @@ export class LeagueApiError extends Error {
   }
 }
 
+/**
+ * Provider context for the active connection. Sleeper needs nothing; ESPN
+ * threads its season + (for private leagues) the user's own cookies through
+ * every request — query for the season, headers for the secrets.
+ */
+interface ApiContext {
+  provider: 'sleeper' | 'espn';
+  season?: string;
+  espnS2?: string | null;
+  swid?: string | null;
+}
+
+let apiContext: ApiContext = { provider: 'sleeper' };
+
+export function setApiContext(context: ApiContext) {
+  apiContext = context;
+}
+
+/** Decorate a request path + init with the active provider context. */
+function withContext(path: string, init: RequestInit = {}): [string, RequestInit] {
+  if (apiContext.provider !== 'espn') return [path, init];
+
+  const separator = path.includes('?') ? '&' : '?';
+  const url = `${path}${separator}provider=espn&season=${encodeURIComponent(
+    apiContext.season ?? '',
+  )}`;
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
+  if (apiContext.espnS2) headers['x-espn-s2'] = apiContext.espnS2;
+  if (apiContext.swid) headers['x-espn-swid'] = apiContext.swid;
+  return [url, { ...init, headers }];
+}
+
 async function get<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  const [url, decorated] = withContext(path, init);
+  const response = await fetch(url, decorated);
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
@@ -232,6 +265,36 @@ export function connectUsername(username: string) {
   );
 }
 
+export interface EspnTeamSummary {
+  rosterId: number;
+  ownerId: string | null;
+  teamName: string;
+  ownerName: string;
+  record: { wins: number; losses: number; ties: number };
+}
+
+/**
+ * Probe an ESPN league. Pass cookies only for a private league. Throws a
+ * LeagueApiError with code 'espn_private' when the league needs them.
+ */
+export function connectEspn(
+  leagueId: string,
+  season: string,
+  creds?: { espnS2: string; swid: string },
+) {
+  const headers: Record<string, string> = {};
+  if (creds) {
+    headers['x-espn-s2'] = creds.espnS2;
+    headers['x-espn-swid'] = creds.swid;
+  }
+  return get<{
+    league: { id: string; name: string; season: string; totalTeams: number; scoringFamily: string };
+    teams: EspnTeamSummary[];
+  }>(`/api/espn/connect/${encodeURIComponent(leagueId)}?season=${encodeURIComponent(season)}`, {
+    headers,
+  });
+}
+
 export function fetchBootstrap(leagueId: string, userId: string) {
   return get<LeagueBootstrap>(
     `/api/league/${leagueId}/bootstrap?userId=${encodeURIComponent(userId)}`,
@@ -245,7 +308,8 @@ export function fetchSchedule(leagueId: string) {
 }
 
 export function refreshLeague(leagueId: string) {
-  return fetch(`/api/league/${leagueId}/refresh`, { method: 'POST' });
+  const [url, init] = withContext(`/api/league/${leagueId}/refresh`, { method: 'POST' });
+  return fetch(url, init);
 }
 
 export interface TradeTraits {

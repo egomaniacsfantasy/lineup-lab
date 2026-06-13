@@ -14,6 +14,7 @@ import {
   fetchLines,
   fetchSchedule,
   refreshLeague,
+  setApiContext,
   type LeagueBootstrap,
   type LeaguePricing,
   type LineHistoryEntry,
@@ -23,7 +24,7 @@ import {
 const STORAGE_KEY = 'og.olympus.connected-league';
 
 export interface StoredConnection {
-  provider: 'sleeper';
+  provider: 'sleeper' | 'espn';
   leagueId: string;
   userId: string;
   username: string;
@@ -31,6 +32,24 @@ export interface StoredConnection {
   /** Multi-league seam: all of the user's leagues are stored on connect;
    *  one is active. A header league switcher is a later pass. */
   allLeagueIds: string[];
+  /** ESPN-only: season + (private league) the user's own read-only cookies. */
+  season?: string;
+  espnS2?: string | null;
+  swid?: string | null;
+}
+
+/** Point the API client at the right provider for a connection. */
+function applyApiContext(connection: StoredConnection | null) {
+  if (connection?.provider === 'espn') {
+    setApiContext({
+      provider: 'espn',
+      season: connection.season,
+      espnS2: connection.espnS2 ?? null,
+      swid: connection.swid ?? null,
+    });
+  } else {
+    setApiContext({ provider: 'sleeper' });
+  }
 }
 
 interface LeagueConnectionValue {
@@ -51,7 +70,10 @@ const LeagueConnectionContext = createContext<LeagueConnectionValue | null>(null
 function readStored(): StoredConnection | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as StoredConnection) : null;
+    const parsed = raw ? (JSON.parse(raw) as StoredConnection) : null;
+    // Point the API client at the right provider before the first fetch.
+    applyApiContext(parsed);
+    return parsed;
   } catch {
     return null;
   }
@@ -117,6 +139,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   }, [stored, hydrate]);
 
   const connect = useCallback((connection: StoredConnection) => {
+    applyApiContext(connection);
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(connection));
     } catch {
@@ -126,6 +149,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   }, []);
 
   const disconnect = useCallback(() => {
+    applyApiContext(null);
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch {

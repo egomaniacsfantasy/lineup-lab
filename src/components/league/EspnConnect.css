@@ -1,0 +1,189 @@
+.espn-connect {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.espn-connect__header {
+  text-align: center;
+}
+
+.espn-connect__kicker {
+  margin: 0 0 4px;
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.espn-connect__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 5vw, 2.4rem);
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.espn-connect__form,
+.espn-connect__teams {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.espn-connect__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.espn-connect__label {
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.espn-connect__input {
+  padding: 11px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 15px;
+}
+
+.espn-connect__input--short {
+  max-width: 140px;
+}
+
+.espn-connect__input:focus {
+  outline: none;
+  border-color: var(--amber);
+}
+
+.espn-connect__hint {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.espn-connect__hint code,
+.espn-connect__cookies-note code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-surface-soft);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.espn-connect__cookies {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(232, 84, 29, 0.4);
+  border-radius: 12px;
+  background: rgba(232, 84, 29, 0.06);
+}
+
+.espn-connect__cookies-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.espn-connect__submit {
+  min-height: 46px;
+  border: none;
+  border-radius: 10px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.espn-connect__submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.espn-connect__privacy,
+.espn-connect__step-note {
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.espn-connect__team-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.espn-connect__team-row:hover:not(:disabled) {
+  border-color: var(--amber);
+}
+
+.espn-connect__team-row:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.espn-connect__team-name {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 17px;
+  letter-spacing: 0.02em;
+}
+
+.espn-connect__team-meta {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.espn-connect__back {
+  align-self: center;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.espn-connect__error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 92, 77, 0.12);
+  color: var(--red);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+}

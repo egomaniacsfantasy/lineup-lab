@@ -4,6 +4,7 @@
  */
 import { Router } from 'express';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
+import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import { getLeaguePricing, priceTrade } from '../engine/engine.js';
@@ -13,11 +14,20 @@ import { getActiveProjections } from '../projections/store.js';
 
 const DAY = 24 * 60 * 60_000;
 
-// Provider registry — ESPN/Yahoo slot in here later.
-const providers = { sleeper: sleeperProvider };
-
+/**
+ * Pick the provider for this request. ESPN needs a per-request instance bound
+ * to the season and (for private leagues) the user's own cookies, passed as
+ * headers so they never land in a URL or a log.
+ */
 function getProvider(req) {
-  return providers[req.query.provider ?? 'sleeper'] ?? sleeperProvider;
+  if (req.query.provider === 'espn') {
+    return createEspnProvider({
+      season: req.query.season ?? String(new Date().getUTCFullYear()),
+      espnS2: req.get('x-espn-s2') || null,
+      swid: req.get('x-espn-swid') || null,
+    });
+  }
+  return sleeperProvider;
 }
 
 export const apiRouter = Router();
@@ -126,6 +136,52 @@ apiRouter.get('/connect/:username', async (req, res, next) => {
 
     res.json({ user, season, leagues });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * ESPN connect: there's no username lookup, so the user supplies their league
+ * id (from the league URL). We return the league + its teams so they can pick
+ * which one is theirs. A private league answers 401/403 — we say so plainly so
+ * the UI can ask for the espn_s2 + SWID cookies and retry.
+ */
+apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
+  try {
+    const result = await espnConnect({
+      season: req.query.season ?? String(new Date().getUTCFullYear()),
+      leagueId: req.params.leagueId.trim(),
+      espnS2: req.get('x-espn-s2') || null,
+      swid: req.get('x-espn-swid') || null,
+    });
+
+    if (!result) {
+      res.status(404).json({
+        error: 'league_not_found',
+        message:
+          "We couldn't find that ESPN league. Double-check the league ID from your league URL and the season.",
+      });
+      return;
+    }
+
+    res.json(result);
+  } catch (error) {
+    if (error.isPrivate) {
+      res.status(403).json({
+        error: 'espn_private',
+        message:
+          'This ESPN league is private. Paste your espn_s2 and SWID cookies to connect — they stay on your device and are read-only.',
+      });
+      return;
+    }
+    if (String(error.message).startsWith('espn_')) {
+      res.status(404).json({
+        error: 'league_not_found',
+        message:
+          "We couldn't reach that ESPN league. Check the league ID and season, then try again.",
+      });
+      return;
+    }
     next(error);
   }
 });
