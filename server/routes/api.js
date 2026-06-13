@@ -348,8 +348,8 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const { leagueId } = req.params;
-    const { userId, partnerRosterId, give = [], get = [], traits = {}, overlay = null } =
-      req.body ?? {};
+    const { userId, partnerRosterId, give = [], get = [], traits = {} } = req.body ?? {};
+    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
 
     const ctxBase = await loadLeagueContext(provider, leagueId, userId);
     if (!ctxBase) throw new Error('league_not_found');

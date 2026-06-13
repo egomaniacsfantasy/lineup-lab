@@ -23,6 +23,7 @@ import {
 } from '../services/leagueApi';
 import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
+import { useModelOverlay } from './ModelOverlayContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
 
@@ -157,6 +158,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const [isLoading, setIsLoading] = useState(Boolean(stored));
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const { overlayVersion } = useModelOverlay();
   const userIdRef = useRef<string | null>(null);
   userIdRef.current = user?.id ?? null;
 
@@ -368,6 +370,34 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [stored]);
+
+  // When the user's model (BYOR overlay) changes, reprice the book so the
+  // matchup and season tabs reflect their numbers. Debounced: rapid dragging
+  // shouldn't fire a sim per tick. The overlay header is already set by the
+  // model context, so a plain re-fetch picks it up.
+  const didOverlayMount = useRef(false);
+  useEffect(() => {
+    if (!stored) return undefined;
+    if (!didOverlayMount.current) {
+      didOverlayMount.current = true;
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const lines = await fetchLines(stored.leagueId, stored.userId);
+          setPricing(lines);
+          if (lines.available) {
+            const h = await fetchLineHistory(stored.leagueId).catch(() => null);
+            setLineHistory(h?.history ?? null);
+          }
+        } catch {
+          // keep the last good pricing
+        }
+      })();
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [overlayVersion, stored]);
 
   const refresh = useCallback(async () => {
     if (!stored) return;

@@ -7,6 +7,7 @@ import {
   useLeagueConnection,
 } from './contexts/LeagueConnectionContext';
 import { OddsFormatProvider } from './contexts/OddsFormatContext';
+import { ModelOverlayProvider } from './contexts/ModelOverlayContext';
 import { AuthLanding } from './pages/AuthLanding';
 import { ConnectPage } from './pages/ConnectPage';
 import { DraftPage } from './pages/DraftPage';
@@ -34,8 +35,9 @@ function RequireLeague() {
 function AppRoutes() {
   return (
     <SeasonModeProvider>
-      <LeagueConnectionProvider>
-        <OddsFormatProvider>
+      <ModelOverlayProvider>
+        <LeagueConnectionProvider>
+          <OddsFormatProvider>
           <Routes>
             <Route element={<AppShell />}>
               <Route path="/" element={<HomeGate />} />
@@ -52,8 +54,9 @@ function AppRoutes() {
               <Route path="/admin/projections" element={<AdminProjectionsPage />} />
             </Route>
           </Routes>
-        </OddsFormatProvider>
-      </LeagueConnectionProvider>
+          </OddsFormatProvider>
+        </LeagueConnectionProvider>
+      </ModelOverlayProvider>
     </SeasonModeProvider>
   );
 }

@@ -205,6 +205,29 @@ export function fetchLines(leagueId: string, userId: string) {
   );
 }
 
+export interface BoardRow {
+  rank: number;
+  playerId: string;
+  name: string;
+  position: string;
+  team: string;
+  mean: number;
+  stdev: number | null;
+  floor: number | null;
+  ceiling: number | null;
+  seasonTotal: number | null;
+  weekly: Record<string, number>;
+  tier: number | null;
+  derived: boolean;
+}
+
+/** Franco's projection board (the house line), the base for Build Your Own Rankings. */
+export function fetchBoard(limit = 800) {
+  return get<{ available: boolean; version: string; source: string; rankings: BoardRow[] }>(
+    `/api/rankings?limit=${limit}`,
+  );
+}
+
 export class LeagueApiError extends Error {
   code: string;
 
@@ -232,15 +255,27 @@ export function setApiContext(context: ApiContext) {
   apiContext = context;
 }
 
-/** Decorate a request path + init with the active provider context. */
+/**
+ * The user's "Build Your Own Rankings" overlay, base64-encoded, sent on every
+ * request so the engine prices off their model. null = pure Franco (house).
+ */
+let overlayHeader: string | null = null;
+
+export function setProjectionOverlay(encoded: string | null) {
+  overlayHeader = encoded;
+}
+
+/** Decorate a request path + init with the active provider + overlay context. */
 function withContext(path: string, init: RequestInit = {}): [string, RequestInit] {
-  if (apiContext.provider !== 'espn') return [path, init];
+  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
+  if (overlayHeader) headers['x-olympus-overlay'] = overlayHeader;
+
+  if (apiContext.provider !== 'espn') return [path, { ...init, headers }];
 
   const separator = path.includes('?') ? '&' : '?';
   const url = `${path}${separator}provider=espn&season=${encodeURIComponent(
     apiContext.season ?? '',
   )}`;
-  const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
   if (apiContext.espnS2) headers['x-espn-s2'] = apiContext.espnS2;
   if (apiContext.swid) headers['x-espn-swid'] = apiContext.swid;
   return [url, { ...init, headers }];
