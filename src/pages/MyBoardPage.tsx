@@ -432,6 +432,7 @@ export function MyBoardPage() {
           board={board}
           poolIds={rapidPool}
           bootstrap={bootstrap}
+          francoGodOf={francoGodOf}
           onPick={(winner, loser, conviction) => {
             const wEff = effective(winner);
             const lEff = effective(loser);
@@ -503,41 +504,64 @@ function buildPairs(board: BoardRow[], poolIds: Set<string>): Array<[BoardRow, B
   return pairs.slice(0, 60);
 }
 
+type Reveal = { kind: 'with' | 'hot' | 'coin'; text: string };
+
 function RapidFire({
   board,
   poolIds,
   bootstrap,
+  francoGodOf,
   onPick,
 }: {
   board: BoardRow[];
   poolIds: Set<string>;
   bootstrap: NonNullable<ReturnType<typeof useLeagueConnection>['bootstrap']>;
+  francoGodOf: (row: BoardRow) => number;
   onPick: (winner: BoardRow, loser: BoardRow, conviction: Conviction) => void;
 }) {
   const pairs = useMemo(() => buildPairs(board, poolIds), [board, poolIds]);
   const [index, setIndex] = useState(0);
   const [conviction, setConviction] = useState<Conviction>('clear');
-  const [last, setLast] = useState<{ winner: string; loser: string } | null>(null);
   const [picked, setPicked] = useState<0 | 1 | null>(null);
+  const [reveal, setReveal] = useState<Reveal | null>(null);
+  const [streak, setStreak] = useState(0);
+  const [stats, setStats] = useState({ made: 0, hot: 0, best: 0 });
 
-  // A pick flashes the chosen card, then advances — identical feedback whether
-  // you tap or use an arrow key.
+  // A pick flashes the chosen card, reveals whether you went with the board or
+  // made a hot take, then advances — identical feedback for a tap or an arrow.
   const choose = useCallback(
     (side: 0 | 1) => {
       if (picked !== null) return;
       const pair = pairs[index];
       if (!pair) return;
+      const winner = side === 0 ? pair[0] : pair[1];
+      const loser = side === 0 ? pair[1] : pair[0];
+      const diff = francoGodOf(winner) - francoGodOf(loser);
+      const r: Reveal =
+        Math.abs(diff) < 2
+          ? { kind: 'coin', text: 'Coin flip — too close to call' }
+          : diff > 0
+            ? { kind: 'with', text: 'With the board' }
+            : { kind: 'hot', text: '🔥 Hot take' };
       setPicked(side);
+      setReveal(r);
+      setStreak((s) => {
+        const next = s + 1;
+        setStats((st) => ({
+          made: st.made + 1,
+          hot: st.hot + (r.kind === 'hot' ? 1 : 0),
+          best: Math.max(st.best, next),
+        }));
+        return next;
+      });
       window.setTimeout(() => {
-        const winner = side === 0 ? pair[0] : pair[1];
-        const loser = side === 0 ? pair[1] : pair[0];
         onPick(winner, loser, conviction);
-        setLast({ winner: winner.name, loser: loser.name });
         setPicked(null);
+        setReveal(null);
         setIndex((i) => i + 1);
-      }, 200);
+      }, 480);
     },
-    [picked, pairs, index, onPick, conviction],
+    [picked, pairs, index, onPick, conviction, francoGodOf],
   );
 
   // Left / right arrow keys pick the left / right player.
@@ -561,12 +585,35 @@ function RapidFire({
   if (index >= pairs.length) {
     return (
       <div className="rapid rapid--done">
-        <p className="rapid__done-title">That is the close calls, done.</p>
+        <p className="rapid__done-kicker">Session complete</p>
+        <p className="rapid__done-title">Your board moved.</p>
+        <div className="rapid__done-stats">
+          <div className="rapid__done-stat">
+            <span className="rapid__done-num">{stats.made}</span>
+            <span className="rapid__done-lbl">calls</span>
+          </div>
+          <div className="rapid__done-stat">
+            <span className="rapid__done-num">{stats.best}</span>
+            <span className="rapid__done-lbl">best streak</span>
+          </div>
+          <div className="rapid__done-stat">
+            <span className="rapid__done-num">{stats.hot}</span>
+            <span className="rapid__done-lbl">hot takes</span>
+          </div>
+        </div>
         <p className="rapid__done-sub">
-          Your board reflects every call. Flip to Board to fine-tune any number.
+          Flip to Board to fine-tune any number, or run a fresh slate.
         </p>
-        <button className="rapid__again" onClick={() => setIndex(0)} type="button">
-          Run through again
+        <button
+          className="rapid__again"
+          onClick={() => {
+            setIndex(0);
+            setStreak(0);
+            setStats({ made: 0, hot: 0, best: 0 });
+          }}
+          type="button"
+        >
+          Fresh slate
         </button>
       </div>
     );
@@ -576,18 +623,21 @@ function RapidFire({
 
   return (
     <div className="rapid">
+      <div className="rapid__bar" aria-hidden="true">
+        <span className="rapid__bar-fill" style={{ width: `${(index / pairs.length) * 100}%` }} />
+      </div>
       <div className="rapid__progress">
-        <span>{index + 1} of {pairs.length}</span>
-        {last ? (
-          <span className="rapid__last">
-            You have <b>{last.winner}</b> over {last.loser}
-          </span>
+        <span className="rapid__count">
+          {index + 1} <span className="rapid__count-of">/ {pairs.length}</span>
+        </span>
+        {streak >= 3 ? (
+          <span className="rapid__streak">🔥 {streak} in a row</span>
         ) : (
           <span className="rapid__hint">Who would you rather have?</span>
         )}
       </div>
 
-      <div className="rapid__pair">
+      <div className="rapid__pair" key={index}>
         {[a, b].map((row, i) => (
           <button
             className={[
@@ -614,9 +664,14 @@ function RapidFire({
             <span className="rapid__franco">{Math.round(row.seasonTotal ?? 0)} proj pts</span>
           </button>
         ))}
+        <span className="rapid__vs" aria-hidden="true">VS</span>
       </div>
 
-      <p className="rapid__keys" aria-hidden="true">Tap a card, or use ← / → keys</p>
+      {reveal ? (
+        <p className={`rapid__reveal rapid__reveal--${reveal.kind}`}>{reveal.text}</p>
+      ) : (
+        <p className="rapid__keys" aria-hidden="true">Tap a card, or use ← / → keys</p>
+      )}
 
       <div className="rapid__conviction">
         {(['lean', 'clear', 'huge'] as Conviction[]).map((c) => (
@@ -631,7 +686,14 @@ function RapidFire({
         ))}
       </div>
 
-      <button className="rapid__skip" onClick={() => setIndex((i) => i + 1)} type="button">
+      <button
+        className="rapid__skip"
+        onClick={() => {
+          setStreak(0);
+          setIndex((i) => i + 1);
+        }}
+        type="button"
+      >
         Skip, no read
       </button>
     </div>
