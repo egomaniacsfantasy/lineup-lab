@@ -11,9 +11,9 @@ const BOARD_POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
 const RAPID_POSITIONS = ['QB', 'RB', 'WR', 'TE'] as const;
 
 const SKILL = ['QB', 'RB', 'WR', 'TE'];
-/** Nudge the order toward consensus/ESPN: QBs and TEs carry a bit more draft
- *  value than raw VOR alone implies. */
-const POS_MULT: Record<string, number> = { QB: 1.4, RB: 1, WR: 1, TE: 1.05 };
+/** Nudge the order toward consensus/ESPN. Raw VOR overrates RB scarcity and
+ *  underrates elite (PPR) WRs and QBs, so temper RB and lift WR/QB/TE. */
+const POS_MULT: Record<string, number> = { QB: 1.4, RB: 0.85, WR: 1.25, TE: 1.1 };
 
 type Starters = Record<'QB' | 'RB' | 'WR' | 'TE', number>;
 
