@@ -10,16 +10,49 @@ import './MyBoardPage.css';
 const BOARD_POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
 const RAPID_POSITIONS = ['QB', 'RB', 'WR', 'TE'] as const;
 
-/** Roughly where the replacement player sits per position in a redraft league;
- *  used only to order the Overall board by value over replacement. */
-const REPLACEMENT_RANK: Record<string, number> = {
-  QB: 12,
-  RB: 24,
-  WR: 30,
-  TE: 12,
-  K: 12,
-  DEF: 12,
-};
+const SKILL = ['QB', 'RB', 'WR', 'TE'];
+/** Replacement rank per position (≈ starters × teams) for value over replacement. */
+const REPL_RANK: Record<string, number> = { QB: 12, RB: 30, WR: 36, TE: 12 };
+
+/**
+ * The "GOD" rating: one 1–100 number per player that combines Franco's
+ * projection with value over replacement, on SEASON TOTALS (not per-game, so a
+ * backup who scores well in spot duty doesn't read as elite). Skill players are
+ * scored by normalized VOR; DEF and K — low, streamable, draft-them-last — ride
+ * a compressed low band so they never crowd the top of the board.
+ */
+function buildGodScale(board: BoardRow[]) {
+  const replTotal: Record<string, number> = {};
+  for (const pos of SKILL) {
+    const sorted = board.filter((r) => r.position === pos).sort((a, b) => (b.seasonTotal ?? 0) - (a.seasonTotal ?? 0));
+    replTotal[pos] = sorted[REPL_RANK[pos]]?.seasonTotal ?? 0;
+  }
+  let wmin = Infinity;
+  let wmax = -Infinity;
+  for (const r of board) {
+    if (!SKILL.includes(r.position)) continue;
+    const v = (r.seasonTotal ?? 0) - (replTotal[r.position] ?? 0);
+    if (v < wmin) wmin = v;
+    if (v > wmax) wmax = v;
+  }
+  const band = (pos: string, cap: number) => {
+    const totals = board.filter((r) => r.position === pos).map((r) => r.seasonTotal ?? 0);
+    return { cap, tmin: Math.min(...totals, 0), tmax: Math.max(...totals, 1) };
+  };
+  const defB = band('DEF', 28);
+  const kB = band('K', 26);
+
+  return (position: string, total: number) => {
+    if (SKILL.includes(position)) {
+      const vor = total - (replTotal[position] ?? 0);
+      const g = 1 + (99 * (vor - wmin)) / (wmax - wmin || 1);
+      return Math.max(1, Math.min(100, g));
+    }
+    const b = position === 'DEF' ? defB : kB;
+    const g = 4 + ((b.cap - 4) * (total - b.tmin)) / (b.tmax - b.tmin || 1);
+    return Math.max(1, Math.min(b.cap, g));
+  };
+}
 
 type Conviction = 'lean' | 'clear' | 'huge';
 const MARGIN: Record<Conviction, number> = { lean: 0.5, clear: 1.5, huge: 3.5 };
@@ -214,6 +247,17 @@ export function MyBoardPage() {
 
   const effective = (row: BoardRow) => overlay[row.playerId]?.base ?? row.mean;
 
+  // GOD rating: built from the whole board (season totals + VOR), recomputed
+  // live as the user's overrides change a player's implied season total.
+  const godScale = useMemo(() => (board ? buildGodScale(board) : null), [board]);
+  const gamesOf = (row: BoardRow) => (row.seasonTotal && row.mean ? row.seasonTotal / row.mean : 17);
+  const effTotalOf = (row: BoardRow) => {
+    const ov = overlay[row.playerId]?.base;
+    return ov == null ? row.seasonTotal ?? 0 : ov * gamesOf(row);
+  };
+  const godOf = (row: BoardRow) => (godScale ? godScale(row.position, effTotalOf(row)) : 0);
+  const francoGodOf = (row: BoardRow) => (godScale ? godScale(row.position, row.seasonTotal ?? 0) : 0);
+
   if (!bootstrap) {
     return (
       <div className="myboard">
@@ -300,6 +344,9 @@ export function MyBoardPage() {
           position={position}
           setPosition={setPosition}
           effective={effective}
+          godOf={godOf}
+          francoGodOf={francoGodOf}
+          effTotalOf={effTotalOf}
           expanded={expanded}
           setExpanded={setExpanded}
           setPlayerBase={setPlayerBase}
@@ -315,12 +362,17 @@ export function MyBoardPage() {
 function buildPairs(board: BoardRow[]): Array<[BoardRow, BoardRow]> {
   const pairs: Array<[BoardRow, BoardRow]> = [];
   for (const pos of RAPID_POSITIONS) {
-    const list = board.filter((r) => r.position === pos).sort((a, b) => b.mean - a.mean);
+    // Pair by season total so a backup (low total) never gets matched against a
+    // starter, and skip players with no projected role.
+    const list = board
+      .filter((r) => r.position === pos && (r.seasonTotal ?? 0) > 0)
+      .sort((a, b) => (b.seasonTotal ?? 0) - (a.seasonTotal ?? 0));
     for (let i = 0; i < list.length - 1; i += 1) {
-      if (list[i].mean - list[i + 1].mean <= 3) pairs.push([list[i], list[i + 1]]);
+      if ((list[i].seasonTotal ?? 0) - (list[i + 1].seasonTotal ?? 0) <= 40) {
+        pairs.push([list[i], list[i + 1]]);
+      }
     }
   }
-  // Interleave by walking positions round-robin for variety, capped.
   return pairs.slice(0, 60);
 }
 
@@ -395,9 +447,9 @@ function RapidFire({
             <span className="rapid__meta">
               {row.position} · {row.team}
             </span>
-            <span className="rapid__franco">Franco {row.mean.toFixed(1)}</span>
+            <span className="rapid__franco">{Math.round(row.seasonTotal ?? 0)} proj pts</span>
             {effective(row) !== row.mean ? (
-              <span className="rapid__yours">You {effective(row).toFixed(1)}</span>
+              <span className="rapid__yours">You bumped him</span>
             ) : null}
           </button>
         ))}
@@ -432,6 +484,9 @@ function BoardView({
   position,
   setPosition,
   effective,
+  godOf,
+  francoGodOf,
+  effTotalOf,
   expanded,
   setExpanded,
   setPlayerBase,
@@ -443,34 +498,22 @@ function BoardView({
   position: (typeof BOARD_POSITIONS)[number];
   setPosition: (p: (typeof BOARD_POSITIONS)[number]) => void;
   effective: (row: BoardRow) => number;
+  godOf: (row: BoardRow) => number;
+  francoGodOf: (row: BoardRow) => number;
+  effTotalOf: (row: BoardRow) => number;
   expanded: string | null;
   setExpanded: (id: string | null) => void;
   setPlayerBase: (id: string, base: number | null) => void;
   clearPlayer: (id: string) => void;
 }) {
-  // Replacement level per position (from Franco's means) for Overall ordering.
-  const replacement = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const pos of Object.keys(REPLACEMENT_RANK)) {
-      const sorted = board.filter((r) => r.position === pos).sort((a, b) => b.mean - a.mean);
-      out[pos] = sorted[REPLACEMENT_RANK[pos]]?.mean ?? 0;
-    }
-    return out;
-  }, [board]);
-
-  // Order: by the user's number within a position, or by value-over-replacement
-  // for Overall. Recomputes when the model changes...
+  // Order by GOD rating: Overall is everyone (DEF/K sink on their own), a
+  // position tab is just that position. Recomputes when the model changes.
   const ordered = useMemo(() => {
-    if (position === 'ALL') {
-      return board
-        .filter((r) => REPLACEMENT_RANK[r.position] != null)
-        .slice()
-        .sort((a, b) => effective(b) - replacement[b.position] - (effective(a) - replacement[a.position]))
-        .slice(0, 120);
-    }
-    return board.filter((r) => r.position === position).slice().sort((a, b) => effective(b) - effective(a));
+    const pool = position === 'ALL' ? board : board.filter((r) => r.position === position);
+    const sorted = pool.slice().sort((a, b) => godOf(b) - godOf(a));
+    return position === 'ALL' ? sorted.slice(0, 120) : sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, position, overlay, replacement]);
+  }, [board, position, overlay]);
 
   // ...but freeze that order while a dial is open, so dragging the slider
   // doesn't re-sort the list and yank the row out from under your finger.
@@ -499,14 +542,16 @@ function BoardView({
       </div>
 
       <div className="myboard__legend">
-        <span>{position === 'ALL' ? 'Ranked by value over replacement' : 'Your order'}</span>
-        <span>Proj pts / game</span>
+        <span>{position === 'ALL' ? 'Overall · by GOD rating' : 'Your order · by GOD'}</span>
+        <span>GOD / 100</span>
       </div>
 
       <div className="myboard__list">
         {rows.map((row, index) => {
           const value = effective(row);
-          const drift = value - row.mean;
+          const god = godOf(row);
+          const drift = god - francoGodOf(row);
+          const total = effTotalOf(row);
           const isOpen = expanded === row.playerId;
           return (
             <div className="myboard__item" key={row.playerId}>
@@ -529,7 +574,7 @@ function BoardView({
                   </span>
                 </span>
                 <span className="myboard__nums">
-                  <span className="myboard__yours">{value.toFixed(1)}</span>
+                  <span className="myboard__yours">{god.toFixed(1)}</span>
                   {Math.abs(drift) >= 0.05 ? (
                     <span
                       className={
@@ -539,10 +584,10 @@ function BoardView({
                       }
                     >
                       {drift > 0 ? '+' : ''}
-                      {drift.toFixed(1)} vs Franco
+                      {drift.toFixed(1)} GOD vs Franco
                     </span>
                   ) : (
-                    <span className="myboard__drift">Franco {row.mean.toFixed(1)}</span>
+                    <span className="myboard__drift">{Math.round(total)} pts proj</span>
                   )}
                 </span>
               </button>
