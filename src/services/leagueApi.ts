@@ -249,9 +249,14 @@ export function refreshLeague(leagueId: string) {
 }
 
 export interface TradeTraits {
-  stinginess: number;
-  starBias: number;
-  mode: 'rebuild' | 'balanced' | 'win-now';
+  /** 1–10: pushover ↔ ruthless shark. */
+  toughness: number;
+  /** 1–10: ghosts every offer ↔ trades constantly. */
+  dealAppetite: number;
+  /** Their favorite NFL team (Sleeper abbr), or null. */
+  fandomTeam: string | null;
+  /** 1–10: how big a homer they are for that team. */
+  fandomLevel: number;
 }
 
 export interface TradeResult {

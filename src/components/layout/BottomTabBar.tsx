@@ -33,6 +33,15 @@ const BASE_TABS = [
     ),
   },
   {
+    label: 'Ranks',
+    path: '/rankings',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M4 6h12M4 10h12M4 14h8" />
+      </svg>
+    ),
+  },
+  {
     label: 'League',
     path: '/league',
     icon: (

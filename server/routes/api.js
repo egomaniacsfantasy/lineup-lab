@@ -60,7 +60,7 @@ apiRouter.get('/rankings', (req, res) => {
     return;
   }
 
-  const limit = Math.min(Number(req.query.limit ?? 100), 300);
+  const limit = Math.min(Number(req.query.limit ?? 100), 800);
   const rankings = [...active.projections]
     .sort((a, b) => b.mean - a.mean)
     .slice(0, limit)
@@ -71,6 +71,8 @@ apiRouter.get('/rankings', (req, res) => {
       position: p.position,
       team: p.team,
       mean: p.mean,
+      seasonTotal: p.seasonTotal ?? null,
+      weekly: p.weekly ?? {},
       tier: p.tier,
       derived: p.derived,
     }));

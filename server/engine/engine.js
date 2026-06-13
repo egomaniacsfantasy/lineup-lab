@@ -849,15 +849,17 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     16,
   );
 
-  // baseline best-lineup distributions for the whole league
+  // Trades are rest-of-season decisions, so value players by their season
+  // mean (null week), NOT this week's projection. A guy projected a point
+  // higher in Week 1 shouldn't sway a trade — that was the right call.
   const baseDist = new Map(
-    teams.map((t) => [t.rosterId, bestLineupDistribution(t.players, slotLabels, projectionMap, catalog, week)]),
+    teams.map((t) => [t.rosterId, bestLineupDistribution(t.players, slotLabels, projectionMap, catalog, null)]),
   );
 
   const userPoolAfter = user.players.filter((id) => !give.includes(id)).concat(get);
   const partnerPoolAfter = partner.players.filter((id) => !get.includes(id)).concat(give);
-  const userAfter = bestLineupDistribution(userPoolAfter, slotLabels, projectionMap, catalog, week);
-  const partnerAfter = bestLineupDistribution(partnerPoolAfter, slotLabels, projectionMap, catalog, week);
+  const userAfter = bestLineupDistribution(userPoolAfter, slotLabels, projectionMap, catalog, null);
+  const partnerAfter = bestLineupDistribution(partnerPoolAfter, slotLabels, projectionMap, catalog, null);
 
   const futuresBefore = simulateFutures({ league, teams, distByRoster: baseDist, scheduleWeeks, week, seed });
   const afterDist = new Map(baseDist);
@@ -889,22 +891,25 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const depthBefore = depthByPosition(user.players, catalog);
   const depthAfter = depthByPosition(userPoolAfter, catalog);
 
-  // ── acceptance read: computable facts, nudged by the trait knobs ──
-  const stinginess = Math.min(100, Math.max(0, traits.stinginess ?? 50));
-  const starBias = Math.min(100, Math.max(0, traits.starBias ?? 0));
-  const mode = traits.mode ?? 'balanced';
+  // ── acceptance read: computable facts, nudged by the user's read on the
+  //    other manager (1–10 dials, supplied by you — not fabricated) ──
+  const clamp10 = (n, fallback) => Math.min(10, Math.max(1, n ?? fallback));
+  const toughness = clamp10(traits.toughness, 5); // pushover ↔ shark
+  const dealAppetite = clamp10(traits.dealAppetite, 5); // ghosts ↔ wheeler-dealer
+  const fandomTeam = traits.fandomTeam ?? null;
+  const fandomLevel = clamp10(traits.fandomLevel, 5);
 
   const reasons = [];
   let score = 0;
 
   if (theirValueDelta > 0.5) {
     score += theirValueDelta;
-    reasons.push(`Upgrades their starting lineup by ${theirValueDelta} projected points.`);
+    reasons.push(`Upgrades their starters by ${theirValueDelta} pts a week, rest of season.`);
   } else if (theirValueDelta < -0.5) {
     score += theirValueDelta;
-    reasons.push(`Downgrades their starting lineup by ${Math.abs(theirValueDelta)} projected points.`);
+    reasons.push(`Downgrades their starters by ${Math.abs(theirValueDelta)} pts a week, rest of season.`);
   } else {
-    reasons.push("Barely moves their starting lineup, so there's little reason to say yes.");
+    reasons.push("Barely moves their starters, so there's little reason to say yes.");
   }
 
   if (bestPlayer.toThem) {
@@ -917,7 +922,6 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
 
   // their thin spots: positions where they sit at or below the slot need
   const partnerDepth = depthByPosition(partner.players, catalog);
-  const getPositions = get.map((id) => catalog[id]?.position).filter(Boolean);
   const slotNeed = (pos) => slotLabels.filter((s) => slotAllows(s, pos)).length;
   const fillsNeed = give.some((id) => {
     const pos = catalog[id]?.position;
@@ -928,25 +932,32 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     reasons.push('It plugs a position they are thin at.');
   }
 
-  // win-now partners want startable help; rebuilders are colder on it
-  if (mode === 'win-now' && theirValueDelta > 0.5) {
+  // Fandom: a homer overvalues their NFL team's players — hard to pry one
+  // loose, easy to tempt them with one.
+  if (fandomTeam) {
+    const wantsFromYou = get.some((id) => catalog[id]?.team === fandomTeam);
+    const sendingTheirGuy = give.some((id) => catalog[id]?.team === fandomTeam);
+    if (wantsFromYou) {
+      score -= fandomLevel * 0.4;
+      reasons.push(`You're asking for a ${fandomTeam} player and they bleed ${fandomTeam}.`);
+    }
+    if (sendingTheirGuy) {
+      score += fandomLevel * 0.3;
+      reasons.push(`You're dangling a ${fandomTeam} player they'd love to own.`);
+    }
+  }
+
+  // Toughness raises the bar (5 = neutral).
+  score -= (toughness - 5) * 0.6;
+  if (toughness >= 8) reasons.push('You pegged them as a ruthless negotiator, so the bar is higher.');
+
+  // Deal appetite: low = they ghost most offers; high = they love to wheel.
+  if (dealAppetite <= 3) {
+    score -= 2;
+    reasons.push('You marked them as someone who ignores most offers.');
+  } else if (dealAppetite >= 8) {
     score += 1;
-  } else if (mode === 'rebuild') {
-    score -= 1;
-    reasons.push('You marked them as rebuilding, so win-now value lands softer.');
-  }
-
-  // star bias: reluctance to part with their own stud
-  const givingUpStud = get.some((id) => (projectionMap.get(id)?.mean ?? 0) >= 14);
-  if (givingUpStud && starBias > 40) {
-    score -= starBias / 25;
-    reasons.push('You flagged them as attached to their stars, and a stud is leaving their side.');
-  }
-
-  // stinginess raises the bar to clear
-  score -= (stinginess - 50) / 15;
-  if (stinginess >= 70) {
-    reasons.push('You marked them as a tough negotiator, so the bar is higher.');
+    reasons.push('You marked them as an active trader who loves to wheel and deal.');
   }
 
   const acceptanceBand =

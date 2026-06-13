@@ -39,6 +39,68 @@ const VERDICT_RAIL: Record<string, number> = {
   'Smash accept': 0.9,
 };
 
+const NFL_TEAMS: [string, string][] = [
+  ['ARI', 'Cardinals'], ['ATL', 'Falcons'], ['BAL', 'Ravens'], ['BUF', 'Bills'],
+  ['CAR', 'Panthers'], ['CHI', 'Bears'], ['CIN', 'Bengals'], ['CLE', 'Browns'],
+  ['DAL', 'Cowboys'], ['DEN', 'Broncos'], ['DET', 'Lions'], ['GB', 'Packers'],
+  ['HOU', 'Texans'], ['IND', 'Colts'], ['JAX', 'Jaguars'], ['KC', 'Chiefs'],
+  ['LAC', 'Chargers'], ['LAR', 'Rams'], ['LV', 'Raiders'], ['MIA', 'Dolphins'],
+  ['MIN', 'Vikings'], ['NE', 'Patriots'], ['NO', 'Saints'], ['NYG', 'Giants'],
+  ['NYJ', 'Jets'], ['PHI', 'Eagles'], ['PIT', 'Steelers'], ['SEA', 'Seahawks'],
+  ['SF', '49ers'], ['TB', 'Buccaneers'], ['TEN', 'Titans'], ['WAS', 'Commanders'],
+];
+
+const TOUGH_TAGS = (v: number) => (v <= 3 ? 'Pushover' : v <= 6 ? 'Fair' : v <= 8 ? 'Tough' : 'Shark');
+const APPETITE_TAGS = (v: number) =>
+  v <= 3 ? 'Ghosts offers' : v <= 6 ? 'Selective' : v <= 8 ? 'Active' : 'Wheeler-dealer';
+const FANDOM_TAGS = (v: number) => (v <= 3 ? 'Casual' : v <= 6 ? 'Fan' : v <= 8 ? 'Diehard' : 'Homer');
+
+/** Ten-notch 1–10 dial in the ember identity. */
+function NotchSlider({
+  label,
+  value,
+  onChange,
+  tag,
+  ends,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  tag: (value: number) => string;
+  ends: [string, string];
+}) {
+  return (
+    <div className="trade-cc__dial">
+      <div className="trade-cc__dial-head">
+        <span className="trade-cc__dial-label">{label}</span>
+        <span className="trade-cc__dial-tag">{tag(value)}</span>
+      </div>
+      <div
+        aria-label={label}
+        aria-valuemax={10}
+        aria-valuemin={1}
+        aria-valuenow={value}
+        className="trade-cc__notches"
+        role="slider"
+      >
+        {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+          <button
+            aria-label={`${label} ${n} of 10`}
+            className={['trade-cc__notch', n <= value ? 'trade-cc__notch--on' : ''].join(' ')}
+            key={n}
+            onClick={() => onChange(n)}
+            type="button"
+          />
+        ))}
+      </div>
+      <div className="trade-cc__dial-ends">
+        <span>{ends[0]}</span>
+        <span>{ends[1]}</span>
+      </div>
+    </div>
+  );
+}
+
 // Starters first, in their lineup order, then the bench — the way a manager
 // reads a roster.
 function rosterRows(bootstrap: LeagueBootstrap, rosterId: number) {
@@ -65,9 +127,10 @@ export function TradePage() {
   const [give, setGive] = useState<string[]>([]);
   const [getIds, setGetIds] = useState<string[]>([]);
   const [traits, setTraits] = useState<TradeTraits>({
-    stinginess: 50,
-    starBias: 0,
-    mode: 'balanced',
+    toughness: 5,
+    dealAppetite: 5,
+    fandomTeam: null,
+    fandomLevel: 5,
   });
   const [result, setResult] = useState<TradeResult | null>(null);
   const [isPricing, setIsPricing] = useState(false);
@@ -241,61 +304,54 @@ export function TradePage() {
           </div>
         </div>
 
-        {/* per-trade partner read; nothing is fabricated, you tell us */}
+        {/* Per-trade read on the other manager: dials you set, nothing
+            fabricated. This is the "scouting report" that makes the
+            acceptance call feel like a real league, not a calculator. */}
         <div className="trade-cc__traits">
-          <p className="trade-cc__traits-label">
-            What&apos;s the other manager like? (shapes the acceptance read)
-          </p>
-          <div className="trade-cc__trait">
-            <span>Negotiator</span>
-            <div className="trade-cc__seg">
-              {(['easy', 'normal', 'tough'] as const).map((level, i) => (
-                <button
-                  className={
-                    [25, 50, 75][i] === traits.stinginess
-                      ? 'trade-cc__seg-on'
-                      : ''
-                  }
-                  key={level}
-                  onClick={() => setTraits({ ...traits, stinginess: [25, 50, 75][i] })}
-                  type="button"
-                >
-                  {level === 'easy' ? 'Easygoing' : level === 'tough' ? 'Tough' : 'Normal'}
-                </button>
-              ))}
+          <p className="trade-cc__traits-label">Scout the other manager</p>
+
+          <NotchSlider
+            ends={['Pushover', 'Shark']}
+            label="Negotiator"
+            onChange={(v) => setTraits({ ...traits, toughness: v })}
+            tag={TOUGH_TAGS}
+            value={traits.toughness}
+          />
+          <NotchSlider
+            ends={['Ghosts offers', 'Wheeler-dealer']}
+            label="Deal appetite"
+            onChange={(v) => setTraits({ ...traits, dealAppetite: v })}
+            tag={APPETITE_TAGS}
+            value={traits.dealAppetite}
+          />
+
+          <div className="trade-cc__fandom">
+            <div className="trade-cc__fandom-row">
+              <span className="trade-cc__dial-label">Fandom</span>
+              <select
+                className="trade-cc__fandom-select"
+                onChange={(event) =>
+                  setTraits({ ...traits, fandomTeam: event.target.value || null })
+                }
+                value={traits.fandomTeam ?? ''}
+              >
+                <option value="">No team bias</option>
+                {NFL_TEAMS.map(([abbr, name]) => (
+                  <option key={abbr} value={abbr}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-          <div className="trade-cc__trait">
-            <span>Star bias</span>
-            <div className="trade-cc__seg">
-              {(['none', 'some', 'homer'] as const).map((level, i) => (
-                <button
-                  className={
-                    [0, 50, 90][i] === traits.starBias ? 'trade-cc__seg-on' : ''
-                  }
-                  key={level}
-                  onClick={() => setTraits({ ...traits, starBias: [0, 50, 90][i] })}
-                  type="button"
-                >
-                  {level === 'none' ? 'None' : level === 'some' ? 'Some' : 'Homer'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="trade-cc__trait">
-            <span>Mode</span>
-            <div className="trade-cc__seg">
-              {(['rebuild', 'balanced', 'win-now'] as const).map((mode) => (
-                <button
-                  className={traits.mode === mode ? 'trade-cc__seg-on' : ''}
-                  key={mode}
-                  onClick={() => setTraits({ ...traits, mode })}
-                  type="button"
-                >
-                  {mode === 'win-now' ? 'Win now' : mode === 'rebuild' ? 'Rebuild' : 'Balanced'}
-                </button>
-              ))}
-            </div>
+            {traits.fandomTeam ? (
+              <NotchSlider
+                ends={['Casual fan', 'Diehard homer']}
+                label={`${traits.fandomTeam} bias`}
+                onChange={(v) => setTraits({ ...traits, fandomLevel: v })}
+                tag={FANDOM_TAGS}
+                value={traits.fandomLevel}
+              />
+            ) : null}
           </div>
         </div>
 

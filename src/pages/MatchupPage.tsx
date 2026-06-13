@@ -928,8 +928,8 @@ function MatchupLive({
           <div className="matchup-page__preview-banner" role="status">
             <span className="matchup-page__preview-dot" aria-hidden="true" />
             <span>
-              Previewing a lineup change. These numbers update your Sleeper
-              lineup, not the other way around.
+              Previewing a lineup change. You will need to update your lineup
+              in Sleeper to reflect these changes.
             </span>
             <button
               className="matchup-page__preview-reset"

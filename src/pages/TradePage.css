@@ -611,3 +611,96 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Scouting dials (1–10 notches) ── */
+.trade-cc__traits {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.trade-cc__dial {
+  margin-bottom: 16px;
+}
+
+.trade-cc__dial-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.trade-cc__dial-label {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.trade-cc__dial-tag {
+  color: var(--amber-bright);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.trade-cc__notches {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+}
+
+.trade-cc__notch {
+  height: 22px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-inset);
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease, transform 80ms ease;
+}
+
+.trade-cc__notch:hover {
+  border-color: var(--amber);
+}
+
+.trade-cc__notch--on {
+  border-color: var(--amber);
+  background: linear-gradient(180deg, var(--amber-bright), var(--amber));
+  box-shadow: 0 0 8px rgba(232, 84, 29, 0.4);
+}
+
+.trade-cc__dial-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.trade-cc__fandom {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.trade-cc__fandom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.trade-cc__fandom-select {
+  flex: 1;
+  max-width: 220px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
