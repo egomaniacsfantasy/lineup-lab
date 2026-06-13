@@ -861,6 +861,13 @@ function MatchupLive({
     setCompareSelection((current) => current.filter((candidate) => candidate.id !== playerId));
   };
 
+  const eligibleCount =
+    compareSelection.length === 1
+      ? [...engine.roster.map((slot) => slot.starter), ...engine.bench.map((b) => b.player)].filter(
+          (p) => p.id !== compareSelection[0].id && isComparable(compareSelection[0], p),
+        ).length
+      : null;
+
   const renderLineupRow = ({
     player,
     slotLabel,
@@ -1509,7 +1516,9 @@ function MatchupLive({
                       ? slotIndex === 0
                         ? 'Tap any player'
                         : 'Then a second'
-                      : `Who are you weighing against ${compareSelection[0].shortName}?`}
+                      : eligibleCount === 0
+                        ? `${compareSelection[0].shortName} is your only ${compareSelection[0].position}. Remove him to weigh a different spot.`
+                        : `Who are you weighing against ${compareSelection[0].shortName}?`}
                   </span>
                 </div>
               );
