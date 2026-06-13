@@ -759,14 +759,28 @@ function MatchupLive({
     await navigator.clipboard.writeText(text);
   };
 
-  // Eligibility: only pairs a manager could actually weigh against each
-  // other. Same position always; RB/WR/TE against each other only when
-  // the league runs a flex slot.
+  // "Who do I start" only answers a real decision: starting one player means
+  // benching another in the same slot. So every pick after the first must
+  // form an actual swap with it (a starter + a bench player who fits that
+  // slot). That guarantees the verdict is a matchup-impact call — win
+  // probability — never a hollow projection gap between two guys who both
+  // already start.
   const FLEX_GROUP = ['RB', 'WR', 'TE'];
-  const hasFlexSlot = matchup.yourTeam.roster.some((slot) => slot.slotLabel === 'FLEX');
-  const isComparable = (a: Player, b: Player) =>
-    a.position === b.position ||
-    (hasFlexSlot && FLEX_GROUP.includes(a.position) && FLEX_GROUP.includes(b.position));
+  const slotAllowsPos = (slotLabel: string, position: string) =>
+    slotLabel === 'FLEX' ? FLEX_GROUP.includes(position) : slotLabel === position;
+  const isComparable = (anchor: Player, candidate: Player) => {
+    const anchorSlot = matchup.yourTeam.roster.find((s) => s.starter.id === anchor.id);
+    if (anchorSlot) {
+      // anchor starts → candidate must be a bench player who fits its slot
+      return (
+        (matchup.yourTeam.bench ?? []).some((b) => b.player.id === candidate.id) &&
+        slotAllowsPos(anchorSlot.slotLabel, candidate.position)
+      );
+    }
+    // anchor is on the bench → candidate must be a starter it could replace
+    const candidateSlot = matchup.yourTeam.roster.find((s) => s.starter.id === candidate.id);
+    return Boolean(candidateSlot && slotAllowsPos(candidateSlot.slotLabel, anchor.position));
+  };
 
   const MAX_COMPARE = 4;
 
@@ -826,6 +840,17 @@ function MatchupLive({
     const benchRow = benchRows.find((b) => b.player.id === playerId);
     return benchRow?.projection ?? 0;
   };
+
+  const firstPick = compareSelection[0];
+  const firstIsStarter = firstPick
+    ? matchup.yourTeam.roster.some((s) => s.starter.id === firstPick.id)
+    : false;
+  const compareHint =
+    !isCompareMode || compareSelection.length === 0
+      ? 'Tap any player: who do I start?'
+      : firstIsStarter
+        ? `Now tap a bench player to weigh against ${firstPick.shortName}.`
+        : `Now tap the starter you'd bench for ${firstPick.shortName}.`;
 
   const eligibleCount =
     compareSelection.length >= 1
@@ -1285,11 +1310,7 @@ function MatchupLive({
           <div className="matchup-page__module-row matchup-page__module-row--lineup">
             <div>
               <h2 className="matchup-page__module-title">Your lineup</h2>
-              <p className="matchup-page__lineup-hint">
-                {isCompareMode
-                  ? 'Tap a second player to see who to start.'
-                  : 'Tap any player: who do I start?'}
-              </p>
+              <p className="matchup-page__lineup-hint">{compareHint}</p>
             </div>
             <button
               className={[
@@ -1413,11 +1434,7 @@ function MatchupLive({
           <div className="matchup-page__module-row matchup-page__module-row--lineup">
             <div>
               <h2 className="matchup-page__module-title">Your lineup</h2>
-              <p className="matchup-page__lineup-hint">
-                {isCompareMode
-                  ? 'Tap a second player to see who to start.'
-                  : 'Tap any player: who do I start?'}
-              </p>
+              <p className="matchup-page__lineup-hint">{compareHint}</p>
             </div>
             <button
               className={[
@@ -1679,6 +1696,12 @@ export function MatchupPage() {
     const latest = lineHistory.at(-1);
     const previous = lineHistory.at(-2);
     if (!latest || !previous || latest.week !== previous.week) return null;
+    // A real market move is the same model repricing the same week (lineup or
+    // score change). Two different projection imports aren't a "market move" —
+    // that's us swapping the book, and it shouldn't read as one.
+    if (latest.projectionVersion !== previous.projectionVersion) return null;
+    // No "this week" movement before any games are on the board.
+    if ((bootstrap.league.lastScoredWeek ?? 0) < 1) return null;
 
     const find = (entry: typeof latest) =>
       entry.lines

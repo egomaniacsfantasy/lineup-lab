@@ -704,3 +704,32 @@
   font-family: var(--font-ui);
   font-size: 13px;
 }
+
+.trade-cc__lane-gain {
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--font-num);
+}
+
+.trade-cc__lane-gain strong {
+  color: var(--green);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.trade-cc__lane-gain span {
+  display: block;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.trade-cc__odds-value--up { color: var(--green); }
+.trade-cc__odds-value--down { color: var(--red); }
+
+.trade-cc__odds-value span {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 400;
+}

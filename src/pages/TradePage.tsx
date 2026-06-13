@@ -258,9 +258,9 @@ export function TradePage() {
                 <span className="trade-cc__lane-headline">{lane.headline}</span>
                 <span className="trade-cc__lane-detail">{lane.detail}</span>
               </span>
-              <span className="trade-cc__lane-price">
-                <s>{formatAmericanOdds(lane.titleOddsBefore)}</s>{' '}
-                <strong>{formatAmericanOdds(lane.titleOddsAfter)}</strong>
+              <span className="trade-cc__lane-gain">
+                <strong>+{(lane.valueGain ?? 0).toFixed(1)}</strong>
+                <span> pts/wk to your starters</span>
               </span>
             </button>
           ))}
@@ -399,30 +399,47 @@ export function TradePage() {
             <span>Steal</span>
           </div>
 
-          {/* two-sided title odds */}
+          {/* Two-sided value. A single trade barely moves season title odds,
+              so we lead with starting-lineup value (the number that actually
+              moves) and show the title-odds shift only when it's real. */}
           <div className="trade-cc__odds">
-            <div className="trade-cc__odds-side">
-              <p className="trade-cc__odds-name">{result.you.teamName} (you)</p>
-              <p className="trade-cc__odds-value">
-                title odds <s>{formatAmericanOdds(result.you.titleBefore)}</s>{' '}
-                <strong>{formatAmericanOdds(result.you.titleAfter)}</strong>
-              </p>
-              <p className="trade-cc__odds-meta">
-                Starting value {result.you.valueDelta >= 0 ? '+' : ''}
-                {result.you.valueDelta} pts
-              </p>
-            </div>
-            <div className="trade-cc__odds-side">
-              <p className="trade-cc__odds-name">{result.them.teamName}</p>
-              <p className="trade-cc__odds-value">
-                title odds <s>{formatAmericanOdds(result.them.titleBefore)}</s>{' '}
-                <strong>{formatAmericanOdds(result.them.titleAfter)}</strong>
-              </p>
-              <p className="trade-cc__odds-meta">
-                Starting value {result.them.valueDelta >= 0 ? '+' : ''}
-                {result.them.valueDelta} pts
-              </p>
-            </div>
+            {[
+              { side: result.you, isYou: true },
+              { side: result.them, isYou: false },
+            ].map(({ side, isYou }) => {
+              const titleMoved = side.titleAfter !== side.titleBefore;
+              return (
+                <div className="trade-cc__odds-side" key={side.teamName}>
+                  <p className="trade-cc__odds-name">
+                    {side.teamName}
+                    {isYou ? ' (you)' : ''}
+                  </p>
+                  <p
+                    className={`trade-cc__odds-value ${
+                      side.valueDelta > 0
+                        ? 'trade-cc__odds-value--up'
+                        : side.valueDelta < 0
+                          ? 'trade-cc__odds-value--down'
+                          : ''
+                    }`}
+                  >
+                    {side.valueDelta >= 0 ? '+' : ''}
+                    {side.valueDelta}
+                    <span> pts/wk to starters</span>
+                  </p>
+                  {titleMoved ? (
+                    <p className="trade-cc__odds-meta">
+                      Title odds {formatAmericanOdds(side.titleBefore)} →{' '}
+                      {formatAmericanOdds(side.titleAfter)}
+                    </p>
+                  ) : (
+                    <p className="trade-cc__odds-meta">
+                      Title odds unchanged (one trade rarely moves the season line)
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* why they would / wouldn't say yes */}

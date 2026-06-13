@@ -607,18 +607,22 @@ function computeMovers(ctx) {
     return ids.map((id, i) => ({ id, slot: slotLabels[i] ?? 'FLEX', mean: projectionMap.get(id)?.mean ?? 0 }));
   };
 
-  const userBench = benchOf(userTeam);
   const userStarters = startersOf(userTeam);
 
-  // Only skill positions trade (nobody trades kickers or defenses), and
-  // both players must be in the same value band: no kicker-for-WR1
-  // nonsense, no lanes a real manager would laugh out of the chat.
+  // Only skill positions trade, and value bands must match: no kicker-for-WR1.
   const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
   const sameValueBand = (a, b) => {
     const low = Math.min(a.mean, b.mean);
     const high = Math.max(a.mean, b.mean);
     return high > 0 && low / high >= 0.65;
   };
+
+  // A sensible trade is CROSS-position (you don't swap a WR for a WR), both
+  // sides upgrade a starter, and neither team guts itself — you only deal a
+  // position where a backup remains. That kills "they need WR, here's a WR
+  // for a WR" without drying the board up entirely.
+  const dedicated = (pos) => slotLabels.filter((s) => s === pos).length || 1;
+  const canSpare = (team, pos) => depthByPosition(team.players, catalog)[pos] >= dedicated(pos) + 1;
 
   const lanes = [];
 
@@ -627,9 +631,10 @@ function computeMovers(ctx) {
     const oppBench = benchOf(opp);
     const oppStarters = startersOf(opp);
 
-    for (const giveId of userBench) {
+    for (const giveId of benchOf(userTeam)) {
       const give = projectionMap.get(giveId);
       if (!TRADEABLE.includes(give.position)) continue;
+      if (!canSpare(userTeam, give.position)) continue; // keep a backup
       const oppWeakest = oppStarters
         .filter((st) => (FLEX_ELIGIBILITY[st.slot] ?? [st.slot]).includes(give.position))
         .sort((a, b) => a.mean - b.mean)[0];
@@ -639,6 +644,8 @@ function computeMovers(ctx) {
       for (const getId of oppBench) {
         const get = projectionMap.get(getId);
         if (!TRADEABLE.includes(get.position)) continue;
+        if (get.position === give.position) continue; // cross-position only
+        if (!canSpare(opp, get.position)) continue; // they keep a backup too
         if (!sameValueBand(give, get)) continue;
         const userWeakest = userStarters
           .filter((st) => (FLEX_ELIGIBILITY[st.slot] ?? [st.slot]).includes(get.position))
@@ -661,8 +668,8 @@ function computeMovers(ctx) {
     const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, lane.userGain);
     movers.push({
       kind: 'trade',
-      headline: `${lane.opp.teamName} need ${lane.give.position}`,
-      detail: `You send ${lane.give.name}, you get ${lane.get.name}`,
+      headline: `${lane.opp.teamName} want ${lane.give.position}, you want ${lane.get.position}`,
+      detail: `Send ${lane.give.name}, get ${lane.get.name}`,
       givePlayerId: lane.give.playerId,
       getPlayerId: lane.get.playerId,
       valueGain: Number(lane.userGain.toFixed(1)),
