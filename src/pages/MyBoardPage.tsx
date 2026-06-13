@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { RankingMechanic } from '../components/rankings/RankingMechanic';
+import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useModelOverlay } from '../contexts/ModelOverlayContext';
 import { fetchBoard, type BoardRow } from '../services/leagueApi';
+import { supabase } from '../services/supabase';
 import { toPlayer } from '../adapters/connectedLeague';
 import './MyBoardPage.css';
 
@@ -279,11 +281,33 @@ export function MyBoardPage() {
     deleteSet,
     switchSet,
   } = useModelOverlay();
+  const { user } = useAuth();
   const [board, setBoard] = useState<BoardRow[] | null>(null);
   const [version, setVersion] = useState<string | null>(null);
   const [mode, setMode] = useState<'board' | 'rapid'>('board');
   const [position, setPosition] = useState<(typeof BOARD_POSITIONS)[number]>('RB');
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Every who's-better pick is logged as a crowd signal. Individually it tunes
+  // the user's own board; in aggregate these pairwise votes are a consensus
+  // layer that can feed back into Franco's rankings. Best-effort, silent.
+  const logPick = useCallback(
+    (winner: BoardRow, loser: BoardRow, conviction: Conviction) => {
+      if (!user) return;
+      void supabase
+        .from('olympus_pairwise')
+        .insert({
+          user_id: user.id,
+          winner_id: winner.playerId,
+          loser_id: loser.playerId,
+          winner_pos: winner.position,
+          conviction,
+          scoring: bootstrap?.league.scoringFamily ?? null,
+        })
+        .then(() => undefined, () => undefined);
+    },
+    [user, bootstrap],
+  );
 
   useEffect(() => {
     if (!bootstrap) return;
@@ -397,6 +421,7 @@ export function MyBoardPage() {
             const lEff = effective(loser);
             const margin = MARGIN[conviction];
             if (wEff < lEff + margin) setPlayerBase(winner.playerId, lEff + margin);
+            logPick(winner, loser, conviction);
           }}
         />
       ) : (
@@ -425,19 +450,40 @@ export function MyBoardPage() {
 
 function buildPairs(board: BoardRow[]): Array<[BoardRow, BoardRow]> {
   const pairs: Array<[BoardRow, BoardRow]> = [];
+  const seen = new Set<string>();
   for (const pos of RAPID_POSITIONS) {
-    // Pair by season total so a backup (low total) never gets matched against a
-    // starter, and skip players with no projected role.
     const list = board
       .filter((r) => r.position === pos && (r.seasonTotal ?? 0) > 0)
-      .sort((a, b) => (b.seasonTotal ?? 0) - (a.seasonTotal ?? 0));
+      .sort((a, b) => (b.seasonTotal ?? 0) - (a.seasonTotal ?? 0))
+      .slice(0, 60); // the top ~60 at each position are the interesting calls
     for (let i = 0; i < list.length - 1; i += 1) {
-      if ((list[i].seasonTotal ?? 0) - (list[i + 1].seasonTotal ?? 0) <= 40) {
-        pairs.push([list[i], list[i + 1]]);
+      // Pair each player with a RANDOM nearby one (small window), not always the
+      // very next — breaks the QB1-vs-QB2, QB2-vs-QB3 chain and adds variety.
+      const window = Math.min(4, list.length - 1 - i);
+      const j = i + 1 + Math.floor(Math.random() * window);
+      const key = `${list[i].playerId}:${list[j].playerId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        pairs.push([list[i], list[j]]);
       }
     }
   }
-  return pairs.slice(0, 60);
+  // Shuffle so positions interleave and you don't get four QB calls in a row.
+  for (let i = pairs.length - 1; i > 0; i -= 1) {
+    const k = Math.floor(Math.random() * (i + 1));
+    [pairs[i], pairs[k]] = [pairs[k], pairs[i]];
+  }
+  // Best-effort: avoid two consecutive pairs sharing a player.
+  for (let i = 1; i < pairs.length; i += 1) {
+    const prev = new Set([pairs[i - 1][0].playerId, pairs[i - 1][1].playerId]);
+    if (prev.has(pairs[i][0].playerId) || prev.has(pairs[i][1].playerId)) {
+      const swapWith = pairs.findIndex(
+        (p, idx) => idx > i && !prev.has(p[0].playerId) && !prev.has(p[1].playerId),
+      );
+      if (swapWith > -1) [pairs[i], pairs[swapWith]] = [pairs[swapWith], pairs[i]];
+    }
+  }
+  return pairs.slice(0, 120);
 }
 
 function RapidFire({
@@ -455,6 +501,32 @@ function RapidFire({
   const [index, setIndex] = useState(0);
   const [conviction, setConviction] = useState<Conviction>('clear');
   const [last, setLast] = useState<{ winner: string; loser: string } | null>(null);
+
+  const pick = useCallback(
+    (winner: BoardRow, loser: BoardRow) => {
+      onPick(winner, loser, conviction);
+      setLast({ winner: winner.name, loser: loser.name });
+      setIndex((i) => i + 1);
+    },
+    [onPick, conviction],
+  );
+
+  // Left / right arrow keys pick the left / right player.
+  useEffect(() => {
+    const pair = pairs[index];
+    if (!pair) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        pick(pair[0], pair[1]);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        pick(pair[1], pair[0]);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [index, pairs, pick]);
 
   if (pairs.length === 0) {
     return <p className="myboard__empty">No close calls to make right now.</p>;
@@ -474,11 +546,6 @@ function RapidFire({
   }
 
   const [a, b] = pairs[index];
-  const pick = (winner: BoardRow, loser: BoardRow) => {
-    onPick(winner, loser, conviction);
-    setLast({ winner: winner.name, loser: loser.name });
-    setIndex((i) => i + 1);
-  };
 
   return (
     <div className="rapid">
@@ -518,6 +585,8 @@ function RapidFire({
           </button>
         ))}
       </div>
+
+      <p className="rapid__keys" aria-hidden="true">Tap a card, or use ← / → keys</p>
 
       <div className="rapid__conviction">
         {(['lean', 'clear', 'huge'] as Conviction[]).map((c) => (
@@ -577,7 +646,7 @@ function BoardView({
   const ordered = useMemo(() => {
     const pool = position === 'ALL' ? board : board.filter((r) => r.position === position);
     const sorted = pool.slice().sort((a, b) => godOf(b) - godOf(a));
-    return position === 'ALL' ? sorted.slice(0, 120) : sorted;
+    return position === 'ALL' ? sorted.slice(0, 400) : sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board, position, overlay]);
 

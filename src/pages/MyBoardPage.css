@@ -334,11 +334,19 @@
   font-weight: 600;
 }
 
+.rapid__keys {
+  margin: 12px 0 0;
+  text-align: center;
+  color: var(--ink-3, #787c75);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
 .rapid__conviction {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .rapid__conv {
