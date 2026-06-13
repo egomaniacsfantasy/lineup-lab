@@ -346,6 +346,22 @@ export function MyBoardPage() {
   const francoGodOf = (row: BoardRow) =>
     godScale ? godScale.score(row.position, row.seasonTotal ?? 0) : 0;
 
+  // Rapid fire only pits the top ~150 overall (by Franco's GOD) against each
+  // other — the calls that matter, no deep scrubs.
+  const rapidPool = useMemo(() => {
+    if (!board || !godScale) return new Set<string>();
+    return new Set(
+      [...board]
+        .sort(
+          (x, y) =>
+            godScale.score(y.position, y.seasonTotal ?? 0) -
+            godScale.score(x.position, x.seasonTotal ?? 0),
+        )
+        .slice(0, 150)
+        .map((r) => r.playerId),
+    );
+  }, [board, godScale]);
+
   if (!bootstrap) {
     return (
       <div className="myboard">
@@ -414,8 +430,8 @@ export function MyBoardPage() {
       ) : mode === 'rapid' ? (
         <RapidFire
           board={board}
+          poolIds={rapidPool}
           bootstrap={bootstrap}
-          effective={effective}
           onPick={(winner, loser, conviction) => {
             const wEff = effective(winner);
             const lEff = effective(loser);
@@ -448,14 +464,14 @@ export function MyBoardPage() {
 
 /* ── Rapid fire: the fun bulk loop. Close pairs, who's better, advance. ── */
 
-function buildPairs(board: BoardRow[]): Array<[BoardRow, BoardRow]> {
+function buildPairs(board: BoardRow[], poolIds: Set<string>): Array<[BoardRow, BoardRow]> {
   const pairs: Array<[BoardRow, BoardRow]> = [];
   const seen = new Set<string>();
   for (const pos of RAPID_POSITIONS) {
+    // Only the relevant guys (top ~150 overall) get compared — no deep scrubs.
     const list = board
-      .filter((r) => r.position === pos && (r.seasonTotal ?? 0) > 0)
-      .sort((a, b) => (b.seasonTotal ?? 0) - (a.seasonTotal ?? 0))
-      .slice(0, 60); // the top ~60 at each position are the interesting calls
+      .filter((r) => r.position === pos && (r.seasonTotal ?? 0) > 0 && poolIds.has(r.playerId))
+      .sort((a, b) => (b.seasonTotal ?? 0) - (a.seasonTotal ?? 0));
     for (let i = 0; i < list.length - 1; i += 1) {
       // Pair each player with a RANDOM nearby one (small window), not always the
       // very next — breaks the QB1-vs-QB2, QB2-vs-QB3 chain and adds variety.
@@ -483,50 +499,61 @@ function buildPairs(board: BoardRow[]): Array<[BoardRow, BoardRow]> {
       if (swapWith > -1) [pairs[i], pairs[swapWith]] = [pairs[swapWith], pairs[i]];
     }
   }
-  return pairs.slice(0, 120);
+  // ~60 calls is the sweet spot — enough to shape the board, before fatigue.
+  return pairs.slice(0, 60);
 }
 
 function RapidFire({
   board,
+  poolIds,
   bootstrap,
-  effective,
   onPick,
 }: {
   board: BoardRow[];
+  poolIds: Set<string>;
   bootstrap: NonNullable<ReturnType<typeof useLeagueConnection>['bootstrap']>;
-  effective: (row: BoardRow) => number;
   onPick: (winner: BoardRow, loser: BoardRow, conviction: Conviction) => void;
 }) {
-  const pairs = useMemo(() => buildPairs(board), [board]);
+  const pairs = useMemo(() => buildPairs(board, poolIds), [board, poolIds]);
   const [index, setIndex] = useState(0);
   const [conviction, setConviction] = useState<Conviction>('clear');
   const [last, setLast] = useState<{ winner: string; loser: string } | null>(null);
+  const [picked, setPicked] = useState<0 | 1 | null>(null);
 
-  const pick = useCallback(
-    (winner: BoardRow, loser: BoardRow) => {
-      onPick(winner, loser, conviction);
-      setLast({ winner: winner.name, loser: loser.name });
-      setIndex((i) => i + 1);
+  // A pick flashes the chosen card, then advances — identical feedback whether
+  // you tap or use an arrow key.
+  const choose = useCallback(
+    (side: 0 | 1) => {
+      if (picked !== null) return;
+      const pair = pairs[index];
+      if (!pair) return;
+      setPicked(side);
+      window.setTimeout(() => {
+        const winner = side === 0 ? pair[0] : pair[1];
+        const loser = side === 0 ? pair[1] : pair[0];
+        onPick(winner, loser, conviction);
+        setLast({ winner: winner.name, loser: loser.name });
+        setPicked(null);
+        setIndex((i) => i + 1);
+      }, 200);
     },
-    [onPick, conviction],
+    [picked, pairs, index, onPick, conviction],
   );
 
   // Left / right arrow keys pick the left / right player.
   useEffect(() => {
-    const pair = pairs[index];
-    if (!pair) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        pick(pair[0], pair[1]);
+        choose(0);
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        pick(pair[1], pair[0]);
+        choose(1);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [index, pairs, pick]);
+  }, [choose]);
 
   if (pairs.length === 0) {
     return <p className="myboard__empty">No close calls to make right now.</p>;
@@ -563,9 +590,15 @@ function RapidFire({
       <div className="rapid__pair">
         {[a, b].map((row, i) => (
           <button
-            className="rapid__card"
+            className={[
+              'rapid__card',
+              picked === i ? 'rapid__card--picked' : '',
+              picked !== null && picked !== i ? 'rapid__card--dim' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             key={row.playerId}
-            onClick={() => pick(row, i === 0 ? b : a)}
+            onClick={() => choose(i as 0 | 1)}
             type="button"
           >
             <PlayerHeadshot
@@ -579,9 +612,6 @@ function RapidFire({
               {row.position} · {row.team}
             </span>
             <span className="rapid__franco">{Math.round(row.seasonTotal ?? 0)} proj pts</span>
-            {effective(row) !== row.mean ? (
-              <span className="rapid__yours">You bumped him</span>
-            ) : null}
           </button>
         ))}
       </div>

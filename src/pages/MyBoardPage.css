@@ -287,7 +287,8 @@
   border-radius: 16px;
   background: var(--bg-surface, #15181b);
   cursor: pointer;
-  transition: border-color 0.12s, transform 0.06s;
+  transition: border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease,
+    box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .rapid__card:hover {
@@ -296,6 +297,20 @@
 
 .rapid__card:active {
   transform: scale(0.98);
+}
+
+/* The chosen card — same feedback for a tap or an arrow key. */
+.rapid__card--picked {
+  border-color: var(--amber-bright, #ff6a33);
+  background: rgba(232, 84, 29, 0.18);
+  transform: scale(1.04);
+  box-shadow: 0 0 0 2px var(--amber, #e8541d), 0 12px 32px rgba(232, 84, 29, 0.25);
+}
+
+/* The other card recedes as you commit. */
+.rapid__card--dim {
+  opacity: 0.35;
+  transform: scale(0.96);
 }
 
 .rapid__shot,
