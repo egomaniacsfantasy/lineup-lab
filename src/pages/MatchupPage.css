@@ -1044,3 +1044,10 @@
     bottom: 20px;
   }
 }
+
+.matchup-page__edge-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}

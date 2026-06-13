@@ -93,3 +93,68 @@
 .trade-page__lane-price s {
   color: var(--text-muted);
 }
+
+.trade-page__lane-players {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0;
+}
+
+.trade-page__lane-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.trade-page__lane-headshot {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-inset);
+}
+
+.trade-page__lane-headshot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trade-page__lane-headshot-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trade-page__lane-direction {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.trade-page__lane-name {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trade-page__lane-arrows {
+  color: var(--amber-bright);
+  font-size: 18px;
+  flex-shrink: 0;
+}

@@ -143,6 +143,16 @@ export interface LeaguePricing {
   leagueMedian?: { mean: number; sigma: number };
   /** Latest recorded title odds per week (real history only). */
   titleHistory?: { week: number; odds: Record<string, number>; at: number }[];
+  /** The user's engine-priced line for every scheduled week. */
+  weeklyLines?: {
+    week: number;
+    opponentRosterId: number;
+    opponentName: string;
+    moneyline: number;
+    winProb: number;
+    projection: number;
+    opponentProjection: number;
+  }[];
 }
 
 export interface DraftWrappedReal {
@@ -162,6 +172,8 @@ export interface MarketMover {
   headline: string;
   detail: string;
   playerId?: string;
+  givePlayerId?: string;
+  getPlayerId?: string;
   titleOddsBefore: number;
   titleOddsAfter: number;
 }

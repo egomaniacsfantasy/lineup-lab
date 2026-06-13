@@ -33,7 +33,7 @@ export function SeasonPage() {
       userTeam,
       userRow,
       rank: rank > 0 ? rank : bootstrap.league.totalTeams,
-      scheduleItems: schedule ? toScheduleItems(schedule, bootstrap) : [],
+      scheduleItems: schedule ? toScheduleItems(schedule, bootstrap, pricing) : [],
     };
   }, [bootstrap, schedule, pricing]);
 

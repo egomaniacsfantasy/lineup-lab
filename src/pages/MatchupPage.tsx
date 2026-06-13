@@ -717,6 +717,7 @@ function MatchupLive({
 }: MatchupLiveProps) {
   const engine = useMatchupEngine(matchup);
   const { openPlayerDetail } = usePlayerDetail();
+  const { stored } = useLeagueConnection();
   const starterEvaluations = useMemo(
     () => evaluateStarterRoster(engine.baselineRoster),
     [engine.baselineRoster],
@@ -1130,6 +1131,27 @@ function MatchupLive({
               <span className="matchup-page__edge-delta matchup-page__edge-delta--up">
                 {formatSignedPercent(biggestSwing.delta)}
               </span>
+            </div>
+            <div className="matchup-page__edge-actions">
+              <button
+                className="matchup-page__row-action"
+                onClick={() =>
+                  engine.selectPlayer(biggestSwing.slotIndex, biggestSwing.alternativeIndex)
+                }
+                type="button"
+              >
+                Preview the swap
+              </button>
+              {stored ? (
+                <a
+                  className="matchup-page__text-link"
+                  href={`https://sleeper.com/leagues/${stored.leagueId}`}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Make it official in Sleeper ↗
+                </a>
+              ) : null}
             </div>
           </section>
         ) : null}

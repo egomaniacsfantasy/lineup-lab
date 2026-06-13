@@ -477,12 +477,17 @@ function buildOffseasonMatchupData(
 export function toScheduleItems(
   schedule: ScheduleWeek[],
   bootstrap: LeagueBootstrap,
+  pricing?: LeaguePricing | null,
 ): ScheduleGridItem[] {
   const userTeam = getUserTeam(bootstrap);
   if (!userTeam) return [];
 
   const teamsByRoster = new Map(bootstrap.teams.map((t) => [t.rosterId, t]));
   const lastScored = bootstrap.league.lastScoredWeek ?? 0;
+  // engine-priced week-by-week lines (projection-based, not record-based)
+  const pricedWeeks = new Map(
+    (pricing?.available ? pricing.weeklyLines ?? [] : []).map((w) => [w.week, w]),
+  );
 
   return schedule
     .map((weekEntry): ScheduleGridItem | null => {
@@ -517,12 +522,14 @@ export function toScheduleItems(
         };
       }
 
+      const priced = pricedWeeks.get(weekEntry.week);
+
       return {
         week: weekEntry.week,
         opponent: opp.teamName,
         opponentRecord: recordLabel(opp),
         status: weekEntry.week === bootstrap.week ? 'live' : 'projected',
-        yourLine: line.yours.moneyline,
+        yourLine: priced?.moneyline ?? line.yours.moneyline,
       };
     })
     .filter((item): item is ScheduleGridItem => item !== null);
