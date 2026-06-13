@@ -8,22 +8,54 @@ import './AuthLanding.css';
 
 const FEATURES = [
   {
-    title: 'Your matchup, as a line',
-    body: 'Every week priced like a sportsbook — moneyline, spread, win probability — off a 10,000-run simulation of your real roster.',
-  },
-  {
-    title: 'Who do I start?',
-    body: 'Tap two players and see the actual win-probability swing, not a vague projection. The math behind the call.',
+    title: 'Who do I start',
+    body: 'Tap two players, see the exact win-probability swing. The math, not a hunch.',
   },
   {
     title: 'Trade command center',
-    body: 'Real deals both sides should take, an accept/decline read on any offer, and the value behind it.',
+    body: 'Deals both sides should take, plus an honest accept-or-decline read on any offer.',
   },
   {
     title: 'Season futures',
-    body: 'Live title odds, playoff and finals probabilities, and a week-by-week schedule with real lines.',
+    body: 'Live title odds, playoff and finals probabilities, week by week.',
   },
 ];
+
+/** A static taste of the real matchup card, to show what they're signing up for. */
+function MatchupPreview() {
+  return (
+    <div className="auth-preview" aria-hidden="true">
+      <div className="auth-preview__head">
+        <span className="auth-preview__eyebrow">Week 1 · head to head</span>
+        <span className="auth-preview__live">
+          <span className="auth-preview__dot" />
+          Live line
+        </span>
+      </div>
+      <div className="auth-preview__faceoff">
+        <div className="auth-preview__side">
+          <p className="auth-preview__team">Your team</p>
+          <p className="auth-preview__ml">+154</p>
+          <p className="auth-preview__proj">Proj 128.4</p>
+        </div>
+        <span className="auth-preview__vs">VS</span>
+        <div className="auth-preview__side auth-preview__side--opp">
+          <p className="auth-preview__team">Roster 4</p>
+          <p className="auth-preview__ml auth-preview__ml--opp">−154</p>
+          <p className="auth-preview__proj">Proj 135.7</p>
+        </div>
+      </div>
+      <div className="auth-preview__bar">
+        <span className="auth-preview__bar-fill" style={{ width: '39.8%' }} />
+      </div>
+      <div className="auth-preview__labels">
+        <span className="auth-preview__label-you">39.8% you</span>
+        <span>60.2% them</span>
+      </div>
+      <p className="auth-preview__verdict">Underdog, but live. The right swap moves this line.</p>
+    </div>
+  );
+}
 
 export function AuthLanding() {
   const { signUp, signIn } = useAuth();
@@ -54,10 +86,10 @@ export function AuthLanding() {
           <p className="auth-landing__kicker">Odds Gods</p>
           <h1 className="auth-landing__wordmark">OLYMPUS</h1>
           <p className="auth-landing__thesis">
-            Your fantasy league, priced like a betting market. Connect your
-            league once and every matchup, start/sit, and trade gets a real
-            number behind it.
+            Your fantasy league, priced like a sportsbook. Sync once and every
+            matchup, start-sit, and trade gets a real number behind it.
           </p>
+          <MatchupPreview />
           <ul className="auth-landing__features">
             {FEATURES.map((feature) => (
               <li className="auth-landing__feature" key={feature.title}>

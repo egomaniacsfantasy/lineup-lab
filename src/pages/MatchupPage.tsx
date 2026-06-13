@@ -759,28 +759,15 @@ function MatchupLive({
     await navigator.clipboard.writeText(text);
   };
 
-  // "Who do I start" only answers a real decision: starting one player means
-  // benching another in the same slot. So every pick after the first must
-  // form an actual swap with it (a starter + a bench player who fits that
-  // slot). That guarantees the verdict is a matchup-impact call — win
-  // probability — never a hollow projection gap between two guys who both
-  // already start.
+  // Compare any two players at a similar position: same position always, and
+  // RB/WR/TE against each other when the league runs a flex. A real swap shows
+  // the win-probability impact; two players who both already start show a
+  // straight projection face-off.
   const FLEX_GROUP = ['RB', 'WR', 'TE'];
-  const slotAllowsPos = (slotLabel: string, position: string) =>
-    slotLabel === 'FLEX' ? FLEX_GROUP.includes(position) : slotLabel === position;
-  const isComparable = (anchor: Player, candidate: Player) => {
-    const anchorSlot = matchup.yourTeam.roster.find((s) => s.starter.id === anchor.id);
-    if (anchorSlot) {
-      // anchor starts → candidate must be a bench player who fits its slot
-      return (
-        (matchup.yourTeam.bench ?? []).some((b) => b.player.id === candidate.id) &&
-        slotAllowsPos(anchorSlot.slotLabel, candidate.position)
-      );
-    }
-    // anchor is on the bench → candidate must be a starter it could replace
-    const candidateSlot = matchup.yourTeam.roster.find((s) => s.starter.id === candidate.id);
-    return Boolean(candidateSlot && slotAllowsPos(candidateSlot.slotLabel, anchor.position));
-  };
+  const hasFlexSlot = matchup.yourTeam.roster.some((s) => s.slotLabel === 'FLEX');
+  const isComparable = (anchor: Player, candidate: Player) =>
+    anchor.position === candidate.position ||
+    (hasFlexSlot && FLEX_GROUP.includes(anchor.position) && FLEX_GROUP.includes(candidate.position));
 
   const MAX_COMPARE = 4;
 
@@ -842,15 +829,10 @@ function MatchupLive({
   };
 
   const firstPick = compareSelection[0];
-  const firstIsStarter = firstPick
-    ? matchup.yourTeam.roster.some((s) => s.starter.id === firstPick.id)
-    : false;
   const compareHint =
     !isCompareMode || compareSelection.length === 0
       ? 'Tap any player: who do I start?'
-      : firstIsStarter
-        ? `Now tap a bench player to weigh against ${firstPick.shortName}.`
-        : `Now tap the starter you'd bench for ${firstPick.shortName}.`;
+      : `Now tap another ${firstPick.position} to weigh against ${firstPick.shortName}.`;
 
   const eligibleCount =
     compareSelection.length >= 1
