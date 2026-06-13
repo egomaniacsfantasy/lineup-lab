@@ -188,9 +188,22 @@ export function applyOverlay(projectionMap, overlay) {
       weekly: {},
     };
     const next = { ...base };
-    if (typeof ov.base === 'number' && Number.isFinite(ov.base)) next.mean = ov.base;
+    if (typeof ov.base === 'number' && Number.isFinite(ov.base)) {
+      next.mean = ov.base;
+      // Weekly matchups price off weekly[week], not the season mean, so shift
+      // the whole weekly grid to the user's level while keeping Franco's
+      // week-to-week shape. (e.g. base 12.8 → 16 scales every week by 1.25.)
+      const oldMean = base.mean;
+      if (base.weekly && oldMean > 0) {
+        const factor = ov.base / oldMean;
+        const scaled = {};
+        for (const [w, v] of Object.entries(base.weekly)) scaled[w] = v * factor;
+        next.weekly = scaled;
+      }
+    }
     if (ov.weekly && typeof ov.weekly === 'object') {
-      next.weekly = { ...(base.weekly ?? {}), ...ov.weekly };
+      // Explicit per-week overrides win over the scaled grid.
+      next.weekly = { ...(next.weekly ?? base.weekly ?? {}), ...ov.weekly };
     }
     projectionMap.set(playerId, next);
   }

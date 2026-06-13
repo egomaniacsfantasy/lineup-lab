@@ -185,7 +185,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           return;
         }
         const all = rows.map(rowToConnection);
-        const active = all.find((c, i) => rows[i].is_active) ?? all[0];
+        const active = all.find((_, i) => rows[i].is_active) ?? all[0];
         applyApiContext(active);
         try {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(active));

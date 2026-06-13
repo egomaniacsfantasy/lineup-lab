@@ -33,7 +33,7 @@ const BASE_TABS = [
     ),
   },
   {
-    label: 'Ranks',
+    label: 'My Board',
     path: '/rankings',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">

@@ -14,7 +14,7 @@ import { DraftPage } from './pages/DraftPage';
 import { LeaguePage } from './pages/LeaguePage';
 import { MatchupPage } from './pages/MatchupPage';
 import { MorePage } from './pages/MorePage';
-import { RankingsPage } from './pages/RankingsPage';
+import { MyBoardPage } from './pages/MyBoardPage';
 import { SeasonPage } from './pages/SeasonPage';
 import { TradePage } from './pages/TradePage';
 import { AdminProjectionsPage } from './pages/AdminProjectionsPage';
@@ -47,7 +47,7 @@ function AppRoutes() {
                 <Route path="/season" element={<SeasonPage />} />
                 <Route path="/draft" element={<DraftPage />} />
                 <Route path="/trade" element={<TradePage />} />
-                <Route path="/rankings" element={<RankingsPage />} />
+                <Route path="/rankings" element={<MyBoardPage />} />
                 <Route path="/league" element={<LeaguePage />} />
                 <Route path="/more" element={<MorePage />} />
               </Route>
