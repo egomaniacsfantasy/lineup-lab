@@ -384,7 +384,17 @@ export interface TradeResult {
     valueDelta: number;
   };
   verdict?: string;
-  acceptance?: { band: string; reasons: string[] };
+  acceptance?: { band: string; probability: number; reasons: string[] };
+  /** Player value (points over replacement) you give minus you get. >0 = you overpay. */
+  valueGap?: number;
+  /** When the deal is lopsided, the throw-in(s) that even it out. */
+  fairCounter?: {
+    whoAdds: 'you' | 'them';
+    teamName: string;
+    add: { id: string; name: string; value: number }[];
+    gapBefore: number;
+    gapAfter: number;
+  } | null;
   bestPlayer?: { name: string; toThem: boolean };
   isDepthPackage?: boolean;
 }

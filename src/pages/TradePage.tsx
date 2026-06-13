@@ -213,6 +213,29 @@ export function TradePage() {
     }
   };
 
+  // One-tap fair counter: add the suggested throw-in(s) to the right side and reprice.
+  const applyCounter = async (counter: NonNullable<TradeResult['fairCounter']>) => {
+    if (!stored || partnerRosterId == null) return;
+    const ids = counter.add.map((a) => a.id);
+    const nextGive = counter.whoAdds === 'you' ? [...new Set([...give, ...ids])] : give;
+    const nextGet = counter.whoAdds === 'them' ? [...new Set([...getIds, ...ids])] : getIds;
+    setGive(nextGive);
+    setGetIds(nextGet);
+    setIsPricing(true);
+    try {
+      const priced = await priceTrade(stored.leagueId, {
+        userId: stored.userId,
+        partnerRosterId,
+        give: nextGive,
+        get: nextGet,
+        traits,
+      });
+      setResult(priced);
+    } finally {
+      setIsPricing(false);
+    }
+  };
+
   const canPrice = partnerRosterId != null && give.length > 0 && getIds.length > 0;
 
   const renderPool = (
@@ -412,9 +435,37 @@ export function TradePage() {
                 BAND_TONE[result.acceptance?.band ?? 'Coin flip'] ?? 'neutral'
               }`}
             >
-              {result.acceptance?.band} to accept
+              {result.acceptance?.probability ?? 50}% to accept · {result.acceptance?.band}
             </span>
           </div>
+
+          {result.fairCounter ? (
+            <div className="trade-cc__counter">
+              <p className="trade-cc__counter-title">
+                {result.fairCounter.whoAdds === 'them'
+                  ? `You're overpaying by ${result.fairCounter.gapBefore} pts of value`
+                  : `You're winning this by ${result.fairCounter.gapBefore} pts of value`}
+              </p>
+              <p className="trade-cc__counter-body">
+                {result.fairCounter.whoAdds === 'them'
+                  ? `Even it out: ask for ${result.fairCounter.add
+                      .map((a) => a.name)
+                      .join(' + ')} from ${result.fairCounter.teamName}.`
+                  : `Make it fair: add ${result.fairCounter.add
+                      .map((a) => a.name)
+                      .join(' + ')} to your side.`}
+              </p>
+              <button
+                className="trade-cc__counter-btn"
+                onClick={() => applyCounter(result.fairCounter!)}
+                type="button"
+              >
+                {result.fairCounter.whoAdds === 'them'
+                  ? 'Add it to what you get'
+                  : 'Add it to what you give'}
+              </button>
+            </div>
+          ) : null}
 
           {/* fairness rail */}
           <div className="trade-cc__rail" aria-hidden="true">

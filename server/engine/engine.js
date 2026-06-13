@@ -953,31 +953,34 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const yourValueDelta = Number((userAfter.mean - baseDist.get(userRosterId).mean).toFixed(1));
   const theirValueDelta = Number((partnerAfter.mean - baseDist.get(partnerRosterId).mean).toFixed(1));
 
-  // Best player in the deal by VALUE, not raw points. QBs put up the most
-  // fantasy points but are the most replaceable (everyone starts one), so raw
-  // mean would crown a streamer QB over an elite WR. Value-over-replacement —
-  // a player's points above the worst starter the league fields at his
-  // position — fixes that: an elite WR rightly outranks a mid QB.
+  // Trade value = value over replacement on SEASON TOTALS, against a fixed
+  // 12-team reference (a small league otherwise makes even studs replacement-
+  // level), tempered by position the same way the GOD board is. This keeps a
+  // player's trade value consistent with where he sits in the rankings: Burrow
+  // is worth far more than a streaming DEF, so a lopsided deal reads lopsided.
   const startersPerTeam = (pos) => {
     const ded = slotLabels.filter((s) => s === pos).length;
     const flex = slotLabels.filter((s) => FLEX_ELIGIBILITY[s]?.includes(pos)).length;
     return ded + flex / 3; // flex shared among RB/WR/TE
   };
-  const meansByPos = {};
-  const replacementMean = (pos) => {
-    if (!meansByPos[pos]) {
-      meansByPos[pos] = active.projections
+  const TRADE_POS_W = { QB: 1.4, RB: 0.85, WR: 1.25, TE: 1.1, DEF: 0.25, K: 0.2 };
+  const replByPos = {};
+  const replacementTotal = (pos) => {
+    if (replByPos[pos] === undefined) {
+      const totals = active.projections
         .filter((p) => p.position === pos)
-        .map((p) => p.mean)
+        .map((p) => p.seasonTotal ?? 0)
         .sort((a, b) => b - a);
+      const rank = Math.max(0, Math.round(12 * Math.max(1, startersPerTeam(pos))) - 1);
+      replByPos[pos] = totals[Math.min(totals.length - 1, rank)] ?? 0;
     }
-    const list = meansByPos[pos];
-    const idx = Math.min(list.length - 1, Math.max(0, Math.round(teams.length * startersPerTeam(pos)) - 1));
-    return list[idx] ?? 0;
+    return replByPos[pos];
   };
   const valueOf = (id) => {
     const p = projectionMap.get(id);
-    return p ? p.mean - replacementMean(p.position) : 0;
+    if (!p) return 0;
+    const vor = (p.seasonTotal ?? 0) - replacementTotal(p.position);
+    return vor * (TRADE_POS_W[p.position] ?? 1);
   };
 
   const everyPlayer = [...give, ...get]
@@ -1082,6 +1085,49 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
         : score >= 0 ? 'Coin flip'
           : score >= -2.5 ? 'Unlikely'
             : 'Long shot';
+  // Continuous probability so the scouting dials visibly move the read, not
+  // just flip a coarse band. Logistic on the same score (k=2.5).
+  const acceptanceProb = Math.round(100 / (1 + Math.exp(-score / 2.5)));
+
+  // ── fair-deal counter: if the player value is lopsided, suggest throw-ins
+  //    that even it out (value = points over replacement, the same currency we
+  //    rank trades by). The side that's getting more value adds the player(s).
+  const sumValue = (ids) => ids.reduce((s, id) => s + Math.max(0, valueOf(id)), 0);
+  const giveValue = sumValue(give);
+  const getValue = sumValue(get);
+  const valueGap = Number((giveValue - getValue).toFixed(0)); // >0 = you overpay
+  const FAIR_TOL = 15; // season-total value points; deals within this read as fair
+  let fairCounter = null;
+  if (Math.abs(valueGap) > FAIR_TOL) {
+    const youAdd = valueGap < 0; // they overpay → you even it up; else they add
+    const pool = (youAdd
+      ? user.players.filter((id) => !give.includes(id))
+      : partner.players.filter((id) => !get.includes(id))
+    )
+      .map((id) => ({ id, name: catalog[id]?.name ?? `Player ${id}`, value: valueOf(id) }))
+      .filter((c) => c.value > 0.3)
+      .sort((a, b) => b.value - a.value);
+    const add = [];
+    let remaining = Math.abs(valueGap);
+    for (const c of pool) {
+      if (remaining <= FAIR_TOL) break;
+      if (c.value <= remaining + FAIR_TOL) {
+        add.push(c);
+        remaining -= c.value;
+      }
+    }
+    if (add.length === 0 && pool.length) add.push(pool[pool.length - 1]); // smallest throw-in
+    if (add.length) {
+      const added = add.reduce((s, c) => s + c.value, 0);
+      fairCounter = {
+        whoAdds: youAdd ? 'you' : 'them',
+        teamName: youAdd ? user.teamName : partner.teamName,
+        add: add.map((c) => ({ id: c.id, name: c.name, value: Number(c.value.toFixed(1)) })),
+        gapBefore: Math.abs(valueGap),
+        gapAfter: Number(Math.abs(Math.abs(valueGap) - added).toFixed(1)),
+      };
+    }
+  }
 
   // ── your-side verdict from your title-odds + value movement ──
   const titleGain = (yourAfter?.titleProb ?? 0) - (yourBefore?.titleProb ?? 0);
@@ -1117,7 +1163,9 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
       valueDelta: theirValueDelta,
     },
     verdict,
-    acceptance: { band: acceptanceBand, reasons },
+    acceptance: { band: acceptanceBand, probability: acceptanceProb, reasons },
+    valueGap,
+    fairCounter,
     bestPlayer: { name: bestPlayer.name, toThem: bestPlayer.toThem },
     isDepthPackage,
   };
