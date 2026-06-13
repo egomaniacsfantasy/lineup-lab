@@ -13,10 +13,6 @@ interface EspnConnectProps {
 
 const CURRENT_SEASON = String(new Date().getFullYear());
 
-// One-click cookie grab: run on espn.com, copies a token to the clipboard.
-const BOOKMARKLET =
-  "javascript:(function(){var g=function(n){var m=document.cookie.match(new RegExp(n+'=([^;]+)'));return m?m[1]:''};var s=g('espn_s2'),w=g('SWID');if(!s||!w){alert('Open espn.com (logged in) first, then click this. If it still fails, your browser hides the cookie — use manual entry in Olympus.');return}var t=btoa(s+'~~'+w);if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){alert('ESPN access copied. Paste it back in Olympus.')},function(){prompt('Copy this token into Olympus:',t)})}else{prompt('Copy this token into Olympus:',t)}})()";
-
 type Step =
   | { name: 'league' }
   | {
@@ -32,54 +28,34 @@ type Step =
 export function EspnConnect({ onConnected }: EspnConnectProps) {
   const [step, setStep] = useState<Step>({ name: 'league' });
   const [leagueId, setLeagueId] = useState('');
-  // Season is the current NFL year — no need to ask. (Past seasons are an
-  // advanced case we can add later.)
+  // Season is the current NFL year — no need to ask.
   const season = CURRENT_SEASON;
   const [needsCookies, setNeedsCookies] = useState(false);
   const [espnS2, setEspnS2] = useState('');
   const [swid, setSwid] = useState('');
-  const [tokenInput, setTokenInput] = useState('');
   const [manual, setManual] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The browser extension that reads ESPN's HttpOnly cookie (FantasyPros-style).
+  const [extInstalled, setExtInstalled] = useState(false);
+  const [extSyncing, setExtSyncing] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
 
-  // React 19 blocks javascript: hrefs in JSX, so set the bookmarklet via ref.
-  const bookmarkletRef = useRef<HTMLAnchorElement>(null);
-  useEffect(() => {
-    if (bookmarkletRef.current) bookmarkletRef.current.setAttribute('href', BOOKMARKLET);
-  }, [needsCookies]);
+  const leagueIdRef = useRef(leagueId);
+  leagueIdRef.current = leagueId;
 
-  // Decode the clipboard token from the bookmarklet into the two cookies.
-  const applyToken = (raw: string) => {
-    try {
-      const [s2, sw] = atob(raw.trim()).split('~~');
-      if (s2 && sw) {
-        setEspnS2(s2);
-        setSwid(sw);
-        return true;
-      }
-    } catch {
-      // not a valid token yet
-    }
-    return false;
-  };
-
-  const attemptConnect = async () => {
-    if (leagueId.trim().length === 0 || isLoading) return;
+  // Core connect. Cookies are optional (public leagues need none).
+  const doConnect = async (creds?: { espnS2: string; swid: string }) => {
+    const id = leagueIdRef.current.trim();
+    if (id.length === 0) return;
     setIsLoading(true);
     setError(null);
-
-    const creds =
-      needsCookies && espnS2.trim() && swid.trim()
-        ? { espnS2: espnS2.trim(), swid: swid.trim() }
-        : undefined;
-
     try {
-      const result = await connectEspn(leagueId.trim(), season.trim(), creds);
+      const result = await connectEspn(id, season, creds);
       setStep({
         name: 'pick-team',
-        leagueId: leagueId.trim(),
-        season: season.trim(),
+        leagueId: id,
+        season,
         leagueName: result.league.name,
         teams: result.teams,
         espnS2: creds?.espnS2 ?? null,
@@ -88,7 +64,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
     } catch (caught) {
       if (caught instanceof LeagueApiError && caught.code === 'espn_private') {
         setNeedsCookies(true);
-        setError(caught.message);
+        setError(null);
       } else {
         setError(
           caught instanceof LeagueApiError
@@ -98,7 +74,52 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
       }
     } finally {
       setIsLoading(false);
+      setExtSyncing(false);
     }
+  };
+
+  const attemptConnect = () => {
+    const creds =
+      needsCookies && espnS2.trim() && swid.trim()
+        ? { espnS2: espnS2.trim(), swid: swid.trim() }
+        : undefined;
+    void doConnect(creds);
+  };
+
+  // Talk to the extension (if installed): it reads espn_s2 + SWID and sends
+  // them straight back to this page; we never see a password.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      const data = event.data;
+      if (!data || data.source !== 'olympus-ext') return;
+      if (data.type === 'OLYMPUS_ESPN_READY') {
+        setExtInstalled(true);
+      }
+      if (data.type === 'OLYMPUS_ESPN_RESULT') {
+        if (data.espnS2 && data.swid) {
+          setEspnS2(data.espnS2);
+          setSwid(data.swid);
+          void doConnect({ espnS2: data.espnS2, swid: data.swid });
+        } else {
+          setExtSyncing(false);
+          setError(
+            'The extension could not read your ESPN login. Make sure you are signed in to espn.com in this browser.',
+          );
+        }
+      }
+    };
+    window.addEventListener('message', onMessage);
+    // Ping in case the extension's content script loaded before we mounted.
+    window.postMessage({ source: 'olympus-page', type: 'OLYMPUS_ESPN_PING' }, window.location.origin);
+    return () => window.removeEventListener('message', onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const syncWithExtension = () => {
+    setExtSyncing(true);
+    setError(null);
+    window.postMessage({ source: 'olympus-page', type: 'OLYMPUS_ESPN_REQUEST' }, window.location.origin);
   };
 
   return (
@@ -115,7 +136,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
           className="espn-connect__form"
           onSubmit={(event) => {
             event.preventDefault();
-            void attemptConnect();
+            attemptConnect();
           }}
         >
           <label className="espn-connect__field">
@@ -137,56 +158,55 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
           {needsCookies ? (
             <div className="espn-connect__cookies">
               <p className="espn-connect__cookies-note">
-                This league is private, so ESPN needs to know it&apos;s really
-                you. One click does it — no passwords, read-only, stays on your
-                device:
+                This league is private. ESPN keeps its login locked away from
+                web pages, so connecting needs the Olympus extension — one
+                click, no passwords, read-only.
               </p>
-              <ol className="espn-connect__steps">
-                <li>
-                  Drag this to your bookmarks bar:{' '}
-                  <a
-                    className="espn-connect__bookmarklet"
-                    onClick={(event) => event.preventDefault()}
-                    ref={bookmarkletRef}
-                  >
-                    🔑 Grab ESPN access
-                  </a>
-                </li>
-                <li>Open espn.com (logged in) and click that bookmark.</li>
-                <li>Come back here and paste:</li>
-              </ol>
-              <input
-                className="espn-connect__input"
-                onChange={(event) => {
-                  setTokenInput(event.target.value);
-                  applyToken(event.target.value);
-                }}
-                placeholder="Paste your ESPN access token"
-                value={tokenInput}
-              />
-              {tokenInput && !espnS2 ? (
-                <p className="espn-connect__hint">
-                  That token didn&apos;t read. Use{' '}
-                  <button
-                    className="espn-connect__linkbtn"
-                    onClick={() => setManual((m) => !m)}
-                    type="button"
-                  >
-                    manual entry
-                  </button>{' '}
-                  instead.
-                </p>
-              ) : (
+
+              {extInstalled ? (
                 <button
-                  className="espn-connect__linkbtn espn-connect__linkbtn--block"
-                  onClick={() => setManual((m) => !m)}
+                  className="espn-connect__submit"
+                  disabled={extSyncing || isLoading}
+                  onClick={syncWithExtension}
                   type="button"
                 >
-                  {manual ? 'Hide manual entry' : 'Or paste the two cookies manually'}
+                  {extSyncing ? 'Reading your ESPN login…' : 'Sync with the extension'}
                 </button>
+              ) : (
+                <>
+                  <button
+                    className="espn-connect__submit"
+                    onClick={() => setShowInstall((s) => !s)}
+                    type="button"
+                  >
+                    Get the Olympus connector
+                  </button>
+                  {showInstall ? (
+                    <ol className="espn-connect__steps">
+                      <li>
+                        Install the Olympus ESPN Connector extension and make
+                        sure you&apos;re signed in to espn.com in this browser.
+                      </li>
+                      <li>Refresh this page — the button above becomes “Sync.”</li>
+                    </ol>
+                  ) : null}
+                </>
               )}
+
+              <button
+                className="espn-connect__linkbtn espn-connect__linkbtn--block"
+                onClick={() => setManual((m) => !m)}
+                type="button"
+              >
+                {manual ? 'Hide manual entry' : 'Or paste the two cookies manually'}
+              </button>
+
               {manual ? (
                 <div className="espn-connect__manual">
+                  <p className="espn-connect__hint">
+                    In espn.com, open DevTools → Application → Cookies →{' '}
+                    <code>espn_s2</code> and <code>SWID</code>.
+                  </p>
                   <label className="espn-connect__field">
                     <span className="espn-connect__label">espn_s2</span>
                     <input
@@ -210,13 +230,17 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
             </div>
           ) : null}
 
-          <button className="espn-connect__submit" disabled={isLoading} type="submit">
-            {isLoading
-              ? 'Looking up your league…'
-              : needsCookies
-                ? 'Connect with cookies'
-                : 'Find my league'}
-          </button>
+          {/* The primary button only matters for public leagues or manual entry;
+              the extension/manual sub-buttons drive the private path. */}
+          {!needsCookies || manual ? (
+            <button className="espn-connect__submit" disabled={isLoading} type="submit">
+              {isLoading
+                ? 'Looking up your league…'
+                : needsCookies
+                  ? 'Connect with cookies'
+                  : 'Find my league'}
+            </button>
+          ) : null}
 
           <p className="espn-connect__privacy">
             Read-only. We never ask for your ESPN password.

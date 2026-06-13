@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Olympus ESPN Connector",
+  "version": "1.0.0",
+  "description": "Securely connect your private ESPN fantasy football league to Olympus. Read-only — your login never leaves your browser.",
+  "permissions": ["cookies"],
+  "host_permissions": ["https://*.espn.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://olympus-20tu.onrender.com/*",
+        "http://localhost:3000/*",
+        "http://localhost:5173/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
