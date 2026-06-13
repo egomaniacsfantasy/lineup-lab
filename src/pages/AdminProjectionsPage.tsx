@@ -208,7 +208,7 @@ export function AdminProjectionsPage() {
         <section className="admin-projections__card">
           <h2 className="admin-projections__subtitle">Last import</h2>
           <p className="admin-projections__summary">
-            {result.tabs.map((t) => `${t.position ?? t.tab}: ${t.rows}`).join(' · ')} —{' '}
+            {result.tabs.map((t) => `${t.position ?? t.tab}: ${t.rows}`).join(' · ')}.{' '}
             {result.count} imported as <strong>{result.version}</strong>.
           </p>
 

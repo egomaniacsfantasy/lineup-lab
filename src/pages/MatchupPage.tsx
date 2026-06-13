@@ -84,16 +84,6 @@ function formatTeamSpread(spread: number) {
   return rounded > 0 ? `You −${rounded.toFixed(1)}` : `You +${Math.abs(rounded).toFixed(1)}`;
 }
 
-/** One line of voice that actually matches the number. */
-function heroVerdict(winProbability: number) {
-  if (winProbability >= 75) return 'Heavy favorite. Don’t get cute.';
-  if (winProbability >= 60) return 'Clear edge. Protect it with the right starts.';
-  if (winProbability >= 52) return 'Slight edge. One bad break away from sweating.';
-  if (winProbability >= 48) return 'Coin flip. Every lineup call is the ballgame.';
-  if (winProbability >= 35) return 'Underdog, but live. The right swap moves this line.';
-  return 'Long shot this week. Swing for ceiling, not floor.';
-}
-
 function formatVerdict(playerName: string, deltaWinProbability: number) {
   const rounded = roundTo(deltaWinProbability);
 
@@ -1058,10 +1048,6 @@ function MatchupLive({
               </span>
             </span>
           </div>
-
-          <p className="matchup-page__body-copy">
-            {heroVerdict(engine.activeLine.yours.winProbability)}
-          </p>
         </section>
 
         {scoringNote ? <SeasonalNotice>{scoringNote}</SeasonalNotice> : null}
@@ -1660,8 +1646,8 @@ function CompareBoard({
 
         <p className="matchup-page__compare-verdict">
           {gap >= 0.3
-            ? `${top.player.shortName} is the start, ${gap.toFixed(1)} projected points clear of the next man up.`
-            : `Too close to call on projection — ${top.player.shortName} edges it, but this is a gut-feel week.`}
+            ? `${top.player.shortName} projects ${gap.toFixed(1)} points clear.`
+            : `Dead heat: ${top.player.shortName} edges it by ${gap.toFixed(1)}.`}
         </p>
       </section>
     </div>

@@ -97,8 +97,8 @@ export function WeekDetailModal({ week, userTeamName, line, onClose }: WeekDetai
 
             <p className="week-detail__note">
               {favored
-                ? `You're projected to favor by ${spread.toFixed(1)}. Lineups can swing this before kickoff — it reprices when rosters change.`
-                : `You're the underdog by ${spread.toFixed(1)} on projection. The right starts can still flip it.`}
+                ? `Favored by ${spread.toFixed(1)} on projection. Reprices as rosters change.`
+                : `Underdog by ${spread.toFixed(1)} on projection. Reprices as rosters change.`}
             </p>
           </>
         ) : (

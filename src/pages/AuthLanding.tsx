@@ -52,7 +52,10 @@ function MatchupPreview() {
         <span className="auth-preview__label-you">39.8% you</span>
         <span>60.2% them</span>
       </div>
-      <p className="auth-preview__verdict">Underdog, but live. The right swap moves this line.</p>
+      <div className="auth-preview__meta">
+        <span>Spread <b>You +7.4</b></span>
+        <span>Total <b>264.1</b></span>
+      </div>
     </div>
   );
 }

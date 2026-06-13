@@ -177,11 +177,22 @@
   font-weight: 600;
 }
 
-.auth-preview__verdict {
-  margin: 12px 0 0;
-  color: var(--text-muted, #a9aea4);
+.auth-preview__meta {
+  display: flex;
+  gap: 18px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle, #23272b);
+  color: var(--ink-3, #787c75);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.auth-preview__meta b {
+  color: var(--text-soft, #b9bdb4);
+  font-family: var(--font-num, monospace);
+  font-weight: 600;
 }
 
 .auth-landing__features {

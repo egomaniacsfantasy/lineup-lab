@@ -159,7 +159,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
             <div className="espn-connect__cookies">
               <p className="espn-connect__cookies-note">
                 This league is private. ESPN keeps its login locked away from
-                web pages, so connecting needs the Olympus extension — one
+                web pages, so connecting needs the Olympus extension. One
                 click, no passwords, read-only.
               </p>
 
@@ -187,7 +187,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                         Install the Olympus ESPN Connector extension and make
                         sure you&apos;re signed in to espn.com in this browser.
                       </li>
-                      <li>Refresh this page — the button above becomes “Sync.”</li>
+                      <li>Refresh this page. The button above becomes “Sync.”</li>
                     </ol>
                   ) : null}
                 </>
