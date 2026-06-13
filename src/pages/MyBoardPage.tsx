@@ -636,6 +636,7 @@ function BoardView({
                 <Dial
                   row={row}
                   value={value}
+                  god={god}
                   onSet={(v) => setPlayerBase(row.playerId, v)}
                   onReset={() => clearPlayer(row.playerId)}
                 />
@@ -651,11 +652,13 @@ function BoardView({
 function Dial({
   row,
   value,
+  god,
   onSet,
   onReset,
 }: {
   row: BoardRow;
   value: number;
+  god: number;
   onSet: (v: number) => void;
   onReset: () => void;
 }) {
@@ -690,13 +693,16 @@ function Dial({
         </span>
       </div>
       <div className="dial__foot">
-        {offBook ? (
-          <span className="dial__offbook">
-            Off-book. Franco has him {row.mean.toFixed(1)}.
-          </span>
-        ) : (
-          <span className="dial__here">You: {value.toFixed(1)}</span>
-        )}
+        <span className="dial__readout">
+          <span className="dial__god">GOD {god.toFixed(1)}</span>
+          {offBook ? (
+            <span className="dial__offbook">
+              Off-book · Franco has him {row.mean.toFixed(1)} pts/gm
+            </span>
+          ) : (
+            <span className="dial__pts">{value.toFixed(1)} proj pts/game</span>
+          )}
+        </span>
         <button className="dial__reset" onClick={onReset} type="button">
           Reset to Franco
         </button>
