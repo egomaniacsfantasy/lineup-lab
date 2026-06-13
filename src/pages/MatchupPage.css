@@ -1231,3 +1231,64 @@
   font-size: 12px;
   font-weight: 500;
 }
+
+/* Hypothetical-lineup indicator: shown whenever you've previewed a swap. */
+.matchup-page__preview-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(232, 84, 29, 0.5);
+  border-radius: 12px;
+  background: rgba(232, 84, 29, 0.1);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.matchup-page__preview-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber-bright);
+  box-shadow: 0 0 8px var(--amber-bright);
+}
+
+.matchup-page__preview-reset {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.matchup-page__preview-reset:hover {
+  background: rgba(232, 84, 29, 0.16);
+}
+
+.matchup-page__module--preview {
+  border-color: var(--amber);
+  border-style: dashed;
+}
+
+.matchup-page__preview-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}

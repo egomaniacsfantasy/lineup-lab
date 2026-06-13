@@ -652,6 +652,16 @@ function MatchupLive({
 }: MatchupLiveProps) {
   const engine = useMatchupEngine(matchup);
   const { stored } = useLeagueConnection();
+
+  // A "preview" lineup: you've swapped someone in here but not in Sleeper, so
+  // every number below is hypothetical until you make it official.
+  const isPreview =
+    isConnected &&
+    Object.values(engine.selectedAlternatives).some((value) => value !== null);
+  const resetPreview = () =>
+    Object.keys(engine.selectedAlternatives).forEach((key) =>
+      engine.selectPlayer(Number(key), null),
+    );
   const starterEvaluations = useMemo(
     () => evaluateStarterRoster(engine.baselineRoster),
     [engine.baselineRoster],
@@ -914,15 +924,42 @@ function MatchupLive({
       />
 
       <section className="matchup-page__story">
-        <section className="matchup-page__module matchup-page__module--hero">
+        {isPreview ? (
+          <div className="matchup-page__preview-banner" role="status">
+            <span className="matchup-page__preview-dot" aria-hidden="true" />
+            <span>
+              Previewing a lineup change. These numbers update your Sleeper
+              lineup, not the other way around.
+            </span>
+            <button
+              className="matchup-page__preview-reset"
+              onClick={resetPreview}
+              type="button"
+            >
+              Reset
+            </button>
+          </div>
+        ) : null}
+
+        <section
+          className={[
+            'matchup-page__module',
+            'matchup-page__module--hero',
+            isPreview ? 'matchup-page__module--preview' : '',
+          ].join(' ')}
+        >
           <div className="matchup-page__module-row">
             <span className="matchup-page__eyebrow">
               Week {matchup.week} · head-to-head
             </span>
-            <span className="matchup-page__live-chip">
-              <span className="matchup-page__live-dot" aria-hidden="true" />
-              Live line
-            </span>
+            {isPreview ? (
+              <span className="matchup-page__preview-chip">Preview lineup</span>
+            ) : (
+              <span className="matchup-page__live-chip">
+                <span className="matchup-page__live-dot" aria-hidden="true" />
+                Live line
+              </span>
+            )}
           </div>
 
           <div className="matchup-page__faceoff">
