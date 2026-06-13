@@ -535,6 +535,9 @@ function computeMovers(ctx) {
   const { league, teams, matchups, projections, projectionMap, distByRoster, scheduleWeeks, week, catalog, seed } = ctx;
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return [];
+  // Redraft-value movers are misleading in dynasty/keeper, where youth and
+  // picks carry the value Franco's weekly model doesn't price yet.
+  if (league.leagueType && league.leagueType !== 'redraft') return [];
 
   const baseFutures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, seed });
   const baseUser = baseFutures.find((f) => f.rosterId === userTeam.rosterId);
@@ -557,11 +560,16 @@ function computeMovers(ctx) {
   for (const candidate of projections) {
     if (rostered.has(candidate.playerId)) continue;
     if (!['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(candidate.position)) continue;
+    // Never suggest dropping a real starter for a depth-chart backup. A QB2
+    // who out-projects a QB1 in one slice is noise (he barely plays); Franco's
+    // depth_rank is the truth source for that.
+    if (candidate.depthRank != null && candidate.depthRank >= 2) continue;
     for (const starter of starterMeans) {
       const allowed = FLEX_ELIGIBILITY[starter.slot] ?? [starter.slot];
       if (!allowed.includes(candidate.position)) continue;
       const delta = candidate.mean - starter.mean;
-      if (delta <= 0.5) continue;
+      // a waiver claim has to be a real upgrade, not a rounding-error edge
+      if (delta < 2) continue;
       if (!bestClaim || delta > bestClaim.delta) {
         bestClaim = { candidate, starter, delta };
       }
@@ -572,8 +580,9 @@ function computeMovers(ctx) {
     movers.push({
       kind: 'waiver',
       headline: `Claim ${bestClaim.candidate.name} off waivers`,
-      detail: `Slots ${bestClaim.candidate.position}, +${bestClaim.delta.toFixed(1)} proj over ${catalog[bestClaim.starter.id]?.name ?? 'current starter'}`,
+      detail: `Upgrade over ${catalog[bestClaim.starter.id]?.name ?? 'your current starter'} at ${bestClaim.candidate.position}`,
       playerId: bestClaim.candidate.playerId,
+      valueGain: Number(bestClaim.delta.toFixed(1)),
       titleOddsBefore: baseUser.championOdds,
       titleOddsAfter: noWorseThan(
         baseUser.championOdds,
@@ -656,6 +665,7 @@ function computeMovers(ctx) {
       detail: `You send ${lane.give.name}, you get ${lane.get.name}`,
       givePlayerId: lane.give.playerId,
       getPlayerId: lane.get.playerId,
+      valueGain: Number(lane.userGain.toFixed(1)),
       titleOddsBefore: baseUser.championOdds,
       titleOddsAfter: noWorseThan(
         baseUser.championOdds,

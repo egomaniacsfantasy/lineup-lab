@@ -77,6 +77,21 @@ export function TradePage() {
     );
   }
 
+  // Redraft-only for now: dynasty/keeper value lives in youth and picks that
+  // Franco's weekly model doesn't price yet, so we don't pretend to.
+  if (bootstrap.league.leagueType !== 'redraft') {
+    return (
+      <div className="trade-page">
+        <h1 className="visually-hidden">Trade Command Center</h1>
+        <SeasonalNotice>
+          The Trade Command Center is built for redraft leagues. Dynasty and
+          keeper trades turn on player age and pick value, which we don&apos;t
+          price yet. It&apos;s coming.
+        </SeasonalNotice>
+      </div>
+    );
+  }
+
   const lanes = pricing?.available
     ? (pricing.movers ?? []).filter((mover) => mover.kind === 'trade')
     : [];

@@ -28,6 +28,8 @@ export interface ApiLeague extends ApiLeagueSummary {
   playoffTeams: number | null;
   lastScoredWeek: number | null;
   regularSeasonWeeks: number;
+  leagueType: 'redraft' | 'keeper' | 'dynasty';
+  bestBall: boolean;
 }
 
 export interface ApiTeam {
@@ -174,6 +176,8 @@ export interface MarketMover {
   playerId?: string;
   givePlayerId?: string;
   getPlayerId?: string;
+  /** Projected points the move adds to your starting lineup. */
+  valueGain?: number;
   titleOddsBefore: number;
   titleOddsAfter: number;
 }

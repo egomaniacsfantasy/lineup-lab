@@ -6,7 +6,7 @@ interface SeasonHeadlineProps {
   recordValue: string;
   recordLabel: string;
   championshipOdds: number;
-  recordRange: {
+  recordRange?: {
     best: string;
     worst: string;
     median: string;
@@ -44,9 +44,11 @@ export function SeasonHeadline({
           <h2 className="season-headline__value" id="season-headline-title">
             {recordValue}
           </h2>
-          <p className="season-headline__range">
-            Range {recordRange.worst} to {recordRange.best}
-          </p>
+          {recordRange ? (
+            <p className="season-headline__range">
+              Range {recordRange.worst} to {recordRange.best}
+            </p>
+          ) : null}
         </div>
 
         <div className="season-headline__metric">
@@ -54,7 +56,9 @@ export function SeasonHeadline({
           <p className="season-headline__value season-headline__value--amber">
             {formatAmericanOdds(championshipOdds)}
           </p>
-          <p className="season-headline__range">Median {recordRange.median}</p>
+          {recordRange ? (
+            <p className="season-headline__range">Median {recordRange.median}</p>
+          ) : null}
         </div>
       </div>
 

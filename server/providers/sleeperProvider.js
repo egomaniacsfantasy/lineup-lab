@@ -145,6 +145,9 @@ export const sleeperProvider = {
       sleeperGet(`/league/${leagueId}`, 'league'),
     );
     if (!raw) return null;
+    // Sleeper settings.type: 0 redraft, 1 keeper, 2 dynasty.
+    const leagueType =
+      raw.settings?.type === 2 ? 'dynasty' : raw.settings?.type === 1 ? 'keeper' : 'redraft';
     return {
       ...mapLeagueSummary(raw),
       scoringSettings: raw.scoring_settings ?? {},
@@ -154,6 +157,8 @@ export const sleeperProvider = {
       lastScoredWeek: raw.settings?.last_scored_leg ?? null,
       regularSeasonWeeks:
         (raw.settings?.playoff_week_start ?? 15) - 1 || 14,
+      leagueType,
+      bestBall: raw.settings?.best_ball === 1,
     };
   },
 

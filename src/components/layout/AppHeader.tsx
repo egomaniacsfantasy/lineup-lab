@@ -38,10 +38,12 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
     season,
     displayedWeek,
   );
+  // Trade tools are redraft-only for now; hide the tab in dynasty/keeper.
+  const hideTrade = isSynced && bootstrap.league.leagueType !== 'redraft';
   const navItems = [
     { label: 'Matchup', path: '/matchup' },
     { label: 'Season', path: '/season' },
-    { label: 'Trade', path: '/trade' },
+    ...(hideTrade ? [] : [{ label: 'Trade', path: '/trade' }]),
     { label: 'League', path: '/league' },
     { label: 'More', path: '/more' },
   ];
@@ -96,16 +98,34 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
           </span>
           {isSynced ? (
             <button
-              className="app-header__synced-chip"
+              className={[
+                'app-header__sync',
+                isRefreshing ? 'app-header__sync--busy' : '',
+              ].join(' ')}
               disabled={isRefreshing}
               onClick={() => {
                 setIsRefreshing(true);
                 void refresh().finally(() => setIsRefreshing(false));
               }}
-              title={`Last updated ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}. Click to pull the latest from Sleeper.`}
+              title={`Last synced ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}. Click to pull the latest from Sleeper.`}
               type="button"
             >
-              {isRefreshing ? 'Syncing…' : 'Synced'}
+              <svg
+                className="app-header__sync-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <path d="M21 3v5h-5" />
+              </svg>
+              <span className="app-header__sync-label">
+                {isRefreshing ? 'Syncing' : 'Synced'}
+              </span>
             </button>
           ) : (
             <span className="app-header__replay-chip">Not synced</span>

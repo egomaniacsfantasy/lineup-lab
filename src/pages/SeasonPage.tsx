@@ -8,12 +8,10 @@ import {
   MOCK_SEASON_OUTLOOK,
   MOCK_SCHEDULE_PREVIEW,
 } from '../mocks';
-import type { DraftWrappedData } from '../types';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import {
   getUserTeam,
   toLeagueFutures,
-  toPlayer,
   toScheduleItems,
 } from '../adapters/connectedLeague';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -71,30 +69,9 @@ export function SeasonPage() {
     const userFuture = pricing?.available
       ? pricing.futures?.find((future) => future.isUser)
       : undefined;
-    const real = pricing?.available ? pricing.draftWrapped : null;
-    const realWrapped: DraftWrappedData | null =
-      real && real.boldestPick && bootstrap
-        ? {
-            teamName: real.teamName,
-            leagueName: real.leagueName,
-            championshipOdds: userFuture?.championOdds ?? userRow.championOdds,
-            projectedRecord: userFuture?.projRecord ?? record,
-            recordRange,
-            leagueRank: rank,
-            boldestPick: {
-              player: toPlayer(real.boldestPick.playerId, bootstrap.players),
-              pickNumber: real.boldestPick.pickNo,
-              adpDelta: real.boldestPick.reach,
-            },
-            toughestMatchup: real.toughestWeek
-              ? { week: real.toughestWeek.week, odds: real.toughestWeek.odds, opponent: real.toughestWeek.opponent }
-              : { week: 0, odds: 100, opponent: '—' },
-            easiestMatchup: real.easiestWeek
-              ? { week: real.easiestWeek.week, odds: real.easiestWeek.odds, opponent: real.easiestWeek.opponent }
-              : { week: 0, odds: -100, opponent: '—' },
-            rosterGrade: real.grade,
-          }
-        : null;
+    // Record range is only meaningful once games have been played; at 0-0 it
+    // spans the whole season (0-15 to 15-0), which reads as broken.
+    const showRange = played > 0;
 
     return (
       <div className="season-page">
@@ -113,21 +90,10 @@ export function SeasonPage() {
           live={bootstrap !== null && bootstrap.league.status === 'in_season'}
           playoffProbability={userRow.playoffProb}
           recordLabel={userFuture ? 'Projected record' : 'Record'}
-          recordRange={recordRange}
+          recordRange={showRange ? recordRange : undefined}
           recordValue={userFuture?.projRecord ?? record}
           title={`Your ${bootstrap?.league.season} season futures`}
         />
-
-        {realWrapped ? (
-          <DraftWrappedCard draftWrapped={realWrapped} onShare={() => {}} />
-        ) : null}
-
-        {real && real.unpricedPicks > 0 ? (
-          <SeasonalNotice>
-            {real.unpricedPicks} of your {real.totalPicks} draft picks are
-            outside the projection sheet, so the grade is reduced-confidence.
-          </SeasonalNotice>
-        ) : null}
 
         {scheduleItems.length > 0 ? (
           <ScheduleGrid

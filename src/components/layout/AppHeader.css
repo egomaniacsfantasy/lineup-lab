@@ -245,39 +245,55 @@
 
 }
 
-/* Real-league indicator; hover/long-press shows last-updated time. */
-.app-header__synced-chip {
+/* Real-league sync control: quiet outline + refresh glyph, not a loud pill. */
+.app-header__sync {
   display: inline-flex;
   align-items: center;
-  min-height: 20px;
-  padding-inline: 7px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--green) 16%, transparent);
-  color: var(--green);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.app-header__sync:hover:not(:disabled) {
+  border-color: var(--ink-3);
+  color: var(--text-primary);
+}
+
+.app-header__sync-icon {
+  width: 12px;
+  height: 12px;
+  color: var(--green);
+}
+
+.app-header__sync--busy {
+  cursor: default;
+}
+
+.app-header__sync--busy .app-header__sync-icon {
+  color: var(--text-soft);
+  animation: app-header-spin 0.8s linear infinite;
+}
+
+@keyframes app-header-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 520px) {
-  .app-header__synced-chip {
-    padding-inline: 5px;
-    font-size: 9px;
+  .app-header__sync {
+    padding: 0 7px;
+    font-size: 10px;
   }
-}
-
-button.app-header__synced-chip {
-  border: none;
-  cursor: pointer;
-  font-size: inherit;
-}
-
-button.app-header__synced-chip:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 
 .app-header__odds-toggle {

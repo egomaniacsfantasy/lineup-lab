@@ -389,6 +389,7 @@ function MarketMoverRow({
   sublabel,
   from,
   to,
+  gain,
   avatar,
   crestTeam,
 }: {
@@ -396,6 +397,8 @@ function MarketMoverRow({
   sublabel: string;
   from: number;
   to: number;
+  /** Projected points the move adds to your starting lineup, if known. */
+  gain?: number;
   avatar?: Player | null;
   crestTeam?: string;
 }) {
@@ -417,12 +420,18 @@ function MarketMoverRow({
           <p className="matchup-page__mover-meta">{sublabel}</p>
         </div>
       </div>
-      <p className="matchup-page__price-shift">
-        <span className="matchup-page__price-old">{formatAmericanOdds(from)}</span>{' '}
-        <span className={to < from ? 'matchup-page__price-new matchup-page__price-new--up' : 'matchup-page__price-new matchup-page__price-new--down'}>
-          {formatAmericanOdds(to)}
-        </span>
-      </p>
+      {/* Title odds barely move on a single roster change, so lead with the
+          real number: projected points added to your starting lineup. */}
+      {gain != null ? (
+        <p className="matchup-page__mover-gain">+{gain.toFixed(1)}<span> pts/wk</span></p>
+      ) : (
+        <p className="matchup-page__price-shift">
+          <span className="matchup-page__price-old">{formatAmericanOdds(from)}</span>{' '}
+          <span className={to < from ? 'matchup-page__price-new matchup-page__price-new--up' : 'matchup-page__price-new matchup-page__price-new--down'}>
+            {formatAmericanOdds(to)}
+          </span>
+        </p>
+      )}
     </div>
   );
 }
@@ -604,6 +613,7 @@ interface PricedMover {
   headline: string;
   detail: string;
   playerId?: string;
+  gain?: number;
   before: number;
   after: number;
 }
@@ -1236,12 +1246,7 @@ function MatchupLive({
             <section className="matchup-page__module">
               <div className="matchup-page__module-row">
                 <h2 className="matchup-page__module-title">Market movers</h2>
-                <p className="matchup-page__meta-copy">
-                  title odds{' '}
-                  <span className="matchup-page__inline-number">
-                    {formatAmericanOdds(movers[0].before)}
-                  </span>
-                </p>
+                <p className="matchup-page__meta-copy">added to your lineup</p>
               </div>
               {movers.map((mover) => (
                 <MarketMoverRow
@@ -1261,6 +1266,7 @@ function MatchupLive({
                       : null
                   }
                   from={mover.before}
+                  gain={mover.gain}
                   key={mover.headline}
                   label={mover.headline}
                   sublabel={mover.detail}
@@ -1776,6 +1782,7 @@ export function MatchupPage() {
           headline: mover.headline,
           detail: mover.detail,
           playerId: mover.playerId,
+          gain: mover.valueGain,
           before: mover.titleOddsBefore,
           after: mover.titleOddsAfter,
         }))

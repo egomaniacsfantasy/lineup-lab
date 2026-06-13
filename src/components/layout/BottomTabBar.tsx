@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import './BottomTabBar.css';
 const BASE_TABS = [
   {
@@ -57,7 +58,10 @@ const BASE_TABS = [
 ];
 
 export function BottomTabBar() {
-  const tabs = BASE_TABS;
+  const { bootstrap } = useLeagueConnection();
+  // The trade tools price redraft value; they don't fit dynasty/keeper yet.
+  const hideTrade = bootstrap != null && bootstrap.league.leagueType !== 'redraft';
+  const tabs = hideTrade ? BASE_TABS.filter((t) => t.path !== '/trade') : BASE_TABS;
 
   return (
     <nav className="bottom-tab-bar" aria-label="Primary">
