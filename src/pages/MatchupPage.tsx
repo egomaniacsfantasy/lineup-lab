@@ -394,6 +394,7 @@ function CompareSheet({
   comparison,
   leftPlayer,
   rightPlayer,
+  tapeNote = '',
   onClose,
 }: {
   comparison: {
@@ -406,11 +407,12 @@ function CompareSheet({
   };
   leftPlayer: Player;
   rightPlayer: Player;
+  tapeNote?: string;
   onClose: () => void;
 }) {
   // slotIndex >= 0: a real swap inside one lineup slot, priced by the
-  // engine. slotIndex === -1: the two players can't trade places (e.g. a
-  // QB vs a WR) — show an honest projection face-off, never a fake line.
+  // engine. slotIndex === -1: the two players can't trade places this
+  // week, so show an honest projection face-off, never a fake line.
   const isSwap = comparison.slotIndex >= 0;
   const projectionDelta = roundTo(comparison.rightProjection - comparison.leftProjection);
   const rightWins = isSwap ? comparison.deltaWinProbability > 0 : projectionDelta > 0;
@@ -424,8 +426,8 @@ function CompareSheet({
   const verdict = isSwap
     ? formatVerdict(rightPlayer.shortName, comparison.deltaWinProbability)
     : headlineWinner
-      ? `${headlineWinner.shortName} projects ${Math.abs(projectionDelta).toFixed(1)} more points this week. They play different slots, so this is a pulse check, not a swap.`
-      : 'Dead even on projection. They play different slots, so this is a pulse check, not a swap.';
+      ? `${headlineWinner.shortName} projects ${Math.abs(projectionDelta).toFixed(1)} more points this week. ${tapeNote}`.trim()
+      : `Dead even on projection. ${tapeNote}`.trim();
 
   const maxProjection = Math.max(comparison.leftProjection, comparison.rightProjection, 1);
 
@@ -453,9 +455,9 @@ function CompareSheet({
       >
         <div className="matchup-page__compare-header">
           <div>
-            <p className="matchup-page__eyebrow">VS compare</p>
+            <p className="matchup-page__eyebrow">Who do I start?</p>
             <h2 className="matchup-page__module-title" id="compare-sheet-title">
-              {isSwap ? 'Price the swap' : 'Tale of the tape'}
+              {isSwap ? 'The verdict' : 'Side by side'}
             </h2>
           </div>
           <button
@@ -811,11 +813,24 @@ function MatchupLive({
     await navigator.clipboard.writeText(text);
   };
 
+  // Eligibility: only pairs a manager could actually weigh against each
+  // other. Same position always; RB/WR/TE against each other only when
+  // the league runs a flex slot.
+  const FLEX_GROUP = ['RB', 'WR', 'TE'];
+  const hasFlexSlot = matchup.yourTeam.roster.some((slot) => slot.slotLabel === 'FLEX');
+  const isComparable = (a: Player, b: Player) =>
+    a.position === b.position ||
+    (hasFlexSlot && FLEX_GROUP.includes(a.position) && FLEX_GROUP.includes(b.position));
+
   const handleComparePick = (player: Player) => {
     setIsCompareMode(true);
     setCompareSelection((current) => {
       if (current.some((candidate) => candidate.id === player.id)) {
         return current.filter((candidate) => candidate.id !== player.id);
+      }
+
+      if (current.length === 1 && !isComparable(current[0], player)) {
+        return current; // ineligible rows are disabled; belt and braces
       }
 
       const nextSelection = [...current, player].slice(-2);
@@ -828,10 +843,21 @@ function MatchupLive({
     });
   };
 
-  const closeCompare = () => {
+  // Closing the verdict keeps your first pick on the slip, so trying a
+  // different second player is one tap, not a restart.
+  const closeVerdict = () => {
+    setCompareModalPlayers(null);
+    setCompareSelection((current) => current.slice(0, 1));
+  };
+
+  const exitCompare = () => {
     setCompareModalPlayers(null);
     setCompareSelection([]);
     setIsCompareMode(false);
+  };
+
+  const removePick = (playerId: string) => {
+    setCompareSelection((current) => current.filter((candidate) => candidate.id !== playerId));
   };
 
   const renderLineupRow = ({
@@ -856,22 +882,30 @@ function MatchupLive({
     const pickOrder = compareSelection.findIndex(
       (candidate) => candidate.id === player.id,
     );
+    const ineligible =
+      isCompareMode &&
+      compareSelection.length >= 1 &&
+      pickOrder === -1 &&
+      !isComparable(compareSelection[0], player);
 
     return (
       <div
         className={[
           'matchup-page__lineup-row',
           tone === 'bench' ? 'matchup-page__lineup-row--bench' : '',
-          isCompareMode ? 'matchup-page__lineup-row--pickable' : '',
+          isCompareMode && !ineligible ? 'matchup-page__lineup-row--pickable' : '',
+          ineligible ? 'matchup-page__lineup-row--ineligible' : '',
           selected ? 'matchup-page__lineup-row--selected' : '',
         ]
           .filter(Boolean)
           .join(' ')}
         key={`${slotLabel}-${player.id}`}
+        title={ineligible ? `Different position than ${compareSelection[0]?.shortName}` : undefined}
       >
         <button
           aria-pressed={isCompareMode ? selected : undefined}
           className="matchup-page__lineup-hitbox"
+          disabled={ineligible}
           onClick={() => {
             if (isCompareMode) {
               handleComparePick(player);
@@ -1236,13 +1270,7 @@ function MatchupLive({
           <div className="matchup-page__module-row matchup-page__module-row--lineup">
             <div>
               <h2 className="matchup-page__module-title">Your lineup</h2>
-              {isCompareMode ? (
-                <p className="matchup-page__meta-copy">
-                  {compareSelection.length === 0
-                    ? 'Tap any two players — starters or bench.'
-                    : 'One more — tap a second player to see the verdict.'}
-                </p>
-              ) : null}
+
             </div>
             <button
               className={[
@@ -1252,22 +1280,12 @@ function MatchupLive({
                 .filter(Boolean)
                 .join(' ')}
               onClick={() => {
-                setIsCompareMode((current) => {
-                  const next = !current;
-
-                  if (!next) {
-                    setCompareSelection([]);
-                    setCompareModalPlayers(null);
-                  }
-
-                  return next;
-                });
+                if (isCompareMode) exitCompare();
+                else setIsCompareMode(true);
               }}
               type="button"
             >
-              {isCompareMode
-                ? `Picking ${compareSelection.length}/2 — tap to exit`
-                : 'VS compare'}
+              {isCompareMode ? 'Exit' : 'Who do I start?'}
             </button>
           </div>
 
@@ -1376,13 +1394,7 @@ function MatchupLive({
           <div className="matchup-page__module-row matchup-page__module-row--lineup">
             <div>
               <h2 className="matchup-page__module-title">Your lineup</h2>
-              {isCompareMode ? (
-                <p className="matchup-page__meta-copy">
-                  {compareSelection.length === 0
-                    ? 'Tap any two players — starters or bench.'
-                    : 'One more — tap a second player to see the verdict.'}
-                </p>
-              ) : null}
+
             </div>
             <button
               className={[
@@ -1392,22 +1404,12 @@ function MatchupLive({
                 .filter(Boolean)
                 .join(' ')}
               onClick={() => {
-                setIsCompareMode((current) => {
-                  const next = !current;
-
-                  if (!next) {
-                    setCompareSelection([]);
-                    setCompareModalPlayers(null);
-                  }
-
-                  return next;
-                });
+                if (isCompareMode) exitCompare();
+                else setIsCompareMode(true);
               }}
               type="button"
             >
-              {isCompareMode
-                ? `Picking ${compareSelection.length}/2 — tap to exit`
-                : 'VS compare'}
+              {isCompareMode ? 'Exit' : 'Who do I start?'}
             </button>
           </div>
 
@@ -1445,12 +1447,74 @@ function MatchupLive({
         <TitlePriceChart series={titleSeries} variant="desktop" />
       </aside>
 
+      {isCompareMode && !compareModalPlayers ? (
+        <div aria-label="Start or sit slip" className="matchup-page__slip" role="region">
+          <div className="matchup-page__slip-header">
+            <span className="matchup-page__slip-title">Who do I start?</span>
+            <button className="matchup-page__slip-exit" onClick={exitCompare} type="button">
+              Exit
+            </button>
+          </div>
+          <div className="matchup-page__slip-slots">
+            {[0, 1].map((slotIndex) => {
+              const pick = compareSelection[slotIndex];
+              return pick ? (
+                <div
+                  className="matchup-page__slip-slot matchup-page__slip-slot--filled"
+                  key={slotIndex}
+                >
+                  <PlayerHeadshot
+                    className="matchup-page__headshot matchup-page__headshot--slip"
+                    fallbackClassName="matchup-page__headshot-fallback"
+                    imageClassName="matchup-page__headshot-image"
+                    player={pick}
+                  />
+                  <span className="matchup-page__slip-name">{pick.shortName}</span>
+                  <button
+                    aria-label={`Remove ${pick.shortName}`}
+                    className="matchup-page__slip-remove"
+                    onClick={() => removePick(pick.id)}
+                    type="button"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div className="matchup-page__slip-slot" key={slotIndex}>
+                  <span className="matchup-page__slip-number">{slotIndex + 1}</span>
+                  <span className="matchup-page__slip-empty">
+                    {compareSelection.length === 0
+                      ? slotIndex === 0
+                        ? 'Tap any player'
+                        : 'Then a second'
+                      : `Who are you weighing against ${compareSelection[0].shortName}?`}
+                  </span>
+                </div>
+              );
+            })}
+            <span aria-hidden="true" className="matchup-page__slip-vs">
+              VS
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       {compareResult && compareModalPlayers ? (
         <CompareSheet
           comparison={compareResult}
           leftPlayer={compareModalPlayers[0]}
-          onClose={closeCompare}
+          onClose={closeVerdict}
           rightPlayer={compareModalPlayers[1]}
+          tapeNote={(() => {
+            const starterIds = new Set(engine.roster.map((slot) => slot.starter.id));
+            const bothIn = compareModalPlayers.every((p) => starterIds.has(p.id));
+            const neitherIn = compareModalPlayers.every((p) => !starterIds.has(p.id));
+            return bothIn
+              ? 'Both already start this week.'
+              : neitherIn
+                ? 'Neither starts this week.'
+                : '';
+          })()}
         />
       ) : null}
     </div>
