@@ -46,6 +46,7 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
     { label: 'Season', path: '/season' },
     ...(hideTrade ? [] : [{ label: 'Trade', path: '/trade' }]),
     { label: 'My Board', path: '/rankings' },
+    { label: 'Projections', path: '/projections' },
     { label: 'League', path: '/league' },
     { label: 'More', path: '/more' },
   ];
