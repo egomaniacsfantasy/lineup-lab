@@ -17,9 +17,12 @@ interface Player {
   point: number | null;
   floor: number | null;
   ceiling: number | null;
+  agreement?: string;
   season: Row;
   weekly: Row[];
 }
+
+const PW_KEY = 'og.projections.adminpw';
 
 interface Dataset {
   updatedAt: number;
@@ -116,6 +119,14 @@ export function ProjectionsPage() {
   const [sortKey, setSortKey] = useState<string>('point');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [openName, setOpenName] = useState<string | null>(null);
+  // Agreement editing: unlocked with the admin password; edits POST back to the
+  // server and are held in a local overlay keyed by position+name.
+  const [adminPw, setAdminPw] = useState<string | null>(() => localStorage.getItem(PW_KEY));
+  const [agree, setAgree] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
+
+  const editing = adminPw != null;
+  const akey = (p: Player) => `${p.position}::${p.name}`;
 
   useEffect(() => {
     let alive = true;
@@ -147,6 +158,40 @@ export function ProjectionsPage() {
     if (sortDir === 'asc') sorted.reverse();
     return sorted;
   }, [data, pos, query, sortKey, sortDir]);
+
+  function unlockEditing() {
+    const pw = window.prompt('Admin password to edit agreement values:');
+    if (pw == null) return;
+    localStorage.setItem(PW_KEY, pw);
+    setAdminPw(pw);
+  }
+  function lockEditing() {
+    localStorage.removeItem(PW_KEY);
+    setAdminPw(null);
+  }
+
+  async function saveAgreement(p: Player, value: string) {
+    const key = akey(p);
+    const current = agree[key] ?? p.agreement ?? '';
+    if (value === current) return;
+    setAgree((m) => ({ ...m, [key]: value }));
+    setSaving((s) => ({ ...s, [key]: 'saving' }));
+    try {
+      const res = await fetch('/api/projections/agreement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw ?? '' },
+        body: JSON.stringify({ position: p.position, name: p.name, agreement: value }),
+      });
+      if (res.status === 401) {
+        setSaving((s) => ({ ...s, [key]: 'err' }));
+        window.alert('Wrong admin password — click “Lock” and re-enter it.');
+        return;
+      }
+      setSaving((s) => ({ ...s, [key]: res.ok ? 'ok' : 'err' }));
+    } catch {
+      setSaving((s) => ({ ...s, [key]: 'err' }));
+    }
+  }
 
   function toggleSort(key: string) {
     if (key === sortKey) {
@@ -205,13 +250,24 @@ export function ProjectionsPage() {
             </button>
           ))}
         </div>
-        <input
-          className="proj-search"
-          type="search"
-          placeholder={`Search ${nameLabel.toLowerCase()} or team…`}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+        <div className="proj-controls__right">
+          <input
+            className="proj-search"
+            type="search"
+            placeholder={`Search ${nameLabel.toLowerCase()} or team…`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {editing ? (
+            <button className="proj-edit proj-edit--on" onClick={lockEditing} title="Stop editing agreement">
+              Editing · Lock
+            </button>
+          ) : (
+            <button className="proj-edit" onClick={unlockEditing} title="Unlock to edit agreement values">
+              Edit agreement
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="proj-table-wrap">
@@ -236,6 +292,7 @@ export function ProjectionsPage() {
               <th className="proj-th proj-th--num proj-th--sort" onClick={() => toggleSort('ceiling')}>
                 Ceil{sortMark('ceiling')}
               </th>
+              <th className="proj-th proj-th--agree">Agreement</th>
             </tr>
           </thead>
           <tbody>
@@ -264,10 +321,28 @@ export function ProjectionsPage() {
                     <td className="proj-td proj-td--num proj-td--fp">{fmt(p.point)}</td>
                     <td className="proj-td proj-td--num proj-td--floor">{fmt(p.floor)}</td>
                     <td className="proj-td proj-td--num proj-td--ceil">{fmt(p.ceiling)}</td>
+                    <td
+                      className="proj-td proj-td--agree"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {editing ? (
+                        <input
+                          className={`proj-agree-input${saving[akey(p)] ? ` proj-agree-input--${saving[akey(p)]}` : ''}`}
+                          defaultValue={agree[akey(p)] ?? p.agreement ?? ''}
+                          placeholder="—"
+                          onBlur={(e) => saveAgreement(p, e.target.value.trim())}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                          }}
+                        />
+                      ) : (
+                        <span className="proj-agree-val">{agree[akey(p)] ?? p.agreement ?? '—'}</span>
+                      )}
+                    </td>
                   </tr>
                   {isOpen && (
                     <tr className="proj-week-row">
-                      <td className="proj-week-cell" colSpan={cols.length + 5}>
+                      <td className="proj-week-cell" colSpan={cols.length + 6}>
                         <WeeklyGrid player={p} cols={cols} />
                       </td>
                     </tr>
@@ -277,7 +352,7 @@ export function ProjectionsPage() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td className="proj-empty" colSpan={cols.length + 5}>
+                <td className="proj-empty" colSpan={cols.length + 6}>
                   No players match.
                 </td>
               </tr>

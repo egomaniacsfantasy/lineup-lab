@@ -1,19 +1,43 @@
 /**
  * Projections API — serves the six combined workbooks committed under /projections
- * directly to the client. No upload, no crosswalk: the files are the source of truth.
- *   GET  /api/projections            → full dataset (every player, season + weekly)
- *   POST /api/projections/reload     → force re-read from disk (admin-gated)
- * The reload lets an operator refresh mid-season the instant new files land,
- * without waiting on a Render redeploy.
+ * directly to the client, with the human "agreement" values overlaid on top.
+ *   GET  /api/projections                 → full dataset (season + weekly + agreement)
+ *   POST /api/projections/reload          → force re-read of the workbooks (admin)
+ *   POST /api/projections/agreement       → set one player's agreement value (admin)
+ *   GET  /api/projections/agreement/export→ { position: { name: value } } for the pipeline
+ * The files are the source of truth for projections; agreementStore is the source
+ * of truth for the human input (kept separate so regeneration never wipes it).
  */
 import { Router } from 'express';
 import { loadProjections, reloadProjections } from '../projections/loadFromRepo.js';
+import { getAllAgreement, setAgreement, POSITIONS } from '../projections/agreementStore.js';
 
 export const projectionsRouter = Router();
 
+function requireAdmin(req, res) {
+  const expected = process.env.ADMIN_PASSWORD ?? 'olympus-admin';
+  if ((req.get('x-admin-password') ?? '') !== expected) {
+    res.status(401).json({ error: 'unauthorized', message: 'Wrong admin password.' });
+    return false;
+  }
+  return true;
+}
+
+/** Attach each player's current agreement value without mutating the loader cache. */
+function withAgreement(dataset) {
+  const agree = getAllAgreement();
+  return {
+    ...dataset,
+    players: dataset.players.map((p) => ({
+      ...p,
+      agreement: agree[p.position]?.[p.name] ?? '',
+    })),
+  };
+}
+
 projectionsRouter.get('/', (_req, res) => {
   try {
-    res.json(loadProjections());
+    res.json(withAgreement(loadProjections()));
   } catch (error) {
     console.error('[projections] load failed', error);
     res.status(500).json({ error: 'projections_load_failed', message: String(error?.message ?? error) });
@@ -21,15 +45,36 @@ projectionsRouter.get('/', (_req, res) => {
 });
 
 projectionsRouter.post('/reload', (req, res) => {
-  const supplied = req.get('x-admin-password') ?? '';
-  if (process.env.ADMIN_PASSWORD && supplied !== process.env.ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
+  if (!requireAdmin(req, res)) return;
   try {
     const data = reloadProjections();
     res.json({ ok: true, count: data.count, perPosition: data.perPosition, updatedAt: data.updatedAt });
   } catch (error) {
     console.error('[projections] reload failed', error);
     res.status(500).json({ error: 'projections_reload_failed', message: String(error?.message ?? error) });
+  }
+});
+
+projectionsRouter.post('/agreement', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { position, name, agreement } = req.body ?? {};
+  if (!POSITIONS.includes(position) || !name) {
+    return res.status(400).json({ error: 'bad_request', message: 'position and name are required.' });
+  }
+  try {
+    const value = setAgreement(position, name, agreement);
+    res.json({ ok: true, position, name, agreement: value });
+  } catch (error) {
+    console.error('[projections] set agreement failed', error);
+    res.status(500).json({ error: 'agreement_save_failed', message: String(error?.message ?? error) });
+  }
+});
+
+// Read-only export the combine pipeline pulls to fold agreement back into the xlsx.
+projectionsRouter.get('/agreement/export', (_req, res) => {
+  try {
+    res.json(getAllAgreement());
+  } catch (error) {
+    res.status(500).json({ error: 'agreement_export_failed', message: String(error?.message ?? error) });
   }
 });
