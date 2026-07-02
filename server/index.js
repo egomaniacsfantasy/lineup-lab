@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
 import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
+import { projectionsRouter } from './routes/projections.js';
+import { loadProjections } from './projections/loadFromRepo.js';
 import { callLog, callsInLastMinute } from './cache.js';
 import { isGameWindow } from './gameWindows.js';
 
@@ -20,6 +22,7 @@ app.use(express.json());
 
 app.use('/api/admin', adminRouter);
 app.use('/api/img', assetsRouter);
+app.use('/api/projections', projectionsRouter);
 app.use('/api', apiRouter);
 
 app.use('/api', (error, _req, res, _next) => {
@@ -37,6 +40,12 @@ app.get(/.*/, (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`[olympus] server on :${PORT}`);
+  // Warm the projections cache on boot so the first request is instant.
+  try {
+    loadProjections();
+  } catch (error) {
+    console.error('[projections] boot load failed', error);
+  }
 });
 
 // Call-volume heartbeat: Sleeper asks < 1000 calls/min per IP — ours

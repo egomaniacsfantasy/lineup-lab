@@ -42,6 +42,16 @@ const BASE_TABS = [
     ),
   },
   {
+    label: 'Projections',
+    path: '/projections',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M3 16.5 7.5 10l3.5 3 5-8" />
+        <path d="M3 3v14h14" />
+      </svg>
+    ),
+  },
+  {
     label: 'League',
     path: '/league',
     icon: (
