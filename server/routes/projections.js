@@ -21,8 +21,11 @@ import {
 export const projectionsRouter = Router();
 
 function requireAdmin(req, res) {
-  const expected = process.env.ADMIN_PASSWORD ?? 'olympus-admin';
-  if ((req.get('x-admin-password') ?? '') !== expected) {
+  // Trim both sides: a trailing space/newline in the Render env value (a common
+  // paste gotcha) shouldn't make a correctly-typed password fail.
+  const expected = (process.env.ADMIN_PASSWORD ?? 'olympus-admin').trim();
+  const supplied = (req.get('x-admin-password') ?? '').trim();
+  if (supplied !== expected) {
     res.status(401).json({ error: 'unauthorized', message: 'Wrong admin password.' });
     return false;
   }
