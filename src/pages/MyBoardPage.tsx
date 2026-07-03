@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { RankingMechanic } from '../components/rankings/RankingMechanic';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +8,7 @@ import { useModelOverlay } from '../contexts/ModelOverlayContext';
 import { fetchBoard, type BoardRow } from '../services/leagueApi';
 import { supabase } from '../services/supabase';
 import { toPlayer } from '../adapters/connectedLeague';
+import type { Player } from '../types';
 import './MyBoardPage.css';
 
 const BOARD_POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
@@ -127,6 +129,35 @@ function scaleFor(row: BoardRow) {
   return { floor, ceiling, min: Math.max(0, floor - 0.3 * span), max: ceiling + 0.3 * span };
 }
 
+function boardPlayer(row: BoardRow, catalog?: Parameters<typeof toPlayer>[1]): Player {
+  if (catalog?.[row.playerId]) {
+    return toPlayer(row.playerId, catalog);
+  }
+
+  return {
+    id: row.playerId,
+    name: row.name,
+    shortName: row.name,
+    position:
+      row.position === 'QB' ||
+      row.position === 'RB' ||
+      row.position === 'WR' ||
+      row.position === 'TE' ||
+      row.position === 'K' ||
+      row.position === 'DEF'
+        ? row.position
+        : 'WR',
+    team: row.team || 'FA',
+    headshotUrl:
+      row.position === 'DEF'
+        ? `/api/img/logo/${(row.team || row.playerId).toLowerCase()}`
+        : `/api/img/headshot/${row.playerId}`,
+    teamLogoUrl: `/api/img/logo/${(row.team || 'fa').toLowerCase()}`,
+    bye: 0,
+    isActive: true,
+  };
+}
+
 /** Save / name / switch / delete named ranking sets, from the board title. */
 function SetSwitcher({
   sets,
@@ -158,12 +189,19 @@ function SetSwitcher({
     if (!open) return undefined;
     const onClick = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) {
+        if (renaming) {
+          const trimmed = draftName.trim();
+          if (trimmed && trimmed !== activeSetName) {
+            renameSet(activeSetId, trimmed);
+          }
+        }
         setOpen(false);
         setRenaming(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        setDraftName(activeSetName);
         setOpen(false);
         setRenaming(false);
       }
@@ -174,10 +212,16 @@ function SetSwitcher({
       document.removeEventListener('mousedown', onClick);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [activeSetId, activeSetName, draftName, open, renameSet, renaming]);
 
   const commitRename = () => {
-    renameSet(activeSetId, draftName);
+    const trimmed = draftName.trim();
+    if (trimmed && trimmed !== activeSetName) {
+      renameSet(activeSetId, trimmed);
+      setDraftName(trimmed);
+    } else {
+      setDraftName(activeSetName);
+    }
     setRenaming(false);
   };
 
@@ -228,6 +272,13 @@ function SetSwitcher({
                   className="setsw__input"
                   onBlur={commitRename}
                   onChange={(e) => setDraftName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setDraftName(activeSetName);
+                      setRenaming(false);
+                    }
+                  }}
                   value={draftName}
                 />
               </form>
@@ -269,8 +320,10 @@ export function MyBoardPage() {
   const { bootstrap } = useLeagueConnection();
   const {
     overlay,
+    flags,
     setPlayerBase,
     clearPlayer,
+    toggleFlag,
     overrideCount,
     reset,
     sets,
@@ -310,7 +363,6 @@ export function MyBoardPage() {
   );
 
   useEffect(() => {
-    if (!bootstrap) return;
     let cancelled = false;
     fetchBoard(800)
       .then((payload) => {
@@ -362,17 +414,14 @@ export function MyBoardPage() {
     );
   }, [board, godScale]);
 
-  if (!bootstrap) {
-    return (
-      <div className="myboard">
-        <h1 className="visually-hidden">Your board</h1>
-        <RankingMechanic />
-      </div>
-    );
-  }
-
   return (
     <div className="myboard">
+      <h1 className="visually-hidden">Your board</h1>
+      {!bootstrap ? (
+        <SeasonalNotice>
+          Your league is still syncing, so this board is using league-neutral starter assumptions for now.
+        </SeasonalNotice>
+      ) : null}
       <header className="myboard__head">
         <div>
           <p className="myboard__kicker">
@@ -426,26 +475,24 @@ export function MyBoardPage() {
       </div>
 
       {!board ? (
-        <p className="myboard__empty">Loading your board…</p>
+        bootstrap ? <p className="myboard__empty">Loading your board…</p> : <RankingMechanic />
       ) : mode === 'rapid' ? (
         <RapidFire
           board={board}
           poolIds={rapidPool}
-          bootstrap={bootstrap}
+          playerCatalog={bootstrap?.players}
           francoGodOf={francoGodOf}
-          onPick={(winner, loser, conviction) => {
-            const wEff = effective(winner);
-            const lEff = effective(loser);
-            const margin = MARGIN[conviction];
-            if (wEff < lEff + margin) setPlayerBase(winner.playerId, lEff + margin);
-            logPick(winner, loser, conviction);
-          }}
+          effective={effective}
+          readBase={(id) => overlay[id]?.base ?? null}
+          setBase={setPlayerBase}
+          logPick={logPick}
         />
       ) : (
         <BoardView
           board={board}
           overlay={overlay}
-          bootstrap={bootstrap}
+          flags={flags}
+          playerCatalog={bootstrap?.players}
           position={position}
           setPosition={setPosition}
           effective={effective}
@@ -457,6 +504,7 @@ export function MyBoardPage() {
           setExpanded={setExpanded}
           setPlayerBase={setPlayerBase}
           clearPlayer={clearPlayer}
+          toggleFlag={toggleFlag}
         />
       )}
     </div>
@@ -506,29 +554,43 @@ function buildPairs(board: BoardRow[], poolIds: Set<string>): Array<[BoardRow, B
 
 type Reveal = { kind: 'with' | 'hot' | 'coin'; text: string };
 
+type PickRecord = { kind: 'pick'; reveal: Reveal['kind']; winnerId: string; prevBase: number | null };
+type HistoryEntry = PickRecord | { kind: 'skip' };
+
 function RapidFire({
   board,
   poolIds,
-  bootstrap,
+  playerCatalog,
   francoGodOf,
-  onPick,
+  effective,
+  readBase,
+  setBase,
+  logPick,
 }: {
   board: BoardRow[];
   poolIds: Set<string>;
-  bootstrap: NonNullable<ReturnType<typeof useLeagueConnection>['bootstrap']>;
+  playerCatalog?: Parameters<typeof toPlayer>[1];
   francoGodOf: (row: BoardRow) => number;
-  onPick: (winner: BoardRow, loser: BoardRow, conviction: Conviction) => void;
+  effective: (row: BoardRow) => number;
+  readBase: (id: string) => number | null;
+  setBase: (id: string, base: number | null) => void;
+  logPick: (winner: BoardRow, loser: BoardRow, conviction: Conviction) => void;
 }) {
-  const pairs = useMemo(() => buildPairs(board, poolIds), [board, poolIds]);
-  const [index, setIndex] = useState(0);
+  const buildSessionPairs = useCallback(() => buildPairs(board, poolIds), [board, poolIds]);
+  // Built ONCE per session — a background re-sync must not reshuffle the deck
+  // mid-run (that repeated pairs and lost your place).
+  const [pairs, setPairs] = useState(() => buildSessionPairs());
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [conviction, setConviction] = useState<Conviction>('clear');
   const [picked, setPicked] = useState<0 | 1 | null>(null);
   const [reveal, setReveal] = useState<Reveal | null>(null);
-  const [streak, setStreak] = useState(0);
-  const [stats, setStats] = useState({ made: 0, hot: 0, best: 0 });
 
-  // A pick flashes the chosen card, reveals whether you went with the board or
-  // made a hot take, then advances — identical feedback for a tap or an arrow.
+  const index = history.length;
+  let streak = 0;
+  for (let i = history.length - 1; i >= 0 && history[i].kind === 'pick'; i -= 1) streak += 1;
+
+  // A pick flashes the chosen card, reveals your read vs the board, then
+  // advances — identical feedback for a tap or an arrow key.
   const choose = useCallback(
     (side: 0 | 1) => {
       if (picked !== null) return;
@@ -536,6 +598,9 @@ function RapidFire({
       if (!pair) return;
       const winner = side === 0 ? pair[0] : pair[1];
       const loser = side === 0 ? pair[1] : pair[0];
+      const prevBase = readBase(winner.playerId);
+      const target = effective(loser) + MARGIN[conviction];
+      const willMove = effective(winner) < target;
       const diff = francoGodOf(winner) - francoGodOf(loser);
       const r: Reveal =
         Math.abs(diff) < 2
@@ -545,26 +610,34 @@ function RapidFire({
             : { kind: 'hot', text: '🔥 Hot take' };
       setPicked(side);
       setReveal(r);
-      setStreak((s) => {
-        const next = s + 1;
-        setStats((st) => ({
-          made: st.made + 1,
-          hot: st.hot + (r.kind === 'hot' ? 1 : 0),
-          best: Math.max(st.best, next),
-        }));
-        return next;
-      });
       window.setTimeout(() => {
-        onPick(winner, loser, conviction);
+        if (willMove) setBase(winner.playerId, target);
+        logPick(winner, loser, conviction);
+        setHistory((h) => [
+          ...h,
+          { kind: 'pick', reveal: r.kind, winnerId: winner.playerId, prevBase },
+        ]);
         setPicked(null);
         setReveal(null);
-        setIndex((i) => i + 1);
       }, 480);
     },
-    [picked, pairs, index, onPick, conviction, francoGodOf],
+    [picked, pairs, index, conviction, francoGodOf, effective, readBase, setBase, logPick],
   );
 
-  // Left / right arrow keys pick the left / right player.
+  const skip = useCallback(() => {
+    if (picked !== null) return;
+    setHistory((h) => [...h, { kind: 'skip' }]);
+  }, [picked]);
+
+  const goBack = useCallback(() => {
+    if (picked !== null || history.length === 0) return;
+    const last = history[history.length - 1];
+    if (last.kind === 'pick') setBase(last.winnerId, last.prevBase); // undo the bump
+    setHistory((h) => h.slice(0, -1));
+    setReveal(null);
+  }, [picked, history, setBase]);
+
+  // ← / → pick the left / right player; Backspace goes back.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {
@@ -573,31 +646,44 @@ function RapidFire({
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         choose(1);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        goBack();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [choose]);
+  }, [choose, goBack]);
 
   if (pairs.length === 0) {
     return <p className="myboard__empty">No close calls to make right now.</p>;
   }
   if (index >= pairs.length) {
+    const made = history.filter((h) => h.kind === 'pick').length;
+    const hot = history.filter((h) => h.kind === 'pick' && h.reveal === 'hot').length;
+    let best = 0;
+    let run = 0;
+    for (const h of history) {
+      if (h.kind === 'pick') {
+        run += 1;
+        best = Math.max(best, run);
+      } else run = 0;
+    }
     return (
       <div className="rapid rapid--done">
         <p className="rapid__done-kicker">Session complete</p>
         <p className="rapid__done-title">Your board moved.</p>
         <div className="rapid__done-stats">
           <div className="rapid__done-stat">
-            <span className="rapid__done-num">{stats.made}</span>
+            <span className="rapid__done-num">{made}</span>
             <span className="rapid__done-lbl">calls</span>
           </div>
           <div className="rapid__done-stat">
-            <span className="rapid__done-num">{stats.best}</span>
+            <span className="rapid__done-num">{best}</span>
             <span className="rapid__done-lbl">best streak</span>
           </div>
           <div className="rapid__done-stat">
-            <span className="rapid__done-num">{stats.hot}</span>
+            <span className="rapid__done-num">{hot}</span>
             <span className="rapid__done-lbl">hot takes</span>
           </div>
         </div>
@@ -607,9 +693,8 @@ function RapidFire({
         <button
           className="rapid__again"
           onClick={() => {
-            setIndex(0);
-            setStreak(0);
-            setStats({ made: 0, hot: 0, best: 0 });
+            setPairs(buildSessionPairs());
+            setHistory([]);
           }}
           type="button"
         >
@@ -655,7 +740,7 @@ function RapidFire({
               className="rapid__shot"
               fallbackClassName="rapid__shot-fallback"
               imageClassName="rapid__shot-image"
-              player={toPlayer(row.playerId, bootstrap.players)}
+              player={boardPlayer(row, playerCatalog)}
             />
             <span className="rapid__name">{row.name}</span>
             <span className="rapid__meta">
@@ -670,7 +755,7 @@ function RapidFire({
       {reveal ? (
         <p className={`rapid__reveal rapid__reveal--${reveal.kind}`}>{reveal.text}</p>
       ) : (
-        <p className="rapid__keys" aria-hidden="true">Tap a card, or use ← / → keys</p>
+        <p className="rapid__keys" aria-hidden="true">Tap, or ← / → · ⌫ to go back</p>
       )}
 
       <div className="rapid__conviction">
@@ -686,16 +771,19 @@ function RapidFire({
         ))}
       </div>
 
-      <button
-        className="rapid__skip"
-        onClick={() => {
-          setStreak(0);
-          setIndex((i) => i + 1);
-        }}
-        type="button"
-      >
-        Skip, no read
-      </button>
+      <div className="rapid__foot">
+        <button
+          className="rapid__back"
+          disabled={history.length === 0 || picked !== null}
+          onClick={goBack}
+          type="button"
+        >
+          ← Go back
+        </button>
+        <button className="rapid__skip" disabled={picked !== null} onClick={skip} type="button">
+          Skip, no read
+        </button>
+      </div>
     </div>
   );
 }
@@ -705,7 +793,8 @@ function RapidFire({
 function BoardView({
   board,
   overlay,
-  bootstrap,
+  flags,
+  playerCatalog,
   position,
   setPosition,
   effective,
@@ -717,10 +806,12 @@ function BoardView({
   setExpanded,
   setPlayerBase,
   clearPlayer,
+  toggleFlag,
 }: {
   board: BoardRow[];
   overlay: Record<string, { base?: number }>;
-  bootstrap: NonNullable<ReturnType<typeof useLeagueConnection>['bootstrap']>;
+  flags: Record<string, 'high' | 'low'>;
+  playerCatalog?: Parameters<typeof toPlayer>[1];
   position: (typeof BOARD_POSITIONS)[number];
   setPosition: (p: (typeof BOARD_POSITIONS)[number]) => void;
   effective: (row: BoardRow) => number;
@@ -732,6 +823,7 @@ function BoardView({
   setExpanded: (id: string | null) => void;
   setPlayerBase: (id: string, base: number | null) => void;
   clearPlayer: (id: string) => void;
+  toggleFlag: (id: string, kind: 'high' | 'low') => void;
 }) {
   // Order by GOD rating: Overall is everyone (DEF/K sink on their own), a
   // position tab is just that position. Recomputes when the model changes.
@@ -788,6 +880,7 @@ function BoardView({
           const drift = god - francoGodOf(row);
           const total = effTotalOf(row);
           const isOpen = expanded === row.playerId;
+          const flag = flags[row.playerId] ?? null;
           return (
             <div className="myboard__item" key={row.playerId}>
               <button
@@ -800,12 +893,23 @@ function BoardView({
                   className="myboard__shot"
                   fallbackClassName="myboard__shot-fallback"
                   imageClassName="myboard__shot-image"
-                  player={toPlayer(row.playerId, bootstrap.players)}
+                  player={boardPlayer(row, playerCatalog)}
                 />
                 <span className="myboard__playercopy">
                   <span className="myboard__name">{row.name}</span>
                   <span className="myboard__meta">
                     {row.position} · {row.team}
+                    {flag ? (
+                      <span
+                        className={
+                          flag === 'high'
+                            ? 'myboard__flag myboard__flag--high'
+                            : 'myboard__flag myboard__flag--low'
+                        }
+                      >
+                        {flag === 'high' ? 'Too high' : 'Too low'}
+                      </span>
+                    ) : null}
                   </span>
                 </span>
                 <span className="myboard__nums">
@@ -844,8 +948,10 @@ function BoardView({
                   value={value}
                   god={god}
                   godScale={godScale}
+                  flag={flag}
                   onSet={(v) => setPlayerBase(row.playerId, v)}
                   onReset={() => clearPlayer(row.playerId)}
+                  onToggleFlag={(kind) => toggleFlag(row.playerId, kind)}
                 />
               ) : null}
             </div>
@@ -861,15 +967,19 @@ function Dial({
   value,
   god,
   godScale,
+  flag,
   onSet,
   onReset,
+  onToggleFlag,
 }: {
   row: BoardRow;
   value: number;
   god: number;
   godScale: ReturnType<typeof buildGodScale>;
+  flag: 'high' | 'low' | null;
   onSet: (v: number) => void;
   onReset: () => void;
+  onToggleFlag: (kind: 'high' | 'low') => void;
 }) {
   // The slider is GOD-native: you drag the rating, and the implied projection
   // (what the engine actually prices off) is backed out from it.
@@ -923,6 +1033,22 @@ function Dial({
         </span>
         <button className="dial__reset" onClick={onReset} type="button">
           Reset to Franco
+        </button>
+      </div>
+      <div className="dial__flags" role="group" aria-label={`Flag ${row.name} for review`}>
+        <button
+          className={flag === 'high' ? 'dial__flag dial__flag--on dial__flag--high' : 'dial__flag'}
+          onClick={() => onToggleFlag('high')}
+          type="button"
+        >
+          Too high
+        </button>
+        <button
+          className={flag === 'low' ? 'dial__flag dial__flag--on dial__flag--low' : 'dial__flag'}
+          onClick={() => onToggleFlag('low')}
+          type="button"
+        >
+          Too low
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
+import { PROVIDER_LABEL } from '../../utils/provider';
 import './WelcomeCard.css';
 
 interface WelcomeCardProps {
@@ -8,7 +9,8 @@ interface WelcomeCardProps {
 }
 
 export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
-  const { bootstrap } = useLeagueConnection();
+  const { bootstrap, stored } = useLeagueConnection();
+  const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : null;
 
   useEffect(() => {
     if (!isOpen) {
@@ -42,8 +44,8 @@ export function WelcomeCard({ isOpen, onDismiss }: WelcomeCardProps) {
         </h2>
         <p className="welcome-card__replay-note">
           {bootstrap
-            ? `Synced to ${bootstrap.league.name}, live Sleeper data`
-            : 'Live Sleeper data, refreshed all week'}
+            ? `Synced to ${bootstrap.league.name}, live ${providerLabel ?? 'fantasy'} data`
+            : 'Live synced league data, refreshed all week'}
         </p>
 
         <div className="welcome-card__sections">

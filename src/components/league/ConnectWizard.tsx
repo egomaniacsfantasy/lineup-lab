@@ -26,6 +26,8 @@ type Step =
   | {
       name: 'confirm';
       user: ProviderUser;
+      season: string;
+      leagues: ApiLeagueSummary[];
       league: ApiLeagueSummary;
       bootstrap: LeagueBootstrap;
       allLeagueIds: string[];
@@ -59,14 +61,22 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
   const pickLeague = async (
     user: ProviderUser,
     league: ApiLeagueSummary,
-    allLeagueIds: string[],
+    leagues: ApiLeagueSummary[],
   ) => {
     setIsLoading(true);
     setError(null);
 
     try {
       const bootstrap = await fetchBootstrap(league.id, user.id);
-      setStep({ name: 'confirm', user, league, bootstrap, allLeagueIds });
+      setStep({
+        name: 'confirm',
+        user,
+        season: league.season,
+        leagues,
+        league,
+        bootstrap,
+        allLeagueIds: leagues.map((entry) => entry.id),
+      });
     } catch (caught) {
       setError(
         caught instanceof LeagueApiError
@@ -115,7 +125,7 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
           </div>
 
           <p className="connect-wizard__note">
-            ESPN and Yahoo are coming later. Sleeper first.
+            Sleeper connects here by username. ESPN starts from the provider chooser.
           </p>
         </form>
       ) : null}
@@ -132,9 +142,7 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
               className="connect-wizard__league-row"
               disabled={isLoading}
               key={league.id}
-              onClick={() =>
-                void pickLeague(step.user, league, step.leagues.map((l) => l.id))
-              }
+              onClick={() => void pickLeague(step.user, league, step.leagues)}
               type="button"
             >
               <span className="connect-wizard__league-name">{league.name}</span>
@@ -164,8 +172,8 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
             setStep({
               name: 'pick-league',
               user: step.user,
-              season: step.league.season,
-              leagues: [step.league],
+              season: step.season,
+              leagues: step.leagues,
             })
           }
           onConfirm={() =>

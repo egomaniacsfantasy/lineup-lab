@@ -15,11 +15,19 @@ import {
   toScheduleItems,
 } from '../adapters/connectedLeague';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
+import { formatAmericanOdds } from '../utils/formatOdds';
+import { shareText } from '../utils/share';
 import './SeasonPage.css';
 
 export function SeasonPage() {
-  const { bootstrap, schedule, pricing } = useLeagueConnection();
+  const { stored, bootstrap, schedule, pricing, isLoading, error } = useLeagueConnection();
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const handleShareDraftWrapped = async () =>
+    shareText({
+      title: 'Olympus draft wrapped',
+      text: `${MOCK_DRAFT_WRAPPED.teamName}: ${MOCK_DRAFT_WRAPPED.rosterGrade} draft grade, ${formatAmericanOdds(MOCK_DRAFT_WRAPPED.championshipOdds)} title odds, and the boldest pick was ${MOCK_DRAFT_WRAPPED.boldestPick.player.shortName} at ${MOCK_DRAFT_WRAPPED.boldestPick.pickNumber}.`,
+      url: window.location.href,
+    });
 
   const connectedSeason = useMemo(() => {
     if (!bootstrap) return null;
@@ -50,6 +58,18 @@ export function SeasonPage() {
     [],
   );
 
+  if (stored && !bootstrap) {
+    return (
+      <div className="season-page">
+        <h1 className="visually-hidden">Season futures</h1>
+        <SeasonalNotice>
+          {isLoading
+            ? 'Syncing your season outlook…'
+            : error ?? "We couldn't load this league's season outlook right now."}
+        </SeasonalNotice>
+      </div>
+    );
+  }
 
   if (connectedSeason && connectedSeason.userRow) {
     const { userTeam, userRow, rank, scheduleItems } = connectedSeason;
@@ -138,7 +158,7 @@ export function SeasonPage() {
 
       <DraftWrappedCard
         draftWrapped={MOCK_DRAFT_WRAPPED}
-        onShare={() => {}}
+        onShare={handleShareDraftWrapped}
       />
 
       <ScheduleGrid

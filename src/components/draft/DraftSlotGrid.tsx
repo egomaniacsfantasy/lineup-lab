@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import type { DraftSlotResult, LeagueStyle } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
+import type { ShareResult } from '../../utils/share';
 import { LeagueStyleToggle } from './LeagueStyleToggle';
 import './DraftSlotGrid.css';
 
@@ -10,7 +11,7 @@ interface DraftSlotGridProps {
   onLeagueStyleChange: (value: LeagueStyle) => void;
   selectedPosition: number | null;
   onSelectPosition: (position: number) => void;
-  onShare: () => void;
+  onShare: () => Promise<ShareResult | void> | void;
 }
 
 function getSlotTone(position: number) {
@@ -37,12 +38,30 @@ export function DraftSlotGrid({
   onSelectPosition,
   onShare,
 }: DraftSlotGridProps) {
+  const [shareState, setShareState] = useState<'idle' | 'working' | ShareResult>('idle');
   const topCell = useMemo(
     () => draftSlotResult.slots.reduce((best, slot) =>
       slot.winProbability > best.winProbability ? slot : best,
     ),
     [draftSlotResult.slots],
   );
+
+  useEffect(() => {
+    if (shareState === 'idle' || shareState === 'working') return undefined;
+    const timer = window.setTimeout(() => setShareState('idle'), 1800);
+    return () => window.clearTimeout(timer);
+  }, [shareState]);
+
+  const handleShare = async () => {
+    if (shareState === 'working') return;
+    setShareState('working');
+    try {
+      const result = await onShare();
+      setShareState(result ?? 'shared');
+    } catch {
+      setShareState('idle');
+    }
+  };
 
   return (
     <section aria-labelledby="draft-slot-grid-title" className="draft-slot-grid">
@@ -84,8 +103,14 @@ export function DraftSlotGrid({
         ))}
       </div>
 
-      <button className="draft-slot-grid__share" onClick={onShare} type="button">
-        Share draft slot odds
+      <button className="draft-slot-grid__share" onClick={() => void handleShare()} type="button">
+        {shareState === 'working'
+          ? 'Sharing…'
+          : shareState === 'copied'
+            ? 'Copied'
+            : shareState === 'shared'
+              ? 'Shared'
+              : 'Share draft slot odds'}
       </button>
     </section>
   );

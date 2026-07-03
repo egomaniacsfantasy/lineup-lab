@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DraftWrappedData } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
+import type { ShareResult } from '../../utils/share';
 import './DraftWrappedCard.css';
 
 interface DraftWrappedCardProps {
   draftWrapped: DraftWrappedData;
-  onShare?: () => void;
+  onShare?: () => Promise<ShareResult | void> | void;
 }
 
 export function DraftWrappedCard({
@@ -13,6 +14,24 @@ export function DraftWrappedCard({
   onShare,
 }: DraftWrappedCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [shareState, setShareState] = useState<'idle' | 'working' | ShareResult>('idle');
+
+  useEffect(() => {
+    if (shareState === 'idle' || shareState === 'working') return undefined;
+    const timer = window.setTimeout(() => setShareState('idle'), 1800);
+    return () => window.clearTimeout(timer);
+  }, [shareState]);
+
+  const handleShare = async () => {
+    if (!onShare || shareState === 'working') return;
+    setShareState('working');
+    try {
+      const result = await onShare();
+      setShareState(result ?? 'shared');
+    } catch {
+      setShareState('idle');
+    }
+  };
 
   return (
     <section aria-labelledby="draft-wrapped-title" className="draft-wrapped-card">
@@ -78,10 +97,16 @@ export function DraftWrappedCard({
       <div className="draft-wrapped-card__actions">
         <button
           className="draft-wrapped-card__share"
-          onClick={onShare}
+          onClick={() => void handleShare()}
           type="button"
         >
-          Share your draft
+          {shareState === 'working'
+            ? 'Sharing…'
+            : shareState === 'copied'
+              ? 'Copied'
+              : shareState === 'shared'
+                ? 'Shared'
+                : 'Share your draft'}
         </button>
         <button
           aria-expanded={isExpanded}

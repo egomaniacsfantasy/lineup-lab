@@ -5,6 +5,8 @@ import { PlayerAvailability } from '../components/draft/PlayerAvailability';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { useSeasonMode } from '../hooks/useSeasonMode';
 import type { DraftSlotResult, LeagueStyle } from '../types';
+import { formatAmericanOdds } from '../utils/formatOdds';
+import { shareText } from '../utils/share';
 import {
   MOCK_CONSENSUS_RANKINGS,
   MOCK_DRAFT_SLOT_ODDS,
@@ -65,6 +67,19 @@ export function DraftPage() {
     () => deriveDraftSlotOdds(leagueStyle),
     [leagueStyle],
   );
+  const selectedSlot = slotOdds.slots.find((slot) => slot.position === selectedPosition) ?? null;
+  const bestSlot = slotOdds.slots.reduce((best, slot) =>
+    slot.winProbability > best.winProbability ? slot : best,
+  );
+
+  const handleShareDraftSlots = async () =>
+    shareText({
+      title: 'Olympus draft slot odds',
+      text: selectedSlot
+        ? `Olympus draft slot odds (${leagueStyle}): pick #${selectedSlot.position} prices at ${formatAmericanOdds(selectedSlot.championshipOdds)} with a ${selectedSlot.winProbability.toFixed(1)}% title chance. Best slot right now is #${bestSlot.position} at ${formatAmericanOdds(bestSlot.championshipOdds)}.`
+        : `Olympus draft slot odds (${leagueStyle}): best slot right now is #${bestSlot.position} at ${formatAmericanOdds(bestSlot.championshipOdds)} with a ${bestSlot.winProbability.toFixed(1)}% title chance.`,
+      url: window.location.href,
+    });
 
   return (
     <div className="draft-page">
@@ -81,7 +96,7 @@ export function DraftPage() {
         leagueStyle={leagueStyle}
         onLeagueStyleChange={setLeagueStyle}
         onSelectPosition={setSelectedPosition}
-        onShare={() => {}}
+        onShare={handleShareDraftSlots}
         selectedPosition={selectedPosition}
       />
 

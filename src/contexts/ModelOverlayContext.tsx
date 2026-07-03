@@ -168,9 +168,6 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
         if (cancelled || error) return;
         const rows = data ?? [];
         if (rows.length === 0) {
-          // First login: push whatever's local up to the account.
-          const local = stateRef.current;
-          persistRemote(local.sets, local.activeId);
           return;
         }
         const sets: ModelSet[] = rows.map((r) => ({

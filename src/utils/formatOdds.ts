@@ -28,7 +28,7 @@ export function formatAmericanOdds(odds: number): string {
 
   if (currentFormat === 'percent') {
     const p = impliedProbability(rounded <= -101 || rounded >= 100 ? rounded : 100);
-    return `${p >= 99.5 ? p.toFixed(1) : p < 1 ? p.toFixed(1) : p.toFixed(0)}%`;
+    return `${p.toFixed(1)}%`;
   }
 
   if (rounded >= 100) {

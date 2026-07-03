@@ -50,10 +50,10 @@ export function LeagueSettings({
 
           <div className="league-settings__actions">
             <button className="league-settings__action league-settings__action--primary" onClick={onSwitchLeague} type="button">
-              Switch league
+              Connect or reconnect league
             </button>
             <button className="league-settings__action" onClick={onDisconnect} type="button">
-              Disconnect
+              Disconnect this league
             </button>
           </div>
         </div>

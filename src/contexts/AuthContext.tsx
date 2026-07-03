@@ -21,6 +21,10 @@ interface AuthValue {
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
+const ACCOUNT_SCOPED_STORAGE_KEYS = [
+  'og.olympus.connected-league',
+  'og.olympus.model-overlay',
+] as const;
 
 function friendlyError(message: string): string {
   if (/already registered|already exists/i.test(message)) {
@@ -65,6 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    for (const key of ACCOUNT_SCOPED_STORAGE_KEYS) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        // ignore storage failures in private mode
+      }
+    }
   }, []);
 
   const value = useMemo<AuthValue>(

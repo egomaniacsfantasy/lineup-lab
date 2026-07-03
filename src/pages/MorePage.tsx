@@ -3,6 +3,7 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useSeasonMode } from '../hooks/useSeasonMode';
+import { PROVIDER_LABEL } from '../utils/provider';
 import './MorePage.css';
 
 const MORE_LINKS = [
@@ -27,6 +28,7 @@ export function MorePage() {
   const { mode } = useSeasonMode();
   const { bootstrap, stored } = useLeagueConnection();
   const { user, signOut } = useAuth();
+  const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : null;
 
   return (
     <div className="more-page">
@@ -59,8 +61,8 @@ export function MorePage() {
           <>
             <h2 className="more-page__title">{bootstrap.league.name}</h2>
             <p className="more-page__body">
-              Synced from Sleeper as {stored?.displayName ?? 'you'}. Manage or
-              switch leagues on the{' '}
+              Synced from {providerLabel ?? 'your platform'} as{' '}
+              {stored?.displayName ?? 'you'}. Manage or switch leagues on the{' '}
               <Link className="more-page__inline-link" to="/league">
                 League tab
               </Link>
@@ -69,13 +71,13 @@ export function MorePage() {
           </>
         ) : (
           <>
-            <h2 className="more-page__title">Connect your Sleeper league</h2>
+            <h2 className="more-page__title">Connect a league</h2>
             <p className="more-page__body">
-              You&apos;re on the demo league. One username connects your real
-              rosters, matchups, and standings. Read-only, no password.
+              You&apos;re on the demo league. Pick Sleeper or ESPN to bring in your
+              real rosters, matchups, and standings. Read-only, no password.
             </p>
             <Link className="more-page__connect-cta" to="/league#connect">
-              Connect with Sleeper
+              Choose a provider
             </Link>
           </>
         )}

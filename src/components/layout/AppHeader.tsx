@@ -5,6 +5,7 @@ import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { MOCK_MATCHUP } from '../../mocks';
 import type { ScoringFormat } from '../../types';
+import { PROVIDER_LABEL } from '../../utils/provider';
 import { Gloss } from '../ui/Gloss';
 import { AccountMenu } from './AccountMenu';
 import './AppHeader.css';
@@ -27,13 +28,16 @@ const STATE_LABELS: Record<string, (season: string, week: number) => string> = {
 
 export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   const { mode, seasonState, season, nflWeek } = useSeasonMode();
-  const { bootstrap, refresh } = useLeagueConnection();
+  const { bootstrap, refresh, stored, isLoading, error } = useLeagueConnection();
   const { format, toggleFormat } = useOddsFormat();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isSynced = bootstrap !== null;
+  const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : 'your league host';
   const scoringLabel = isSynced
     ? SCORING_LABELS[bootstrap.league.scoringFamily]
-    : SCORING_LABELS[MOCK_MATCHUP.scoringFormat];
+    : stored
+      ? '...'
+      : SCORING_LABELS[MOCK_MATCHUP.scoringFormat];
   const displayedWeek = isSynced ? Math.max(bootstrap.week, nflWeek) : Math.max(1, nflWeek);
   const stateLabel = (STATE_LABELS[seasonState] ?? STATE_LABELS.IN_SEASON)(
     season,
@@ -41,15 +45,19 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   );
   // Trade tools are redraft-only for now; hide the tab in dynasty/keeper.
   const hideTrade = isSynced && bootstrap.league.leagueType !== 'redraft';
-  const navItems = [
-    { label: 'Matchup', path: '/matchup' },
-    { label: 'Season', path: '/season' },
-    ...(hideTrade ? [] : [{ label: 'Trade', path: '/trade' }]),
-    { label: 'My Board', path: '/rankings' },
-    { label: 'Projections', path: '/projections' },
-    { label: 'League', path: '/league' },
-    { label: 'More', path: '/more' },
-  ];
+  const navItems = stored
+    ? [
+        { label: 'Matchup', path: '/matchup' },
+        { label: 'Season', path: '/season' },
+        ...(hideTrade ? [] : [{ label: 'Trade', path: '/trade' }]),
+        { label: 'My Board', path: '/rankings' },
+        { label: 'Projections', path: '/projections' },
+        { label: 'League', path: '/league' },
+        { label: 'More', path: '/more' },
+      ]
+    : [{ label: 'Connect', path: '/connect' }];
+  const showSyncing = stored && !bootstrap && isLoading;
+  const showSyncIssue = stored && !bootstrap && !isLoading && Boolean(error);
 
   return (
     <header className="app-header">
@@ -110,7 +118,7 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
                 setIsRefreshing(true);
                 void refresh().finally(() => setIsRefreshing(false));
               }}
-              title={`Last synced ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}. Click to pull the latest from Sleeper.`}
+              title={`Last synced ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}. Click to pull the latest from ${providerLabel}.`}
               type="button"
             >
               <svg
@@ -129,6 +137,20 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
               <span className="app-header__sync-label">
                 {isRefreshing ? 'Syncing' : 'Synced'}
               </span>
+            </button>
+          ) : showSyncing ? (
+            <span className="app-header__replay-chip">Syncing</span>
+          ) : showSyncIssue ? (
+            <button
+              className="app-header__sync"
+              onClick={() => {
+                setIsRefreshing(true);
+                void refresh().finally(() => setIsRefreshing(false));
+              }}
+              title={error ?? 'We could not reload this league. Try syncing again.'}
+              type="button"
+            >
+              <span className="app-header__sync-label">Sync issue</span>
             </button>
           ) : (
             <span className="app-header__replay-chip">Not synced</span>

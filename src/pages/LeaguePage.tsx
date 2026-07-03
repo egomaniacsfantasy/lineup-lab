@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
+import { EspnConnect } from '../components/league/EspnConnect';
 import { LeagueFutures } from '../components/league/LeagueFutures';
 import { LeagueSettings } from '../components/league/LeagueSettings';
 import { MatchupSlate } from '../components/league/MatchupSlate';
@@ -19,7 +20,17 @@ import {
   MOCK_TRADE_TARGET_GROUPS,
   MOCK_WEEK_MATCHUPS,
 } from '../mocks';
+import { PROVIDER_LABEL } from '../utils/provider';
+import './ConnectPage.css';
 import './LeaguePage.css';
+
+type ConnectFlow = 'none' | 'sleeper' | 'espn';
+
+function flowFromHash(hash: string): ConnectFlow | null {
+  if (hash === '#connect-sleeper') return 'sleeper';
+  if (hash === '#connect-espn') return 'espn';
+  return null;
+}
 
 export function LeaguePage() {
   const { mode } = useSeasonMode();
@@ -28,8 +39,14 @@ export function LeaguePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [showWizard, setShowWizard] = useState(false);
-  // /league#connect deep-links straight into the wizard (e.g. from More).
-  const isWizardOpen = showWizard || location.hash === '#connect';
+  const [manualFlow, setManualFlow] = useState<ConnectFlow>('none');
+  const isReconnectState = Boolean(stored && !bootstrap && !isLoading && error);
+  const hasConnectHash = location.hash.startsWith('#connect');
+  const isWizardOpen =
+    showWizard || hasConnectHash || isReconnectState;
+  const flow =
+    flowFromHash(location.hash) ??
+    (showWizard || hasConnectHash || isReconnectState ? manualFlow : 'none');
 
   const connected = useMemo(() => {
     if (!bootstrap) return null;
@@ -40,18 +57,91 @@ export function LeaguePage() {
     };
   }, [bootstrap, pricing]);
 
-  if (isWizardOpen || (stored && !bootstrap && !isLoading && error)) {
+  if (isWizardOpen) {
     return (
       <div className="league-page">
         <h1 className="visually-hidden">League market</h1>
         {error ? <SeasonalNotice>{error}</SeasonalNotice> : null}
-        <ConnectWizard
-          onConnected={(connection) => {
-            connect(connection);
-            setShowWizard(false);
-            navigate('/league', { replace: true });
-          }}
-        />
+        {flow === 'none' ? (
+          <div className="connect-page">
+            <section className="connect-page__hero">
+              <p className="connect-page__kicker">
+                {isReconnectState ? 'Reconnect your league' : 'Welcome to Olympus'}
+              </p>
+              <h1 className="connect-page__title">Choose a provider</h1>
+            </section>
+
+            <div className="connect-page__providers">
+              <button
+                className="connect-page__provider connect-page__provider--live"
+                onClick={() => setManualFlow('sleeper')}
+                type="button"
+              >
+                <img
+                  alt="Sleeper"
+                  className="connect-page__provider-logo connect-page__provider-logo--sleeper"
+                  src="/providers/sleeper-logo.png"
+                />
+                <span className="connect-page__provider-action">Connect</span>
+              </button>
+
+              <button
+                className="connect-page__provider connect-page__provider--live"
+                onClick={() => setManualFlow('espn')}
+                type="button"
+              >
+                <img
+                  alt="ESPN"
+                  className="connect-page__provider-logo connect-page__provider-logo--espn"
+                  src="/providers/espn-logo.png"
+                />
+                <span className="connect-page__provider-action">Connect</span>
+              </button>
+            </div>
+
+            <p className="connect-page__demo">
+              Read-only. We never ask for your password.
+            </p>
+          </div>
+        ) : null}
+
+        {flow === 'sleeper' ? (
+          <ConnectWizard
+            onConnected={(connection) => {
+              connect(connection);
+              setManualFlow('none');
+              setShowWizard(false);
+              navigate('/league', { replace: true });
+            }}
+          />
+        ) : null}
+
+        {flow === 'espn' ? (
+          <EspnConnect
+            onConnected={(connection) => {
+              connect(connection);
+              setManualFlow('none');
+              setShowWizard(false);
+              navigate('/league', { replace: true });
+            }}
+          />
+        ) : null}
+
+        {flow !== 'none' ? (
+          <button
+            className="connect-page__back"
+            onClick={() => {
+              if (flowFromHash(location.hash) !== null) {
+                navigate('/league#connect', { replace: true });
+                return;
+              }
+              setManualFlow('none');
+            }}
+            type="button"
+          >
+            Back to providers
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -60,7 +150,9 @@ export function LeaguePage() {
     return (
       <div className="league-page">
         <h1 className="visually-hidden">League market</h1>
-        <SeasonalNotice>Syncing your league from Sleeper…</SeasonalNotice>
+        <SeasonalNotice>
+          Syncing your league from {PROVIDER_LABEL[stored.provider]}…
+        </SeasonalNotice>
       </div>
     );
   }
@@ -78,10 +170,13 @@ export function LeaguePage() {
           You&apos;re viewing the demo league.{' '}
           <button
             className="league-page__connect-link"
-            onClick={() => setShowWizard(true)}
+            onClick={() => {
+              setManualFlow('none');
+              setShowWizard(true);
+            }}
             type="button"
           >
-            Connect your Sleeper league
+            Connect a league
           </button>{' '}
           to price your real season.
         </SeasonalNotice>
@@ -122,7 +217,10 @@ export function LeaguePage() {
             // one, or to the demo prompt when none remain.
             disconnect();
           }}
-          onSwitchLeague={() => setShowWizard(true)}
+          onSwitchLeague={() => {
+            setManualFlow('none');
+            setShowWizard(true);
+          }}
         />
       </div>
     </div>

@@ -4,6 +4,7 @@ import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useModelOverlay } from '../contexts/ModelOverlayContext';
+import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { fetchLines } from '../services/leagueApi';
 import { getPlayerManifestEntry } from '../data/playerManifest';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
@@ -16,6 +17,8 @@ import {
 import { toMatchupData } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { formatAmericanOdds } from '../utils/formatOdds';
+import { PROVIDER_LABEL } from '../utils/provider';
+import { shareText, type ShareResult } from '../utils/share';
 import {
   roundTo,
   winProbabilityToMoneyline,
@@ -29,6 +32,31 @@ import type {
   RosterSlot,
 } from '../types';
 import './MatchupPage.css';
+
+const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
+
+function officialPlatformUrl({
+  provider,
+  leagueId,
+  season,
+  espnTeamId,
+}: {
+  provider: 'sleeper' | 'espn';
+  leagueId: string;
+  season?: string;
+  espnTeamId?: number | null;
+}) {
+  if (provider === 'sleeper') {
+    return `https://sleeper.com/leagues/${leagueId}`;
+  }
+
+  const seasonId = season ?? String(new Date().getFullYear());
+  const base = 'https://fantasy.espn.com/football';
+  if (espnTeamId != null) {
+    return `${base}/team?leagueId=${encodeURIComponent(leagueId)}&teamId=${espnTeamId}&seasonId=${encodeURIComponent(seasonId)}`;
+  }
+  return `${base}/league?leagueId=${encodeURIComponent(leagueId)}&seasonId=${encodeURIComponent(seasonId)}`;
+}
 
 function getBestAlternative(slot: RosterSlot) {
   return slot.alternatives.reduce<(typeof slot.alternatives)[number] | null>(
@@ -645,6 +673,21 @@ function MatchupLive({
   const engine = useMatchupEngine(matchup);
   const { stored, bootstrap } = useLeagueConnection();
   const { overrideCount } = useModelOverlay();
+  const { format: oddsFormat } = useOddsFormat();
+  const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : 'your fantasy app';
+  const userRosterId = bootstrap?.teams.find((team) => team.isUser)?.rosterId ?? null;
+  const officialUrl = stored
+    ? officialPlatformUrl({
+        provider: stored.provider,
+        leagueId: stored.leagueId,
+        season: stored.season,
+        espnTeamId: stored.provider === 'espn' ? userRosterId : null,
+      })
+    : null;
+  const formatDisplayedOdds = (moneyline: number, winProbability?: number) =>
+    oddsFormat === 'percent' && winProbability != null
+      ? `${winProbability.toFixed(1)}%`
+      : formatAmericanOdds(moneyline);
 
   // When the user's model is live, fetch the pure-Franco (house) line for the
   // same matchup so we can show it as the quiet baseline ("Franco +154").
@@ -668,11 +711,9 @@ function MatchupLive({
     };
   }, [stored, bootstrap, overrideCount]);
 
-  // A "preview" lineup: you've swapped someone in here but not in Sleeper, so
-  // every number below is hypothetical until you make it official.
-  const isPreview =
-    isConnected &&
-    Object.values(engine.selectedAlternatives).some((value) => value !== null);
+  // A "preview" lineup: you've swapped someone in here, so every number below
+  // is hypothetical until you reset it or make it official in your platform.
+  const isPreview = Object.values(engine.selectedAlternatives).some((value) => value !== null);
   const resetPreview = () =>
     Object.keys(engine.selectedAlternatives).forEach((key) =>
       engine.selectPlayer(Number(key), null),
@@ -689,7 +730,11 @@ function MatchupLive({
   const [compareSelection, setCompareSelection] = useState<Player[]>([]);
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
-  const [isRecapDismissed, setIsRecapDismissed] = useState(false);
+  const [compareSource, setCompareSource] = useState<'slip' | 'edge' | null>(null);
+  const [isRecapDismissed, setIsRecapDismissed] = useState(
+    () => window.localStorage.getItem(RECAP_DISMISSED_KEY) === 'true',
+  );
+  const [recapShareState, setRecapShareState] = useState<'idle' | 'working' | ShareResult>('idle');
 
   const playerMap = useMemo(
     () => new Map(MOCK_PLAYER_POOL.map((player) => [player.id, player])),
@@ -728,6 +773,15 @@ function MatchupLive({
   }, [topSwapEvaluation]);
 
   const exposureWindows = useMemo(() => buildExposureWindows(engine.roster), [engine.roster]);
+  useEffect(() => {
+    if (recapShareState === 'idle' || recapShareState === 'working') {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setRecapShareState('idle'), 1800);
+    return () => window.clearTimeout(timer);
+  }, [recapShareState]);
+
   const downsideLine = useMemo(() => {
     const nextWindow = exposureWindows[0];
 
@@ -761,17 +815,27 @@ function MatchupLive({
   }, [compareModalPlayers, engine]);
 
   const handleShareRecap = async () => {
-    const text = 'You closed at -180 and won by 12. Best call: London over Smith, +17.5 pts.';
-
-    if (navigator.share) {
-      await navigator.share({
-        title: 'Olympus recap',
-        text,
-      });
+    if (recapShareState === 'working') {
       return;
     }
 
-    await navigator.clipboard.writeText(text);
+    const text = 'You closed at -180 and won by 12. Best call: London over Smith, +17.5 pts.';
+    setRecapShareState('working');
+
+    try {
+      const result = await shareText({
+        title: 'Olympus recap',
+        text,
+      });
+      setRecapShareState(result);
+    } catch {
+      setRecapShareState('idle');
+    }
+  };
+
+  const dismissRecap = () => {
+    window.localStorage.setItem(RECAP_DISMISSED_KEY, 'true');
+    setIsRecapDismissed(true);
   };
 
   // Compare any two players at a similar position: same position always, and
@@ -809,6 +873,7 @@ function MatchupLive({
   // four players get a ranked board (projection is the honest currency
   // once you're past a single swap decision).
   const openVerdict = () => {
+    setCompareSource('slip');
     if (compareSelection.length === 2) {
       setCompareModalPlayers([compareSelection[0], compareSelection[1]]);
     } else if (compareSelection.length >= 3) {
@@ -821,14 +886,30 @@ function MatchupLive({
   const closeVerdict = () => {
     setCompareModalPlayers(null);
     setCompareBoardPlayers(null);
+    setCompareSource(null);
     setCompareSelection((current) => current.slice(0, 1));
   };
 
   const exitCompare = () => {
     setCompareModalPlayers(null);
     setCompareBoardPlayers(null);
+    setCompareSource(null);
     setCompareSelection([]);
     setIsCompareMode(false);
+  };
+
+  const closeEdgeInspect = () => {
+    setCompareModalPlayers(null);
+    setCompareSource(null);
+  };
+
+  const inspectBiggestEdge = () => {
+    if (!biggestSwing) return;
+    setIsCompareMode(false);
+    setCompareSelection([]);
+    setCompareBoardPlayers(null);
+    setCompareSource('edge');
+    setCompareModalPlayers([biggestSwing.starter, biggestSwing.alternative]);
   };
 
   const removePick = (playerId: string) => {
@@ -950,8 +1031,9 @@ function MatchupLive({
           <div className="matchup-page__preview-banner" role="status">
             <span className="matchup-page__preview-dot" aria-hidden="true" />
             <span>
-              Previewing a lineup change. You will need to update your lineup
-              in Sleeper to reflect these changes.
+              {isConnected
+                ? `Previewing a lineup change. You will need to update your lineup in ${providerLabel} to reflect these changes.`
+                : 'Previewing a lineup change. This is a hypothetical demo lineup until you reset it.'}
             </span>
             <button
               className="matchup-page__preview-reset"
@@ -1005,13 +1087,17 @@ function MatchupLive({
                 </div>
               </div>
               <span className="matchup-page__hero-number">
-                {formatAmericanOdds(engine.activeLine.yours.moneyline)}
+                {formatDisplayedOdds(
+                  engine.activeLine.yours.moneyline,
+                  engine.activeLine.yours.winProbability,
+                )}
               </span>
               {overrideCount > 0 &&
               houseYours &&
               houseYours.moneyline !== engine.activeLine.yours.moneyline ? (
                 <p className="matchup-page__house-line">
-                  Franco {formatAmericanOdds(houseYours.moneyline)}
+                  Franco{' '}
+                  {formatDisplayedOdds(houseYours.moneyline, houseYours.winProbability)}
                 </p>
               ) : null}
               <p className="matchup-page__meta-copy">
@@ -1041,7 +1127,10 @@ function MatchupLive({
                 </div>
               </div>
               <span className="matchup-page__hero-number matchup-page__hero-number--opp">
-                {formatAmericanOdds(engine.activeLine.opponent.moneyline)}
+                {formatDisplayedOdds(
+                  engine.activeLine.opponent.moneyline,
+                  engine.activeLine.opponent.winProbability,
+                )}
               </span>
               <p className="matchup-page__meta-copy">
                 Proj{' '}
@@ -1161,6 +1250,9 @@ function MatchupLive({
               </span>
             </div>
             <div className="matchup-page__edge-actions">
+              <button className="matchup-page__row-action" onClick={inspectBiggestEdge} type="button">
+                Inspect why
+              </button>
               <button
                 className="matchup-page__row-action"
                 onClick={() =>
@@ -1171,14 +1263,18 @@ function MatchupLive({
                 Preview the swap
               </button>
               {stored ? (
-                <a
-                  className="matchup-page__text-link"
-                  href={`https://sleeper.com/leagues/${stored.leagueId}`}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Make it official in Sleeper ↗
-                </a>
+                officialUrl ? (
+                  <a
+                    className="matchup-page__text-link"
+                    href={officialUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {`Make it official in ${PROVIDER_LABEL[stored.provider]} ↗`}
+                  </a>
+                ) : (
+                  <span className="matchup-page__text-link">{`Make it official in ${PROVIDER_LABEL[stored.provider]}`}</span>
+                )
               ) : null}
             </div>
           </section>
@@ -1424,9 +1520,15 @@ function MatchupLive({
             </p>
             <div className="matchup-page__recap-actions">
               <button className="matchup-page__text-link" onClick={() => void handleShareRecap()} type="button">
-                Share
+                {recapShareState === 'working'
+                  ? 'Sharing…'
+                  : recapShareState === 'copied'
+                    ? 'Copied'
+                    : recapShareState === 'shared'
+                      ? 'Shared'
+                      : 'Share'}
               </button>
-              <button className="matchup-page__text-link" onClick={() => setIsRecapDismissed(true)} type="button">
+              <button className="matchup-page__text-link" onClick={dismissRecap} type="button">
                 Dismiss
               </button>
             </div>
@@ -1561,7 +1663,7 @@ function MatchupLive({
         <CompareSheet
           comparison={compareResult}
           leftPlayer={compareModalPlayers[0]}
-          onClose={closeVerdict}
+          onClose={compareSource === 'slip' ? closeVerdict : closeEdgeInspect}
           rightPlayer={compareModalPlayers[1]}
           userWinProbability={engine.activeLine.yours.winProbability}
           tapeNote={(() => {
@@ -1692,7 +1794,20 @@ function CompareBoard({
 }
 
 export function MatchupPage() {
-  const { bootstrap, pricing, lineHistory } = useLeagueConnection();
+  const { stored, bootstrap, pricing, lineHistory, isLoading, error } = useLeagueConnection();
+
+  if (stored && !bootstrap) {
+    return (
+      <div className="matchup-page">
+        <h1 className="visually-hidden">The Olympus matchup screen</h1>
+        <SeasonalNotice>
+          {isLoading
+            ? `Syncing your ${PROVIDER_LABEL[stored.provider]} league…`
+            : error ?? `We couldn't load your ${PROVIDER_LABEL[stored.provider]} league right now.`}
+        </SeasonalNotice>
+      </div>
+    );
+  }
 
   const lineMovement = (() => {
     if (!bootstrap || !lineHistory || lineHistory.length < 2) return null;

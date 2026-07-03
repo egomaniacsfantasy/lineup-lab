@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import './BottomTabBar.css';
+
 const BASE_TABS = [
   {
     label: 'Matchup',
@@ -77,14 +78,25 @@ const BASE_TABS = [
 ];
 
 export function BottomTabBar() {
-  const { bootstrap } = useLeagueConnection();
+  const { bootstrap, stored } = useLeagueConnection();
   // The trade tools price redraft value; they don't fit dynasty/keeper yet.
   const hideTrade = bootstrap != null && bootstrap.league.leagueType !== 'redraft';
-  const tabs = hideTrade ? BASE_TABS.filter((t) => t.path !== '/trade') : BASE_TABS;
+  const tabs = stored
+    ? hideTrade
+      ? BASE_TABS.filter((t) => t.path !== '/trade')
+      : BASE_TABS
+    : BASE_TABS.filter((t) => t.path === '/league').map((tab) => ({
+        ...tab,
+        label: 'Connect',
+        path: '/connect',
+      }));
 
   return (
     <nav className="bottom-tab-bar" aria-label="Primary">
-      <div className="bottom-tab-bar__grid">
+      <div
+        className="bottom-tab-bar__grid"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      >
         {tabs.map((tab) => (
           <NavLink
             key={tab.path}

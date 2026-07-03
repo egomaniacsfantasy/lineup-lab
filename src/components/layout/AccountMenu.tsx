@@ -3,12 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
+import { PROVIDER_LABEL } from '../../utils/provider';
 import './AccountMenu.css';
-
-const PROVIDER_LABEL: Record<StoredConnection['provider'], string> = {
-  sleeper: 'Sleeper',
-  espn: 'ESPN',
-};
 
 function leagueLabel(league: StoredConnection, activeName?: string | null) {
   return (
@@ -111,7 +107,7 @@ export function AccountMenu() {
                       .join(' ')}
                     key={`${league.provider}:${league.leagueId}`}
                     onClick={() => {
-                      if (!isActive) switchLeague(league.leagueId);
+                      if (!isActive) switchLeague(league.provider, league.leagueId);
                       setOpen(false);
                     }}
                     role="menuitemradio"

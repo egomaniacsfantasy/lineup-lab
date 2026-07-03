@@ -108,7 +108,7 @@ function rosterRows(bootstrap: LeagueBootstrap, rosterId: number) {
 }
 
 export function TradePage() {
-  const { bootstrap, stored, pricing } = useLeagueConnection();
+  const { bootstrap, stored, pricing, isLoading, error } = useLeagueConnection();
 
   const userTeam = bootstrap?.teams.find((t) => t.isUser) ?? null;
   const partners = useMemo(
@@ -151,6 +151,19 @@ export function TradePage() {
 
   // Connected leagues get the Trade Command Center; the mock targets are
   // demo-only and never render next to a real roster.
+  if (stored && !bootstrap) {
+    return (
+      <div className="trade-page">
+        <h1 className="visually-hidden">Trade Command Center</h1>
+        <SeasonalNotice>
+          {isLoading
+            ? 'Syncing your trade board…'
+            : error ?? "We couldn't load your league context for trades right now."}
+        </SeasonalNotice>
+      </div>
+    );
+  }
+
   if (!bootstrap || !userTeam || !stored) {
     return (
       <div className="trade-page">

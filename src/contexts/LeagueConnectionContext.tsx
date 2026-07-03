@@ -71,7 +71,7 @@ interface LeagueConnectionValue {
   isLoading: boolean;
   error: string | null;
   connect: (connection: StoredConnection) => void;
-  switchLeague: (leagueId: string) => void;
+  switchLeague: (provider: StoredConnection['provider'], leagueId: string) => void;
   disconnect: () => void;
   refresh: () => Promise<void>;
 }
@@ -176,12 +176,19 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
         if (cancelled) return;
         const rows = (data ?? []) as DbLeagueRow[];
         if (rows.length === 0) {
-          // First login on this account: migrate a league synced before sign-in.
-          const local = readStored();
-          if (local) {
-            void saveLeagueRow(user.id, local);
-            setLeagues([local]);
+          applyApiContext(null);
+          try {
+            window.localStorage.removeItem(STORAGE_KEY);
+          } catch {
+            // ignore
           }
+          setLeagues([]);
+          setStored(null);
+          setBootstrap(null);
+          setSchedule(null);
+          setPricing(null);
+          setLineHistory(null);
+          setError(null);
           return;
         }
         const all = rows.map(rowToConnection);
@@ -277,8 +284,10 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
 
   // Switch the active league to another one already saved on the account.
   const switchLeague = useCallback(
-    (leagueId: string) => {
-      const target = leagues.find((l) => l.leagueId === leagueId);
+    (provider: StoredConnection['provider'], leagueId: string) => {
+      const target = leagues.find(
+        (l) => l.provider === provider && l.leagueId === leagueId,
+      );
       if (!target || (stored && leagueKey(target) === leagueKey(stored))) return;
       activateLocal(target);
       if (userIdRef.current) void activateLeagueRow(userIdRef.current, target);
