@@ -646,14 +646,6 @@ function computeMovers(ctx) {
     );
     return team.players.filter((id) => !teamStarters.has(id) && projectionMap.has(id));
   };
-  const startersOf = (team) => {
-    const ids = matchups.find((m) => m.rosterId === team.rosterId)?.starters?.length
-      ? matchups.find((m) => m.rosterId === team.rosterId).starters
-      : team.starters;
-    return ids.map((id, i) => ({ id, slot: slotLabels[i] ?? 'FLEX', mean: projectionMap.get(id)?.mean ?? 0 }));
-  };
-
-  const userStarters = startersOf(userTeam);
 
   // Only skill positions trade, and value bands must match: no kicker-for-WR1.
   const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
@@ -675,17 +667,11 @@ function computeMovers(ctx) {
   for (const opp of teams) {
     if (opp.rosterId === userTeam.rosterId) continue;
     const oppBench = benchOf(opp);
-    const oppStarters = startersOf(opp);
 
     for (const giveId of benchOf(userTeam)) {
       const give = projectionMap.get(giveId);
       if (!TRADEABLE.includes(give.position)) continue;
       if (!canSpare(userTeam, give.position)) continue; // keep a backup
-      const oppWeakest = oppStarters
-        .filter((st) => (FLEX_ELIGIBILITY[st.slot] ?? [st.slot]).includes(give.position))
-        .sort((a, b) => a.mean - b.mean)[0];
-      const oppGain = oppWeakest ? give.mean - oppWeakest.mean : -1;
-      if (oppGain <= 0.5) continue;
 
       for (const getId of oppBench) {
         const get = projectionMap.get(getId);
@@ -693,11 +679,24 @@ function computeMovers(ctx) {
         if (get.position === give.position) continue; // cross-position only
         if (!canSpare(opp, get.position)) continue; // they keep a backup too
         if (!sameValueBand(give, get)) continue;
-        const userWeakest = userStarters
-          .filter((st) => (FLEX_ELIGIBILITY[st.slot] ?? [st.slot]).includes(get.position))
-          .sort((a, b) => a.mean - b.mean)[0];
-        const userGain = userWeakest ? get.mean - userWeakest.mean : -1;
-        if (userGain <= 0.5) continue;
+
+        const userGain = computeStarterImpact(
+          userTeam.players,
+          userTeam.players.filter((id) => id !== giveId).concat(getId),
+          slotLabels,
+          projectionMap,
+          catalog,
+        ).delta;
+        if (userGain <= 0) continue;
+
+        const oppGain = computeStarterImpact(
+          opp.players,
+          opp.players.filter((id) => id !== getId).concat(giveId),
+          slotLabels,
+          projectionMap,
+          catalog,
+        ).delta;
+        if (oppGain <= 0) continue;
 
         lanes.push({ opp, give, get, userGain, oppGain, score: userGain + oppGain });
       }
@@ -885,6 +884,16 @@ function bestLineupDistribution(playerIds, slotLabels, projectionMap, catalog, w
   return { mean, sigma: Math.sqrt(variance), starters };
 }
 
+function computeStarterImpact(playerIdsBefore, playerIdsAfter, slotLabels, projectionMap, catalog) {
+  const before = bestLineupDistribution(playerIdsBefore, slotLabels, projectionMap, catalog, null);
+  const after = bestLineupDistribution(playerIdsAfter, slotLabels, projectionMap, catalog, null);
+  return {
+    before,
+    after,
+    delta: Number((after.mean - before.mean).toFixed(1)),
+  };
+}
+
 const FANTASY_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 
 function depthByPosition(playerIds, catalog) {
@@ -935,8 +944,22 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
 
   const userPoolAfter = user.players.filter((id) => !give.includes(id)).concat(get);
   const partnerPoolAfter = partner.players.filter((id) => !get.includes(id)).concat(give);
-  const userAfter = bestLineupDistribution(userPoolAfter, slotLabels, projectionMap, catalog, null);
-  const partnerAfter = bestLineupDistribution(partnerPoolAfter, slotLabels, projectionMap, catalog, null);
+  const userImpact = computeStarterImpact(
+    user.players,
+    userPoolAfter,
+    slotLabels,
+    projectionMap,
+    catalog,
+  );
+  const partnerImpact = computeStarterImpact(
+    partner.players,
+    partnerPoolAfter,
+    slotLabels,
+    projectionMap,
+    catalog,
+  );
+  const userAfter = userImpact.after;
+  const partnerAfter = partnerImpact.after;
 
   const futuresBefore = simulateFutures({ league, teams, distByRoster: baseDist, scheduleWeeks, week, seed });
   const afterDist = new Map(baseDist);
@@ -950,8 +973,8 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const theirBefore = find(futuresBefore, partnerRosterId);
   const theirAfter = find(futuresAfter, partnerRosterId);
 
-  const yourValueDelta = Number((userAfter.mean - baseDist.get(userRosterId).mean).toFixed(1));
-  const theirValueDelta = Number((partnerAfter.mean - baseDist.get(partnerRosterId).mean).toFixed(1));
+  const yourValueDelta = userImpact.delta;
+  const theirValueDelta = partnerImpact.delta;
 
   // Trade value = value over replacement on SEASON TOTALS, against a fixed
   // 12-team reference (a small league otherwise makes even studs replacement-

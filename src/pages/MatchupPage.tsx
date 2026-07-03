@@ -17,6 +17,10 @@ import {
 import { toMatchupData } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { formatAmericanOdds } from '../utils/formatOdds';
+import {
+  formatDisplayedWinProbabilityDelta,
+  getDisplayedWinProbabilityDelta,
+} from '../utils/matchupDelta';
 import { PROVIDER_LABEL } from '../utils/provider';
 import { shareText, type ShareResult } from '../utils/share';
 import {
@@ -473,10 +477,13 @@ function CompareSheet({
   rightPlayer,
   tapeNote = '',
   userWinProbability = 50,
+  onApply,
   onClose,
 }: {
   comparison: {
     slotIndex: number;
+    leftSelectionIndex?: number | null;
+    rightSelectionIndex?: number | null;
     leftLine: MatchupLine;
     rightLine: MatchupLine;
     leftProjection: number;
@@ -487,6 +494,7 @@ function CompareSheet({
   rightPlayer: Player;
   tapeNote?: string;
   userWinProbability?: number;
+  onApply?: (() => void) | null;
   onClose: () => void;
 }) {
   // slotIndex >= 0: a real swap inside one lineup slot, priced by the
@@ -498,7 +506,7 @@ function CompareSheet({
   const leftWins = isSwap ? comparison.deltaWinProbability < 0 : projectionDelta < 0;
 
   const headlineNumber = isSwap
-    ? formatSignedPercent(comparison.deltaWinProbability)
+    ? formatDisplayedWinProbabilityDelta(comparison.leftLine, comparison.rightLine)
     : `${projectionDelta > 0 ? '+' : ''}${projectionDelta.toFixed(1)} pts`;
   const headlineWinner = rightWins ? rightPlayer : leftWins ? leftPlayer : null;
 
@@ -634,6 +642,13 @@ function CompareSheet({
         </div>
 
         <p className="matchup-page__compare-verdict">{verdict}</p>
+        {isSwap && onApply ? (
+          <div className="matchup-page__edge-actions">
+            <button className="matchup-page__row-action" onClick={onApply} type="button">
+              Preview the swap
+            </button>
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -719,8 +734,8 @@ function MatchupLive({
       engine.selectPlayer(Number(key), null),
     );
   const starterEvaluations = useMemo(
-    () => evaluateStarterRoster(engine.baselineRoster),
-    [engine.baselineRoster],
+    () => evaluateStarterRoster(engine.baselineRoster, engine.baselineLine.yours),
+    [engine.baselineLine.yours, engine.baselineRoster],
   );
   const topSwapEvaluation = useMemo(
     () => getTopSwapEvaluation(starterEvaluations),
@@ -758,7 +773,13 @@ function MatchupLive({
           topSwapEvaluation.slotIndex,
           topSwapEvaluation.alternativeIndex,
         ),
-        delta: topSwapEvaluation.delta,
+        delta: getDisplayedWinProbabilityDelta(
+          engine.getOptionLine(topSwapEvaluation.slotIndex, null),
+          engine.getOptionLine(
+            topSwapEvaluation.slotIndex,
+            topSwapEvaluation.alternativeIndex,
+          ),
+        ),
       }
     : null;
 
@@ -838,35 +859,38 @@ function MatchupLive({
     setIsRecapDismissed(true);
   };
 
-  // Compare any two players at a similar position: same position always, and
-  // RB/WR/TE against each other when the league runs a flex. A real swap shows
-  // the win-probability impact; two players who both already start show a
-  // straight projection face-off.
-  const FLEX_GROUP = ['RB', 'WR', 'TE'];
-  const hasFlexSlot = matchup.yourTeam.roster.some((s) => s.slotLabel === 'FLEX');
-  const isComparable = (anchor: Player, candidate: Player) =>
-    anchor.position === candidate.position ||
-    (hasFlexSlot && FLEX_GROUP.includes(anchor.position) && FLEX_GROUP.includes(candidate.position));
-
   const MAX_COMPARE = 4;
 
   const handleComparePick = (player: Player) => {
     setIsCompareMode(true);
-    setCompareSelection((current) => {
-      if (current.some((candidate) => candidate.id === player.id)) {
-        return current.filter((candidate) => candidate.id !== player.id);
-      }
+    const current = compareSelection;
+    const next = current.some((candidate) => candidate.id === player.id)
+      ? current.filter((candidate) => candidate.id !== player.id)
+      : current.length >= MAX_COMPARE
+        ? current
+        : [...current, player];
 
-      // every pick must be comparable to the first (same position, or
-      // flex-vs-flex), so the whole set stays mutually weighable
-      if (current.length >= 1 && !isComparable(current[0], player)) {
-        return current; // ineligible rows are disabled; belt and braces
-      }
+    setCompareSelection(next);
 
-      if (current.length >= MAX_COMPARE) return current;
+    if (next.length === 2) {
+      setCompareSource('slip');
+      setCompareBoardPlayers(null);
+      setCompareModalPlayers([next[0], next[1]]);
+      return;
+    }
 
-      return [...current, player];
-    });
+    if (next.length >= 3) {
+      setCompareSource('slip');
+      setCompareModalPlayers(null);
+      setCompareBoardPlayers(next);
+      return;
+    }
+
+    setCompareModalPlayers(null);
+    setCompareBoardPlayers(null);
+    if (next.length === 0) {
+      setCompareSource(null);
+    }
   };
 
   // Open the verdict: a pair gets the rich, slot-aware swap card; three or
@@ -928,14 +952,12 @@ function MatchupLive({
   const compareHint =
     !isCompareMode || compareSelection.length === 0
       ? 'Tap any player: who do I start?'
-      : `Now tap another ${firstPick.position} to weigh against ${firstPick.shortName}.`;
+      : `Now tap another player to weigh against ${firstPick.shortName}.`;
 
   const eligibleCount =
     compareSelection.length >= 1
       ? [...engine.roster.map((slot) => slot.starter), ...engine.bench.map((b) => b.player)].filter(
-          (p) =>
-            !compareSelection.some((c) => c.id === p.id) &&
-            isComparable(compareSelection[0], p),
+          (p) => !compareSelection.some((c) => c.id === p.id),
         ).length
       : null;
 
@@ -961,30 +983,22 @@ function MatchupLive({
     const pickOrder = compareSelection.findIndex(
       (candidate) => candidate.id === player.id,
     );
-    const ineligible =
-      isCompareMode &&
-      compareSelection.length >= 1 &&
-      pickOrder === -1 &&
-      !isComparable(compareSelection[0], player);
 
     return (
       <div
         className={[
           'matchup-page__lineup-row',
           tone === 'bench' ? 'matchup-page__lineup-row--bench' : '',
-          isCompareMode && !ineligible ? 'matchup-page__lineup-row--pickable' : '',
-          ineligible ? 'matchup-page__lineup-row--ineligible' : '',
+          isCompareMode ? 'matchup-page__lineup-row--pickable' : '',
           selected ? 'matchup-page__lineup-row--selected' : '',
         ]
           .filter(Boolean)
           .join(' ')}
         key={`${slotLabel}-${player.id}`}
-        title={ineligible ? `Different position than ${compareSelection[0]?.shortName}` : undefined}
       >
         <button
           aria-pressed={isCompareMode ? selected : undefined}
           className="matchup-page__lineup-hitbox"
-          disabled={ineligible}
           // Tapping any player IS the start/sit flow: it picks them and
           // shows who you can weigh them against.
           onClick={() => handleComparePick(player)}
@@ -1407,109 +1421,6 @@ function MatchupLive({
         ) : null}
 
 
-        <section className="matchup-page__module matchup-page__module--lineup">
-          <div className="matchup-page__module-row matchup-page__module-row--lineup">
-            <div>
-              <h2 className="matchup-page__module-title">Your lineup</h2>
-              <p className="matchup-page__lineup-hint">{compareHint}</p>
-            </div>
-            <button
-              className={[
-                'matchup-page__compare-chip',
-                isCompareMode ? 'matchup-page__compare-chip--active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => {
-                if (isCompareMode) exitCompare();
-                else setIsCompareMode(true);
-              }}
-              type="button"
-            >
-              {isCompareMode ? 'Exit' : 'Who do I start?'}
-            </button>
-          </div>
-
-          <div className="matchup-page__lineup-list">
-            {engine.roster.map((slot, slotIndex) => {
-              const selectedAlternativeIndex = engine.selectedAlternatives[slotIndex] ?? null;
-              const activeAlternative =
-                selectedAlternativeIndex === null
-                  ? null
-                  : engine.baselineRoster[slotIndex]?.alternatives[selectedAlternativeIndex] ?? null;
-              const bestAlternative =
-                selectedAlternativeIndex === null
-                  ? getBestAlternative(engine.baselineRoster[slotIndex])
-                  : null;
-              const actionAlternative =
-                selectedAlternativeIndex === null
-                  ? bestAlternative && bestAlternative.deltaWinProbability > 0
-                    ? bestAlternative
-                    : null
-                  : null;
-              const currentLine = engine.getOptionLine(slotIndex, selectedAlternativeIndex);
-              const targetLine = actionAlternative
-                ? actionAlternative.resultingLine
-                : selectedAlternativeIndex !== null
-                  ? engine.getOptionLine(slotIndex, null)
-                  : null;
-              const edgeMeta =
-                actionAlternative && targetLine
-                  ? `Best swap: ${actionAlternative.player.shortName} · ${formatAmericanOdds(currentLine.moneyline)} to ${formatAmericanOdds(targetLine.moneyline)}`
-                  : activeAlternative && targetLine
-                    ? `Restore ${engine.baselineRoster[slotIndex].starter.shortName} · ${formatAmericanOdds(currentLine.moneyline)} to ${formatAmericanOdds(targetLine.moneyline)}`
-                    : null;
-              const meta = edgeMeta
-                ? `${slot.starter.position} · ${slot.starter.team} · ${edgeMeta}`
-                : `${slot.starter.position} · ${slot.starter.team}`;
-
-              return renderLineupRow({
-                actionLabel:
-                  actionAlternative
-                    ? `Start ${actionAlternative.player.shortName}`
-                    : activeAlternative
-                      ? `Restore ${engine.baselineRoster[slotIndex].starter.shortName}`
-                      : undefined,
-                meta,
-                onAction:
-                  actionAlternative
-                    ? () => engine.selectPlayer(slotIndex, slot.alternatives.findIndex((alternative) => alternative.player.id === actionAlternative.player.id))
-                    : activeAlternative
-                      ? () => engine.selectPlayer(slotIndex, null)
-                      : undefined,
-                player: slot.starter,
-                projection: slot.projection,
-                selected: compareSelection.some((candidate) => candidate.id === slot.starter.id),
-                slotLabel: slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel,
-              });
-            })}
-          </div>
-
-          <div className="matchup-page__bench-header">
-            <h3 className="matchup-page__bench-title">Bench</h3>
-            <p className="matchup-page__meta-copy">{benchRows.length} players</p>
-          </div>
-
-          <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
-            {benchRows.map((benchRow) => {
-              const bestFitMeta = benchRow.bestFit
-                ? `Best fit ${benchRow.bestFit.slot.slotLabel === 'FLEX' ? 'FLX' : benchRow.bestFit.slot.slotLabel} · ${formatAmericanOdds(engine.activeLine.yours.moneyline)} to ${formatAmericanOdds(benchRow.bestFit.line.moneyline)}`
-                : null;
-
-              return renderLineupRow({
-                meta: bestFitMeta
-                  ? `${benchRow.player.position} · ${benchRow.player.team} · ${bestFitMeta}`
-                  : `${benchRow.player.position} · ${benchRow.player.team}`,
-                player: benchRow.player,
-                projection: benchRow.projection,
-                selected: compareSelection.some((candidate) => candidate.id === benchRow.player.id),
-                slotLabel: 'BEN',
-                tone: 'bench',
-              });
-            })}
-          </div>
-        </section>
-
         {!isConnected && !isRecapDismissed ? (
           <section className="matchup-page__module matchup-page__module--recap">
             <div className="matchup-page__module-row">
@@ -1536,62 +1447,114 @@ function MatchupLive({
         ) : null}
       </section>
 
-      <aside className="matchup-page__rail">
-        <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--desktop-copy">
-          <div className="matchup-page__module-row matchup-page__module-row--lineup">
-            <div>
-              <h2 className="matchup-page__module-title">Your lineup</h2>
-              <p className="matchup-page__lineup-hint">{compareHint}</p>
-            </div>
-            <button
-              className={[
-                'matchup-page__compare-chip',
-                isCompareMode ? 'matchup-page__compare-chip--active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              onClick={() => {
-                if (isCompareMode) exitCompare();
-                else setIsCompareMode(true);
-              }}
-              type="button"
-            >
-              {isCompareMode ? 'Exit' : 'Who do I start?'}
-            </button>
+      <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--lineup-rail">
+        <div className="matchup-page__module-row matchup-page__module-row--lineup">
+          <div>
+            <h2 className="matchup-page__module-title">Your lineup</h2>
+            <p className="matchup-page__lineup-hint">{compareHint}</p>
           </div>
+          <button
+            className={[
+              'matchup-page__compare-chip',
+              isCompareMode ? 'matchup-page__compare-chip--active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onClick={() => {
+              if (isCompareMode) exitCompare();
+              else setIsCompareMode(true);
+            }}
+            type="button"
+          >
+            {isCompareMode ? 'Exit' : 'Who do I start?'}
+          </button>
+        </div>
 
-          <div className="matchup-page__lineup-list">
-            {engine.roster.map((slot) => {
-              return renderLineupRow({
-                meta: `${slot.starter.position} · ${slot.starter.team}`,
-                player: slot.starter,
-                projection: slot.projection,
-                selected: compareSelection.some((candidate) => candidate.id === slot.starter.id),
-                slotLabel: slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel,
-              });
-            })}
-          </div>
+        <div className="matchup-page__lineup-list">
+          {engine.roster.map((slot, slotIndex) => {
+            const selectedAlternativeIndex = engine.selectedAlternatives[slotIndex] ?? null;
+            const activeAlternative =
+              selectedAlternativeIndex === null
+                ? null
+                : engine.baselineRoster[slotIndex]?.alternatives[selectedAlternativeIndex] ?? null;
+            const bestAlternative =
+              selectedAlternativeIndex === null
+                ? getBestAlternative(engine.baselineRoster[slotIndex])
+                : null;
+            const actionAlternative =
+              selectedAlternativeIndex === null
+                ? bestAlternative && bestAlternative.deltaWinProbability > 0
+                  ? bestAlternative
+                  : null
+                : null;
+            const currentLine = engine.getOptionLine(slotIndex, selectedAlternativeIndex);
+            const targetLine = actionAlternative
+              ? actionAlternative.resultingLine
+              : selectedAlternativeIndex !== null
+                ? engine.getOptionLine(slotIndex, null)
+                : null;
+            const edgeMeta =
+              actionAlternative && targetLine
+                ? `Best swap: ${actionAlternative.player.shortName} · ${formatAmericanOdds(currentLine.moneyline)} to ${formatAmericanOdds(targetLine.moneyline)}`
+                : activeAlternative && targetLine
+                  ? `Restore ${engine.baselineRoster[slotIndex].starter.shortName} · ${formatAmericanOdds(currentLine.moneyline)} to ${formatAmericanOdds(targetLine.moneyline)}`
+                  : null;
+            const meta = edgeMeta
+              ? `${slot.starter.position} · ${slot.starter.team} · ${edgeMeta}`
+              : `${slot.starter.position} · ${slot.starter.team}`;
 
-          <div className="matchup-page__bench-header">
-            <h3 className="matchup-page__bench-title">Bench</h3>
-            <p className="matchup-page__meta-copy">{benchRows.length} players</p>
-          </div>
+            return renderLineupRow({
+              actionLabel:
+                actionAlternative
+                  ? `Start ${actionAlternative.player.shortName}`
+                  : activeAlternative
+                    ? `Restore ${engine.baselineRoster[slotIndex].starter.shortName}`
+                    : undefined,
+              meta,
+              onAction:
+                actionAlternative
+                  ? () =>
+                      engine.selectPlayer(
+                        slotIndex,
+                        slot.alternatives.findIndex(
+                          (alternative) => alternative.player.id === actionAlternative.player.id,
+                        ),
+                      )
+                  : activeAlternative
+                    ? () => engine.selectPlayer(slotIndex, null)
+                    : undefined,
+              player: slot.starter,
+              projection: slot.projection,
+              selected: compareSelection.some((candidate) => candidate.id === slot.starter.id),
+              slotLabel: slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel,
+            });
+          })}
+        </div>
 
-          <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
-            {benchRows.map((benchRow) => {
-              return renderLineupRow({
-                meta: `${benchRow.player.position} · ${benchRow.player.team}`,
-                player: benchRow.player,
-                projection: benchRow.projection,
-                selected: compareSelection.some((candidate) => candidate.id === benchRow.player.id),
-                slotLabel: 'BEN',
-                tone: 'bench',
-              });
-            })}
-          </div>
-        </section>
+        <div className="matchup-page__bench-header">
+          <h3 className="matchup-page__bench-title">Bench</h3>
+          <p className="matchup-page__meta-copy">{benchRows.length} players</p>
+        </div>
 
-      </aside>
+        <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
+          {benchRows.map((benchRow) => {
+            const bestFitMeta = benchRow.bestFit
+              ? `Best fit ${benchRow.bestFit.slot.slotLabel === 'FLEX' ? 'FLX' : benchRow.bestFit.slot.slotLabel} · ${formatAmericanOdds(engine.activeLine.yours.moneyline)} to ${formatAmericanOdds(benchRow.bestFit.line.moneyline)}`
+              : null;
+
+            return renderLineupRow({
+              meta: bestFitMeta
+                ? `${benchRow.player.position} · ${benchRow.player.team} · ${bestFitMeta}`
+                : `${benchRow.player.position} · ${benchRow.player.team}`,
+              player: benchRow.player,
+              projection: benchRow.projection,
+              selected: compareSelection.some((candidate) => candidate.id === benchRow.player.id),
+              slotLabel: 'BEN',
+              tone: 'bench',
+            });
+          })}
+        </div>
+      </section>
 
       {isCompareMode && !compareModalPlayers && !compareBoardPlayers ? (
         <div aria-label="Start or sit slip" className="matchup-page__slip" role="region">
@@ -1604,8 +1567,7 @@ function MatchupLive({
 
           {compareSelection.length === 0 ? (
             <p className="matchup-page__slip-empty">
-              Tap up to four players you&apos;re deciding between. Same position
-              only.
+              Tap up to four players you&apos;re deciding between.
             </p>
           ) : (
             <div className="matchup-page__slip-chips">
@@ -1638,9 +1600,8 @@ function MatchupLive({
 
           {compareSelection.length >= 1 && eligibleCount === 0 ? (
             <p className="matchup-page__slip-note">
-              {compareSelection[0].shortName} is your only{' '}
-              {compareSelection[0].position}. Remove a pick to weigh a different
-              spot.
+              You&apos;ve picked everyone in this lineup view. Remove a pick to
+              weigh a different combo.
             </p>
           ) : null}
 
@@ -1663,6 +1624,18 @@ function MatchupLive({
         <CompareSheet
           comparison={compareResult}
           leftPlayer={compareModalPlayers[0]}
+          onApply={
+            compareResult.slotIndex >= 0 &&
+            (compareResult.rightSelectionIndex ?? compareResult.leftSelectionIndex) != null
+              ? () => {
+                  engine.selectPlayer(
+                    compareResult.slotIndex,
+                    compareResult.rightSelectionIndex ?? compareResult.leftSelectionIndex ?? null,
+                  );
+                  exitCompare();
+                }
+              : null
+          }
           onClose={compareSource === 'slip' ? closeVerdict : closeEdgeInspect}
           rightPlayer={compareModalPlayers[1]}
           userWinProbability={engine.activeLine.yours.winProbability}

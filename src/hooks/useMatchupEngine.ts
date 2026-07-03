@@ -7,6 +7,7 @@ import {
   roundTo,
   winProbabilityToMoneyline,
 } from '../utils/lineupComparison';
+import { getDisplayedWinProbabilityDelta } from '../utils/matchupDelta';
 import { getWeek8ReplayProjection } from '../data/playerManifest';
 
 export interface MatchupPlayerComparison {
@@ -185,9 +186,7 @@ function buildSyntheticComparison(
     rightLine,
     leftProjection,
     rightProjection,
-    deltaWinProbability: roundTo(
-      clamp(rightLine.winProbability - leftLine.winProbability, -18, 12),
-    ),
+    deltaWinProbability: getDisplayedWinProbabilityDelta(leftLine, rightLine),
   };
 }
 
@@ -330,9 +329,7 @@ export function useMatchupEngine(matchup: MatchupData): MatchupEngineState {
           rightLine,
           leftProjection,
           rightProjection,
-          deltaWinProbability: roundTo(
-            rightLine.winProbability - leftLine.winProbability,
-          ),
+          deltaWinProbability: getDisplayedWinProbabilityDelta(leftLine, rightLine),
         };
       }
 
@@ -467,7 +464,7 @@ export function useMatchupEngine(matchup: MatchupData): MatchupEngineState {
       // engine. Every line movement flows through here — emit
       // { previousLine, nextLine, delta } to the notification source when the
       // backend lands, instead of only flashing it in the UI.
-      setLastChangeDelta(roundTo(nextLine.winProbability - previousLine.winProbability));
+      setLastChangeDelta(getDisplayedWinProbabilityDelta(previousLine, nextLine));
     },
     [baselineRoster, buildLineFromSelections, selectedAlternatives],
   );

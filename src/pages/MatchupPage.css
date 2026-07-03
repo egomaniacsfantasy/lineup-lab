@@ -6,14 +6,9 @@
   gap: 12px;
 }
 
-.matchup-page__story,
-.matchup-page__rail {
+.matchup-page__story {
   display: grid;
   gap: 12px;
-}
-
-.matchup-page__rail {
-  display: none;
 }
 
 .matchup-page__module {
@@ -47,11 +42,6 @@
   .matchup-page__module--hero .matchup-page__hero-number {
     font-size: 56px;
   }
-}
-
-.matchup-page__module--desktop-copy,
-.matchup-page__module--desktop {
-  display: none;
 }
 
 .matchup-page__module-row {
@@ -836,25 +826,25 @@
   line-height: 1.45;
 }
 
-@media (max-width: 1023px) {
-  .matchup-page__module--desktop-copy {
-    display: none;
-  }
-}
-
 @media (min-width: 1024px) {
 
   /* Pin the two columns explicitly: the page renders a visually-hidden
      h1 sibling, and grid auto-placement would otherwise shove the story
-     into the 400px rail column (story right, rail wrapped below). */
+     into the 400px rail column (story right, lineup wrapped below). */
   .matchup-page__story {
     grid-column: 1;
     grid-row: 1;
   }
 
-  .matchup-page__rail {
+  .matchup-page__module--lineup-rail {
     grid-column: 2;
     grid-row: 1;
+    position: sticky;
+    /* the app's <main> is the scrollport and already sits below the
+       header — a header-sized offset here pushes the lineup module out of
+       alignment with the story column even before any scroll */
+    top: 16px;
+    align-self: start;
   }
 
   .matchup-page {
@@ -862,30 +852,6 @@
     align-items: start;
     gap: 20px;
     padding: 24px 32px 48px;
-  }
-
-  .matchup-page__rail {
-    display: grid;
-    gap: 12px;
-    position: sticky;
-    /* the app's <main> is the scrollport and already sits below the
-       header — a header-sized offset here pushes the rail out of
-       alignment with the story column even before any scroll */
-    top: 16px;
-    align-self: start;
-  }
-
-  .matchup-page__module--mobile {
-    display: none;
-  }
-
-  .matchup-page__module--desktop-copy,
-  .matchup-page__module--desktop {
-    display: block;
-  }
-
-  .matchup-page__module--lineup:not(.matchup-page__module--desktop-copy) {
-    display: none;
   }
 
   .matchup-page__compare-scrim {

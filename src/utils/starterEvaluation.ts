@@ -1,5 +1,5 @@
-import type { Player, PlayerAlternative, RosterSlot } from '../types';
-import { roundTo } from './lineupComparison';
+import type { MatchupLine, Player, PlayerAlternative, RosterSlot } from '../types';
+import { getDisplayedWinProbabilityDelta } from './matchupDelta';
 
 export type StarterEvaluationState = 'OPTIMAL' | 'TIGHT_CALL' | 'SWAP';
 
@@ -14,62 +14,7 @@ export interface StarterEvaluation {
   state: StarterEvaluationState;
 }
 
-interface StarterEvaluationSeed {
-  alternativePlayerId: string;
-  currentWinProbContribution: number;
-  alternativeWinProbContribution: number;
-}
-
 const TIGHT_CALL_THRESHOLD = 1.5;
-
-// TEMP: 2024 replay seed for pivot logic. Replace with engine output. Positive delta = bench player outscored the starter in Week 8.
-const PROTOTYPE_STARTER_EVALUATION_SEED: Record<string, StarterEvaluationSeed> = {
-  'p-mahomes': {
-    alternativePlayerId: 'j-burrow',
-    currentWinProbContribution: 18.2,
-    alternativeWinProbContribution: 12.9,
-  },
-  'd-henry': {
-    alternativePlayerId: 's-barkley',
-    currentWinProbContribution: 14.7,
-    alternativeWinProbContribution: 12.1,
-  },
-  'b-robinson': {
-    alternativePlayerId: 's-barkley',
-    currentWinProbContribution: 23.6,
-    alternativeWinProbContribution: 12.1,
-  },
-  'j-jefferson': {
-    alternativePlayerId: 'd-smith',
-    currentWinProbContribution: 19.5,
-    alternativeWinProbContribution: 20.5,
-  },
-  'c-lamb': {
-    alternativePlayerId: 'd-london',
-    currentWinProbContribution: 39.6,
-    alternativeWinProbContribution: 7.4,
-  },
-  't-kelce': {
-    alternativePlayerId: 't-mcbride',
-    currentWinProbContribution: 25.0,
-    alternativeWinProbContribution: 21.4,
-  },
-  't-mclaurin': {
-    alternativePlayerId: 'd-smith',
-    currentWinProbContribution: 17.5,
-    alternativeWinProbContribution: 20.5,
-  },
-  'b-aubrey': {
-    alternativePlayerId: 'k-fairbairn',
-    currentWinProbContribution: 6.0,
-    alternativeWinProbContribution: 11.0,
-  },
-  'sf-def': {
-    alternativePlayerId: 'phi-def',
-    currentWinProbContribution: 6.0,
-    alternativeWinProbContribution: 6.0,
-  },
-};
 
 function getEvaluationState(delta: number): StarterEvaluationState {
   if (delta > TIGHT_CALL_THRESHOLD) {
@@ -96,34 +41,54 @@ export function getPlayerLastName(playerName: string) {
 export function evaluateStarterSlot(
   slot: RosterSlot,
   slotIndex: number,
+  baselineLine: MatchupLine,
 ): StarterEvaluation {
-  const seed = PROTOTYPE_STARTER_EVALUATION_SEED[slot.starter.id];
-  const seededAlternativeIndex = seed
-    ? slot.alternatives.findIndex(
-        (alternative) => alternative.player.id === seed.alternativePlayerId,
-      )
-    : -1;
-  const fallbackAlternativeIndex =
-    seededAlternativeIndex >= 0 ? seededAlternativeIndex : slot.alternatives.length > 0 ? 0 : -1;
-  const bestBenchAlternative =
-    fallbackAlternativeIndex >= 0 ? slot.alternatives[fallbackAlternativeIndex] : null;
-  const currentWinProbContribution =
-    seed?.currentWinProbContribution ?? slot.projection;
-  const alternativeWinProbContribution =
-    seed?.alternativeWinProbContribution ??
-    (bestBenchAlternative
-      ? roundTo(currentWinProbContribution + bestBenchAlternative.deltaWinProbability)
-      : null);
-  const delta =
-    alternativeWinProbContribution === null
-      ? Number.NEGATIVE_INFINITY
-      : roundTo(alternativeWinProbContribution - currentWinProbContribution);
+  const best = slot.alternatives.reduce<{
+    alternative: PlayerAlternative | null;
+    delta: number;
+    index: number | null;
+  }>(
+    (currentBest, alternative, index) => {
+      const delta = getDisplayedWinProbabilityDelta(
+        baselineLine,
+        alternative.resultingLine,
+      );
+
+      if (delta > currentBest.delta) {
+        return {
+          alternative,
+          delta,
+          index,
+        };
+      }
+
+      return currentBest;
+    },
+    {
+      alternative: null,
+      delta: Number.NEGATIVE_INFINITY,
+      index: null,
+    },
+  );
+
+  const bestBenchAlternative = best.alternative;
+  const alternativeIndex = best.index;
+  const bestDelta = best.delta;
+
+  const currentWinProbContribution = Number(baselineLine.winProbability.toFixed(1));
+  let alternativeWinProbContribution: number | null = null;
+  if (bestBenchAlternative) {
+    alternativeWinProbContribution = Number(
+      bestBenchAlternative.resultingLine.winProbability.toFixed(1),
+    );
+  }
+  const delta = alternativeWinProbContribution === null ? Number.NEGATIVE_INFINITY : bestDelta;
 
   return {
     slotIndex,
     currentStarter: slot.starter,
     bestBenchAlternative,
-    alternativeIndex: bestBenchAlternative ? fallbackAlternativeIndex : null,
+    alternativeIndex,
     currentWinProbContribution,
     alternativeWinProbContribution,
     delta,
@@ -131,8 +96,8 @@ export function evaluateStarterSlot(
   };
 }
 
-export function evaluateStarterRoster(roster: RosterSlot[]) {
-  return roster.map((slot, slotIndex) => evaluateStarterSlot(slot, slotIndex));
+export function evaluateStarterRoster(roster: RosterSlot[], baselineLine: MatchupLine) {
+  return roster.map((slot, slotIndex) => evaluateStarterSlot(slot, slotIndex, baselineLine));
 }
 
 export function getTopSwapEvaluation(evaluations: StarterEvaluation[]) {
