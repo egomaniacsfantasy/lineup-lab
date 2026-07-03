@@ -62,6 +62,13 @@ projectionsRouter.post('/reload', (req, res) => {
   }
 });
 
+// Lightweight password check so the client can validate at unlock time
+// (before the user tries to save) and detect a stale/wrong cached password.
+projectionsRouter.get('/agreement/check', (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.json({ ok: true });
+});
+
 projectionsRouter.post('/agreement', (req, res) => {
   if (!requireAdmin(req, res)) return;
   const { position, name, column, value, agreement } = req.body ?? {};

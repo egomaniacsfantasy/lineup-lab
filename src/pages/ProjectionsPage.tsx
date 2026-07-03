@@ -155,6 +155,24 @@ export function ProjectionsPage() {
     };
   }, []);
 
+  // Validate any cached password on load; clear it if the server rejects it,
+  // so a stale/wrong password can't leave someone in a broken edit mode.
+  useEffect(() => {
+    const cached = localStorage.getItem(PW_KEY);
+    if (!cached) return;
+    let alive = true;
+    verifyPw(cached).then((ok) => {
+      if (alive && !ok) {
+        localStorage.removeItem(PW_KEY);
+        setAdminPw(null);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const cols = STATS[pos];
 
   const rows = useMemo(() => {
@@ -175,9 +193,25 @@ export function ProjectionsPage() {
     return sorted;
   }, [data, pos, query, sortKey, sortDir]);
 
-  function unlockEditing() {
-    const pw = window.prompt('Admin password to edit agreement values:');
-    if (pw == null) return;
+  async function verifyPw(pw: string): Promise<boolean> {
+    try {
+      const res = await fetch('/api/projections/agreement/check', {
+        headers: { 'x-admin-password': pw },
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async function unlockEditing() {
+    const raw = window.prompt('Admin password to edit agreement values:');
+    if (raw == null) return;
+    const pw = raw.trim();
+    if (!pw || !(await verifyPw(pw))) {
+      window.alert('That admin password was not accepted. Double-check it and try again.');
+      return;
+    }
     localStorage.setItem(PW_KEY, pw);
     setAdminPw(pw);
   }
@@ -200,7 +234,9 @@ export function ProjectionsPage() {
       });
       if (res.status === 401) {
         setSaving((s) => ({ ...s, [key]: 'err' }));
-        window.alert('Wrong admin password — click “Lock” and re-enter it.');
+        localStorage.removeItem(PW_KEY);
+        setAdminPw(null); // drop out of edit mode so the bad password isn't reused
+        window.alert('Your admin password was rejected. Click “Edit agreement” to enter it again.');
         return;
       }
       setSaving((s) => ({ ...s, [key]: res.ok ? 'ok' : 'err' }));
