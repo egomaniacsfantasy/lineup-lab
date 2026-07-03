@@ -18,17 +18,28 @@ interface Player {
   point: number | null;
   floor: number | null;
   ceiling: number | null;
-  agreement?: string;
+  agreement?: Record<string, string>;
   season: Row;
   weekly: Row[];
 }
 
 const PW_KEY = 'og.projections.adminpw';
 
+interface AgreementColumn {
+  key: string;
+  label: string;
+}
+
+const DEFAULT_AGREE_COLS: AgreementColumn[] = [
+  { key: 'vlahakis', label: 'Vlahakis' },
+  { key: 'williams', label: 'Williams' },
+];
+
 interface Dataset {
   updatedAt: number;
   count: number;
   perPosition: Record<string, number>;
+  agreementColumns?: AgreementColumn[];
   players: Player[];
 }
 
@@ -127,7 +138,11 @@ export function ProjectionsPage() {
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
 
   const editing = adminPw != null;
-  const akey = (p: Player) => p.id;
+  const agreeCols = data?.agreementColumns ?? DEFAULT_AGREE_COLS;
+  // local overlay key per (player, editor column)
+  const akey = (p: Player, col: string) => `${p.id}::${col}`;
+  const agreeValue = (p: Player, col: string) =>
+    agree[akey(p, col)] ?? p.agreement?.[col] ?? '';
 
   useEffect(() => {
     let alive = true;
@@ -171,9 +186,9 @@ export function ProjectionsPage() {
     setAdminPw(null);
   }
 
-  async function saveAgreement(p: Player, value: string) {
-    const key = akey(p);
-    const current = agree[key] ?? p.agreement ?? '';
+  async function saveAgreement(p: Player, col: string, value: string) {
+    const key = akey(p, col);
+    const current = agree[key] ?? p.agreement?.[col] ?? '';
     if (value === current) return;
     setAgree((m) => ({ ...m, [key]: value }));
     setSaving((s) => ({ ...s, [key]: 'saving' }));
@@ -181,7 +196,7 @@ export function ProjectionsPage() {
       const res = await fetch('/api/projections/agreement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw ?? '' },
-        body: JSON.stringify({ position: p.position, name: p.name, agreement: value }),
+        body: JSON.stringify({ position: p.position, name: p.name, column: col, value }),
       });
       if (res.status === 401) {
         setSaving((s) => ({ ...s, [key]: 'err' }));
@@ -293,7 +308,11 @@ export function ProjectionsPage() {
               <th className="proj-th proj-th--num proj-th--sort" onClick={() => toggleSort('ceiling')}>
                 Ceil{sortMark('ceiling')}
               </th>
-              <th className="proj-th proj-th--agree">Agreement</th>
+              {agreeCols.map((ac) => (
+                <th key={ac.key} className="proj-th proj-th--agree">
+                  {ac.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -322,28 +341,31 @@ export function ProjectionsPage() {
                     <td className="proj-td proj-td--num proj-td--fp">{fmt(p.point)}</td>
                     <td className="proj-td proj-td--num proj-td--floor">{fmt(p.floor)}</td>
                     <td className="proj-td proj-td--num proj-td--ceil">{fmt(p.ceiling)}</td>
-                    <td
-                      className="proj-td proj-td--agree"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {editing ? (
-                        <input
-                          className={`proj-agree-input${saving[akey(p)] ? ` proj-agree-input--${saving[akey(p)]}` : ''}`}
-                          defaultValue={agree[akey(p)] ?? p.agreement ?? ''}
-                          placeholder="—"
-                          onBlur={(e) => saveAgreement(p, e.target.value.trim())}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                          }}
-                        />
-                      ) : (
-                        <span className="proj-agree-val">{agree[akey(p)] ?? p.agreement ?? '—'}</span>
-                      )}
-                    </td>
+                    {agreeCols.map((ac) => (
+                      <td
+                        key={ac.key}
+                        className="proj-td proj-td--agree"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {editing ? (
+                          <input
+                            className={`proj-agree-input${saving[akey(p, ac.key)] ? ` proj-agree-input--${saving[akey(p, ac.key)]}` : ''}`}
+                            defaultValue={agreeValue(p, ac.key)}
+                            placeholder="—"
+                            onBlur={(e) => saveAgreement(p, ac.key, e.target.value.trim())}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                          />
+                        ) : (
+                          <span className="proj-agree-val">{agreeValue(p, ac.key) || '—'}</span>
+                        )}
+                      </td>
+                    ))}
                   </tr>
                   {isOpen && (
                     <tr className="proj-week-row">
-                      <td className="proj-week-cell" colSpan={cols.length + 6}>
+                      <td className="proj-week-cell" colSpan={cols.length + 6 + agreeCols.length}>
                         <WeeklyGrid player={p} cols={cols} />
                       </td>
                     </tr>
@@ -353,7 +375,7 @@ export function ProjectionsPage() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td className="proj-empty" colSpan={cols.length + 6}>
+                <td className="proj-empty" colSpan={cols.length + 6 + agreeCols.length}>
                   No players match.
                 </td>
               </tr>

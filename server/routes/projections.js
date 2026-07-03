@@ -10,7 +10,13 @@
  */
 import { Router } from 'express';
 import { loadProjections, reloadProjections } from '../projections/loadFromRepo.js';
-import { getAllAgreement, setAgreement, POSITIONS } from '../projections/agreementStore.js';
+import {
+  getAllAgreement,
+  setAgreement,
+  POSITIONS,
+  COLUMNS,
+  COLUMN_KEYS,
+} from '../projections/agreementStore.js';
 
 export const projectionsRouter = Router();
 
@@ -23,14 +29,15 @@ function requireAdmin(req, res) {
   return true;
 }
 
-/** Attach each player's current agreement value without mutating the loader cache. */
+/** Attach each player's agreement cell { vlahakis, williams } without mutating the loader cache. */
 function withAgreement(dataset) {
   const agree = getAllAgreement();
   return {
     ...dataset,
+    agreementColumns: COLUMNS,
     players: dataset.players.map((p) => ({
       ...p,
-      agreement: agree[p.position]?.[p.name] ?? '',
+      agreement: agree[p.position]?.[p.name] ?? {},
     })),
   };
 }
@@ -57,13 +64,15 @@ projectionsRouter.post('/reload', (req, res) => {
 
 projectionsRouter.post('/agreement', (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const { position, name, agreement } = req.body ?? {};
-  if (!POSITIONS.includes(position) || !name) {
-    return res.status(400).json({ error: 'bad_request', message: 'position and name are required.' });
+  const { position, name, column, value, agreement } = req.body ?? {};
+  const col = column ?? 'vlahakis'; // back-compat default
+  const val = value ?? agreement ?? '';
+  if (!POSITIONS.includes(position) || !name || !COLUMN_KEYS.includes(col)) {
+    return res.status(400).json({ error: 'bad_request', message: 'position, name and a valid column are required.' });
   }
   try {
-    const value = setAgreement(position, name, agreement);
-    res.json({ ok: true, position, name, agreement: value });
+    const cell = setAgreement(position, name, col, val);
+    res.json({ ok: true, position, name, column: col, agreement: cell });
   } catch (error) {
     console.error('[projections] set agreement failed', error);
     res.status(500).json({ error: 'agreement_save_failed', message: String(error?.message ?? error) });
