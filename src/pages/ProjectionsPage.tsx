@@ -10,6 +10,7 @@ import './ProjectionsPage.css';
 type Row = Record<string, unknown>;
 
 interface Player {
+  id: string;
   position: Position;
   name: string;
   team: string | null;
@@ -126,7 +127,7 @@ export function ProjectionsPage() {
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
 
   const editing = adminPw != null;
-  const akey = (p: Player) => `${p.position}::${p.name}`;
+  const akey = (p: Player) => p.id;
 
   useEffect(() => {
     let alive = true;
@@ -297,12 +298,12 @@ export function ProjectionsPage() {
           </thead>
           <tbody>
             {rows.map((p, i) => {
-              const isOpen = openName === p.name;
+              const isOpen = openName === p.id;
               return (
-                <Fragment key={p.name}>
+                <Fragment key={p.id}>
                   <tr
                     className={`proj-row${isOpen ? ' proj-row--open' : ''}`}
-                    onClick={() => setOpenName(isOpen ? null : p.name)}
+                    onClick={() => setOpenName(isOpen ? null : p.id)}
                   >
                     <td className="proj-td proj-td--rank">{i + 1}</td>
                     <td className="proj-td proj-td--name">

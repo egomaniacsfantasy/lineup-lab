@@ -65,11 +65,15 @@ export function loadProjections({ force = false } = {}) {
     const seasonRows = readSheet(wb, pickSeasonSheet(wb, cfg.seasonSheet));
     const gameRows = readSheet(wb, wb.SheetNames.includes('game_level') ? 'game_level' : null);
 
-    // Group weekly rows by identity (player name, or team for DEF).
+    // Group weekly rows by identity. Key on name+team, not name alone: a player
+    // wrongly listed on two teams (bad depth chart) would otherwise pool both
+    // teams' weeks into one 34-game record. team is blank for K/DEF weekly? use ''.
+    const idOf = (name, team) => `${name}||${team ?? ''}`.toLowerCase();
     const weeklyBy = new Map();
     for (const g of gameRows) {
-      const key = String(g[cfg.nameKey] ?? g.team ?? '').trim();
-      if (!key) continue;
+      const name = String(g[cfg.nameKey] ?? g.team ?? '').trim();
+      if (!name) continue;
+      const key = idOf(name, g.team);
       const arr = weeklyBy.get(key) ?? [];
       arr.push(g);
       weeklyBy.set(key, arr);
@@ -79,13 +83,15 @@ export function loadProjections({ force = false } = {}) {
     for (const s of seasonRows) {
       const name = String(s[cfg.nameKey] ?? '').trim();
       if (!name) continue;
-      const weekly = (weeklyBy.get(name) ?? [])
+      const team = s.team ?? null;
+      const weekly = (weeklyBy.get(idOf(name, team)) ?? [])
         .slice()
         .sort((a, b) => (Number(a.week) || 0) - (Number(b.week) || 0));
       players.push({
+        id: `${position}::${name}::${team ?? ''}`,
         position,
         name,
-        team: s.team ?? null,
+        team,
         depthRank: s.depth_rank ?? null,
         point: num(s[cfg.point]),
         floor: num(s.fantasy_pts_floor),
