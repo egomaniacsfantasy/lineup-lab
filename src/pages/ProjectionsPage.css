@@ -100,6 +100,10 @@
   border-color: var(--amber);
   color: #1a1204;
 }
+.proj-rapid-toggle--on {
+  border-color: var(--amber);
+  color: var(--text-primary);
+}
 
 .proj-scoring {
   display: inline-flex;

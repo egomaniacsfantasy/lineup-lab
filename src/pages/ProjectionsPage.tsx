@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import './ProjectionsPage.css';
 
 /**
@@ -193,13 +193,12 @@ export function ProjectionsPage() {
   const [openName, setOpenName] = useState<string | null>(null);
   const [scoring, setScoring] = useState<Scoring>('');
   const [adminPw, setAdminPw] = useState<string | null>(() => localStorage.getItem(PW_KEY));
+  const [rapidEntryEnabled, setRapidEntryEnabled] = useState(true);
   const [agreeDraft, setAgreeDraft] = useState<Record<string, string>>({});
   const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
   const agreeDraftRef = useRef<Record<string, string>>({});
   const agreeSavedRef = useRef<Record<string, string>>({});
-  const manualFocusKeyRef = useRef<string | null>(null);
-  const manualEditCellKeyRef = useRef<string | null>(null);
 
   const editing = adminPw != null;
   const agreeCols = data?.agreementColumns ?? DEFAULT_AGREE_COLS;
@@ -359,7 +358,6 @@ export function ProjectionsPage() {
   }
 
   function moveAgreeFocus(currentRowId: string, columnKey: string, dir: -1 | 1) {
-    manualEditCellKeyRef.current = null;
     const cells = Array.from(
       document.querySelectorAll<HTMLInputElement>(`.proj-agree-input[data-agree-col="${cssEscape(columnKey)}"]`),
     );
@@ -371,7 +369,6 @@ export function ProjectionsPage() {
   }
 
   function moveAgreeColumn(currentRowId: string, columnKey: string, dir: -1 | 1) {
-    manualEditCellKeyRef.current = null;
     const keys = agreeCols.map((column) => column.key);
     const index = keys.indexOf(columnKey);
     const targetKey = keys[index + dir];
@@ -384,30 +381,13 @@ export function ProjectionsPage() {
     target.scrollIntoView({ block: 'nearest' });
   }
 
-  function beginManualAgreeEntry(player: Player, columnKey: string) {
-    manualFocusKeyRef.current = cellKey(player, columnKey);
-  }
-
-  function handleAgreeFocus(event: FocusEvent<HTMLInputElement>, player: Player, columnKey: string) {
-    const key = cellKey(player, columnKey);
-    if (manualFocusKeyRef.current === key) {
-      manualEditCellKeyRef.current = key;
-      manualFocusKeyRef.current = null;
-      event.currentTarget.select();
-      return;
-    }
-    manualEditCellKeyRef.current = null;
-  }
-
   function handleAgreeKeyDown(event: KeyboardEvent<HTMLInputElement>, player: Player, columnKey: string) {
-    const keyId = cellKey(player, columnKey);
-    if (manualEditCellKeyRef.current === keyId) {
+    if (!rapidEntryEnabled) {
       if (event.key === 'Enter') {
         event.preventDefault();
         event.currentTarget.blur();
       } else if (event.key === 'Escape') {
         event.preventDefault();
-        manualEditCellKeyRef.current = null;
         event.currentTarget.blur();
       }
       return;
@@ -545,28 +525,53 @@ export function ProjectionsPage() {
             </button>
           )}
           {editing ? (
+            <button
+              aria-pressed={rapidEntryEnabled}
+              className={`proj-edit proj-rapid-toggle${rapidEntryEnabled ? ' proj-rapid-toggle--on' : ''}`}
+              onClick={() => setRapidEntryEnabled((enabled) => !enabled)}
+              title={rapidEntryEnabled ? 'Switch to normal typing mode' : 'Switch to rapid entry mode'}
+              type="button"
+            >
+              Rapid entry: {rapidEntryEnabled ? 'On' : 'Off'}
+            </button>
+          ) : null}
+          {editing ? (
             <div className="proj-agree-hint" role="note">
               <span className="proj-agree-hint__lead">Rapid entry</span>
-              <span>
-                <kbd>1</kbd>–<kbd>9</kbd> = 10–90
-              </span>
-              <span>
-                <kbd>0</kbd> = 100
-              </span>
-              <span>
-                <kbd>↑</kbd>
-                <kbd>↓</kbd> move
-              </span>
-              <span>
-                <kbd>←</kbd>
-                <kbd>→</kbd> switch name
-              </span>
-              <span>
-                <kbd>⌫</kbd> clear
-              </span>
-              <span>
-                <kbd>Esc</kbd> done
-              </span>
+              {rapidEntryEnabled ? (
+                <>
+                  <span>
+                    <kbd>1</kbd>–<kbd>9</kbd> = 10–90
+                  </span>
+                  <span>
+                    <kbd>0</kbd> = 100
+                  </span>
+                  <span>
+                    <kbd>↑</kbd>
+                    <kbd>↓</kbd> move
+                  </span>
+                  <span>
+                    <kbd>←</kbd>
+                    <kbd>→</kbd> switch name
+                  </span>
+                  <span>
+                    <kbd>⌫</kbd> clear
+                  </span>
+                  <span>
+                    <kbd>Esc</kbd> done
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>Typing mode is on for exact values like 45.</span>
+                  <span>
+                    <kbd>Enter</kbd> save
+                  </span>
+                  <span>
+                    <kbd>Esc</kbd> done
+                  </span>
+                </>
+              )}
               <span className="proj-agree-hint__scale">
                 <b>50</b> aligned · higher = up · lower = down
               </span>
@@ -658,12 +663,9 @@ export function ProjectionsPage() {
                               placeholder="—"
                               spellCheck={false}
                               value={currentValue}
-                              onFocus={(e) => handleAgreeFocus(e, p, column.key)}
                               onBlur={() => {
-                                manualEditCellKeyRef.current = null;
                                 void commitAgreement(p, column.key, readLiveAgreementValue(p, column.key));
                               }}
-                              onMouseDown={() => beginManualAgreeEntry(p, column.key)}
                               onChange={(e) => setDraftValue(key, e.target.value)}
                               onKeyDown={(e) => handleAgreeKeyDown(e, p, column.key)}
                             />
