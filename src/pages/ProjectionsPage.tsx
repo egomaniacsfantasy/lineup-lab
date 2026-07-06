@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import './ProjectionsPage.css';
 
 /**
@@ -34,7 +34,6 @@ const DEFAULT_AGREE_COLS: AgreementColumn[] = [
   { key: 'vlahakis', label: 'Vlahakis' },
   { key: 'williams', label: 'Williams' },
 ];
-
 interface Dataset {
   updatedAt: number;
   count: number;
@@ -166,6 +165,24 @@ function scoredWeek(p: Player, w: Row, suf: Scoring) {
   };
 }
 
+function hasKey(map: Record<string, string>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(map, key);
+}
+
+function agreeToneClass(raw: string | null | undefined): string {
+  if (raw === '' || raw == null) return '';
+  const n = Number(raw);
+  if (Number.isNaN(n)) return '';
+  if (n > 50) return 'is-up';
+  if (n < 50) return 'is-down';
+  return 'is-even';
+}
+
+function cssEscape(value: string): string {
+  if (window.CSS?.escape) return window.CSS.escape(value);
+  return value.replace(/[^\w-]/g, '\\$&');
+}
+
 export function ProjectionsPage() {
   const [data, setData] = useState<Dataset | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -175,18 +192,17 @@ export function ProjectionsPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [openName, setOpenName] = useState<string | null>(null);
   const [scoring, setScoring] = useState<Scoring>('');
-  // Agreement editing: unlocked with the admin password; edits POST back to the
-  // server and are held in a local overlay keyed by position+name.
   const [adminPw, setAdminPw] = useState<string | null>(() => localStorage.getItem(PW_KEY));
-  const [agree, setAgree] = useState<Record<string, string>>({});
+  const [agreeDraft, setAgreeDraft] = useState<Record<string, string>>({});
+  const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
+  const agreeDraftRef = useRef<Record<string, string>>({});
+  const agreeSavedRef = useRef<Record<string, string>>({});
 
   const editing = adminPw != null;
   const agreeCols = data?.agreementColumns ?? DEFAULT_AGREE_COLS;
-  // local overlay key per (player, editor column)
-  const akey = (p: Player, col: string) => `${p.id}::${col}`;
-  const agreeValue = (p: Player, col: string) =>
-    agree[akey(p, col)] ?? p.agreement?.[col] ?? '';
+  const rowId = (p: Player) => p.id;
+  const cellKey = (p: Player, columnKey: string) => `${rowId(p)}::${columnKey}`;
 
   useEffect(() => {
     let alive = true;
@@ -214,10 +230,46 @@ export function ProjectionsPage() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cols = STATS[pos];
+  const totalColumns = cols.length + 6 + agreeCols.length;
+
+  function readBaseAgreementValue(player: Player, columnKey: string): string {
+    return player.agreement?.[columnKey] ?? '';
+  }
+
+  function readCommittedAgreementValueFromMap(
+    player: Player,
+    columnKey: string,
+    savedMap: Record<string, string>,
+  ): string {
+    const key = cellKey(player, columnKey);
+    if (hasKey(savedMap, key)) return savedMap[key];
+    return readBaseAgreementValue(player, columnKey);
+  }
+
+  function readCommittedAgreementValue(player: Player, columnKey: string): string {
+    return readCommittedAgreementValueFromMap(player, columnKey, agreeSaved);
+  }
+
+  function readAgreementValue(player: Player, columnKey: string): string {
+    const key = cellKey(player, columnKey);
+    if (hasKey(agreeDraft, key)) return agreeDraft[key];
+    return readCommittedAgreementValueFromMap(player, columnKey, agreeSaved);
+  }
+
+  function setDraftValue(key: string, value: string) {
+    const next = { ...agreeDraftRef.current, [key]: value };
+    agreeDraftRef.current = next;
+    setAgreeDraft(next);
+  }
+
+  function setSavedValue(key: string, value: string) {
+    const next = { ...agreeSavedRef.current, [key]: value };
+    agreeSavedRef.current = next;
+    setAgreeSaved(next);
+  }
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -264,17 +316,19 @@ export function ProjectionsPage() {
     setAdminPw(null);
   }
 
-  async function saveAgreement(p: Player, col: string, value: string) {
-    const key = akey(p, col);
-    const current = agree[key] ?? p.agreement?.[col] ?? '';
+  async function commitAgreement(player: Player, columnKey: string, valueString: string) {
+    const key = cellKey(player, columnKey);
+    const value = valueString.trim();
+    const current = readCommittedAgreementValueFromMap(player, columnKey, agreeSavedRef.current);
+    setDraftValue(key, value);
     if (value === current) return;
-    setAgree((m) => ({ ...m, [key]: value }));
+    setSavedValue(key, value);
     setSaving((s) => ({ ...s, [key]: 'saving' }));
     try {
       const res = await fetch('/api/projections/agreement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw ?? '' },
-        body: JSON.stringify({ position: p.position, name: p.name, column: col, value }),
+        body: JSON.stringify({ position: player.position, name: player.name, column: columnKey, value }),
       });
       if (res.status === 401) {
         setSaving((s) => ({ ...s, [key]: 'err' }));
@@ -286,6 +340,76 @@ export function ProjectionsPage() {
       setSaving((s) => ({ ...s, [key]: res.ok ? 'ok' : 'err' }));
     } catch {
       setSaving((s) => ({ ...s, [key]: 'err' }));
+    }
+  }
+
+  function moveAgreeFocus(currentRowId: string, columnKey: string, dir: -1 | 1) {
+    const cells = Array.from(
+      document.querySelectorAll<HTMLInputElement>(`.proj-agree-input[data-agree-col="${cssEscape(columnKey)}"]`),
+    );
+    const index = cells.findIndex((cell) => cell.dataset.agreeRow === currentRowId);
+    const next = cells[index + dir];
+    if (!next) return;
+    next.focus();
+    next.scrollIntoView({ block: 'nearest' });
+  }
+
+  function moveAgreeColumn(currentRowId: string, columnKey: string, dir: -1 | 1) {
+    const keys = agreeCols.map((column) => column.key);
+    const index = keys.indexOf(columnKey);
+    const targetKey = keys[index + dir];
+    if (!targetKey) return;
+    const target = document.querySelector<HTMLInputElement>(
+      `.proj-agree-input[data-agree-col="${cssEscape(targetKey)}"][data-agree-row="${cssEscape(currentRowId)}"]`,
+    );
+    if (!target) return;
+    target.focus();
+    target.scrollIntoView({ block: 'nearest' });
+  }
+
+  function handleAgreeKeyDown(event: KeyboardEvent<HTMLInputElement>, player: Player, columnKey: string) {
+    const key = event.key;
+
+    if (/^[0-9]$/.test(key)) {
+      event.preventDefault();
+      const digit = Number(key);
+      const value = digit === 0 ? 100 : digit * 10;
+      void commitAgreement(player, columnKey, String(value));
+      moveAgreeFocus(rowId(player), columnKey, 1);
+      return;
+    }
+
+    switch (key) {
+      case 'ArrowDown':
+      case 'Enter':
+        event.preventDefault();
+        moveAgreeFocus(rowId(player), columnKey, 1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        moveAgreeFocus(rowId(player), columnKey, -1);
+        break;
+      case 'ArrowRight':
+        event.preventDefault();
+        moveAgreeColumn(rowId(player), columnKey, 1);
+        break;
+      case 'ArrowLeft':
+        event.preventDefault();
+        moveAgreeColumn(rowId(player), columnKey, -1);
+        break;
+      case 'Backspace':
+      case 'Delete':
+        event.preventDefault();
+        void commitAgreement(player, columnKey, '');
+        break;
+      case 'Escape':
+        event.preventDefault();
+        event.currentTarget.blur();
+        break;
+      default:
+        if (key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
+          event.preventDefault();
+        }
     }
   }
 
@@ -375,6 +499,34 @@ export function ProjectionsPage() {
               Edit agreement
             </button>
           )}
+          {editing ? (
+            <div className="proj-agree-hint" role="note">
+              <span className="proj-agree-hint__lead">Rapid entry</span>
+              <span>
+                <kbd>1</kbd>–<kbd>9</kbd> = 10–90
+              </span>
+              <span>
+                <kbd>0</kbd> = 100
+              </span>
+              <span>
+                <kbd>↑</kbd>
+                <kbd>↓</kbd> move
+              </span>
+              <span>
+                <kbd>←</kbd>
+                <kbd>→</kbd> switch name
+              </span>
+              <span>
+                <kbd>⌫</kbd> clear
+              </span>
+              <span>
+                <kbd>Esc</kbd> done
+              </span>
+              <span className="proj-agree-hint__scale">
+                <b>50</b> aligned · higher = up · lower = down
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -400,9 +552,9 @@ export function ProjectionsPage() {
               <th className="proj-th proj-th--num proj-th--sort" onClick={() => toggleSort('ceiling')}>
                 Ceil{sortMark('ceiling')}
               </th>
-              {agreeCols.map((ac) => (
-                <th key={ac.key} className="proj-th proj-th--agree">
-                  {ac.label}
+              {agreeCols.map((column) => (
+                <th key={column.key} className="proj-th proj-th--agree">
+                  {column.label}
                 </th>
               ))}
             </tr>
@@ -411,7 +563,7 @@ export function ProjectionsPage() {
             {rows.map((p, i) => {
               const isOpen = openName === p.id;
               return (
-                <Fragment key={p.id}>
+                <Fragment key={rowId(p)}>
                   <tr
                     className={`proj-row${isOpen ? ' proj-row--open' : ''}`}
                     onClick={() => setOpenName(isOpen ? null : p.id)}
@@ -440,31 +592,43 @@ export function ProjectionsPage() {
                         </>
                       );
                     })()}
-                    {agreeCols.map((ac) => (
-                      <td
-                        key={ac.key}
-                        className="proj-td proj-td--agree"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {editing ? (
-                          <input
-                            className={`proj-agree-input${saving[akey(p, ac.key)] ? ` proj-agree-input--${saving[akey(p, ac.key)]}` : ''}`}
-                            defaultValue={agreeValue(p, ac.key)}
-                            placeholder="—"
-                            onBlur={(e) => saveAgreement(p, ac.key, e.target.value.trim())}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                            }}
-                          />
-                        ) : (
-                          <span className="proj-agree-val">{agreeValue(p, ac.key) || '—'}</span>
-                        )}
-                      </td>
-                    ))}
+                    {agreeCols.map((column) => {
+                      const key = cellKey(p, column.key);
+                      const currentValue = readAgreementValue(p, column.key);
+                      return (
+                        <td key={column.key} className="proj-td proj-td--agree" onClick={(e) => e.stopPropagation()}>
+                          {editing ? (
+                            <input
+                              autoComplete="off"
+                              className={[
+                                'proj-agree-input',
+                                agreeToneClass(currentValue),
+                                saving[key] ? `proj-agree-input--${saving[key]}` : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              data-agree-col={column.key}
+                              data-agree-row={rowId(p)}
+                              inputMode="numeric"
+                              placeholder="—"
+                              spellCheck={false}
+                              value={currentValue}
+                              onBlur={(e) => {
+                                void commitAgreement(p, column.key, e.target.value);
+                              }}
+                              onChange={(e) => setDraftValue(key, e.target.value)}
+                              onKeyDown={(e) => handleAgreeKeyDown(e, p, column.key)}
+                            />
+                          ) : (
+                            <span className="proj-agree-val">{readCommittedAgreementValue(p, column.key) || '—'}</span>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                   {isOpen && (
                     <tr className="proj-week-row">
-                      <td className="proj-week-cell" colSpan={cols.length + 6 + agreeCols.length}>
+                      <td className="proj-week-cell" colSpan={totalColumns}>
                         <WeeklyGrid player={p} cols={cols} scoring={scoring} />
                       </td>
                     </tr>
@@ -474,7 +638,7 @@ export function ProjectionsPage() {
             })}
             {rows.length === 0 && (
               <tr>
-                <td className="proj-empty" colSpan={cols.length + 6 + agreeCols.length}>
+                <td className="proj-empty" colSpan={totalColumns}>
                   No players match.
                 </td>
               </tr>

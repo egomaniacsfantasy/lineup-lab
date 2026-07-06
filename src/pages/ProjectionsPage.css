@@ -75,6 +75,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .proj-edit {
   padding: 8px 12px;
@@ -270,12 +272,34 @@
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-family: var(--font-num);
+  font-family: var(--font-num, var(--font-mono, "IBM Plex Mono", monospace));
+  font-variant-numeric: tabular-nums;
   font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  caret-color: transparent;
+  transition:
+    box-shadow 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.proj-agree-input.is-up {
+  color: var(--green, #30a46c);
+}
+.proj-agree-input.is-down {
+  color: var(--red, #e5484d);
+}
+.proj-agree-input.is-even {
+  color: var(--text-amber);
 }
 .proj-agree-input:focus {
   outline: none;
   border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 8%, var(--bg-surface));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--amber) 55%, transparent),
+    0 0 18px color-mix(in srgb, var(--amber) 22%, transparent);
 }
 .proj-agree-input--saving {
   border-color: var(--amber);
@@ -285,6 +309,47 @@
 }
 .proj-agree-input--err {
   border-color: var(--red, #e5484d);
+}
+.proj-agree-hint {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber) 28%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--amber) 5%, transparent);
+  font-family: var(--font-num, var(--font-mono, "IBM Plex Mono", monospace));
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.proj-agree-hint__lead {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--text-amber);
+  letter-spacing: 0.01em;
+}
+.proj-agree-hint__scale {
+  margin-left: auto;
+  opacity: 0.85;
+}
+.proj-agree-hint__scale b {
+  color: var(--text-amber);
+}
+.proj-agree-hint kbd {
+  display: inline-block;
+  min-width: 16px;
+  padding: 1px 5px;
+  margin: 0 1px;
+  border: 1px solid color-mix(in srgb, var(--text-primary) 25%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .proj-week-row td {
