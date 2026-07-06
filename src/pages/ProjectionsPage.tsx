@@ -204,6 +204,17 @@ export function ProjectionsPage() {
   const rowId = (p: Player) => p.id;
   const cellKey = (p: Player, columnKey: string) => `${rowId(p)}::${columnKey}`;
 
+  async function verifyPw(pw: string): Promise<boolean> {
+    try {
+      const res = await fetch('/api/projections/agreement/check', {
+        headers: { 'x-admin-password': pw },
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   useEffect(() => {
     let alive = true;
     fetch('/api/projections')
@@ -288,17 +299,6 @@ export function ProjectionsPage() {
     if (sortDir === 'asc') sorted.reverse();
     return sorted;
   }, [data, pos, query, sortKey, sortDir, scoring]);
-
-  async function verifyPw(pw: string): Promise<boolean> {
-    try {
-      const res = await fetch('/api/projections/agreement/check', {
-        headers: { 'x-admin-password': pw },
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
 
   async function unlockEditing() {
     const raw = window.prompt('Admin password to edit agreement values:');
