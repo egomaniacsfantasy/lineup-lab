@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import './ProjectionsPage.css';
 
 /**
@@ -198,6 +198,8 @@ export function ProjectionsPage() {
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
   const agreeDraftRef = useRef<Record<string, string>>({});
   const agreeSavedRef = useRef<Record<string, string>>({});
+  const manualFocusKeyRef = useRef<string | null>(null);
+  const manualEditCellKeyRef = useRef<string | null>(null);
 
   const editing = adminPw != null;
   const agreeCols = data?.agreementColumns ?? DEFAULT_AGREE_COLS;
@@ -357,6 +359,7 @@ export function ProjectionsPage() {
   }
 
   function moveAgreeFocus(currentRowId: string, columnKey: string, dir: -1 | 1) {
+    manualEditCellKeyRef.current = null;
     const cells = Array.from(
       document.querySelectorAll<HTMLInputElement>(`.proj-agree-input[data-agree-col="${cssEscape(columnKey)}"]`),
     );
@@ -368,6 +371,7 @@ export function ProjectionsPage() {
   }
 
   function moveAgreeColumn(currentRowId: string, columnKey: string, dir: -1 | 1) {
+    manualEditCellKeyRef.current = null;
     const keys = agreeCols.map((column) => column.key);
     const index = keys.indexOf(columnKey);
     const targetKey = keys[index + dir];
@@ -380,7 +384,35 @@ export function ProjectionsPage() {
     target.scrollIntoView({ block: 'nearest' });
   }
 
+  function beginManualAgreeEntry(player: Player, columnKey: string) {
+    manualFocusKeyRef.current = cellKey(player, columnKey);
+  }
+
+  function handleAgreeFocus(event: FocusEvent<HTMLInputElement>, player: Player, columnKey: string) {
+    const key = cellKey(player, columnKey);
+    if (manualFocusKeyRef.current === key) {
+      manualEditCellKeyRef.current = key;
+      manualFocusKeyRef.current = null;
+      event.currentTarget.select();
+      return;
+    }
+    manualEditCellKeyRef.current = null;
+  }
+
   function handleAgreeKeyDown(event: KeyboardEvent<HTMLInputElement>, player: Player, columnKey: string) {
+    const keyId = cellKey(player, columnKey);
+    if (manualEditCellKeyRef.current === keyId) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.currentTarget.blur();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        manualEditCellKeyRef.current = null;
+        event.currentTarget.blur();
+      }
+      return;
+    }
+
     const key = event.key;
 
     if (/^[0-9]$/.test(key)) {
@@ -626,9 +658,12 @@ export function ProjectionsPage() {
                               placeholder="—"
                               spellCheck={false}
                               value={currentValue}
+                              onFocus={(e) => handleAgreeFocus(e, p, column.key)}
                               onBlur={() => {
+                                manualEditCellKeyRef.current = null;
                                 void commitAgreement(p, column.key, readLiveAgreementValue(p, column.key));
                               }}
+                              onMouseDown={() => beginManualAgreeEntry(p, column.key)}
                               onChange={(e) => setDraftValue(key, e.target.value)}
                               onKeyDown={(e) => handleAgreeKeyDown(e, p, column.key)}
                             />
