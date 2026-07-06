@@ -100,10 +100,6 @@
   border-color: var(--amber);
   color: #1a1204;
 }
-.proj-rapid-toggle--on {
-  border-color: var(--amber);
-  color: var(--text-primary);
-}
 
 .proj-scoring {
   display: inline-flex;
@@ -334,6 +330,31 @@
   font-size: 0.95rem;
   color: var(--text-amber);
   letter-spacing: 0.01em;
+}
+.proj-rapid-mode {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill, 999px);
+}
+.proj-rapid-mode__btn {
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.proj-rapid-mode__btn:last-child {
+  border-right: 0;
+}
+.proj-rapid-mode__btn--on {
+  background: var(--amber);
+  color: #1a1204;
 }
 .proj-agree-hint__scale {
   margin-left: auto;

@@ -525,19 +525,26 @@ export function ProjectionsPage() {
             </button>
           )}
           {editing ? (
-            <button
-              aria-pressed={rapidEntryEnabled}
-              className={`proj-edit proj-rapid-toggle${rapidEntryEnabled ? ' proj-rapid-toggle--on' : ''}`}
-              onClick={() => setRapidEntryEnabled((enabled) => !enabled)}
-              title={rapidEntryEnabled ? 'Switch to normal typing mode' : 'Switch to rapid entry mode'}
-              type="button"
-            >
-              Rapid entry: {rapidEntryEnabled ? 'On' : 'Off'}
-            </button>
-          ) : null}
-          {editing ? (
             <div className="proj-agree-hint" role="note">
               <span className="proj-agree-hint__lead">Rapid entry</span>
+              <span className="proj-rapid-mode" aria-label="Agreement entry mode">
+                <button
+                  aria-pressed={rapidEntryEnabled}
+                  className={rapidEntryEnabled ? 'proj-rapid-mode__btn proj-rapid-mode__btn--on' : 'proj-rapid-mode__btn'}
+                  onClick={() => setRapidEntryEnabled(true)}
+                  type="button"
+                >
+                  Rapid
+                </button>
+                <button
+                  aria-pressed={!rapidEntryEnabled}
+                  className={!rapidEntryEnabled ? 'proj-rapid-mode__btn proj-rapid-mode__btn--on' : 'proj-rapid-mode__btn'}
+                  onClick={() => setRapidEntryEnabled(false)}
+                  type="button"
+                >
+                  Type exact
+                </button>
+              </span>
               {rapidEntryEnabled ? (
                 <>
                   <span>
