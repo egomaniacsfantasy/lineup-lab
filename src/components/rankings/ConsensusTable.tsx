@@ -4,7 +4,7 @@ import './ConsensusTable.css';
 
 interface ConsensusTableProps {
   rankings: ConsensusRanking[];
-  /** Real source label for connected leagues ("Olympus model · franco-…");
+  /** Real source label for connected leagues ("Odds Gods model · franco-…");
    *  the submissions fiction stays demo-only. */
   sourceLabel?: string;
 }
@@ -35,7 +35,7 @@ export function ConsensusTable({ rankings, sourceLabel }: ConsensusTableProps) {
     <section aria-labelledby="consensus-table-title" className="consensus-table">
       <div className="consensus-table__header">
         <p className="consensus-table__kicker">
-          {sourceLabel ? 'Olympus model rankings' : 'Consensus redraft rankings'}
+          {sourceLabel ? 'Odds Gods model rankings' : 'Consensus redraft rankings'}
         </p>
         <h2 className="consensus-table__title" id="consensus-table-title">
           {sourceLabel ?? 'Updated from 142,417 submissions'}

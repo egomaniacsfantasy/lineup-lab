@@ -52,7 +52,7 @@ export function ConnectPage() {
   return (
     <div className="connect-page">
       <section className="connect-page__hero">
-        <p className="connect-page__kicker">Welcome to Olympus</p>
+        <p className="connect-page__kicker">Welcome to Odds Gods</p>
         <h1 className="connect-page__title">Sync a league to begin</h1>
       </section>
 

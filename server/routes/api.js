@@ -84,7 +84,7 @@ apiRouter.get('/state', async (req, res, next) => {
   }
 });
 
-/** Active projection model served as a ranking board ("Olympus model"). */
+/** Active projection model served as a ranking board ("Odds Gods model"). */
 apiRouter.get('/rankings', (req, res) => {
   const active = getActiveProjections();
 
@@ -121,7 +121,7 @@ apiRouter.get('/rankings', (req, res) => {
       derived: p.derived,
     }));
 
-  res.json({ available: true, source: 'Olympus model', version: active.version, rankings });
+  res.json({ available: true, source: 'Odds Gods model', version: active.version, rankings });
 });
 
 /**

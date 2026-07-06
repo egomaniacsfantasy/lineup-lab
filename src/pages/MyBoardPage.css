@@ -45,6 +45,28 @@
   color: var(--text-primary);
 }
 
+.myboard__title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.myboard__state-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-subtle, #23272b);
+  border-radius: 999px;
+  color: var(--text-soft, #b9bdb4);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .setsw__namewrap {
   display: flex;
   flex-direction: column;
@@ -211,9 +233,8 @@
   cursor: pointer;
 }
 
-.myboard__sub {
+.myboard__status-row {
   margin: 12px 0 16px;
-  max-width: 52ch;
   color: var(--text-muted, #a9aea4);
   font-family: var(--font-ui);
   font-size: 13px;

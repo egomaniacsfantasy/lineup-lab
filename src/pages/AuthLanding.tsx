@@ -86,8 +86,7 @@ export function AuthLanding() {
     <div className="auth-landing">
       <div className="auth-landing__inner">
         <section className="auth-landing__pitch">
-          <p className="auth-landing__kicker">Odds Gods</p>
-          <h1 className="auth-landing__wordmark">OLYMPUS</h1>
+          <h1 className="auth-landing__wordmark">ODDS GODS</h1>
           <p className="auth-landing__thesis">
             Your fantasy league, priced like a sportsbook. Sync once and every
             matchup, start-sit, and trade gets a real number behind it.

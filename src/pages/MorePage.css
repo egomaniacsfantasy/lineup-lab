@@ -55,7 +55,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  width: 100%;
   padding: 16px;
+  text-align: left;
+}
+
+.more-page__card--button {
+  cursor: pointer;
 }
 
 .more-page__card-cta {

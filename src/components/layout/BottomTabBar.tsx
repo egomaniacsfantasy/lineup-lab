@@ -14,12 +14,14 @@ const BASE_TABS = [
     ),
   },
   {
-    label: 'Season',
-    path: '/season',
+    label: 'League',
+    path: '/league',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <rect x="3" y="4" width="14" height="13" rx="2" />
-        <path d="M6.5 2.8v3M13.5 2.8v3M3 8h14" />
+        <circle cx="7" cy="7" r="2.5" />
+        <circle cx="13.2" cy="8.2" r="2" />
+        <path d="M3.5 16c.7-2.6 2.5-4.1 4.7-4.1 2.1 0 3.8 1.3 4.5 3.7" />
+        <path d="M11.5 16c.4-1.7 1.8-2.9 3.5-2.9 1.4 0 2.6.8 3.3 2.1" />
       </svg>
     ),
   },
@@ -34,33 +36,11 @@ const BASE_TABS = [
     ),
   },
   {
-    label: 'My Board',
+    label: 'Board',
     path: '/rankings',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M4 6h12M4 10h12M4 14h8" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Projections',
-    path: '/projections',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M3 16.5 7.5 10l3.5 3 5-8" />
-        <path d="M3 3v14h14" />
-      </svg>
-    ),
-  },
-  {
-    label: 'League',
-    path: '/league',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <circle cx="7" cy="7" r="2.5" />
-        <circle cx="13.2" cy="8.2" r="2" />
-        <path d="M3.5 16c.7-2.6 2.5-4.1 4.7-4.1 2.1 0 3.8 1.3 4.5 3.7" />
-        <path d="M11.5 16c.4-1.7 1.8-2.9 3.5-2.9 1.4 0 2.6.8 3.3 2.1" />
       </svg>
     ),
   },

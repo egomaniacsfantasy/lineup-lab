@@ -98,7 +98,7 @@ function drawShareImage() {
 
   ctx.fillStyle = '#a9aea4';
   ctx.font = '700 24px Saira, sans-serif';
-  ctx.fillText('ODDS GODS / OLYMPUS', 90, 965);
+  ctx.fillText('ODDS GODS', 90, 965);
   ctx.fillText('lineuplab.oddsgods.net', 690, 965);
 
   canvas.toBlob((blob) => {

@@ -16,17 +16,13 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
   'half-ppr': 'HALF',
 };
 
-interface AppHeaderProps {
-  onOpenWelcome: () => void;
-}
-
 const STATE_LABELS: Record<string, (season: string, week: number) => string> = {
   IN_SEASON: (_season, week) => `Week ${week}`,
   LEAGUE_PLAYOFFS: (_season, week) => `Playoffs · Week ${week}`,
   COMPLETE: (season) => `${season} final`,
 };
 
-export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
+export function AppHeader() {
   const { mode, seasonState, season, nflWeek } = useSeasonMode();
   const { bootstrap, refresh, stored, isLoading, error } = useLeagueConnection();
   const { format, toggleFormat } = useOddsFormat();
@@ -48,11 +44,9 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   const navItems = stored
     ? [
         { label: 'Matchup', path: '/matchup' },
-        { label: 'Season', path: '/season' },
-        ...(hideTrade ? [] : [{ label: 'Trade', path: '/trade' }]),
-        { label: 'My Board', path: '/rankings' },
-        { label: 'Projections', path: '/projections' },
         { label: 'League', path: '/league' },
+        ...(hideTrade ? [] : [{ label: 'Trade', path: '/trade' }]),
+        { label: 'Board', path: '/rankings' },
         { label: 'More', path: '/more' },
       ]
     : [{ label: 'Connect', path: '/connect' }];
@@ -62,9 +56,8 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
   return (
     <header className="app-header">
       <div className="app-header__inner">
-        <div className="app-header__brand" aria-label="Odds Gods Olympus">
-          <span className="app-header__brand-kicker">ODDS GODS</span>
-          <span className="app-header__brand-title">OLYMPUS</span>
+        <div className="app-header__brand" aria-label="Odds Gods">
+          <span className="app-header__brand-title">ODDS GODS</span>
         </div>
 
         <nav className="app-header__nav" aria-label="Primary">
@@ -87,13 +80,6 @@ export function AppHeader({ onOpenWelcome }: AppHeaderProps) {
         </nav>
 
         <div className="app-header__actions">
-          <button
-            className="app-header__help"
-            onClick={onOpenWelcome}
-            type="button"
-          >
-            How this works
-          </button>
           <span
             className={[
               'app-header__status',

@@ -6,32 +6,6 @@ interface LineChangeFlashProps {
   visible: boolean;
 }
 
-const POSITIVE_MESSAGES = [
-  'The gods approve.',
-  'The line moves in your favor.',
-  'Smart play. The odds agree.',
-  'Fortune favors the bold.',
-];
-
-const NEGATIVE_MESSAGES = [
-  "Bold move. The line doesn't love it.",
-  'The odds shift against you.',
-  'Risky. The gods are watching.',
-  'The line tightens.',
-];
-
-function pickMessage(delta: number) {
-  if (delta > 0) {
-    return POSITIVE_MESSAGES[Math.floor(Math.random() * POSITIVE_MESSAGES.length)];
-  }
-
-  if (delta < 0) {
-    return NEGATIVE_MESSAGES[Math.floor(Math.random() * NEGATIVE_MESSAGES.length)];
-  }
-
-  return 'No change. The line holds.';
-}
-
 export function LineChangeFlash({ delta, visible }: LineChangeFlashProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [message, setMessage] = useState('');
@@ -45,8 +19,8 @@ export function LineChangeFlash({ delta, visible }: LineChangeFlashProps) {
 
     const nextMessage =
       roundedDelta === 0
-        ? pickMessage(0)
-        : `${pickMessage(roundedDelta)} ${roundedDelta > 0 ? '+' : ''}${roundedDelta.toFixed(1)}%`;
+        ? 'Previewing swap'
+        : `Previewing swap · ${roundedDelta > 0 ? '+' : ''}${roundedDelta.toFixed(1)}%`;
 
     let hideTimer: number | null = null;
 

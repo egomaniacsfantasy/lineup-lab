@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { LeagueFutures } from '../components/league/LeagueFutures';
@@ -7,24 +7,43 @@ import { LeagueSettings } from '../components/league/LeagueSettings';
 import { MatchupSlate } from '../components/league/MatchupSlate';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
-import { useSeasonMode } from '../hooks/useSeasonMode';
+import { DraftWrappedCard } from '../components/season/DraftWrappedCard';
+import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
+import { SeasonHeadline } from '../components/season/SeasonHeadline';
+import { WeekDetailModal } from '../components/season/WeekDetailModal';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { useSeasonMode } from '../hooks/useSeasonMode';
 import {
+  getUserTeam,
   toLeagueConnection,
   toLeagueFutures,
+  toScheduleItems,
   toWeekMatchups,
 } from '../adapters/connectedLeague';
 import {
+  MOCK_DRAFT_WRAPPED,
   MOCK_LEAGUE,
   MOCK_LEAGUE_FUTURES,
+  MOCK_SCHEDULE_PREVIEW,
+  MOCK_SEASON_OUTLOOK,
   MOCK_TRADE_TARGET_GROUPS,
   MOCK_WEEK_MATCHUPS,
 } from '../mocks';
+import { formatAmericanOdds } from '../utils/formatOdds';
 import { PROVIDER_LABEL } from '../utils/provider';
+import { shareText } from '../utils/share';
 import './ConnectPage.css';
 import './LeaguePage.css';
 
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
+type LeagueView = 'this-week' | 'futures' | 'schedule' | 'settings';
+
+const LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
+  { key: 'this-week', label: 'This week' },
+  { key: 'futures', label: 'Futures' },
+  { key: 'schedule', label: 'Schedule' },
+  { key: 'settings', label: 'Settings' },
+];
 
 function flowFromHash(hash: string): ConnectFlow | null {
   if (hash === '#connect-sleeper') return 'sleeper';
@@ -32,18 +51,31 @@ function flowFromHash(hash: string): ConnectFlow | null {
   return null;
 }
 
+function parseLeagueView(raw: string | null): LeagueView {
+  return LEAGUE_VIEWS.some((view) => view.key === raw)
+    ? (raw as LeagueView)
+    : 'this-week';
+}
+
+function recordLabel(team: { record: { wins: number; losses: number; ties: number } }) {
+  const { wins, losses, ties } = team.record;
+  return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
+}
+
 export function LeaguePage() {
   const { mode } = useSeasonMode();
-  const { stored, bootstrap, pricing, isLoading, error, connect, disconnect } =
+  const { stored, bootstrap, schedule, pricing, isLoading, error, connect, disconnect } =
     useLeagueConnection();
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showWizard, setShowWizard] = useState(false);
   const [manualFlow, setManualFlow] = useState<ConnectFlow>('none');
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const activeView = parseLeagueView(searchParams.get('view'));
   const isReconnectState = Boolean(stored && !bootstrap && !isLoading && error);
   const hasConnectHash = location.hash.startsWith('#connect');
-  const isWizardOpen =
-    showWizard || hasConnectHash || isReconnectState;
+  const isWizardOpen = showWizard || hasConnectHash || isReconnectState;
   const flow =
     flowFromHash(location.hash) ??
     (showWizard || hasConnectHash || isReconnectState ? manualFlow : 'none');
@@ -57,6 +89,59 @@ export function LeaguePage() {
     };
   }, [bootstrap, pricing]);
 
+  const connectedSeason = useMemo(() => {
+    if (!bootstrap) return null;
+    const userTeam = getUserTeam(bootstrap);
+    if (!userTeam) return null;
+    const futures = toLeagueFutures(bootstrap, pricing);
+    const scheduleItems = schedule ? toScheduleItems(schedule, bootstrap, pricing) : [];
+    const userFuture = futures.find((row) => row.teamName === userTeam.teamName);
+    const rank =
+      userFuture != null
+        ? futures.findIndex((row) => row.teamName === userFuture.teamName) + 1
+        : Math.max(1, Math.round(bootstrap.teams.length / 2));
+    const record = recordLabel(userTeam);
+
+    return {
+      rank,
+      record,
+      scheduleItems,
+      userFuture,
+      userTeam,
+    };
+  }, [bootstrap, pricing, schedule]);
+
+  const preseasonSchedule: ScheduleGridItem[] = useMemo(
+    () =>
+      MOCK_SCHEDULE_PREVIEW.map((item) => ({
+        ...item,
+        status: item.opponent === 'BYE' ? 'bye' : 'projected',
+      })),
+    [],
+  );
+
+  const handleShareDraftWrapped = async () => {
+    const message = `My 2026 season outlook: ${MOCK_DRAFT_WRAPPED.projectedRecord}, ${formatAmericanOdds(
+      MOCK_DRAFT_WRAPPED.championshipOdds,
+    )} to win it all.`;
+    try {
+      await shareText({
+        title: 'Draft wrapped',
+        text: message,
+      });
+    } catch {
+      // Native share is optional; the card remains useful without it.
+    }
+  };
+
+  const setLeagueView = (view: LeagueView) => {
+    if (view === 'this-week') {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ view });
+  };
+
   if (isWizardOpen) {
     return (
       <div className="league-page">
@@ -66,7 +151,7 @@ export function LeaguePage() {
           <div className="connect-page">
             <section className="connect-page__hero">
               <p className="connect-page__kicker">
-                {isReconnectState ? 'Reconnect your league' : 'Welcome to Olympus'}
+                {isReconnectState ? 'Reconnect your league' : 'Welcome to Odds Gods'}
               </p>
               <h1 className="connect-page__title">Choose a provider</h1>
             </section>
@@ -193,36 +278,133 @@ export function LeaguePage() {
         <SeasonalNotice>{pricing.scoringNote}</SeasonalNotice>
       ) : null}
 
-      <LeagueFutures
-        currentWeek={connection.currentWeek}
-        futures={futures}
-        leagueName={connection.leagueName}
-        mode={connected ? 'inseason' : mode}
-        playoffTeams={bootstrap?.league.playoffTeams ?? 6}
-        scoringFormat={connection.scoringFormat}
-        totalTeams={connection.totalTeams}
-      />
+      <div className="league-page__view-tabs" role="tablist" aria-label="League market views">
+        {LEAGUE_VIEWS.map((view) => (
+          <button
+            aria-selected={activeView === view.key}
+            className={[
+              'league-page__view-tab',
+              activeView === view.key ? 'league-page__view-tab--active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            key={view.key}
+            onClick={() => setLeagueView(view.key)}
+            role="tab"
+            type="button"
+          >
+            {view.label}
+          </button>
+        ))}
+      </div>
 
-      {!connected ? <TradeTargetTeaser groups={MOCK_TRADE_TARGET_GROUPS} /> : null}
+      {activeView === 'this-week' ? (
+        <>
+          {!connected ? <TradeTargetTeaser groups={MOCK_TRADE_TARGET_GROUPS} /> : null}
 
-      {slate.length > 0 ? (
-        <MatchupSlate currentWeek={connection.currentWeek} matchups={slate} />
+          {slate.length > 0 ? (
+            <MatchupSlate currentWeek={connection.currentWeek} matchups={slate} />
+          ) : null}
+        </>
       ) : null}
 
-      <div className="league-page__settings">
-        <LeagueSettings
-          connection={connection}
-          onDisconnect={() => {
-            // Removes this league; the context falls through to the next saved
-            // one, or to the demo prompt when none remain.
-            disconnect();
-          }}
-          onSwitchLeague={() => {
-            setManualFlow('none');
-            setShowWizard(true);
-          }}
+      {activeView === 'futures' ? (
+        <>
+          <p className="league-page__section-label">League futures</p>
+          <LeagueFutures
+            currentWeek={connection.currentWeek}
+            futures={futures}
+            leagueName={connection.leagueName}
+            mode={connected ? 'inseason' : mode}
+            playoffTeams={bootstrap?.league.playoffTeams ?? 6}
+            scoringFormat={connection.scoringFormat}
+            totalTeams={connection.totalTeams}
+          />
+
+          <p className="league-page__section-label">Your futures</p>
+          {connectedSeason ? (
+            <SeasonHeadline
+              championshipOdds={
+                connectedSeason.userFuture?.championOdds ??
+                MOCK_SEASON_OUTLOOK.championshipOdds
+              }
+              leagueRank={connectedSeason.rank}
+              live={bootstrap !== null && bootstrap.league.status === 'in_season'}
+              playoffProbability={
+                connectedSeason.userFuture?.playoffProb ??
+                MOCK_SEASON_OUTLOOK.playoffProbability
+              }
+              recordLabel={connectedSeason.userFuture ? 'Projected record' : 'Record'}
+              recordValue={connectedSeason.userFuture?.record ?? connectedSeason.record}
+              title={`Your ${bootstrap?.league.season} season futures`}
+            />
+          ) : (
+            <>
+              <SeasonHeadline
+                championshipOdds={MOCK_SEASON_OUTLOOK.championshipOdds}
+                leagueRank={2}
+                playoffProbability={MOCK_SEASON_OUTLOOK.playoffProbability}
+                recordLabel="Projected record"
+                recordRange={MOCK_SEASON_OUTLOOK.recordRange}
+                recordValue={`${MOCK_SEASON_OUTLOOK.projectedRecord.wins}-${MOCK_SEASON_OUTLOOK.projectedRecord.losses}`}
+                title="Your 2026 season futures"
+              />
+              <DraftWrappedCard
+                draftWrapped={MOCK_DRAFT_WRAPPED}
+                onShare={handleShareDraftWrapped}
+              />
+            </>
+          )}
+        </>
+      ) : null}
+
+      {activeView === 'schedule' ? (
+        <>
+          {connected ? (
+            connectedSeason && connectedSeason.scheduleItems.length > 0 ? (
+              <ScheduleGrid
+                items={connectedSeason.scheduleItems}
+                onSelectWeek={(item) => setSelectedWeek(item.week)}
+                title="Schedule"
+              />
+            ) : (
+              <SeasonalNotice>Loading your schedule…</SeasonalNotice>
+            )
+          ) : (
+            <ScheduleGrid items={preseasonSchedule} title="Upcoming schedule" />
+          )}
+        </>
+      ) : null}
+
+      {activeView === 'settings' ? (
+        <div className="league-page__settings">
+          <LeagueSettings
+            connection={connection}
+            onDisconnect={() => {
+              // Removes this league; the context falls through to the next saved
+              // one, or to the demo prompt when none remain.
+              disconnect();
+            }}
+            onSwitchLeague={() => {
+              setManualFlow('none');
+              setShowWizard(true);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {selectedWeek && bootstrap && connectedSeason ? (
+        <WeekDetailModal
+          line={
+            pricing?.available
+              ? pricing.weeklyLines?.find((line) => line.week === selectedWeek) ?? null
+              : null
+          }
+          onClose={() => setSelectedWeek(null)}
+          userTeamName={connectedSeason.userTeam.teamName}
+          week={selectedWeek}
         />
-      </div>
+      ) : null}
     </div>
   );
 }

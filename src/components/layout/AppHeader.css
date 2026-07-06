@@ -21,18 +21,9 @@
 }
 
 .app-header__brand {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
   min-width: 0;
-}
-
-.app-header__brand-kicker {
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
 }
 
 .app-header__brand-title {
@@ -54,20 +45,6 @@
   justify-content: flex-end;
   gap: 6px;
   min-width: fit-content;
-}
-
-.app-header__help {
-  display: none;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  transition: color var(--transition-fast);
-}
-
-.app-header__help:hover {
-  color: var(--text-primary);
 }
 
 .app-header__status {
@@ -134,10 +111,6 @@
     grid-template-columns: auto 1fr auto;
     gap: var(--space-xl);
     padding-inline: var(--space-xl);
-  }
-
-  .app-header__brand-kicker {
-    font-size: 9px;
   }
 
   .app-header__brand-title {

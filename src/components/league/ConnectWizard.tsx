@@ -198,7 +198,7 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
       ) : null}
 
       <p className="connect-wizard__privacy">
-        Read-only. We never ask for your Sleeper password. Olympus prices your
+        Read-only. We never ask for your Sleeper password. Odds Gods prices your
         league, it can&apos;t touch it.
       </p>
     </section>

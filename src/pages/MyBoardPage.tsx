@@ -13,6 +13,7 @@ import './MyBoardPage.css';
 
 const BOARD_POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'] as const;
 const RAPID_POSITIONS = ['QB', 'RB', 'WR', 'TE'] as const;
+const BOARD_LAST_EDIT_KEY = 'og.board.last-edited';
 
 const SKILL = ['QB', 'RB', 'WR', 'TE'];
 /** Nudge the order toward consensus/ESPN. Raw VOR overrates RB scarcity and
@@ -115,6 +116,44 @@ const CONVICTION_LABEL: Record<Conviction, string> = {
   clear: 'Clearly',
   huge: 'By a lot',
 };
+
+function readLastEditedMap(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(BOARD_LAST_EDIT_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function baselineDate(version: string | null) {
+  if (!version) return '—';
+  return version.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? version;
+}
+
+function relativeTime(iso: string | null) {
+  if (!iso) return '—';
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '—';
+  const diffMs = Date.now() - then;
+  const minutes = Math.max(0, Math.round(diffMs / 60_000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.round(days / 30);
+  return `${months}mo ago`;
+}
+
+function isStaleEdit(iso: string | null) {
+  if (!iso) return false;
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return false;
+  return Date.now() - then > 14 * 24 * 60 * 60_000;
+}
 
 /**
  * Per-game floor/ceiling for the dial scale. Franco's floor/ceiling fields are
@@ -340,6 +379,7 @@ export function MyBoardPage() {
   const [mode, setMode] = useState<'board' | 'rapid'>('board');
   const [position, setPosition] = useState<(typeof BOARD_POSITIONS)[number]>('RB');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [lastEditedBySet, setLastEditedBySet] = useState<Record<string, string>>(readLastEditedMap);
 
   // Every who's-better pick is logged as a crowd signal. Individually it tunes
   // the user's own board; in aggregate these pairwise votes are a consensus
@@ -378,6 +418,53 @@ export function MyBoardPage() {
   }, [bootstrap]);
 
   const effective = (row: BoardRow) => overlay[row.playerId]?.base ?? row.mean;
+  const lastEditedAt = lastEditedBySet[activeSetId] ?? null;
+  const modelState = overrideCount === 0 ? 'Baseline' : isStaleEdit(lastEditedAt) ? 'Stale' : 'Active';
+  const statusSegments = [
+    `Pricing model: ${overrideCount === 0 ? 'Franco baseline' : 'Your board'}`,
+    `Baseline: Franco ${baselineDate(version)}`,
+    ...(overrideCount > 0 ? [`Last edited: ${relativeTime(lastEditedAt)}`] : []),
+    'Used in matchup, season, trade',
+  ];
+
+  const markEdited = useCallback(() => {
+    const now = new Date().toISOString();
+    setLastEditedBySet((current) => {
+      const next = { ...current, [activeSetId]: now };
+      try {
+        window.localStorage.setItem(BOARD_LAST_EDIT_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, [activeSetId]);
+
+  const setPlayerBaseAndMark = useCallback(
+    (playerId: string, base: number | null) => {
+      markEdited();
+      setPlayerBase(playerId, base);
+    },
+    [markEdited, setPlayerBase],
+  );
+  const clearPlayerAndMark = useCallback(
+    (playerId: string) => {
+      markEdited();
+      clearPlayer(playerId);
+    },
+    [markEdited, clearPlayer],
+  );
+  const toggleFlagAndMark = useCallback(
+    (playerId: string, kind: 'high' | 'low') => {
+      markEdited();
+      toggleFlag(playerId, kind);
+    },
+    [markEdited, toggleFlag],
+  );
+  const resetAndMark = useCallback(() => {
+    markEdited();
+    reset();
+  }, [markEdited, reset]);
 
   // GOD rating: built from the whole board (season totals + VOR), league-aware
   // via the roster slots, recomputed live as overrides change implied totals.
@@ -424,34 +511,31 @@ export function MyBoardPage() {
       ) : null}
       <header className="myboard__head">
         <div>
-          <p className="myboard__kicker">
-            Your model{version ? ` · on Franco ${version}` : ''}
-          </p>
-          <SetSwitcher
-            sets={sets}
-            activeSetId={activeSetId}
-            activeSetName={activeSetName}
-            createSet={createSet}
-            renameSet={renameSet}
-            deleteSet={deleteSet}
-            switchSet={switchSet}
-          />
+          <p className="myboard__kicker">Board</p>
+          <div className="myboard__title-line">
+            <SetSwitcher
+              sets={sets}
+              activeSetId={activeSetId}
+              activeSetName={activeSetName}
+              createSet={createSet}
+              renameSet={renameSet}
+              deleteSet={deleteSet}
+              switchSet={switchSet}
+            />
+            <span className="myboard__state-chip">{modelState}</span>
+          </div>
         </div>
         {overrideCount > 0 ? (
           <div className="myboard__head-right">
             <span className="myboard__count">{overrideCount} moved</span>
-            <button className="myboard__reset" onClick={() => reset()} type="button">
+            <button className="myboard__reset" onClick={resetAndMark} type="button">
               Reset to Franco
             </button>
           </div>
         ) : null}
       </header>
 
-      <p className="myboard__sub">
-        This is your board to edit, not a printout. Tap any player to set your
-        own number, or run Rapid fire to build it fast. Your matchup and season
-        odds price off it, with Franco as the anchor.
-      </p>
+      <p className="myboard__status-row">{statusSegments.join(' · ')}</p>
 
       <div className="myboard__modes" role="tablist">
         <button
@@ -484,7 +568,7 @@ export function MyBoardPage() {
           francoGodOf={francoGodOf}
           effective={effective}
           readBase={(id) => overlay[id]?.base ?? null}
-          setBase={setPlayerBase}
+          setBase={setPlayerBaseAndMark}
           logPick={logPick}
         />
       ) : (
@@ -502,9 +586,9 @@ export function MyBoardPage() {
           godScale={godScale}
           expanded={expanded}
           setExpanded={setExpanded}
-          setPlayerBase={setPlayerBase}
-          clearPlayer={clearPlayer}
-          toggleFlag={toggleFlag}
+          setPlayerBase={setPlayerBaseAndMark}
+          clearPlayer={clearPlayerAndMark}
+          toggleFlag={toggleFlagAndMark}
         />
       )}
     </div>

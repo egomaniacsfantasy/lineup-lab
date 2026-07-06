@@ -74,10 +74,10 @@ export function DraftPage() {
 
   const handleShareDraftSlots = async () =>
     shareText({
-      title: 'Olympus draft slot odds',
+      title: 'Draft slot odds',
       text: selectedSlot
-        ? `Olympus draft slot odds (${leagueStyle}): pick #${selectedSlot.position} prices at ${formatAmericanOdds(selectedSlot.championshipOdds)} with a ${selectedSlot.winProbability.toFixed(1)}% title chance. Best slot right now is #${bestSlot.position} at ${formatAmericanOdds(bestSlot.championshipOdds)}.`
-        : `Olympus draft slot odds (${leagueStyle}): best slot right now is #${bestSlot.position} at ${formatAmericanOdds(bestSlot.championshipOdds)} with a ${bestSlot.winProbability.toFixed(1)}% title chance.`,
+        ? `Draft slot odds (${leagueStyle}): pick #${selectedSlot.position} prices at ${formatAmericanOdds(selectedSlot.championshipOdds)} with a ${selectedSlot.winProbability.toFixed(1)}% title chance. Best slot right now is #${bestSlot.position} at ${formatAmericanOdds(bestSlot.championshipOdds)}.`
+        : `Draft slot odds (${leagueStyle}): best slot right now is #${bestSlot.position} at ${formatAmericanOdds(bestSlot.championshipOdds)} with a ${bestSlot.winProbability.toFixed(1)}% title chance.`,
       url: window.location.href,
     });
 

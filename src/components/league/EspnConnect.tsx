@@ -159,7 +159,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
             <div className="espn-connect__cookies">
               <p className="espn-connect__cookies-note">
                 This league is private. ESPN keeps its login locked away from
-                web pages, so connecting needs the Olympus extension. One
+                web pages, so connecting needs the Odds Gods extension. One
                 click, no passwords, read-only.
               </p>
 
@@ -179,12 +179,12 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                     onClick={() => setShowInstall((s) => !s)}
                     type="button"
                   >
-                    Get the Olympus connector
+                    Get the Odds Gods connector
                   </button>
                   {showInstall ? (
                     <ol className="espn-connect__steps">
                       <li>
-                        Install the Olympus ESPN Connector extension and make
+                        Install the Odds Gods ESPN Connector extension and make
                         sure you&apos;re signed in to espn.com in this browser.
                       </li>
                       <li>Refresh this page. The button above becomes “Sync.”</li>
