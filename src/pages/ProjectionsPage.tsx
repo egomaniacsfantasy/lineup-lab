@@ -123,6 +123,49 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : -Infinity;
 }
 
+function numOrNull(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Scoring systems. "" = PPR (bare columns). RB/WR/TE carry per-scoring columns;
+// QB/K/DEF are identical across scorings (no receptions).
+type Scoring = '' | '_half' | '_nonppr';
+const SCORING_OPTIONS: { key: Scoring; label: string }[] = [
+  { key: '', label: 'PPR' },
+  { key: '_half', label: 'Half PPR' },
+  { key: '_nonppr', label: 'Non-PPR' },
+];
+const HAS_SCORING = (p: Position) => p === 'RB' || p === 'WR' || p === 'TE';
+
+/** Season point/floor/ceiling for the selected scoring. */
+function scoredSeason(p: Player, suf: Scoring) {
+  if (HAS_SCORING(p.position)) {
+    return {
+      point: numOrNull(p.season['fantasy_pts' + suf]),
+      floor: numOrNull(p.season['fantasy_pts_floor' + suf]),
+      ceiling: numOrNull(p.season['fantasy_pts_ceiling' + suf]),
+    };
+  }
+  return { point: p.point, floor: p.floor, ceiling: p.ceiling };
+}
+
+/** Weekly point/floor/ceiling for the selected scoring. */
+function scoredWeek(p: Player, w: Row, suf: Scoring) {
+  if (HAS_SCORING(p.position)) {
+    return {
+      point: w['fantasy_pts' + suf],
+      floor: w['fantasy_pts_floor' + suf],
+      ceiling: w['fantasy_pts_ceiling' + suf],
+    };
+  }
+  return {
+    point: w[WEEKLY_POINT[p.position]],
+    floor: w['fantasy_pts_floor'],
+    ceiling: w['fantasy_pts_ceiling'],
+  };
+}
+
 export function ProjectionsPage() {
   const [data, setData] = useState<Dataset | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +174,7 @@ export function ProjectionsPage() {
   const [sortKey, setSortKey] = useState<string>('point');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [openName, setOpenName] = useState<string | null>(null);
+  const [scoring, setScoring] = useState<Scoring>('');
   // Agreement editing: unlocked with the admin password; edits POST back to the
   // server and are held in a local overlay keyed by position+name.
   const [adminPw, setAdminPw] = useState<string | null>(() => localStorage.getItem(PW_KEY));
@@ -183,15 +227,15 @@ export function ProjectionsPage() {
       .filter((p) => !q || p.name.toLowerCase().includes(q) || (p.team ?? '').toLowerCase().includes(q));
 
     const valueOf = (p: Player): number => {
-      if (sortKey === 'point') return num(p.point);
-      if (sortKey === 'floor') return num(p.floor);
-      if (sortKey === 'ceiling') return num(p.ceiling);
+      if (sortKey === 'point' || sortKey === 'floor' || sortKey === 'ceiling') {
+        return num(scoredSeason(p, scoring)[sortKey]);
+      }
       return num(p.season[sortKey]);
     };
     const sorted = [...filtered].sort((a, b) => valueOf(b) - valueOf(a));
     if (sortDir === 'asc') sorted.reverse();
     return sorted;
-  }, [data, pos, query, sortKey, sortDir]);
+  }, [data, pos, query, sortKey, sortDir, scoring]);
 
   async function verifyPw(pw: string): Promise<boolean> {
     try {
@@ -302,6 +346,18 @@ export function ProjectionsPage() {
             </button>
           ))}
         </div>
+        <div className="proj-scoring" role="group" aria-label="Scoring system">
+          {SCORING_OPTIONS.map((o) => (
+            <button
+              key={o.key}
+              className={`proj-scoring__btn${o.key === scoring ? ' proj-scoring__btn--on' : ''}`}
+              onClick={() => setScoring(o.key)}
+              title={`Show ${o.label} fantasy points`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
         <div className="proj-controls__right">
           <input
             className="proj-search"
@@ -374,9 +430,16 @@ export function ProjectionsPage() {
                         {fmt(p.season[c.key])}
                       </td>
                     ))}
-                    <td className="proj-td proj-td--num proj-td--fp">{fmt(p.point)}</td>
-                    <td className="proj-td proj-td--num proj-td--floor">{fmt(p.floor)}</td>
-                    <td className="proj-td proj-td--num proj-td--ceil">{fmt(p.ceiling)}</td>
+                    {(() => {
+                      const sv = scoredSeason(p, scoring);
+                      return (
+                        <>
+                          <td className="proj-td proj-td--num proj-td--fp">{fmt(sv.point)}</td>
+                          <td className="proj-td proj-td--num proj-td--floor">{fmt(sv.floor)}</td>
+                          <td className="proj-td proj-td--num proj-td--ceil">{fmt(sv.ceiling)}</td>
+                        </>
+                      );
+                    })()}
                     {agreeCols.map((ac) => (
                       <td
                         key={ac.key}
@@ -402,7 +465,7 @@ export function ProjectionsPage() {
                   {isOpen && (
                     <tr className="proj-week-row">
                       <td className="proj-week-cell" colSpan={cols.length + 6 + agreeCols.length}>
-                        <WeeklyGrid player={p} cols={cols} />
+                        <WeeklyGrid player={p} cols={cols} scoring={scoring} />
                       </td>
                     </tr>
                   )}
@@ -423,8 +486,7 @@ export function ProjectionsPage() {
   );
 }
 
-function WeeklyGrid({ player, cols }: { player: Player; cols: StatCol[] }) {
-  const pointCol = WEEKLY_POINT[player.position];
+function WeeklyGrid({ player, cols, scoring }: { player: Player; cols: StatCol[]; scoring: Scoring }) {
   if (!player.weekly.length) {
     return <p className="proj-week-empty">No week-by-week schedule available.</p>;
   }
@@ -441,11 +503,14 @@ function WeeklyGrid({ player, cols }: { player: Player; cols: StatCol[] }) {
               </th>
             ))}
             <th className="proj-th--num proj-th--fp">FP</th>
+            <th className="proj-th--num">Floor</th>
+            <th className="proj-th--num">Ceil</th>
           </tr>
         </thead>
         <tbody>
           {player.weekly.map((w, idx) => {
             const home = w.game_location === 'H' || w.game_location === 'home';
+            const sw = scoredWeek(player, w, scoring);
             return (
               <tr key={`${w.week}-${idx}`}>
                 <td>{String(w.week ?? idx + 1)}</td>
@@ -458,7 +523,9 @@ function WeeklyGrid({ player, cols }: { player: Player; cols: StatCol[] }) {
                     {fmt(w[c.weeklyKey ?? c.key])}
                   </td>
                 ))}
-                <td className="proj-td--num proj-td--fp">{fmt(w[pointCol])}</td>
+                <td className="proj-td--num proj-td--fp">{fmt(sw.point)}</td>
+                <td className="proj-td--num proj-week-floor">{fmt(sw.floor)}</td>
+                <td className="proj-td--num proj-week-ceil">{fmt(sw.ceiling)}</td>
               </tr>
             );
           })}
