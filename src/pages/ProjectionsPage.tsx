@@ -264,10 +264,23 @@ export function ProjectionsPage() {
     return readCommittedAgreementValueFromMap(player, columnKey, agreeSaved);
   }
 
-  function readAgreementValue(player: Player, columnKey: string): string {
+  function readAgreementValueFromMaps(
+    player: Player,
+    columnKey: string,
+    draftMap: Record<string, string>,
+    savedMap: Record<string, string>,
+  ): string {
     const key = cellKey(player, columnKey);
-    if (hasKey(agreeDraft, key)) return agreeDraft[key];
-    return readCommittedAgreementValueFromMap(player, columnKey, agreeSaved);
+    if (hasKey(draftMap, key)) return draftMap[key];
+    return readCommittedAgreementValueFromMap(player, columnKey, savedMap);
+  }
+
+  function readAgreementValue(player: Player, columnKey: string): string {
+    return readAgreementValueFromMaps(player, columnKey, agreeDraft, agreeSaved);
+  }
+
+  function readLiveAgreementValue(player: Player, columnKey: string): string {
+    return readAgreementValueFromMaps(player, columnKey, agreeDraftRef.current, agreeSavedRef.current);
   }
 
   function setDraftValue(key: string, value: string) {
@@ -613,8 +626,8 @@ export function ProjectionsPage() {
                               placeholder="—"
                               spellCheck={false}
                               value={currentValue}
-                              onBlur={(e) => {
-                                void commitAgreement(p, column.key, e.target.value);
+                              onBlur={() => {
+                                void commitAgreement(p, column.key, readLiveAgreementValue(p, column.key));
                               }}
                               onChange={(e) => setDraftValue(key, e.target.value)}
                               onKeyDown={(e) => handleAgreeKeyDown(e, p, column.key)}
