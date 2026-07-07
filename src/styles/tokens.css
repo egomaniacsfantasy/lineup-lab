@@ -1,22 +1,22 @@
 :root {
   /* ── Backgrounds ── */
-  --bg: #0e0c09;
-  --bg-deep: #080604;
-  --bg-surface: #17130e;
-  --bg-surface-soft: #211b14;
-  --bg-raised: #211b14;
-  --bg-inset: #0b0906;
-  --bg-overlay: rgba(8, 6, 4, 0.78);
+  --bg: #0d0f11;
+  --bg-deep: #08090b;
+  --bg-surface: #15181b;
+  --bg-surface-soft: #1d2125;
+  --bg-raised: #1d2125;
+  --bg-inset: #0b0d0f;
+  --bg-overlay: rgba(7, 8, 10, 0.78);
   --bg-positive: #11271b;
   --bg-negative: #2e1512;
   /* Canvas texture: near-background solid tone so atmospheric text tints, not reads. */
-  --canvas-numeral: #080604;
+  --canvas-numeral: #08090b;
 
   /* ── Text ── */
   --text-primary: #f4f5f2;
   --text-dim: #cdd1c9;
   --text-soft: #b9bdb4;
-  --text-amber: #b87d18;
+  --text-amber: #ff8049;
   --text-muted: #a9aea4;
   --ink-3: #787c75;
 
@@ -26,18 +26,18 @@
        green (--green)        = favored / positive movement — money only
        red (--red)            = underdog / negative movement — money only
      Nothing else may use green or red. */
-  --amber: #b87d18;
-  --amber-mid: #9c6814;
-  --amber-bright: #d09a3a;
-  --amber-hot: #e5bd72;
+  --amber: #e8541d;
+  --amber-mid: #f0662e;
+  --amber-bright: #ff8049;
+  --amber-hot: #ffa37d;
   --green: #34d27b;
   --red: #ff5c4d;
   --gold: #c9a227;
 
   /* ── Typography ── */
-  --font-display: "Instrument Serif", Georgia, serif;
-  --font-ui: "Space Grotesk", sans-serif;
-  --font-num: "IBM Plex Mono", monospace;
+  --font-display: "Staatliches", "Arial Narrow", sans-serif;
+  --font-ui: "Hanken Grotesk", sans-serif;
+  --font-num: "Saira", "Hanken Grotesk", sans-serif;
   /* Legacy role aliases (existing rules reference these) */
   --font-serif: var(--font-display);
   --font-condensed: var(--font-display);
@@ -97,16 +97,16 @@
   --shadow-glow-amber: 0 0 0 1px var(--border-subtle);
 
   /* ── Glass Effect ── */
-  --glass-bg: #17130e;
-  --glass-border: #302820;
+  --glass-bg: #15181b;
+  --glass-border: #2a2f34;
   --glass-blur: 0px;
 
   /* ── Borders ── */
-  --border-subtle: #302820;
-  --border-strong: rgba(184, 125, 24, 0.38);
+  --border-subtle: #2a2f34;
+  --border-strong: rgba(232, 84, 29, 0.38);
 
   /* ── Focus ── */
-  --focus-ring: rgba(184, 125, 24, 0.45);
+  --focus-ring: rgba(232, 84, 29, 0.45);
 
   /* ── Layers ── */
   --z-dropdown: 50;

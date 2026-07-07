@@ -272,7 +272,7 @@
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   color: var(--text-primary);
-  font-family: var(--font-num, var(--font-mono, "IBM Plex Mono", monospace));
+  font-family: var(--font-num, var(--font-mono, "Saira", sans-serif));
   font-variant-numeric: tabular-nums;
   font-size: 0.8rem;
   font-weight: 600;
@@ -321,7 +321,7 @@
   border: 1px solid color-mix(in srgb, var(--amber) 28%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--amber) 5%, transparent);
-  font-family: var(--font-num, var(--font-mono, "IBM Plex Mono", monospace));
+  font-family: var(--font-num, var(--font-mono, "Saira", sans-serif));
   font-size: 12px;
   color: var(--text-dim);
 }

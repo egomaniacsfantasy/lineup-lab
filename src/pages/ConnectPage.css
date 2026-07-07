@@ -62,7 +62,7 @@
 
 .connect-page__provider--live {
   cursor: pointer;
-  border-color: rgba(184, 125, 24, 0.45);
+  border-color: rgba(232, 84, 29, 0.45);
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 

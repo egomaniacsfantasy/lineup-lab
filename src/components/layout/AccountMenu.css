@@ -17,7 +17,7 @@
 }
 
 .account-menu__trigger:hover {
-  border-color: var(--amber, #b87d18);
+  border-color: var(--amber, #e8541d);
 }
 
 .account-menu__avatar {
@@ -27,7 +27,7 @@
   height: 24px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: var(--amber, #b87d18);
+  background: var(--amber, #e8541d);
   color: #fff;
   font-family: var(--font-ui);
   font-size: 12px;
@@ -124,7 +124,7 @@
 }
 
 .account-menu__league--active {
-  background: rgba(184, 125, 24, 0.1);
+  background: rgba(232, 84, 29, 0.1);
 }
 
 .account-menu__league-text {
@@ -145,7 +145,7 @@
 }
 
 .account-menu__league--active .account-menu__league-title {
-  color: var(--amber-bright, #d09a3a);
+  color: var(--amber-bright, #ff8049);
 }
 
 .account-menu__league-sub {
@@ -159,7 +159,7 @@
   height: 7px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: var(--amber-bright, #d09a3a);
+  background: var(--amber-bright, #ff8049);
 }
 
 .account-menu__actions {
