@@ -6,8 +6,8 @@ import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useModelOverlay } from '../contexts/ModelOverlayContext';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { fetchLines } from '../services/leagueApi';
-import { getPlayerManifestEntry } from '../data/playerManifest';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
+import { useNflSchedule } from '../hooks/useNflSchedule';
 import {
   MOCK_MATCHUP,
   MOCK_PLAYER_POOL,
@@ -28,6 +28,10 @@ import {
   winProbabilityToMoneyline,
 } from '../utils/lineupComparison';
 import { evaluateStarterRoster, getTopSwapEvaluation } from '../utils/starterEvaluation';
+import {
+  buildExposureWindows,
+  getGameContextSource,
+} from '../utils/playerGameContext';
 import type {
   BenchPlayer,
   MatchupData,
@@ -98,16 +102,6 @@ function formatSignedPercent(value: number) {
   return `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}%`;
 }
 
-function formatMatchupForMeta(gameLine: string) {
-  const match = gameLine.match(/^([A-Z]{2,3})\s[+-].*?\s(@|vs)\s([A-Z]{2,3})$/);
-
-  if (!match) {
-    return gameLine.split(' · ')[0] ?? gameLine;
-  }
-
-  return `${match[1]} ${match[2]} ${match[3]}`;
-}
-
 /**
  * Betting-convention spread label with a real minus glyph: the favorite
  * lays points ("You −7.4"), the dog gets them ("You +7.4").
@@ -167,86 +161,6 @@ function swapVerdict(
   }
 
   return formatVerdict(playerName, deltaWinProbability);
-}
-
-function getPlayerContext(player: Player) {
-  const entry = getPlayerManifestEntry(player.slug ?? player.id);
-  const kickoff = entry?.week8_2024.kickoff ?? 'Sun 1pm';
-  const gameLine = entry?.week8_2024.gameLine ?? 'Line pending';
-
-  return {
-    kickoff,
-    gameLine,
-    matchup: formatMatchupForMeta(gameLine),
-  };
-}
-
-function buildExposureWindows(roster: RosterSlot[]) {
-  const grouped = new Map<
-    string,
-    {
-      key: string;
-      dayLabel: string;
-      detail: string;
-      lockLabel: string;
-      projection: number;
-      players: Player[];
-      order: number;
-    }
-  >();
-
-  const dayOrder: Record<string, number> = {
-    THU: 0,
-    FRI: 1,
-    SAT: 2,
-    SUN: 3,
-    MON: 4,
-  };
-
-  roster.forEach((slot) => {
-    const context = getPlayerContext(slot.starter);
-    const [dayPart, ...timeParts] = context.kickoff.split(' ');
-    const dayLabel = dayPart.slice(0, 3).toUpperCase();
-    const timeLabel = timeParts.join(' ').replace('pm', '').replace('am', '').trim();
-    const key = `${dayLabel}-${timeLabel}`;
-    const existing = grouped.get(key);
-    const lockLabel = dayLabel === 'THU' ? `${timeLabel} tonight` : timeLabel;
-
-    if (existing) {
-      existing.projection += slot.projection;
-      existing.players.push(slot.starter);
-      return;
-    }
-
-    grouped.set(key, {
-      key,
-      dayLabel,
-      detail: context.matchup,
-      lockLabel,
-      projection: slot.projection,
-      players: [slot.starter],
-      order: dayOrder[dayLabel] ?? 10,
-    });
-  });
-
-  const totalProjection = roster.reduce((sum, slot) => sum + slot.projection, 0);
-
-  return Array.from(grouped.values())
-    .sort((left, right) => left.order - right.order)
-    .map((window) => {
-      const matchupCount = new Set(
-        window.players.map((player) => getPlayerContext(player).matchup),
-      ).size;
-
-      return {
-        ...window,
-        share: Math.round((window.projection / totalProjection) * 100),
-        detail:
-          window.players.length === 1
-            ? `${window.detail} · locks ${window.lockLabel}`
-            : `${matchupCount} ${matchupCount === 1 ? 'game' : 'games'} · locks ${window.lockLabel}`,
-      };
-    });
 }
 
 function buildBenchImpactRows(
@@ -810,6 +724,12 @@ function MatchupLive({
   const { format: oddsFormat } = useOddsFormat();
   const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : 'your fantasy app';
   const userRosterId = bootstrap?.teams.find((team) => team.isUser)?.rosterId ?? null;
+  const scheduleSeason = bootstrap?.league.season ? Number(bootstrap.league.season) : null;
+  const nflSchedule = useNflSchedule(isConnected ? scheduleSeason : null, isConnected ? matchup.week : null);
+  const gameContextSource = useMemo(
+    () => getGameContextSource(isConnected ? 'live' : 'demo', nflSchedule),
+    [isConnected, nflSchedule],
+  );
   const officialUrl = stored
     ? officialPlatformUrl({
         provider: stored.provider,
@@ -912,7 +832,11 @@ function MatchupLive({
     );
   }, [topSwapEvaluation]);
 
-  const exposureWindows = useMemo(() => buildExposureWindows(engine.roster), [engine.roster]);
+  const exposureTiming = useMemo(
+    () => buildExposureWindows(engine.roster, gameContextSource),
+    [engine.roster, gameContextSource],
+  );
+  const exposureWindows = exposureTiming.windows;
   useEffect(() => {
     if (recapShareState === 'idle' || recapShareState === 'working') {
       return undefined;

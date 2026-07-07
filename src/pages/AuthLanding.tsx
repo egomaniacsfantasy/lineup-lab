@@ -1,64 +1,6 @@
-/**
- * The front door for anyone not logged in: previews the thesis and features,
- * with sign up / log in. You can't reach the app without an account.
- */
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import './AuthLanding.css';
-
-const FEATURES = [
-  {
-    title: 'Who do I start',
-    body: 'Tap two players, see the exact win-probability swing. The math, not a hunch.',
-  },
-  {
-    title: 'Trade command center',
-    body: 'Deals both sides should take, plus an honest accept-or-decline read on any offer.',
-  },
-  {
-    title: 'Season futures',
-    body: 'Live title odds, playoff and finals probabilities, week by week.',
-  },
-];
-
-/** A static taste of the real matchup card, to show what they're signing up for. */
-function MatchupPreview() {
-  return (
-    <div className="auth-preview" aria-hidden="true">
-      <div className="auth-preview__head">
-        <span className="auth-preview__eyebrow">Week 1 · head to head</span>
-        <span className="auth-preview__live">
-          <span className="auth-preview__dot" />
-          Live line
-        </span>
-      </div>
-      <div className="auth-preview__faceoff">
-        <div className="auth-preview__side">
-          <p className="auth-preview__team">Your team</p>
-          <p className="auth-preview__ml">+154</p>
-          <p className="auth-preview__proj">Proj 128.4</p>
-        </div>
-        <span className="auth-preview__vs">VS</span>
-        <div className="auth-preview__side auth-preview__side--opp">
-          <p className="auth-preview__team">Roster 4</p>
-          <p className="auth-preview__ml auth-preview__ml--opp">−154</p>
-          <p className="auth-preview__proj">Proj 135.7</p>
-        </div>
-      </div>
-      <div className="auth-preview__bar">
-        <span className="auth-preview__bar-fill" style={{ width: '39.8%' }} />
-      </div>
-      <div className="auth-preview__labels">
-        <span className="auth-preview__label-you">39.8% you</span>
-        <span>60.2% them</span>
-      </div>
-      <div className="auth-preview__meta">
-        <span>Spread <b>You +7.4</b></span>
-        <span>Total <b>264.1</b></span>
-      </div>
-    </div>
-  );
-}
 
 export function AuthLanding() {
   const { signUp, signIn } = useAuth();
@@ -85,24 +27,8 @@ export function AuthLanding() {
   return (
     <div className="auth-landing">
       <div className="auth-landing__inner">
-        <section className="auth-landing__pitch">
-          <h1 className="auth-landing__wordmark">ODDS GODS</h1>
-          <p className="auth-landing__thesis">
-            Your fantasy league, priced like a sportsbook. Sync once and every
-            matchup, start-sit, and trade gets a real number behind it.
-          </p>
-          <MatchupPreview />
-          <ul className="auth-landing__features">
-            {FEATURES.map((feature) => (
-              <li className="auth-landing__feature" key={feature.title}>
-                <span className="auth-landing__feature-title">{feature.title}</span>
-                <span className="auth-landing__feature-body">{feature.body}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
         <section className="auth-landing__panel">
+          <h1 className="auth-landing__wordmark">ODDS GODS</h1>
           <div className="auth-landing__tabs" role="tablist">
             <button
               aria-selected={mode === 'signup'}

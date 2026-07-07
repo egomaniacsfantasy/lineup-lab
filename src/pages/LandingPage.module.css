@@ -1,0 +1,448 @@
+.page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow-x: clip;
+  background:
+    radial-gradient(70% 58% at 50% 12%, rgba(184, 125, 24, 0.16), transparent 62%),
+    radial-gradient(54% 44% at 8% 38%, rgba(184, 125, 24, 0.08), transparent 68%),
+    #0e0c09;
+  color: #f0e6d0;
+  font-family: var(--font-ui);
+}
+
+.page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(240, 230, 208, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240, 230, 208, 0.012) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
+}
+
+.hero {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.kicker,
+.sectionKicker {
+  margin: 0;
+  color: rgba(240, 230, 208, 0.42);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.kicker {
+  margin-bottom: 20px;
+}
+
+.headline {
+  max-width: 980px;
+  margin: 0 0 20px;
+  color: #f0e6d0;
+  font-family: var(--font-serif);
+  font-size: clamp(48px, 8vw, 96px);
+  font-weight: 400;
+  line-height: 1.02;
+}
+
+.sub {
+  max-width: 600px;
+  margin: 0 0 36px;
+  color: rgba(239, 228, 207, 0.72);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 44px;
+}
+
+.primaryCta,
+.secondaryCta,
+.closeCta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 28px;
+  border-radius: 8px;
+  color: #f0e6d0;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.primaryCta {
+  border: 1px solid var(--amber, #b87d18);
+  background: var(--amber, #b87d18);
+  color: #0e0c09;
+}
+
+.primaryCta:hover {
+  background: #ffc857;
+  border-color: #ffc857;
+  transform: translateY(-1px);
+}
+
+.secondaryCta,
+.closeCta {
+  border: 1px solid rgba(240, 230, 208, 0.25);
+  background: rgba(240, 230, 208, 0.02);
+}
+
+.secondaryCta:hover,
+.closeCta:hover {
+  border-color: rgba(240, 230, 208, 0.5);
+  transform: translateY(-1px);
+}
+
+.proofStrip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  max-width: 780px;
+  color: rgba(240, 230, 208, 0.42);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.dot {
+  color: rgba(240, 230, 208, 0.25);
+}
+
+.section {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 96px 24px 0;
+}
+
+.sectionHead {
+  margin: 0 auto 28px;
+  text-align: center;
+}
+
+.sectionHead h2,
+.close h2 {
+  margin: 10px 0 0;
+  color: #f0e6d0;
+  font-family: var(--font-serif);
+  font-size: clamp(34px, 5vw, 58px);
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.liveCard {
+  display: block;
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: 24px;
+  border: 1px solid rgba(240, 230, 208, 0.12);
+  border-radius: 18px;
+  background:
+    radial-gradient(130% 150% at 0% 0%, rgba(240, 230, 208, 0.07), transparent 52%),
+    #080603;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.44);
+  color: inherit;
+  text-decoration: none;
+}
+
+.liveCardHead,
+.liveLabels,
+.liveCardHead span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.liveCardHead {
+  margin-bottom: 18px;
+  color: rgba(240, 230, 208, 0.44);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.liveFaceoff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.liveOpponent {
+  text-align: right;
+}
+
+.liveTeam {
+  margin: 0;
+  color: rgba(240, 230, 208, 0.74);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.liveNumber {
+  margin: 4px 0 0;
+  color: #f0e6d0;
+  font-family: var(--font-serif);
+  font-size: clamp(42px, 7vw, 72px);
+  font-weight: 400;
+  line-height: 0.95;
+}
+
+.liveMeta,
+.liveTap {
+  margin: 6px 0 0;
+  color: rgba(240, 230, 208, 0.45);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.liveVs {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid rgba(240, 230, 208, 0.12);
+  border-radius: 999px;
+  background: #0e0c09;
+  color: rgba(240, 230, 208, 0.42);
+  font-family: var(--font-serif);
+  letter-spacing: 0.08em;
+}
+
+.liveBar {
+  height: 7px;
+  margin-top: 22px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(240, 230, 208, 0.08);
+}
+
+.liveBar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(240, 230, 208, 0.82), rgba(240, 230, 208, 0.42));
+}
+
+.liveLabels {
+  margin-top: 7px;
+  color: rgba(240, 230, 208, 0.44);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.liveTap {
+  margin-top: 18px;
+  text-align: center;
+}
+
+.beats,
+.marketGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  width: min(100%, 1080px);
+  margin: 0 auto;
+  padding: 96px 24px;
+}
+
+.marketGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 0;
+}
+
+.beat {
+  padding: 28px;
+  border: 1px solid rgba(240, 230, 208, 0.08);
+  border-radius: 12px;
+  background: #080603;
+}
+
+.beatNum,
+.marketStat {
+  margin: 0 0 14px;
+  color: rgba(240, 230, 208, 0.55);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.marketStat span {
+  color: rgba(240, 230, 208, 0.32);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.beatTitle {
+  margin: 0 0 10px;
+  color: #f0e6d0;
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.beatBody {
+  margin: 0;
+  color: rgba(239, 228, 207, 0.7);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.close {
+  padding: 96px 24px 64px;
+  text-align: center;
+}
+
+.close .ctaRow {
+  margin-top: 28px;
+  margin-bottom: 0;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 18px;
+  padding: 24px;
+  border-top: 1px solid rgba(240, 230, 208, 0.08);
+  color: rgba(240, 230, 208, 0.44);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.footer strong {
+  color: #f0e6d0;
+  letter-spacing: 0.12em;
+}
+
+.footer a {
+  color: rgba(240, 230, 208, 0.68);
+  text-decoration: none;
+}
+
+.footer a:hover {
+  color: #f0e6d0;
+}
+
+.demoShell {
+  display: grid;
+  gap: 10px;
+}
+
+.demoBanner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: block;
+  margin: 0 auto;
+  width: min(100%, 1240px);
+  padding: 10px 14px;
+  border: 1px solid rgba(240, 230, 208, 0.12);
+  border-radius: 0 0 10px 10px;
+  background: rgba(8, 6, 3, 0.92);
+  color: rgba(240, 230, 208, 0.84);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  backdrop-filter: blur(14px);
+}
+
+@media (max-width: 920px) {
+  .marketGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .hero {
+    align-items: flex-start;
+    min-height: 92vh;
+    text-align: left;
+  }
+
+  .ctaRow,
+  .proofStrip {
+    justify-content: flex-start;
+  }
+
+  .primaryCta,
+  .secondaryCta,
+  .closeCta {
+    width: 100%;
+  }
+
+  .section,
+  .beats {
+    padding: 64px 20px;
+  }
+
+  .section {
+    padding-bottom: 0;
+  }
+
+  .sectionHead {
+    text-align: left;
+  }
+
+  .liveFaceoff {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .liveVs {
+    width: auto;
+    height: auto;
+    justify-self: start;
+    padding: 6px 10px;
+  }
+
+  .liveOpponent {
+    text-align: left;
+  }
+
+  .beats,
+  .marketGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .close {
+    padding: 64px 20px 48px;
+    text-align: left;
+  }
+}

@@ -13,6 +13,7 @@ import { getLeaguePricing, priceTrade } from '../engine/engine.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
+import { getNflSchedule } from '../services/nflSchedule.js';
 
 const DAY = 24 * 60 * 60_000;
 
@@ -82,6 +83,20 @@ apiRouter.get('/state', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+apiRouter.get('/nfl/schedule', async (req, res) => {
+  const schedule = await getNflSchedule({
+    season: req.query.season,
+    week: req.query.week,
+  });
+
+  if (!schedule.available) {
+    res.status(503).json({ available: false });
+    return;
+  }
+
+  res.json(schedule);
 });
 
 /** Active projection model served as a ranking board ("Odds Gods model"). */

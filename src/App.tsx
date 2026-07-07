@@ -11,6 +11,7 @@ import { ModelOverlayProvider } from './contexts/ModelOverlayContext';
 import { AuthLanding } from './pages/AuthLanding';
 import { ConnectPage } from './pages/ConnectPage';
 import { DraftPage } from './pages/DraftPage';
+import { DemoPage, LandingPage } from './pages/LandingPage';
 import { LeaguePage } from './pages/LeaguePage';
 import { MatchupPage } from './pages/MatchupPage';
 import { MorePage } from './pages/MorePage';
@@ -42,6 +43,7 @@ function AppRoutes() {
           <Routes>
             <Route element={<AppShell />}>
               <Route path="/" element={<HomeGate />} />
+              <Route path="/signin" element={<HomeGate />} />
               <Route path="/connect" element={<ConnectPage />} />
               <Route element={<RequireLeague />}>
                 <Route path="/matchup" element={<MatchupPage />} />
@@ -63,11 +65,32 @@ function AppRoutes() {
   );
 }
 
+function PublicRoutes() {
+  return (
+    <SeasonModeProvider>
+      <ModelOverlayProvider>
+        <LeagueConnectionProvider>
+          <OddsFormatProvider>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/signin" element={<AuthLanding />} />
+              <Route element={<AppShell />}>
+                <Route path="/demo" element={<DemoPage />} />
+              </Route>
+              <Route path="*" element={<AuthLanding />} />
+            </Routes>
+          </OddsFormatProvider>
+        </LeagueConnectionProvider>
+      </ModelOverlayProvider>
+    </SeasonModeProvider>
+  );
+}
+
 /** Nothing in the app is reachable without an account. */
 function AuthGate() {
   const { session, loading } = useAuth();
   if (loading) return <div className="app-boot" aria-hidden="true" />;
-  if (!session) return <AuthLanding />;
+  if (!session) return <PublicRoutes />;
   return <AppRoutes />;
 }
 
