@@ -80,11 +80,63 @@ function laneSideLabel(bootstrap: LeagueBootstrap, ids: string[], compressed: bo
     .toUpperCase();
 }
 
-function laneHeadlineTone(incoming: string, outgoing: string) {
-  const length = incoming.length + outgoing.length;
-  if (length > 40) return 'trade-cc__lane-title--tight';
-  if (length > 30) return 'trade-cc__lane-title--snug';
-  return '';
+function DealLaneTitle({
+  fullIncoming,
+  fullOutgoing,
+  compressedIncoming,
+  compressedOutgoing,
+}: {
+  fullIncoming: string;
+  fullOutgoing: string;
+  compressedIncoming: string;
+  compressedOutgoing: string;
+}) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [fit, setFit] = useState<'full' | 'snug' | 'compressed'>('full');
+  const incoming = fit === 'compressed' ? compressedIncoming : fullIncoming;
+  const outgoing = fit === 'compressed' ? compressedOutgoing : fullOutgoing;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+
+    let frame = 0;
+    const measure = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const overflows = el.scrollWidth > el.clientWidth + 1;
+        if (!overflows) return;
+        setFit((current) => {
+          if (current === 'full') return 'snug';
+          if (current === 'snug') return 'compressed';
+          return current;
+        });
+      });
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [fit, fullIncoming, fullOutgoing, compressedIncoming, compressedOutgoing]);
+
+  return (
+    <span
+      className={[
+        'trade-cc__lane-title',
+        fit === 'snug' ? 'trade-cc__lane-title--snug' : '',
+        fit === 'compressed' ? 'trade-cc__lane-title--compressed' : '',
+      ].filter(Boolean).join(' ')}
+      ref={ref}
+    >
+      <span>{incoming}</span>
+      <span className="trade-cc__lane-for">for</span>
+      <span>{outgoing}</span>
+    </span>
+  );
 }
 
 function generatedAt(timestamp?: number) {
@@ -291,15 +343,15 @@ function TradeDealsView() {
     compact: boolean,
   ) => {
     const allChips = [
-      ...givePlayerIds.map((id) => ({ id, side: 'send' })),
       ...getPlayerIds.map((id) => ({ id, side: 'get' })),
+      ...givePlayerIds.map((id) => ({ id, side: 'send' })),
     ];
-    const visibleChips = allChips.slice(0, 3);
+    const visibleChips = allChips.slice(0, 4);
     const hiddenCount = allChips.length - visibleChips.length;
 
     return (
       <span className={['trade-cc__lane-headshots', compact ? 'trade-cc__lane-headshots--compact' : ''].filter(Boolean).join(' ')}>
-        {visibleChips.map((chip, index) => (
+        {visibleChips.map((chip) => (
           <PlayerHeadshot
             className={[
               'trade-cc__lane-headshot',
@@ -311,14 +363,10 @@ function TradeDealsView() {
             imageClassName="trade-cc__lane-headshot-image"
             key={`${chip.side}-${chip.id}`}
             player={toPlayer(chip.id, bootstrap.players)}
-            style={{ '--lane-headshot-index': index } as CSSProperties}
           />
         ))}
         {hiddenCount > 0 ? (
-          <span
-            className="trade-cc__lane-headshot trade-cc__lane-headshot--more"
-            style={{ '--lane-headshot-index': visibleChips.length } as CSSProperties}
-          >
+          <span className="trade-cc__lane-headshot trade-cc__lane-headshot--more">
             +{hiddenCount}
           </span>
         ) : null}
@@ -390,12 +438,8 @@ function TradeDealsView() {
             const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
             const fullIncoming = laneSideLabel(bootstrap, getPlayerIds, false);
             const fullOutgoing = laneSideLabel(bootstrap, givePlayerIds, false);
-            const shouldCompress =
-              getPlayerIds.length > 1 ||
-              givePlayerIds.length > 1 ||
-              fullIncoming.length + fullOutgoing.length > 34;
-            const incoming = laneSideLabel(bootstrap, getPlayerIds, shouldCompress);
-            const outgoing = laneSideLabel(bootstrap, givePlayerIds, shouldCompress);
+            const compressedIncoming = laneSideLabel(bootstrap, getPlayerIds, true);
+            const compressedOutgoing = laneSideLabel(bootstrap, givePlayerIds, true);
             const marker = verdictRailPosition(lane.verdict);
             const time = generatedAt(lane.pricedAt);
             const compact = index > 0;
@@ -412,11 +456,13 @@ function TradeDealsView() {
               >
                 <span className="trade-cc__lane-top">
                   {renderLaneHeadshots(getPlayerIds, givePlayerIds, compact)}
-                  <span className={['trade-cc__lane-title', laneHeadlineTone(incoming, outgoing)].filter(Boolean).join(' ')}>
-                    <span>{incoming}</span>
-                    <span className="trade-cc__lane-for">for</span>
-                    <span>{outgoing}</span>
-                  </span>
+                  <DealLaneTitle
+                    compressedIncoming={compressedIncoming}
+                    compressedOutgoing={compressedOutgoing}
+                    fullIncoming={fullIncoming}
+                    fullOutgoing={fullOutgoing}
+                    key={`${fullIncoming}|${fullOutgoing}`}
+                  />
                 </span>
 
                 <span className="trade-cc__lane-mid">
