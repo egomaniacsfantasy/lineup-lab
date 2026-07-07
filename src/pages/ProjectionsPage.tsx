@@ -221,7 +221,7 @@ export function ProjectionsPage() {
   useEffect(() => {
     if (!userId || !data) {
       agreeSavedRef.current = {};
-      setAgreeSaved({});
+      queueMicrotask(() => setAgreeSaved({}));
       return;
     }
     let alive = true;
