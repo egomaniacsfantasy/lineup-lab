@@ -175,18 +175,23 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
               season: step.season,
               leagues: step.leagues,
             })
-          }
-          onConfirm={() =>
-            onConnected({
-              provider: 'sleeper',
-              leagueId: step.league.id,
-              leagueName: step.league.name,
-              userId: step.user.id,
-              username: step.user.username,
-              displayName: step.user.displayName,
-              allLeagueIds: step.allLeagueIds,
-            })
-          }
+	          }
+	          onConfirm={() =>
+	            onConnected({
+	              provider: 'sleeper',
+	              leagueId: step.league.id,
+	              leagueName: step.league.name,
+	              userId: step.user.id,
+	              username: step.user.username,
+	              displayName: step.user.displayName,
+	              allLeagueIds: step.allLeagueIds,
+	              allLeagues: step.leagues.map((league) => ({
+	                id: league.id,
+	                name: league.name,
+	                season: league.season,
+	              })),
+	            })
+	          }
           step={step}
         />
       ) : null}

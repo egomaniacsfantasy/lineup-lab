@@ -10,12 +10,14 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  connectUsername,
   fetchBootstrap,
   fetchLineHistory,
   fetchLines,
   fetchSchedule,
   refreshLeague,
   setApiContext,
+  type ApiLeagueSummary,
   type LeagueBootstrap,
   type LeaguePricing,
   type LineHistoryEntry,
@@ -26,6 +28,12 @@ import { useAuth } from './AuthContext';
 import { useModelOverlay } from './ModelOverlayContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
+
+interface StoredLeagueSummary {
+  id: string;
+  name: string;
+  season?: string;
+}
 
 export interface StoredConnection {
   provider: 'sleeper' | 'espn';
@@ -40,6 +48,7 @@ export interface StoredConnection {
   /** Multi-league seam: all of the user's leagues are stored on connect;
    *  one is active. A header league switcher is a later pass. */
   allLeagueIds: string[];
+  allLeagues?: StoredLeagueSummary[];
   /** ESPN-only: season + (private league) the user's own read-only cookies. */
   season?: string;
   espnS2?: string | null;
@@ -122,7 +131,46 @@ function rowToConnection(row: DbLeagueRow): StoredConnection {
   };
 }
 
-async function saveLeagueRow(userId: string, c: StoredConnection) {
+function connectionFromSummary(
+  base: StoredConnection,
+  summary: StoredLeagueSummary,
+  allLeagues: StoredLeagueSummary[],
+): StoredConnection {
+  return {
+    provider: base.provider,
+    leagueId: summary.id,
+    leagueName: summary.name,
+    userId: base.userId,
+    username: base.username,
+    displayName: base.displayName,
+    allLeagueIds: allLeagues.map((league) => league.id),
+    allLeagues,
+    season: summary.season ?? base.season,
+    espnS2: base.espnS2 ?? null,
+    swid: base.swid ?? null,
+  };
+}
+
+function connectionsFromKnownLeagues(connection: StoredConnection) {
+  const summaries = connection.allLeagues?.length
+    ? connection.allLeagues
+    : [{
+        id: connection.leagueId,
+        name: connection.leagueName ?? `${connection.provider} league`,
+        season: connection.season,
+      }];
+  return summaries.map((summary) => connectionFromSummary(connection, summary, summaries));
+}
+
+function sleeperSummaries(leagues: ApiLeagueSummary[]): StoredLeagueSummary[] {
+  return leagues.map((league) => ({
+    id: league.id,
+    name: league.name,
+    season: league.season,
+  }));
+}
+
+async function saveLeagueRow(userId: string, c: StoredConnection, isActive = true) {
   await supabase.from('olympus_leagues').upsert(
     {
       user_id: userId,
@@ -132,8 +180,25 @@ async function saveLeagueRow(userId: string, c: StoredConnection) {
       member_id: c.userId,
       username: c.username,
       display_name: c.displayName,
-      is_active: true,
+      is_active: isActive,
     },
+    { onConflict: 'user_id,provider,league_id' },
+  );
+}
+
+async function saveLeagueRows(userId: string, connections: StoredConnection[], active: StoredConnection) {
+  await supabase.from('olympus_leagues').update({ is_active: false }).eq('user_id', userId);
+  await supabase.from('olympus_leagues').upsert(
+    connections.map((connection) => ({
+      user_id: userId,
+      provider: connection.provider,
+      league_id: connection.leagueId,
+      season: connection.season ?? null,
+      member_id: connection.userId,
+      username: connection.username,
+      display_name: connection.displayName,
+      is_active: leagueKey(connection) === leagueKey(active),
+    })),
     { onConflict: 'user_id,provider,league_id' },
   );
 }
@@ -207,6 +272,56 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     };
   }, [user]);
 
+  useEffect(() => {
+    if (!user || !stored || stored.provider !== 'sleeper' || !stored.username) return;
+    let cancelled = false;
+    connectUsername(stored.username)
+      .then((result) => {
+        if (cancelled || result.leagues.length === 0) return;
+        const summaries = sleeperSummaries(result.leagues);
+        const nextConnections = result.leagues.map((league) =>
+          connectionFromSummary(
+            {
+              ...stored,
+              userId: result.user.id,
+              username: result.user.username,
+              displayName: result.user.displayName,
+            },
+            { id: league.id, name: league.name, season: league.season },
+            summaries,
+          ),
+        );
+        const active =
+          nextConnections.find((connection) => leagueKey(connection) === leagueKey(stored)) ??
+          nextConnections[0];
+        const existingKeys = leagues.map(leagueKey).join('|');
+        const nextKeys = nextConnections.map(leagueKey).join('|');
+        if (existingKeys !== nextKeys) {
+          setLeagues(nextConnections);
+          if (userIdRef.current) void saveLeagueRows(userIdRef.current, nextConnections, active);
+        }
+        if (leagueKey(active) === leagueKey(stored)) {
+          const activeChanged =
+            active.leagueName !== stored.leagueName ||
+            active.allLeagueIds.length !== stored.allLeagueIds.length ||
+            active.allLeagueIds.some((id, index) => id !== stored.allLeagueIds[index]);
+          if (activeChanged) {
+            applyApiContext(active);
+            try {
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(active));
+            } catch {
+              // ignore
+            }
+            setStored(active);
+          }
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [leagues, stored, user]);
+
   const hydrate = useCallback(async (connection: StoredConnection) => {
     setIsLoading(true);
     setError(null);
@@ -271,13 +386,20 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   // Add a league (or re-sync an existing one) and make it active.
   const connect = useCallback(
     (connection: StoredConnection) => {
-      activateLocal(connection);
-      setLeagues((prev) => [
-        connection,
-        ...prev.filter((l) => leagueKey(l) !== leagueKey(connection)),
-      ]);
+      const knownConnections = connectionsFromKnownLeagues(connection);
+      const active =
+        knownConnections.find((known) => leagueKey(known) === leagueKey(connection)) ??
+        connection;
+      activateLocal(active);
+      setLeagues((prev) => {
+        const merged = [
+          ...knownConnections,
+          ...prev.filter((l) => !knownConnections.some((known) => leagueKey(known) === leagueKey(l))),
+        ];
+        return merged;
+      });
       // Persist to the account so it's there on every device.
-      if (userIdRef.current) void activateLeagueRow(userIdRef.current, connection);
+      if (userIdRef.current) void saveLeagueRows(userIdRef.current, knownConnections, active);
     },
     [activateLocal],
   );
