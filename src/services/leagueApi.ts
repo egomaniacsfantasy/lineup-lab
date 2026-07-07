@@ -184,6 +184,9 @@ export interface MarketMover {
   partnerRosterId?: number;
   partnerGain?: number;
   framing?: 'both_upgrade' | 'near_fair_you_win';
+  verdict?: string;
+  valueGap?: number;
+  acceptanceProbability?: number | null;
   acceptanceReason?: string;
   pricedAt?: number;
   /** Projected points the move adds to your starting lineup. */

@@ -20,8 +20,8 @@ import { cached } from '../cache.js';
 
 const SIMS = 10_000;
 const FUTURES_SIMS = 2_000;
-const LANE_PRICING_LIMIT_PER_OPPONENT = 4;
-const LANE_PRICING_LIMIT_TOTAL = 24;
+const LANE_PRICING_LIMIT_PER_OPPONENT = 2;
+const LANE_PRICING_LIMIT_TOTAL = 12;
 
 const FLEX_ELIGIBILITY = {
   FLEX: ['RB', 'WR', 'TE'],
@@ -608,8 +608,27 @@ export function tradeLaneMatchesPricedResult(lane, priced) {
     Math.sign(lane.valueGain ?? 0) === Math.sign(youGain) &&
     Math.abs((lane.valueGain ?? 0) - youGain) <= 0.3 &&
     Math.sign(lane.partnerGain ?? 0) === Math.sign(themGain) &&
-    Math.abs((lane.partnerGain ?? 0) - themGain) <= 0.3
+    Math.abs((lane.partnerGain ?? 0) - themGain) <= 0.3 &&
+    (lane.verdict == null || lane.verdict === priced.verdict) &&
+    (lane.acceptanceProbability == null || lane.acceptanceProbability === priced.acceptance?.probability) &&
+    (lane.valueGap == null || lane.valueGap === priced.valueGap)
   );
+}
+
+function laneAcceptReason({ opp, give, get, priced, catalog }) {
+  const youGain = Number((priced.you?.valueDelta ?? 0).toFixed(1));
+  const themGain = Number((priced.them?.valueDelta ?? 0).toFixed(1));
+  const names = (ids) => ids.map((id) => catalog[id]?.name ?? `Player ${id}`).join(' + ');
+
+  if (themGain > 0) {
+    return `${opp.teamName} upgrades starters by ${themGain.toFixed(1)} pts/wk; you add ${youGain.toFixed(1)}.`;
+  }
+
+  if (priced.bestPlayer?.toThem) {
+    return `${opp.teamName} gets the best player (${priced.bestPlayer.name}); you add ${youGain.toFixed(1)} pts/wk.`;
+  }
+
+  return `${names(get)} adds ${youGain.toFixed(1)} pts/wk to your starters for ${names(give)}.`;
 }
 
 /**
@@ -789,14 +808,30 @@ function computeMovers(ctx) {
       })
       .slice(0, Math.min(LANE_PRICING_LIMIT_PER_OPPONENT, lanePricesRemaining));
 
-    for (const { candidate, youGain, themGain, strict } of scored) {
+    for (const { candidate } of scored) {
       lanePricesRemaining -= 1;
-      const fallback = youGain > 0 && themGain >= -0.5;
+      const priced = priceTrade(ctx, {
+        userRosterId: userTeam.rosterId,
+        partnerRosterId: opp.rosterId,
+        give: candidate.give,
+        get: candidate.get,
+        traits: { toughness: 5, dealAppetite: 5, fandomTeam: null, fandomLevel: 5 },
+      });
+      if (!priced.available || !priced.you || !priced.them) continue;
+
+      const youGain = Number((priced.you.valueDelta ?? 0).toFixed(1));
+      const themGain = Number((priced.them.valueDelta ?? 0).toFixed(1));
+      const strict = youGain > 0 && themGain > 0;
+      const fallback =
+        youGain > 0 &&
+        themGain >= -0.5 &&
+        priced.verdict !== 'Overpay' &&
+        (priced.acceptance?.probability ?? 0) >= 30;
       if (!strict && !fallback) continue;
 
       const lane = {
         kind: 'trade',
-        headline: strict ? `${opp.teamName}: both sides gain` : `${opp.teamName}: near-fair, you gain`,
+        headline: `${names(candidate.get)} for ${names(candidate.give)}`,
         detail: `Send ${names(candidate.give)}, get ${names(candidate.get)}`,
         givePlayerId: candidate.give[0],
         getPlayerId: candidate.get[0],
@@ -806,12 +841,16 @@ function computeMovers(ctx) {
         partnerGain: themGain,
         valueGain: youGain,
         framing: strict ? 'both_upgrade' : 'near_fair_you_win',
-        acceptanceReason: null,
+        verdict: priced.verdict,
+        valueGap: priced.valueGap,
+        acceptanceProbability: priced.acceptance?.probability ?? null,
+        acceptanceReason: laneAcceptReason({ opp, give: candidate.give, get: candidate.get, priced, catalog }),
         pricedAt: Date.now(),
-        titleOddsBefore: baseUser.championOdds,
-        titleOddsAfter: baseUser.championOdds,
+        titleOddsBefore: priced.you.titleBefore,
+        titleOddsAfter: priced.you.titleAfter,
         score: (strict ? 100 : 0) + youGain + themGain,
       };
+      if (!tradeLaneMatchesPricedResult(lane, priced)) continue;
       (strict ? strictLanes : fallbackLanes).push(lane);
     }
   }
@@ -821,18 +860,7 @@ function computeMovers(ctx) {
     if (!bestPerOpponent.has(lane.partnerRosterId)) bestPerOpponent.set(lane.partnerRosterId, lane);
   }
 
-  movers.push(
-    ...[...bestPerOpponent.values()].slice(0, 4).map(({ score, ...lane }) => {
-      const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, lane.valueGain);
-      return {
-        ...lane,
-        titleOddsAfter: noWorseThan(
-          lane.titleOddsBefore,
-          after?.championOdds ?? lane.titleOddsBefore,
-        ),
-      };
-    }),
-  );
+  movers.push(...[...bestPerOpponent.values()].slice(0, 4).map(({ score, ...lane }) => lane));
 
   return movers;
 }

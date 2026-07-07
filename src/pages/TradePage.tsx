@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
@@ -41,6 +41,55 @@ const VERDICT_RAIL: Record<string, number> = {
   'Good value': 0.72,
   'Smash accept': 0.9,
 };
+
+function verdictRailPosition(verdict?: string) {
+  return VERDICT_RAIL[verdict ?? 'Fair'] ?? 0.5;
+}
+
+function signedDelta(value = 0) {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+}
+
+function laneIds(primary?: string[], fallback?: string) {
+  return primary?.length ? primary : fallback ? [fallback] : [];
+}
+
+function playerName(bootstrap: LeagueBootstrap, id: string) {
+  return bootstrap.players[id]?.name ?? `Player ${id}`;
+}
+
+function lastName(name: string) {
+  const pieces = name.trim().split(/\s+/);
+  return pieces.at(-1) ?? name;
+}
+
+function laneSideLabel(bootstrap: LeagueBootstrap, ids: string[]) {
+  if (ids.length === 0) return 'PLAYER';
+  if (ids.length === 1) return playerName(bootstrap, ids[0]).toUpperCase();
+  return ids.map((id) => lastName(playerName(bootstrap, id))).join(' + ').toUpperCase();
+}
+
+function laneHeadlineTone(incoming: string, outgoing: string) {
+  const length = incoming.length + outgoing.length;
+  if (length > 40) return 'trade-cc__lane-title--tight';
+  if (length > 30) return 'trade-cc__lane-title--snug';
+  return '';
+}
+
+function generatedAt(timestamp?: number) {
+  if (!timestamp) return null;
+  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function leanStyle(position: number): CSSProperties {
+  const left = Math.min(position, 0.5) * 100;
+  const width = Math.abs(position - 0.5) * 100;
+  return {
+    '--lane-lean-pos': `${position * 100}%`,
+    '--lane-lean-left': `${left}%`,
+    '--lane-lean-width': `${width}%`,
+  } as CSSProperties;
+}
 
 const NEUTRAL_TRADE_TRAITS: TradeTraits = {
   toughness: 5,
@@ -225,6 +274,36 @@ function TradeDealsView() {
   };
 
   const canPrice = partnerRosterId != null && give.length > 0 && getIds.length > 0;
+  const renderLaneHeadshots = (
+    getPlayerIds: string[],
+    givePlayerIds: string[],
+    compact: boolean,
+  ) => {
+    const chips = [
+      ...givePlayerIds.slice(0, 2).map((id, index) => ({ id, side: 'send', index })),
+      ...getPlayerIds.slice(0, 2).map((id, index) => ({ id, side: 'get', index })),
+    ];
+
+    return (
+      <span className={['trade-cc__lane-headshots', compact ? 'trade-cc__lane-headshots--compact' : ''].filter(Boolean).join(' ')}>
+        {chips.map((chip) => (
+          <PlayerHeadshot
+            className={[
+              'trade-cc__lane-headshot',
+              chip.side === 'get'
+                ? 'trade-cc__lane-headshot--get'
+                : 'trade-cc__lane-headshot--send',
+              chip.index > 0 ? 'trade-cc__lane-headshot--extra' : '',
+            ].filter(Boolean).join(' ')}
+            fallbackClassName="trade-cc__lane-headshot-fallback"
+            imageClassName="trade-cc__lane-headshot-image"
+            key={`${chip.side}-${chip.id}`}
+            player={toPlayer(chip.id, bootstrap.players)}
+          />
+        ))}
+      </span>
+    );
+  };
 
   const renderPool = (
     rosterId: number,
@@ -281,70 +360,81 @@ function TradeDealsView() {
     <div className="trade-page">
       <h1 className="visually-hidden">Market</h1>
 
-      {/* ── Partner finder ── */}
       <section className="trade-cc__finder">
-        <p className="trade-cc__kicker">Deals on the board</p>
-        <h2 className="trade-cc__title">Managers you match with</h2>
+        <h2 className="trade-cc__section-label">Managers you match with</h2>
         {lanes.length > 0 ? (
           <>
-          <p className="trade-cc__sub">
-            Tap one to load the exact priced deal into the builder.
-          </p>
-          {lanes.map((lane) => (
-            <button
-              className="trade-cc__lane"
-              key={lane.headline + lane.detail}
-              onClick={() => loadLane(lane)}
-              type="button"
-            >
-              <span>
-                <span className="trade-cc__lane-headline">{lane.headline}</span>
-                <span className="trade-cc__lane-detail">{lane.detail}</span>
-              </span>
-              {lane.getPlayerId ? (
-                <span
-                  className="trade-cc__lane-read"
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ' ') return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const owner = bootstrap.teams.find((team) => team.players.includes(lane.getPlayerId!));
-                    if (owner?.ownerId) openScoutingCard(owner.ownerId);
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    const owner = bootstrap.teams.find((team) => team.players.includes(lane.getPlayerId!));
-                    if (owner?.ownerId) openScoutingCard(owner.ownerId);
-                  }}
-                  role="button"
-                  tabIndex={0}
-                >
-                  Card
+          {lanes.map((lane, index) => {
+            const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
+            const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
+            const incoming = laneSideLabel(bootstrap, getPlayerIds);
+            const outgoing = laneSideLabel(bootstrap, givePlayerIds);
+            const marker = verdictRailPosition(lane.verdict);
+            const time = generatedAt(lane.pricedAt);
+            const compact = index > 0;
+
+            return (
+              <button
+                className={[
+                  'trade-cc__lane',
+                  compact ? 'trade-cc__lane--compact' : '',
+                ].filter(Boolean).join(' ')}
+                key={`${lane.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`}
+                onClick={() => loadLane(lane)}
+                type="button"
+              >
+                <span className="trade-cc__lane-top">
+                  {renderLaneHeadshots(getPlayerIds, givePlayerIds, compact)}
+                  <span className={['trade-cc__lane-title', laneHeadlineTone(incoming, outgoing)].filter(Boolean).join(' ')}>
+                    <span>{incoming}</span>
+                    <span className="trade-cc__lane-for">for</span>
+                    <span>{outgoing}</span>
+                  </span>
                 </span>
-              ) : null}
-              <span className="trade-cc__lane-gain">
-                <strong>+{(lane.valueGain ?? 0).toFixed(1)}</strong>
-                <span> you</span>
-                {typeof lane.partnerGain === 'number' ? (
-                  <span> · {lane.partnerGain >= 0 ? '+' : ''}{lane.partnerGain.toFixed(1)} them</span>
-                ) : null}
-              </span>
-              <span className="trade-cc__lane-context">
-                {lane.framing === 'near_fair_you_win'
-                  ? 'Near-fair lane'
-                  : 'Both starters gain'}
-                {lane.acceptanceReason ? ` · ${lane.acceptanceReason}` : ''}
-              </span>
-              {lane.pricedAt ? (
-                <span className="trade-cc__lane-freshness">
-                  priced {new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
-                    Math.round((lane.pricedAt - Date.now()) / 3_600_000),
-                    'hour',
-                  )}
+
+                <span className="trade-cc__lane-mid">
+                  <span className="trade-cc__lane-copy">
+                    <span className="trade-cc__lane-manager">
+                      {bootstrap.teams.find((team) => team.rosterId === lane.partnerRosterId)?.teamName ?? 'Manager'}
+                    </span>
+                    <span className="trade-cc__lane-numbers">
+                      <span className="trade-cc__lane-you">you {signedDelta(lane.valueGain)}</span>
+                      <span> · them {signedDelta(lane.partnerGain ?? 0)}</span>
+                      <span> · {lane.acceptanceProbability ?? 50}% to accept</span>
+                    </span>
+                  </span>
+                  <span className="trade-cc__lane-lean" style={leanStyle(marker)}>
+                    <span className="trade-cc__lane-lean-labels">
+                      <span>Overpay</span>
+                      <span>Fair</span>
+                      <span>Steal</span>
+                    </span>
+                    <span className="trade-cc__lane-lean-track">
+                      <span
+                        className={[
+                          'trade-cc__lane-lean-fill',
+                          marker >= 0.5
+                            ? 'trade-cc__lane-lean-fill--steal'
+                            : 'trade-cc__lane-lean-fill--overpay',
+                        ].join(' ')}
+                      />
+                      <span className="trade-cc__lane-lean-notch" />
+                      <span className="trade-cc__lane-lean-marker" />
+                    </span>
+                  </span>
                 </span>
-              ) : null}
-            </button>
-          ))}
+
+                <span className="trade-cc__lane-bottom">
+                  <span className="trade-cc__lane-reason">
+                    {lane.acceptanceReason ?? lane.detail}
+                  </span>
+                  {time ? (
+                    <span className="trade-cc__lane-generated">generated at {time}</span>
+                  ) : null}
+                </span>
+              </button>
+            );
+          })}
           </>
         ) : (
           <p className="trade-cc__empty-lane">No deal on this board improves both sides this week.</p>
@@ -464,7 +554,7 @@ function TradeDealsView() {
             <span className="trade-cc__rail-track" />
             <span
               className="trade-cc__rail-marker"
-              style={{ left: `${(VERDICT_RAIL[result.verdict ?? 'Fair'] ?? 0.5) * 100}%` }}
+              style={{ left: `${verdictRailPosition(result.verdict) * 100}%` }}
             />
           </div>
           <div className="trade-cc__rail-labels">

@@ -228,7 +228,6 @@
   letter-spacing: 0.02em;
 }
 
-.trade-cc__sub,
 .trade-cc__hint {
   margin: 0 0 12px;
   color: var(--text-muted);
@@ -237,43 +236,170 @@
   line-height: 1.45;
 }
 
+.trade-cc__section-label {
+  margin: 0 0 12px;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
 .trade-cc__lane {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 14px;
   width: 100%;
-  padding: 12px;
-  margin-top: 8px;
+  padding: 16px;
+  margin-top: 10px;
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--bg-surface-soft);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 52%),
+    var(--bg-surface-soft);
   text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.trade-cc__lane--compact {
+  padding: 14px 16px;
+  gap: 12px;
 }
 
 .trade-cc__lane:hover {
   border-color: var(--amber);
+  transform: translateY(-1px);
 }
 
-.trade-cc__lane-headline {
+.trade-cc__lane-top,
+.trade-cc__lane-mid,
+.trade-cc__lane-bottom {
+  display: grid;
+  align-items: center;
+  gap: 14px;
+}
+
+.trade-cc__lane-top {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.trade-cc__lane-mid {
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
+}
+
+.trade-cc__lane-bottom {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+}
+
+.trade-cc__lane-headshots {
+  position: relative;
   display: block;
-  color: var(--text-primary);
+  width: 78px;
+  height: 54px;
+  flex-shrink: 0;
+}
+
+.trade-cc__lane-headshots--compact {
+  width: 66px;
+  height: 48px;
+}
+
+.trade-cc__lane-headshot {
+  position: absolute;
+  top: 0;
+  width: 54px;
+  height: 54px;
+  overflow: hidden;
+  border: 2px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--bg-inset);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34);
+}
+
+.trade-cc__lane-headshots--compact .trade-cc__lane-headshot {
+  width: 48px;
+  height: 48px;
+}
+
+.trade-cc__lane-headshot--send {
+  left: 0;
+  z-index: 1;
+  opacity: 0.86;
+}
+
+.trade-cc__lane-headshot--get {
+  left: 24px;
+  z-index: 3;
+  border-color: var(--amber-bright);
+}
+
+.trade-cc__lane-headshot--extra.trade-cc__lane-headshot--send {
+  left: 10px;
+  z-index: 0;
+}
+
+.trade-cc__lane-headshot--extra.trade-cc__lane-headshot--get {
+  left: 34px;
+  z-index: 2;
+}
+
+.trade-cc__lane-headshot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trade-cc__lane-headshot-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-soft);
   font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.trade-cc__lane-detail {
-  display: block;
-  color: var(--ink-3);
   font-size: 12px;
-  margin-top: 2px;
+  font-weight: 800;
 }
 
-.trade-cc__lane-read,
+.trade-cc__lane-title {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.25vw, 28px);
+  letter-spacing: 0.02em;
+  line-height: 0.94;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.trade-cc__lane--compact .trade-cc__lane-title {
+  font-size: clamp(21px, 2vw, 25px);
+}
+
+.trade-cc__lane-title--snug {
+  font-size: clamp(21px, 1.85vw, 24px);
+}
+
+.trade-cc__lane-title--tight {
+  font-size: clamp(18px, 1.55vw, 21px);
+}
+
+.trade-cc__lane-for {
+  flex: 0 0 auto;
+  margin: 0 0.42em;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 0.58em;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
 .trade-cc__partner-read {
   flex-shrink: 0;
   padding: 5px 8px;
@@ -289,23 +415,42 @@
   margin: -2px 0 8px;
 }
 
-.trade-cc__lane-price {
-  flex-shrink: 0;
-  font-family: var(--font-num);
-  font-size: 14px;
+.trade-cc__lane-copy {
+  min-width: 0;
 }
 
-.trade-cc__lane-price s {
+.trade-cc__lane-manager {
+  display: block;
+  margin-bottom: 2px;
   color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.trade-cc__lane-price strong {
-  color: var(--amber-bright);
+.trade-cc__lane-numbers {
+  display: block;
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-cc__lane-you {
+  color: var(--green);
+}
+
+.trade-cc__lane-lean {
+  display: grid;
+  gap: 5px;
+  width: min(210px, 100%);
+  justify-self: end;
 }
 
 .trade-cc__empty-lane,
-.trade-cc__lane-context,
-.trade-cc__lane-freshness {
+.trade-cc__lane-reason,
+.trade-cc__lane-generated {
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: 12px;
@@ -315,16 +460,76 @@
   margin: 10px 0 0;
 }
 
-.trade-cc__lane-context,
-.trade-cc__lane-freshness {
-  display: block;
-  flex-basis: 100%;
-  margin-top: 4px;
+.trade-cc__lane-lean-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
-.trade-cc__lane-freshness {
+.trade-cc__lane-lean-track {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(255, 92, 77, 0.28), rgba(244, 245, 242, 0.22) 50%, rgba(52, 210, 123, 0.28));
+}
+
+.trade-cc__lane-lean-fill {
+  position: absolute;
+  top: 0;
+  left: var(--lane-lean-left);
+  width: max(5px, var(--lane-lean-width));
+  height: 100%;
+  border-radius: inherit;
+}
+
+.trade-cc__lane-lean-fill--steal {
+  background: var(--green);
+}
+
+.trade-cc__lane-lean-fill--overpay {
+  background: var(--red);
+}
+
+.trade-cc__lane-lean-notch {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 1px;
+  height: 15px;
+  background: rgba(244, 245, 242, 0.55);
+}
+
+.trade-cc__lane-lean-marker {
+  position: absolute;
+  top: 50%;
+  left: var(--lane-lean-pos);
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--bg-deep);
+  border-radius: 50%;
+  background: var(--text-primary);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.54);
+}
+
+.trade-cc__lane-reason {
+  min-width: 0;
+  color: var(--text-soft);
+  line-height: 1.35;
+}
+
+.trade-cc__lane-generated {
+  justify-self: end;
+  color: var(--ink-3);
   font-family: var(--font-num);
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .trade-cc__columns {
@@ -336,6 +541,52 @@
 @media (max-width: 600px) {
   .trade-cc__columns {
     grid-template-columns: 1fr;
+  }
+
+  .trade-cc__lane {
+    padding: 14px;
+  }
+
+  .trade-cc__lane-top,
+  .trade-cc__lane-mid,
+  .trade-cc__lane-bottom {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .trade-cc__lane-headshots {
+    width: 72px;
+    height: 50px;
+  }
+
+  .trade-cc__lane-headshot {
+    width: 50px;
+    height: 50px;
+  }
+
+  .trade-cc__lane-title {
+    font-size: clamp(17px, 5.8vw, 22px);
+  }
+
+  .trade-cc__lane-title--snug {
+    font-size: clamp(15px, 5vw, 19px);
+  }
+
+  .trade-cc__lane-title--tight {
+    font-size: clamp(13px, 4.2vw, 16px);
+  }
+
+  .trade-cc__lane-lean {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .trade-cc__lane-bottom {
+    align-items: start;
+  }
+
+  .trade-cc__lane-generated {
+    justify-self: start;
   }
 }
 
@@ -678,25 +929,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.trade-cc__lane-gain {
-  flex-shrink: 0;
-  text-align: right;
-  font-family: var(--font-num);
-}
-
-.trade-cc__lane-gain strong {
-  color: var(--green);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.trade-cc__lane-gain span {
-  display: block;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 11px;
 }
 
 .trade-cc__odds-value--up { color: var(--green); }
