@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { supabase } from '../services/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import './ProjectionsPage.css';
 
 /**
@@ -23,17 +25,14 @@ interface Player {
   weekly: Row[];
 }
 
-const PW_KEY = 'og.projections.adminpw';
 
 interface AgreementColumn {
   key: string;
   label: string;
 }
 
-const DEFAULT_AGREE_COLS: AgreementColumn[] = [
-  { key: 'vlahakis', label: 'Vlahakis' },
-  { key: 'williams', label: 'Williams' },
-];
+// One per-user agreement column, tied to the logged-in account (no named columns).
+const DEFAULT_AGREE_COLS: AgreementColumn[] = [{ key: 'agreement', label: 'Agreement' }];
 interface Dataset {
   updatedAt: number;
   count: number;
@@ -192,7 +191,9 @@ export function ProjectionsPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [openName, setOpenName] = useState<string | null>(null);
   const [scoring, setScoring] = useState<Scoring>('');
-  const [adminPw, setAdminPw] = useState<string | null>(() => localStorage.getItem(PW_KEY));
+  const { session } = useAuth();
+  const userId = session?.user?.id ?? null;
+  const [editing, setEditing] = useState(false);
   const [rapidEntryEnabled, setRapidEntryEnabled] = useState(true);
   const [agreeDraft, setAgreeDraft] = useState<Record<string, string>>({});
   const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
@@ -200,21 +201,9 @@ export function ProjectionsPage() {
   const agreeDraftRef = useRef<Record<string, string>>({});
   const agreeSavedRef = useRef<Record<string, string>>({});
 
-  const editing = adminPw != null;
-  const agreeCols = data?.agreementColumns ?? DEFAULT_AGREE_COLS;
+  const agreeCols = DEFAULT_AGREE_COLS;
   const rowId = (p: Player) => p.id;
   const cellKey = (p: Player, columnKey: string) => `${rowId(p)}::${columnKey}`;
-
-  async function verifyPw(pw: string): Promise<boolean> {
-    try {
-      const res = await fetch('/api/projections/agreement/check', {
-        headers: { 'x-admin-password': pw },
-      });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }
 
   useEffect(() => {
     let alive = true;
@@ -227,22 +216,33 @@ export function ProjectionsPage() {
     };
   }, []);
 
-  // Validate any cached password on load; clear it if the server rejects it,
-  // so a stale/wrong password can't leave someone in a broken edit mode.
+  // Load THIS user's own agreement scores from Supabase (RLS returns only their
+  // rows). Rows are keyed by (position, player name); map them onto our row ids.
   useEffect(() => {
-    const cached = localStorage.getItem(PW_KEY);
-    if (!cached) return;
+    if (!userId || !data) {
+      agreeSavedRef.current = {};
+      setAgreeSaved({});
+      return;
+    }
     let alive = true;
-    verifyPw(cached).then((ok) => {
-      if (alive && !ok) {
-        localStorage.removeItem(PW_KEY);
-        setAdminPw(null);
-      }
-    });
+    supabase
+      .from('olympus_agreement')
+      .select('position, player, score')
+      .then(({ data: rows, error }) => {
+        if (!alive || error || !rows) return;
+        const idByKey = new Map(data.players.map((p) => [`${p.position}::${p.name}`, p.id]));
+        const saved: Record<string, string> = {};
+        for (const r of rows) {
+          const pid = idByKey.get(`${r.position}::${r.player}`);
+          if (pid) saved[`${pid}::agreement`] = String(r.score);
+        }
+        agreeSavedRef.current = saved;
+        setAgreeSaved(saved);
+      });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [userId, data]);
 
   const cols = STATS[pos];
   const totalColumns = cols.length + 6 + agreeCols.length;
@@ -314,20 +314,15 @@ export function ProjectionsPage() {
     return sorted;
   }, [data, pos, query, sortKey, sortDir, scoring]);
 
-  async function unlockEditing() {
-    const raw = window.prompt('Admin password to edit agreement values:');
-    if (raw == null) return;
-    const pw = raw.trim();
-    if (!pw || !(await verifyPw(pw))) {
-      window.alert('That admin password was not accepted. Double-check it and try again.');
+  function unlockEditing() {
+    if (!userId) {
+      window.alert('Log in to enter your agreement scores.');
       return;
     }
-    localStorage.setItem(PW_KEY, pw);
-    setAdminPw(pw);
+    setEditing(true);
   }
   function lockEditing() {
-    localStorage.removeItem(PW_KEY);
-    setAdminPw(null);
+    setEditing(false);
   }
 
   async function commitAgreement(player: Player, columnKey: string, valueString: string) {
@@ -337,21 +332,28 @@ export function ProjectionsPage() {
     setDraftValue(key, value);
     if (value === current) return;
     setSavedValue(key, value);
+    if (!userId) {
+      setSaving((s) => ({ ...s, [key]: 'err' }));
+      return;
+    }
     setSaving((s) => ({ ...s, [key]: 'saving' }));
     try {
-      const res = await fetch('/api/projections/agreement', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPw ?? '' },
-        body: JSON.stringify({ position: player.position, name: player.name, column: columnKey, value }),
-      });
-      if (res.status === 401) {
-        setSaving((s) => ({ ...s, [key]: 'err' }));
-        localStorage.removeItem(PW_KEY);
-        setAdminPw(null); // drop out of edit mode so the bad password isn't reused
-        window.alert('Your admin password was rejected. Click “Edit agreement” to enter it again.');
-        return;
+      let error = null;
+      if (value === '') {
+        // Clearing a cell deletes the user's row (RLS restricts it to their own).
+        ({ error } = await supabase
+          .from('olympus_agreement')
+          .delete()
+          .eq('position', player.position)
+          .eq('player', player.name));
+      } else {
+        const score = Math.max(0, Math.min(100, Math.round(Number(value))));
+        ({ error } = await supabase.from('olympus_agreement').upsert(
+          { user_id: userId, position: player.position, player: player.name, score },
+          { onConflict: 'user_id,position,player' },
+        ));
       }
-      setSaving((s) => ({ ...s, [key]: res.ok ? 'ok' : 'err' }));
+      setSaving((s) => ({ ...s, [key]: error ? 'err' : 'ok' }));
     } catch {
       setSaving((s) => ({ ...s, [key]: 'err' }));
     }
@@ -520,8 +522,12 @@ export function ProjectionsPage() {
               Editing · Lock
             </button>
           ) : (
-            <button className="proj-edit" onClick={unlockEditing} title="Unlock to edit agreement values">
-              Edit agreement
+            <button
+              className="proj-edit"
+              onClick={unlockEditing}
+              title={userId ? 'Edit your agreement scores' : 'Log in to edit'}
+            >
+              {userId ? 'Edit agreement' : 'Log in to edit'}
             </button>
           )}
           {editing ? (
