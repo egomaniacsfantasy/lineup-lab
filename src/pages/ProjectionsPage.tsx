@@ -711,6 +711,9 @@ function WeeklyGrid({ player, cols, scoring }: { player: Player; cols: StatCol[]
   if (!player.weekly.length) {
     return <p className="proj-week-empty">No week-by-week schedule available.</p>;
   }
+  // QB2s are backups: they carry real fill-in projections in the data, but week to
+  // week we assume they don't start, so their weekly cells are shown as 0.
+  const zeroWk = player.position === 'QB' && Number(player.depthRank) === 2;
   return (
     <div className="proj-week-wrap">
       <table className="proj-week-table">
@@ -730,7 +733,7 @@ function WeeklyGrid({ player, cols, scoring }: { player: Player; cols: StatCol[]
         </thead>
         <tbody>
           {player.weekly.map((w, idx) => {
-            const home = w.game_location === 'H' || w.game_location === 'home';
+            const home = Number(w.game_location) === 1; // 1 = home, -1 = away
             const sw = scoredWeek(player, w, scoring);
             return (
               <tr key={`${w.week}-${idx}`}>
@@ -741,12 +744,12 @@ function WeeklyGrid({ player, cols, scoring }: { player: Player; cols: StatCol[]
                 </td>
                 {cols.map((c) => (
                   <td key={c.key} className="proj-td--num">
-                    {fmt(w[c.weeklyKey ?? c.key])}
+                    {zeroWk ? fmt(0) : fmt(w[c.weeklyKey ?? c.key])}
                   </td>
                 ))}
-                <td className="proj-td--num proj-td--fp">{fmt(sw.point)}</td>
-                <td className="proj-td--num proj-week-floor">{fmt(sw.floor)}</td>
-                <td className="proj-td--num proj-week-ceil">{fmt(sw.ceiling)}</td>
+                <td className="proj-td--num proj-td--fp">{zeroWk ? fmt(0) : fmt(sw.point)}</td>
+                <td className="proj-td--num proj-week-floor">{zeroWk ? fmt(0) : fmt(sw.floor)}</td>
+                <td className="proj-td--num proj-week-ceil">{zeroWk ? fmt(0) : fmt(sw.ceiling)}</td>
               </tr>
             );
           })}
