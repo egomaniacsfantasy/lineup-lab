@@ -43,13 +43,14 @@
   animation: pricing-curtain-spin 860ms linear infinite;
 }
 
-.pricing-curtain__kicker {
+.pricing-curtain__brand {
   margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-num);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  line-height: 0.92;
   text-transform: uppercase;
 }
 
@@ -64,11 +65,30 @@
   text-transform: uppercase;
 }
 
+.pricing-curtain__progress {
+  position: relative;
+  width: min(260px, 82%);
+  height: 4px;
+  margin-top: var(--space-sm);
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(244, 245, 242, 0.12);
+}
+
+.pricing-curtain__progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
+  background: var(--amber);
+  animation: pricing-curtain-progress 1.35s ease-in-out infinite;
+}
+
 .pricing-curtain__line {
   min-height: 1.35em;
   margin: var(--space-sm) 0 0;
   color: var(--amber-bright);
-  font-family: var(--font-num);
+  font-family: var(--font-ui);
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -86,8 +106,26 @@
   }
 }
 
+@keyframes pricing-curtain-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  48% {
+    transform: translateX(88%);
+  }
+
+  100% {
+    transform: translateX(250%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pricing-curtain__spinner {
     animation-duration: 1.8s;
+  }
+
+  .pricing-curtain__progress-fill {
+    animation-duration: 2.6s;
   }
 }

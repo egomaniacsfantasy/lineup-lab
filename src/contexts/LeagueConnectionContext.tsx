@@ -90,6 +90,10 @@ function leagueKey(c: { provider: string; leagueId: string }) {
   return `${c.provider}:${c.leagueId}`;
 }
 
+function hydrateKey(c: StoredConnection) {
+  return `${c.provider}:${c.leagueId}:${c.userId}:${c.season ?? ''}`;
+}
+
 const LeagueConnectionContext = createContext<LeagueConnectionValue | null>(null);
 
 function readStored(): StoredConnection | null {
@@ -225,6 +229,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const { user } = useAuth();
   const { overlayVersion } = useModelOverlay();
   const userIdRef = useRef<string | null>(null);
+  const lastHydrateKeyRef = useRef<string | null>(null);
   userIdRef.current = user?.id ?? null;
 
   // Saved leagues live on the account, so they follow you to any device.
@@ -368,9 +373,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => {
-    if (stored) {
-      void hydrate(stored);
+    if (!stored) {
+      lastHydrateKeyRef.current = null;
+      return;
     }
+    const key = hydrateKey(stored);
+    if (lastHydrateKeyRef.current === key) return;
+    lastHydrateKeyRef.current = key;
+    void hydrate(stored);
   }, [stored, hydrate]);
 
   /** Make a connection the active league locally (api context + cache + state). */

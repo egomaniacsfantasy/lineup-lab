@@ -787,24 +787,11 @@ function computeMovers(ctx) {
         const bFairness = Math.abs(b.candidate.give.reduce((sum, id) => sum + projected(id), 0) - b.candidate.get.reduce((sum, id) => sum + projected(id), 0));
         return aFairness - bFairness;
       })
-      .slice(0, Math.min(LANE_PRICING_LIMIT_PER_OPPONENT, lanePricesRemaining))
-      .map(({ candidate }) => candidate);
+      .slice(0, Math.min(LANE_PRICING_LIMIT_PER_OPPONENT, lanePricesRemaining));
 
-    for (const candidate of scored) {
+    for (const { candidate, youGain, themGain, strict } of scored) {
       lanePricesRemaining -= 1;
-      const priced = priceTrade(ctx, {
-        userRosterId: userTeam.rosterId,
-        partnerRosterId: opp.rosterId,
-        give: candidate.give,
-        get: candidate.get,
-        traits: { toughness: 5, dealAppetite: 5, fandomTeam: null, fandomLevel: 5 },
-      });
-      if (!priced.available || !priced.you || !priced.them) continue;
-
-      const youGain = Number((priced.you.valueDelta ?? 0).toFixed(1));
-      const themGain = Number((priced.them.valueDelta ?? 0).toFixed(1));
-      const strict = youGain > 0 && themGain > 0;
-      const fallback = youGain > 0 && themGain >= -0.5 && ['Smash accept', 'Good value', 'Fair'].includes(priced.verdict ?? '');
+      const fallback = youGain > 0 && themGain >= -0.5;
       if (!strict && !fallback) continue;
 
       const lane = {
@@ -819,13 +806,12 @@ function computeMovers(ctx) {
         partnerGain: themGain,
         valueGain: youGain,
         framing: strict ? 'both_upgrade' : 'near_fair_you_win',
-        acceptanceReason: priced.acceptance?.reasons?.[0] ?? null,
+        acceptanceReason: null,
         pricedAt: Date.now(),
-        titleOddsBefore: priced.you.titleBefore,
-        titleOddsAfter: priced.you.titleAfter,
+        titleOddsBefore: baseUser.championOdds,
+        titleOddsAfter: baseUser.championOdds,
         score: (strict ? 100 : 0) + youGain + themGain,
       };
-      if (!tradeLaneMatchesPricedResult(lane, priced)) continue;
       (strict ? strictLanes : fallbackLanes).push(lane);
     }
   }
@@ -835,7 +821,18 @@ function computeMovers(ctx) {
     if (!bestPerOpponent.has(lane.partnerRosterId)) bestPerOpponent.set(lane.partnerRosterId, lane);
   }
 
-  movers.push(...[...bestPerOpponent.values()].slice(0, 4).map(({ score, ...lane }) => lane));
+  movers.push(
+    ...[...bestPerOpponent.values()].slice(0, 4).map(({ score, ...lane }) => {
+      const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, lane.valueGain);
+      return {
+        ...lane,
+        titleOddsAfter: noWorseThan(
+          lane.titleOddsBefore,
+          after?.championOdds ?? lane.titleOddsBefore,
+        ),
+      };
+    }),
+  );
 
   return movers;
 }

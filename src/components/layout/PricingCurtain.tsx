@@ -40,8 +40,11 @@ export function PricingCurtain() {
       <div className="pricing-curtain__scrim" aria-hidden="true" />
       <section className="pricing-curtain__card" aria-busy="true">
         <span className="pricing-curtain__spinner" aria-hidden="true" />
-        <p className="pricing-curtain__kicker">Odds Gods</p>
+        <p className="pricing-curtain__brand">ODDS GODS</p>
         <h2>{title}…</h2>
+        <span className="pricing-curtain__progress" aria-hidden="true">
+          <span className="pricing-curtain__progress-fill" />
+        </span>
         <p className="pricing-curtain__line">{activeLine}…</p>
         <p className="pricing-curtain__sub">Hold the ticket. The book is moving.</p>
       </section>
