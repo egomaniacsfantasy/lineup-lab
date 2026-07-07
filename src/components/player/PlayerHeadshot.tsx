@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Player, Position } from '../../types';
 import {
   getManifestHeadshotUrl,
@@ -21,6 +22,7 @@ interface PlayerHeadshotProps {
   className?: string;
   imageClassName?: string;
   fallbackClassName?: string;
+  style?: CSSProperties;
 }
 
 function getPositionTone(position: Position | string | undefined) {
@@ -50,6 +52,7 @@ export function PlayerHeadshot({
   className = '',
   imageClassName = '',
   fallbackClassName = '',
+  style,
 }: PlayerHeadshotProps) {
   const resolvedSlug = slug ?? player?.slug ?? player?.id ?? '';
   const manifestEntry = resolvedSlug ? getPlayerManifestEntry(resolvedSlug) : null;
@@ -81,6 +84,7 @@ export function PlayerHeadshot({
         .filter(Boolean)
         .join(' ')}
       aria-hidden="true"
+      style={style}
     >
       {hasImageError || !headshotUrl ? (
         <span

@@ -287,6 +287,7 @@
 
 .trade-cc__lane-mid {
   grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
+  align-items: end;
 }
 
 .trade-cc__lane-bottom {
@@ -298,19 +299,20 @@
 .trade-cc__lane-headshots {
   position: relative;
   display: block;
-  width: 78px;
+  width: 102px;
   height: 54px;
   flex-shrink: 0;
 }
 
 .trade-cc__lane-headshots--compact {
-  width: 66px;
+  width: 92px;
   height: 48px;
 }
 
 .trade-cc__lane-headshot {
   position: absolute;
   top: 0;
+  left: calc(var(--lane-headshot-index, 0) * 22px);
   width: 54px;
   height: 54px;
   overflow: hidden;
@@ -326,25 +328,22 @@
 }
 
 .trade-cc__lane-headshot--send {
-  left: 0;
-  z-index: 1;
-  opacity: 0.86;
+  z-index: calc(4 + var(--lane-headshot-index, 0));
 }
 
 .trade-cc__lane-headshot--get {
-  left: 24px;
-  z-index: 3;
+  z-index: calc(8 + var(--lane-headshot-index, 0));
   border-color: var(--amber-bright);
 }
 
-.trade-cc__lane-headshot--extra.trade-cc__lane-headshot--send {
-  left: 10px;
-  z-index: 0;
-}
-
-.trade-cc__lane-headshot--extra.trade-cc__lane-headshot--get {
-  left: 34px;
-  z-index: 2;
+.trade-cc__lane-headshot--more {
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .trade-cc__lane-headshot-image {
@@ -443,7 +442,7 @@
 
 .trade-cc__lane-lean {
   display: grid;
-  gap: 5px;
+  gap: 3px;
   width: min(210px, 100%);
   justify-self: end;
 }
@@ -475,8 +474,7 @@
   position: relative;
   height: 7px;
   border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(255, 92, 77, 0.28), rgba(244, 245, 242, 0.22) 50%, rgba(52, 210, 123, 0.28));
+  background: rgba(244, 245, 242, 0.16);
 }
 
 .trade-cc__lane-lean-fill {
@@ -555,7 +553,7 @@
   }
 
   .trade-cc__lane-headshots {
-    width: 72px;
+    width: 96px;
     height: 50px;
   }
 

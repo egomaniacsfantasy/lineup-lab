@@ -620,6 +620,10 @@ function laneAcceptReason({ opp, give, get, priced, catalog }) {
   const themGain = Number((priced.them?.valueDelta ?? 0).toFixed(1));
   const names = (ids) => ids.map((id) => catalog[id]?.name ?? `Player ${id}`).join(' + ');
 
+  if (priced.volatilityReason) {
+    return priced.volatilityReason;
+  }
+
   if (themGain > 0) {
     return `${opp.teamName} upgrades starters by ${themGain.toFixed(1)} pts/wk; you add ${youGain.toFixed(1)}.`;
   }
@@ -628,7 +632,7 @@ function laneAcceptReason({ opp, give, get, priced, catalog }) {
     return `${opp.teamName} gets the best player (${priced.bestPlayer.name}); you add ${youGain.toFixed(1)} pts/wk.`;
   }
 
-  return `${names(get)} adds ${youGain.toFixed(1)} pts/wk to your starters for ${names(give)}.`;
+  return `${names(get)} adds ${youGain.toFixed(1)} pts/wk to your starters; ${names(give)} barely moves theirs.`;
 }
 
 /**
@@ -710,6 +714,38 @@ function computeMovers(ctx) {
   const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
   const projected = (id) => projectionMap.get(id)?.mean ?? 0;
   const names = (ids) => ids.map((id) => catalog[id]?.name ?? `Player ${id}`).join(' + ');
+  const volatilitySwapReason = (giveId, getId, opp) => {
+    if (catalog[giveId]?.position !== catalog[getId]?.position) return null;
+    const giveP = projectionMap.get(giveId);
+    const getP = projectionMap.get(getId);
+    if (!giveP || !getP) return null;
+    const giveFloor = giveP.floor ?? Math.max(0, giveP.mean - giveP.stdev);
+    const getFloor = getP.floor ?? Math.max(0, getP.mean - getP.stdev);
+    const giveCeiling = giveP.ceiling ?? giveP.mean + giveP.stdev;
+    const getCeiling = getP.ceiling ?? getP.mean + getP.stdev;
+    const userMean = distByRoster.get(userTeam.rosterId)?.mean ?? 0;
+    const oppMean = distByRoster.get(opp.rosterId)?.mean ?? 0;
+    const userNeedsSwing = userMean + 2 < oppMean;
+    const userNeedsSafety = userMean > oppMean + 2;
+    const userGetsCeiling = getCeiling - giveCeiling >= 3 && giveFloor - getFloor >= 1.5;
+    const userGetsFloor = giveCeiling - getCeiling >= 3 && getFloor - giveFloor >= 1.5;
+    const getRange = getCeiling - getFloor;
+    const giveRange = giveCeiling - giveFloor;
+
+    if (userGetsCeiling && userNeedsSwing) {
+      return `Ceiling for floor — ${catalog[getId]?.name ?? 'the incoming player'} widens your weekly range.`;
+    }
+
+    if (userGetsFloor && userNeedsSafety) {
+      return `Floor for ceiling — ${catalog[getId]?.name ?? 'the incoming player'} steadies your weekly range.`;
+    }
+
+    if (getRange >= giveRange * 1.8 && userNeedsSwing) {
+      return `Ceiling for floor — ${catalog[getId]?.name ?? 'the incoming player'} nearly doubles your weekly range.`;
+    }
+
+    return null;
+  };
   const tradeableOf = (team) => {
     const starters = new Set(
       (matchups.find((m) => m.rosterId === team.rosterId)?.starters?.length
@@ -748,7 +784,12 @@ function computeMovers(ctx) {
     for (const giveId of userSingles) {
       for (const getId of oppSingles) {
         const ratio = projected(getId) > 0 ? projected(giveId) / projected(getId) : 1;
-        if (ratio >= 0.45 && ratio <= 1.9) candidates.push({ give: [giveId], get: [getId] });
+        const samePosition = catalog[giveId]?.position === catalog[getId]?.position;
+        const volatilityReason = samePosition ? volatilitySwapReason(giveId, getId, opp) : null;
+        if (samePosition && !volatilityReason) continue;
+        if (ratio >= 0.45 && ratio <= 1.9) {
+          candidates.push({ give: [giveId], get: [getId], volatilityReason });
+        }
       }
     }
     for (const give of userPairs) {
@@ -844,7 +885,13 @@ function computeMovers(ctx) {
         verdict: priced.verdict,
         valueGap: priced.valueGap,
         acceptanceProbability: priced.acceptance?.probability ?? null,
-        acceptanceReason: laneAcceptReason({ opp, give: candidate.give, get: candidate.get, priced, catalog }),
+        acceptanceReason: laneAcceptReason({
+          opp,
+          give: candidate.give,
+          get: candidate.get,
+          priced: { ...priced, volatilityReason: candidate.volatilityReason },
+          catalog,
+        }),
         pricedAt: Date.now(),
         titleOddsBefore: priced.you.titleBefore,
         titleOddsAfter: priced.you.titleAfter,

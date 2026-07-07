@@ -63,10 +63,21 @@ function lastName(name: string) {
   return pieces.at(-1) ?? name;
 }
 
-function laneSideLabel(bootstrap: LeagueBootstrap, ids: string[]) {
+function initialLast(name: string) {
+  const pieces = name.trim().split(/\s+/);
+  if (pieces.length <= 1) return name;
+  return `${pieces[0][0]}. ${lastName(name)}`;
+}
+
+function laneSideLabel(bootstrap: LeagueBootstrap, ids: string[], compressed: boolean) {
   if (ids.length === 0) return 'PLAYER';
-  if (ids.length === 1) return playerName(bootstrap, ids[0]).toUpperCase();
-  return ids.map((id) => lastName(playerName(bootstrap, id))).join(' + ').toUpperCase();
+  return ids
+    .map((id) => {
+      const name = playerName(bootstrap, id);
+      return compressed ? initialLast(name) : name;
+    })
+    .join(' + ')
+    .toUpperCase();
 }
 
 function laneHeadlineTone(incoming: string, outgoing: string) {
@@ -279,28 +290,38 @@ function TradeDealsView() {
     givePlayerIds: string[],
     compact: boolean,
   ) => {
-    const chips = [
-      ...givePlayerIds.slice(0, 2).map((id, index) => ({ id, side: 'send', index })),
-      ...getPlayerIds.slice(0, 2).map((id, index) => ({ id, side: 'get', index })),
+    const allChips = [
+      ...givePlayerIds.map((id) => ({ id, side: 'send' })),
+      ...getPlayerIds.map((id) => ({ id, side: 'get' })),
     ];
+    const visibleChips = allChips.slice(0, 3);
+    const hiddenCount = allChips.length - visibleChips.length;
 
     return (
       <span className={['trade-cc__lane-headshots', compact ? 'trade-cc__lane-headshots--compact' : ''].filter(Boolean).join(' ')}>
-        {chips.map((chip) => (
+        {visibleChips.map((chip, index) => (
           <PlayerHeadshot
             className={[
               'trade-cc__lane-headshot',
               chip.side === 'get'
                 ? 'trade-cc__lane-headshot--get'
                 : 'trade-cc__lane-headshot--send',
-              chip.index > 0 ? 'trade-cc__lane-headshot--extra' : '',
             ].filter(Boolean).join(' ')}
             fallbackClassName="trade-cc__lane-headshot-fallback"
             imageClassName="trade-cc__lane-headshot-image"
             key={`${chip.side}-${chip.id}`}
             player={toPlayer(chip.id, bootstrap.players)}
+            style={{ '--lane-headshot-index': index } as CSSProperties}
           />
         ))}
+        {hiddenCount > 0 ? (
+          <span
+            className="trade-cc__lane-headshot trade-cc__lane-headshot--more"
+            style={{ '--lane-headshot-index': visibleChips.length } as CSSProperties}
+          >
+            +{hiddenCount}
+          </span>
+        ) : null}
       </span>
     );
   };
@@ -367,8 +388,14 @@ function TradeDealsView() {
           {lanes.map((lane, index) => {
             const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
             const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
-            const incoming = laneSideLabel(bootstrap, getPlayerIds);
-            const outgoing = laneSideLabel(bootstrap, givePlayerIds);
+            const fullIncoming = laneSideLabel(bootstrap, getPlayerIds, false);
+            const fullOutgoing = laneSideLabel(bootstrap, givePlayerIds, false);
+            const shouldCompress =
+              getPlayerIds.length > 1 ||
+              givePlayerIds.length > 1 ||
+              fullIncoming.length + fullOutgoing.length > 34;
+            const incoming = laneSideLabel(bootstrap, getPlayerIds, shouldCompress);
+            const outgoing = laneSideLabel(bootstrap, givePlayerIds, shouldCompress);
             const marker = verdictRailPosition(lane.verdict);
             const time = generatedAt(lane.pricedAt);
             const compact = index > 0;
