@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
@@ -29,6 +29,11 @@ import {
   winProbabilityToMoneyline,
 } from '../utils/lineupComparison';
 import { evaluateStarterRoster, getTopSwapEvaluation } from '../utils/starterEvaluation';
+import {
+  createVolatilityResolver,
+  type VolatilityProfile,
+  type VolatilityProjectionSet,
+} from '../utils/volatilityProfile';
 import {
   buildExposureWindows,
   getGameContextSource,
@@ -127,38 +132,22 @@ function formatVerdict(playerName: string, deltaWinProbability: number) {
   return `Starting ${playerName} leaves your win probability unchanged.`;
 }
 
-/**
- * Explains WHY a start helps or hurts when projection and win probability
- * disagree. The honest fantasy logic: while you're favored, a steadier
- * floor can lift your odds even at fewer projected points; while you're
- * behind, a boom-or-bust ceiling can lift your odds even though it lowers
- * the floor. A bare percentage hides that, which is what made the
- * "lower projection, better odds" swap read as nonsense.
- */
 function swapVerdict(
   playerName: string,
   projectionDelta: number,
   deltaWinProbability: number,
-  userWinProbability: number,
 ) {
   const projUp = projectionDelta > 0.3;
   const projDown = projectionDelta < -0.3;
   const oddsUp = deltaWinProbability > 0.2;
   const oddsDown = deltaWinProbability < -0.2;
-  const favored = userWinProbability >= 50;
 
   if (projDown && oddsUp) {
-    return `${playerName} projects ${Math.abs(projectionDelta).toFixed(1)} fewer points but a steadier floor. ${
-      favored ? "You're favored, so protecting that floor" : 'In a tight spot, the safer week'
-    } actually lifts your odds ${formatSignedPercent(deltaWinProbability)}. The boring start is the right one here.`;
+    return `${playerName} projects ${Math.abs(projectionDelta).toFixed(1)} fewer points, but the priced lineup still gains ${formatSignedPercent(deltaWinProbability)} win probability.`;
   }
 
   if (projUp && oddsDown) {
-    return `${playerName} projects ${projectionDelta.toFixed(1)} more points, but it's a boom-or-bust week. ${
-      favored
-        ? "While you're favored that added swing costs you"
-        : 'Even chasing points it nets out negative'
-    } (${formatSignedPercent(deltaWinProbability)}). Only start the ceiling if you expect to be chasing.`;
+    return `${playerName} projects ${projectionDelta.toFixed(1)} more points, but the priced lineup drops ${formatSignedPercent(deltaWinProbability)} win probability.`;
   }
 
   return formatVerdict(playerName, deltaWinProbability);
@@ -207,6 +196,36 @@ function buildBenchImpactRows(
       bestFit,
     };
   });
+}
+
+function formatRangeValue(value: number | null) {
+  return value == null ? '—' : value.toFixed(1);
+}
+
+function formatProfileLabel(profile: VolatilityProfile['profile']) {
+  return profile ? profile.toUpperCase() : null;
+}
+
+function getRangeStyle(
+  volatility: VolatilityProfile,
+  scale: { min: number; max: number } | null,
+) {
+  if (!volatility.available || volatility.floor == null || volatility.median == null || volatility.ceiling == null || !scale) {
+    return null;
+  }
+
+  const span = scale.max - scale.min;
+  if (span <= 0) return null;
+
+  const start = clamp(((volatility.floor - scale.min) / span) * 100, 0, 100);
+  const end = clamp(((volatility.ceiling - scale.min) / span) * 100, 0, 100);
+  const median = clamp(((volatility.median - scale.min) / span) * 100, 0, 100);
+
+  return {
+    '--range-start': `${start}%`,
+    '--range-width': `${Math.max(3, end - start)}%`,
+    '--range-median': `${median}%`,
+  } as CSSProperties;
 }
 
 function TeamCrest({
@@ -391,7 +410,8 @@ function CompareSheet({
   leftPlayer,
   rightPlayer,
   tapeNote = '',
-  userWinProbability = 50,
+  week,
+  getVolatilityProfile,
   onApply,
   onClose,
 }: {
@@ -408,7 +428,8 @@ function CompareSheet({
   leftPlayer: Player;
   rightPlayer: Player;
   tapeNote?: string;
-  userWinProbability?: number;
+  week: number;
+  getVolatilityProfile: (player: Player, week: number) => VolatilityProfile;
   onApply?: (() => void) | null;
   onClose: () => void;
 }) {
@@ -430,13 +451,28 @@ function CompareSheet({
         rightPlayer.shortName,
         projectionDelta,
         comparison.deltaWinProbability,
-        userWinProbability,
       )
     : headlineWinner
       ? `${headlineWinner.shortName} projects ${Math.abs(projectionDelta).toFixed(1)} more points this week. ${tapeNote}`.trim()
       : `Dead even on projection. ${tapeNote}`.trim();
 
   const maxProjection = Math.max(comparison.leftProjection, comparison.rightProjection, 1);
+  const leftVolatility = getVolatilityProfile(leftPlayer, week);
+  const rightVolatility = getVolatilityProfile(rightPlayer, week);
+  const availableRanges = [leftVolatility, rightVolatility].filter(
+    (volatility) =>
+      volatility.available &&
+      volatility.floor != null &&
+      volatility.median != null &&
+      volatility.ceiling != null,
+  );
+  const rangeScale =
+    availableRanges.length > 0
+      ? {
+          min: Math.min(...availableRanges.map((volatility) => volatility.floor ?? 0)),
+          max: Math.max(...availableRanges.map((volatility) => volatility.ceiling ?? 0)),
+        }
+      : null;
 
   const sides = [
     {
@@ -444,12 +480,14 @@ function CompareSheet({
       projection: comparison.leftProjection,
       line: comparison.leftLine,
       winner: leftWins,
+      volatility: leftVolatility,
     },
     {
       player: rightPlayer,
       projection: comparison.rightProjection,
       line: comparison.rightLine,
       winner: rightWins,
+      volatility: rightVolatility,
     },
   ];
 
@@ -494,7 +532,7 @@ function CompareSheet({
         </div>
 
         <div className="matchup-page__compare-cards matchup-page__compare-cards--faceoff">
-          {sides.map(({ player, projection, line, winner }) => (
+          {sides.map(({ player, projection, line, winner, volatility }) => (
             <article
               className={[
                 'matchup-page__compare-card',
@@ -540,6 +578,31 @@ function CompareSheet({
                     style={{ width: `${Math.max(6, (projection / maxProjection) * 100)}%` }}
                   />
                 </span>
+                {volatility.available ? (
+                  <div className="matchup-page__range">
+                    <div className="matchup-page__range-head">
+                      <span className="matchup-page__meta-copy">Franco range</span>
+                      {formatProfileLabel(volatility.profile) ? (
+                        <span className="matchup-page__profile-tag">
+                          {formatProfileLabel(volatility.profile)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <span
+                      aria-hidden="true"
+                      className="matchup-page__range-track"
+                      style={getRangeStyle(volatility, rangeScale) ?? undefined}
+                    >
+                      <span className="matchup-page__range-band" />
+                      <span className="matchup-page__range-median" />
+                    </span>
+                    <p className="matchup-page__range-values">
+                      <span>{formatRangeValue(volatility.floor)} floor</span>
+                      <span>{formatRangeValue(volatility.median)} median</span>
+                      <span>{formatRangeValue(volatility.ceiling)} ceiling</span>
+                    </p>
+                  </div>
+                ) : null}
                 {isSwap ? (
                   <p className="matchup-page__compare-stat">
                     <span className="matchup-page__meta-copy">Line if started</span>
@@ -787,10 +850,36 @@ function MatchupLive({
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
   const [compareSource, setCompareSource] = useState<'slip' | 'edge' | null>(null);
+  const [volatilityProjectionSet, setVolatilityProjectionSet] =
+    useState<VolatilityProjectionSet | null>(null);
   const [isRecapDismissed, setIsRecapDismissed] = useState(
     () => window.localStorage.getItem(RECAP_DISMISSED_KEY) === 'true',
   );
   const [recapShareState, setRecapShareState] = useState<'idle' | 'working' | ShareResult>('idle');
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch('/api/projections', { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: VolatilityProjectionSet | null) => {
+        if (payload?.players?.length) {
+          setVolatilityProjectionSet(payload);
+        }
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        setVolatilityProjectionSet(null);
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const volatilityResolver = useMemo(
+    () => createVolatilityResolver(volatilityProjectionSet, matchup.scoringFormat),
+    [matchup.scoringFormat, volatilityProjectionSet],
+  );
 
   const playerMap = useMemo(
     () => new Map(MOCK_PLAYER_POOL.map((player) => [player.id, player])),
@@ -904,7 +993,7 @@ function MatchupLive({
     setIsRecapDismissed(true);
   };
 
-  const MAX_COMPARE = 4;
+  const MAX_COMPARE = 2;
 
   const handleComparePick = (player: Player) => {
     setIsCompareMode(true);
@@ -938,15 +1027,11 @@ function MatchupLive({
     }
   };
 
-  // Open the verdict: a pair gets the rich, slot-aware swap card; three or
-  // four players get a ranked board (projection is the honest currency
-  // once you're past a single swap decision).
+  // Open the verdict: this flow is capped to the two-player compare sheet.
   const openVerdict = () => {
     setCompareSource('slip');
     if (compareSelection.length === 2) {
       setCompareModalPlayers([compareSelection[0], compareSelection[1]]);
-    } else if (compareSelection.length >= 3) {
-      setCompareBoardPlayers(compareSelection);
     }
   };
 
@@ -1641,7 +1726,7 @@ function MatchupLive({
 
           {compareSelection.length === 0 ? (
             <p className="matchup-page__slip-empty">
-              Tap up to four players you&apos;re deciding between.
+              Pick two players to compare.
             </p>
           ) : (
             <div className="matchup-page__slip-chips">
@@ -1666,7 +1751,7 @@ function MatchupLive({
               ))}
               {compareSelection.length < MAX_COMPARE && eligibleCount !== 0 ? (
                 <span className="matchup-page__slip-ghost">
-                  + add {compareSelection.length === 1 ? 'who to compare' : 'another'}
+                  + add second player
                 </span>
               ) : null}
             </div>
@@ -1686,10 +1771,8 @@ function MatchupLive({
             type="button"
           >
             {compareSelection.length < 2
-              ? 'Pick at least two'
-              : compareSelection.length === 2
-                ? 'See the verdict'
-                : `Rank these ${compareSelection.length}`}
+              ? 'Pick two players to compare'
+              : 'See the verdict'}
           </button>
         </div>
       ) : null}
@@ -1697,6 +1780,7 @@ function MatchupLive({
       {compareResult && compareModalPlayers ? (
         <CompareSheet
           comparison={compareResult}
+          getVolatilityProfile={volatilityResolver.getVolatilityProfile}
           leftPlayer={compareModalPlayers[0]}
           onApply={
             compareResult.slotIndex >= 0 &&
@@ -1712,7 +1796,6 @@ function MatchupLive({
           }
           onClose={compareSource === 'slip' ? closeVerdict : closeEdgeInspect}
           rightPlayer={compareModalPlayers[1]}
-          userWinProbability={engine.activeLine.yours.winProbability}
           tapeNote={(() => {
             const starterIds = new Set(engine.roster.map((slot) => slot.starter.id));
             const bothIn = compareModalPlayers.every((p) => starterIds.has(p.id));
@@ -1723,6 +1806,7 @@ function MatchupLive({
                 ? 'Neither starts this week.'
                 : '';
           })()}
+          week={matchup.week}
         />
       ) : null}
 
