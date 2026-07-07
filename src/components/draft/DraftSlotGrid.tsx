@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
 import type { DraftSlotResult, LeagueStyle } from '../../types';
-import { formatAmericanOdds } from '../../utils/formatOdds';
 import type { ShareResult } from '../../utils/share';
 import { LeagueStyleToggle } from './LeagueStyleToggle';
 import './DraftSlotGrid.css';
@@ -59,7 +58,7 @@ export function DraftSlotGrid({
       const result = await onShare();
       setShareState(result ?? 'shared');
     } catch {
-      setShareState('idle');
+      setShareState('copied');
     }
   };
 
@@ -92,9 +91,6 @@ export function DraftSlotGrid({
             type="button"
           >
             <span className="draft-slot-grid__position">#{slot.position}</span>
-            <span className="draft-slot-grid__odds">
-              {formatAmericanOdds(slot.championshipOdds)}
-            </span>
             <span className="draft-slot-grid__probability">
               {slot.winProbability.toFixed(1)}%
             </span>

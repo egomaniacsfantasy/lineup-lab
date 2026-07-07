@@ -49,7 +49,7 @@ function drawShareImage() {
   ctx.fill();
 
   ctx.fillStyle = '#a9aea4';
-  ctx.font = '700 28px Saira, sans-serif';
+  ctx.font = '700 28px IBM Plex Mono, monospace';
   ctx.letterSpacing = '4px';
   ctx.fillText('WEEK 7 RECAP', 150, 190);
 
@@ -59,10 +59,10 @@ function drawShareImage() {
   ctx.fillText('You won by 12.', 150, 385);
 
   ctx.fillStyle = '#cdd1c9';
-  ctx.font = '500 34px Hanken Grotesk, sans-serif';
+  ctx.font = '500 34px Space Grotesk, sans-serif';
   ctx.fillText('The book called it. So did you.', 150, 455);
 
-  ctx.strokeStyle = '#e8541d';
+  ctx.strokeStyle = '#b87d18';
   ctx.lineWidth = 7;
   ctx.beginPath();
   ctx.moveTo(180, 585);
@@ -73,31 +73,31 @@ function drawShareImage() {
   WEEKLY_RECAP.movement.forEach((point, index) => {
     const x = 180 + index * 360;
     const y = index === 1 ? 540 : 585;
-    ctx.fillStyle = '#e8541d';
+    ctx.fillStyle = '#b87d18';
     ctx.beginPath();
     ctx.arc(x, y, 12, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#a9aea4';
-    ctx.font = '700 24px Saira, sans-serif';
+    ctx.font = '700 24px IBM Plex Mono, monospace';
     ctx.fillText(point.label, x - 24, y + 56);
     ctx.fillStyle = '#f4f5f2';
     ctx.fillText(String(point.value), x - 34, y - 28);
   });
 
   ctx.fillStyle = '#a9aea4';
-  ctx.font = '700 22px Saira, sans-serif';
+  ctx.font = '700 22px IBM Plex Mono, monospace';
   ctx.fillText('FINAL SCORE', 150, 725);
   ctx.fillText('BIGGEST CONTRIBUTOR', 405, 725);
   ctx.fillText('BEST DECISION', 710, 725);
 
   ctx.fillStyle = '#f4f5f2';
-  ctx.font = '800 28px Hanken Grotesk, sans-serif';
+  ctx.font = '700 28px Space Grotesk, sans-serif';
   ctx.fillText(WEEKLY_RECAP.finalScore, 150, 770);
   ctx.fillText('D. Henry', 405, 770);
   ctx.fillText('London > Smith', 710, 770);
 
   ctx.fillStyle = '#a9aea4';
-  ctx.font = '700 24px Saira, sans-serif';
+  ctx.font = '700 24px IBM Plex Mono, monospace';
   ctx.fillText('ODDS GODS', 90, 965);
   ctx.fillText('lineuplab.oddsgods.net', 690, 965);
 

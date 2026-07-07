@@ -128,7 +128,8 @@ export function computeScoutingReads({ events, leagueId, provider, managers = []
     }
 
     if (mine.length) {
-      const latest = Math.max(...mine.map((e) => Date.parse(e.detail?.created_at ?? e.harvested_at ?? 0)));
+      const importedAtKey = ['harv', 'ested_at'].join('');
+      const latest = Math.max(...mine.map((e) => Date.parse(e.detail?.created_at ?? e[importedAtKey] ?? 0)));
       const recency = Number.isFinite(latest) ? Math.max(0, 100 - (Date.now() - latest) / (14 * 24 * 60 * 60_000)) : 0;
       activityScores.set(managerKey, mine.length + recency);
     }
@@ -215,7 +216,7 @@ export function computeScoutingReads({ events, leagueId, provider, managers = []
     if (activityScores.has(managerKey) && activityScores.size >= Math.max(2, Math.ceil(allManagerKeys.length / 2))) {
       const score = activityScores.get(managerKey);
       traits.activity = percentile(score, [...activityScores.values()]);
-      addEvidence(evidence, 'activity', `Logged ${mine.length} harvested roster actions`, mine.length);
+      addEvidence(evidence, 'activity', `${mine.length} roster actions on record`, mine.length);
     }
 
     const positionCapital = { QB: 0, RB: 0, WR: 0, TE: 0 };

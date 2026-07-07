@@ -4,6 +4,7 @@ import { DraftSlotGrid } from '../components/draft/DraftSlotGrid';
 import { PlayerAvailability } from '../components/draft/PlayerAvailability';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { useSeasonMode } from '../hooks/useSeasonMode';
+import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import type { DraftSlotResult, LeagueStyle } from '../types';
 import { formatAmericanOdds } from '../utils/formatOdds';
 import { shareText } from '../utils/share';
@@ -24,16 +25,30 @@ function probabilityToAmerican(probability: number) {
   return Math.round((100 * (1 - decimalProbability)) / decimalProbability);
 }
 
-function deriveDraftSlotOdds(style: LeagueStyle): DraftSlotResult {
+function normalizeSlots(slots: DraftSlotResult['slots']) {
+  const total = slots.reduce((sum, slot) => sum + slot.winProbability, 0) || 1;
+  return slots.map((slot) => {
+    const winProbability = Number(((slot.winProbability / total) * 100).toFixed(1));
+    return {
+      ...slot,
+      winProbability,
+      championshipOdds: probabilityToAmerican(winProbability),
+    };
+  });
+}
+
+function deriveDraftSlotOdds(style: LeagueStyle, slotCount: number): DraftSlotResult {
+  const baseSlots = MOCK_DRAFT_SLOT_ODDS.slots.slice(0, slotCount);
   if (style === 'competitive') {
-    return MOCK_DRAFT_SLOT_ODDS;
+    return { ...MOCK_DRAFT_SLOT_ODDS, slots: normalizeSlots(baseSlots) };
   }
 
   return {
     leagueStyle: style,
-    slots: MOCK_DRAFT_SLOT_ODDS.slots.map((slot) => {
-      const distanceFromMiddle = Math.abs(slot.position - 6.5) / 5.5;
-      const earlyPick = slot.position <= 6;
+    slots: normalizeSlots(baseSlots.map((slot) => {
+      const midpoint = (slotCount + 1) / 2;
+      const distanceFromMiddle = Math.abs(slot.position - midpoint) / Math.max(1, midpoint - 1);
+      const earlyPick = slot.position <= midpoint;
       const styleAdjustment =
         style === 'casual'
           ? earlyPick
@@ -52,7 +67,7 @@ function deriveDraftSlotOdds(style: LeagueStyle): DraftSlotResult {
         winProbability: Number(nextProbability.toFixed(1)),
         championshipOdds: probabilityToAmerican(nextProbability),
       };
-    }),
+    })),
   };
 }
 
@@ -60,12 +75,15 @@ function deriveDraftSlotOdds(style: LeagueStyle): DraftSlotResult {
 // not a year-round tab. Keep the route and the seasonal notice.
 export function DraftPage() {
   const { mode } = useSeasonMode();
+  const { bootstrap } = useLeagueConnection();
   const [leagueStyle, setLeagueStyle] = useState<LeagueStyle>('competitive');
   const [selectedPosition, setSelectedPosition] = useState<number | null>(3);
+  const slotCount = bootstrap?.league.totalTeams ?? MOCK_DRAFT_SLOT_ODDS.slots.length;
+  const draftSeason = bootstrap?.league.season ?? '2026';
 
   const slotOdds = useMemo(
-    () => deriveDraftSlotOdds(leagueStyle),
-    [leagueStyle],
+    () => deriveDraftSlotOdds(leagueStyle, slotCount),
+    [leagueStyle, slotCount],
   );
   const selectedSlot = slotOdds.slots.find((slot) => slot.position === selectedPosition) ?? null;
   const bestSlot = slotOdds.slots.reduce((best, slot) =>
@@ -87,7 +105,7 @@ export function DraftPage() {
 
       {mode === 'inseason' ? (
         <SeasonalNotice>
-          Draft tools open in August. These boards replay your 2024 draft.
+          Draft tools open in August. {draftSeason} boards are parked for now.
         </SeasonalNotice>
       ) : null}
 
@@ -102,6 +120,7 @@ export function DraftPage() {
 
       <div className="draft-page__secondary">
         <PlayerAvailability
+          slotCount={slotCount}
           leagueStyle={leagueStyle}
           onLeagueStyleChange={setLeagueStyle}
           players={Object.values(MOCK_PLAYERS)}
@@ -111,7 +130,7 @@ export function DraftPage() {
         <section className="draft-page__cta">
           <p className="draft-page__cta-kicker">Build trade values</p>
           <h2 className="draft-page__cta-title">
-            Rank 5 players to shape consensus values and enter the weekly Pro raffle.
+            Rank 5 players to shape consensus values.
           </h2>
           <Link className="draft-page__cta-link" to="/rankings">
             Rank players

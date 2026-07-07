@@ -37,6 +37,7 @@ import {
 import {
   buildExposureWindows,
   getGameContextSource,
+  getPlayerContext,
 } from '../utils/playerGameContext';
 import type {
   BenchPlayer,
@@ -440,11 +441,13 @@ function CompareSheet({
   const projectionDelta = roundTo(comparison.rightProjection - comparison.leftProjection);
   const rightWins = isSwap ? comparison.deltaWinProbability > 0 : projectionDelta > 0;
   const leftWins = isSwap ? comparison.deltaWinProbability < 0 : projectionDelta < 0;
+  const headlineWinner = rightWins ? rightPlayer : leftWins ? leftPlayer : null;
 
   const headlineNumber = isSwap
     ? formatDisplayedWinProbabilityDelta(comparison.leftLine, comparison.rightLine)
-    : `${projectionDelta > 0 ? '+' : ''}${projectionDelta.toFixed(1)} pts`;
-  const headlineWinner = rightWins ? rightPlayer : leftWins ? leftPlayer : null;
+    : headlineWinner
+      ? `+${Math.abs(projectionDelta).toFixed(1)} pts`
+      : '0.0 pts';
 
   const verdict = isSwap
     ? swapVerdict(
@@ -559,7 +562,7 @@ function CompareSheet({
               </div>
               <div className="matchup-page__compare-stats">
                 <p className="matchup-page__compare-stat">
-                  <span className="matchup-page__meta-copy">Projection</span>
+                  <span className="matchup-page__meta-copy">Priced projection</span>
                   <span className="matchup-page__inline-number">
                     {formatProjection(projection)} pts
                   </span>
@@ -598,7 +601,7 @@ function CompareSheet({
                     </span>
                     <p className="matchup-page__range-values">
                       <span>{formatRangeValue(volatility.floor)} floor</span>
-                      <span>{formatRangeValue(volatility.median)} median</span>
+                      <span>{formatRangeValue(volatility.median)} Franco median</span>
                       <span>{formatRangeValue(volatility.ceiling)} ceiling</span>
                     </p>
                   </div>
@@ -1095,6 +1098,23 @@ function MatchupLive({
         ).length
       : null;
 
+  const lineupMetaFor = (player: Player, extra?: string | null) => {
+    const context = getPlayerContext(player, gameContextSource);
+    const gameMeta = context.contextAvailable
+      ? context.bye
+        ? 'BYE'
+        : `${context.matchup} · ${context.kickoff}`
+      : null;
+    const status =
+      player.injuryStatus && !['active', 'healthy'].includes(player.injuryStatus.toLowerCase())
+        ? player.injuryStatus
+        : null;
+
+    return [`${player.position} · ${player.team}`, gameMeta, status, extra]
+      .filter(Boolean)
+      .join(' · ');
+  };
+
   const renderLineupRow = ({
     player,
     slotLabel,
@@ -1230,10 +1250,9 @@ function MatchupLive({
             {isPreview ? (
               <span className="matchup-page__preview-chip">Preview lineup</span>
             ) : overrideCount > 0 ? (
-              <span className="matchup-page__model-chip">
-                <span className="matchup-page__live-dot" aria-hidden="true" />
-                Your model
-              </span>
+              <a className="matchup-page__model-chip" href="/rankings">
+                PRICED ON YOUR BOARD
+              </a>
             ) : (
               <span className="matchup-page__live-chip">
                 <span className="matchup-page__live-dot" aria-hidden="true" />
@@ -1286,14 +1305,38 @@ function MatchupLive({
 
             <div className="matchup-page__faceoff-side matchup-page__faceoff-side--opp">
               <div className="matchup-page__faceoff-identity matchup-page__faceoff-identity--opp">
-                <TeamCrest
-                  avatarUrl={matchup.opponentTeam.avatarUrl}
-                  teamName={matchup.opponentTeam.teamName}
-                />
+                {matchup.opponentTeam.managerKey ? (
+                  <button
+                    aria-label={`Open scouting card for ${matchup.opponentTeam.teamName}`}
+                    className="matchup-page__crest-button"
+                    onClick={() => openScoutingCard(matchup.opponentTeam.managerKey!)}
+                    type="button"
+                  >
+                    <TeamCrest
+                      avatarUrl={matchup.opponentTeam.avatarUrl}
+                      teamName={matchup.opponentTeam.teamName}
+                    />
+                  </button>
+                ) : (
+                  <span
+                    className="matchup-page__crest-button matchup-page__crest-button--static"
+                    title="Scouting opens after this manager is synced."
+                  >
+                    <TeamCrest
+                      avatarUrl={matchup.opponentTeam.avatarUrl}
+                      teamName={matchup.opponentTeam.teamName}
+                    />
+                  </span>
+                )}
                 <div>
                   <button
                     className="matchup-page__team-name matchup-page__team-name--button"
                     disabled={!matchup.opponentTeam.managerKey}
+                    title={
+                      matchup.opponentTeam.managerKey
+                        ? `Open scouting card for ${matchup.opponentTeam.teamName}`
+                        : 'Scouting opens after this manager is synced.'
+                    }
                     onClick={() => {
                       if (matchup.opponentTeam.managerKey) {
                         openScoutingCard(matchup.opponentTeam.managerKey);
@@ -1363,7 +1406,7 @@ function MatchupLive({
           <SeasonalNotice>
             {unpricedStarterCount} of your starters{' '}
             {unpricedStarterCount === 1 ? 'is' : 'are'} outside the projection
-            sheet, so this board is reduced-confidence.
+            sheet, so recommendations are limited.
           </SeasonalNotice>
         ) : null}
         {lineMovement ? (
@@ -1526,7 +1569,7 @@ function MatchupLive({
         </section>
         ) : null}
 
-        {!isConnected ? (
+        {exposureTiming.contextAvailable && exposureWindows.length > 0 ? (
         <section className="matchup-page__module">
           <div className="matchup-page__module-row">
             <h2 className="matchup-page__module-title">When your week locks</h2>
@@ -1652,9 +1695,7 @@ function MatchupLive({
               activeAlternative && targetLine
                   ? `Restore ${engine.baselineRoster[slotIndex].starter.shortName} · ${formatAmericanOdds(currentLine.moneyline)} to ${formatAmericanOdds(targetLine.moneyline)}`
                   : null;
-            const meta = edgeMeta
-              ? `${slot.starter.position} · ${slot.starter.team} · ${edgeMeta}`
-              : `${slot.starter.position} · ${slot.starter.team}`;
+            const meta = lineupMetaFor(slot.starter, edgeMeta);
             const swapDelta =
               actionAlternative && targetLine
                 ? getDisplayedWinProbabilityDelta(currentLine, targetLine)
@@ -1677,7 +1718,7 @@ function MatchupLive({
               selected: compareSelection.some((candidate) => candidate.id === slot.starter.id),
               slotLabel: slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel,
               swapChip:
-                actionAlternative && swapDeltaLabel
+                actionAlternative && swapDelta !== null && swapDelta > 0 && swapDeltaLabel
                   ? {
                       ariaLabel: `Start ${actionAlternative.player.name} for ${swapDeltaLabel} win probability`,
                       deltaLabel: swapDeltaLabel,
@@ -1702,9 +1743,7 @@ function MatchupLive({
               : null;
 
             return renderLineupRow({
-              meta: bestFitMeta
-                ? `${benchRow.player.position} · ${benchRow.player.team} · ${bestFitMeta}`
-                : `${benchRow.player.position} · ${benchRow.player.team}`,
+              meta: lineupMetaFor(benchRow.player, bestFitMeta),
               player: benchRow.player,
               projection: benchRow.projection,
               selected: compareSelection.some((candidate) => candidate.id === benchRow.player.id),

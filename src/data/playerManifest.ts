@@ -78,7 +78,7 @@ const TEAM_LOGO_SLUGS: Record<string, string> = {
   LAR: 'lar',
 };
 
-// 2024 NFL Season Replay. Mount Olympus League demo data.
+// 2024 NFL Season Replay. Demo league data.
 // ALL stat lines were re-verified against public 2024 weekly NFL stat feeds and ESPN game pages on Apr 22, 2026.
 // Every week8_2024.pprPoints value matches the player's actual recorded Week 8 2024 PPR fantasy score.
 // Pro Football Reference was unavailable from this environment due a 403 challenge.

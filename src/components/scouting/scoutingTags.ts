@@ -12,7 +12,7 @@ export function scoutingTags(read: ScoutingRead): string[] {
     if (traits.trade_appetite <= 30) tags.push({ label: 'Stingy', score: 100 - traits.trade_appetite });
   }
   if (typeof traits.reach_tendency === 'number' && traits.reach_tendency >= 70) {
-    tags.push({ label: 'Reaches on his guys', score: traits.reach_tendency });
+    tags.push({ label: 'Drafts favorites early', score: traits.reach_tendency });
   }
   if (typeof traits.waiver_aggression === 'number' && traits.waiver_aggression >= 70) {
     tags.push({ label: 'Waiver shark', score: traits.waiver_aggression });

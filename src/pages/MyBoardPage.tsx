@@ -112,7 +112,7 @@ function buildGodScale(board: BoardRow[], starters: Starters) {
 type Conviction = 'lean' | 'clear' | 'huge';
 const MARGIN: Record<Conviction, number> = { lean: 0.5, clear: 1.5, huge: 3.5 };
 const CONVICTION_LABEL: Record<Conviction, string> = {
-  lean: 'Slight lean',
+  lean: 'Barely',
   clear: 'Clearly',
   huge: 'By a lot',
 };
@@ -207,7 +207,7 @@ function SetSwitcher({
   deleteSet,
   switchSet,
 }: {
-  sets: Array<{ id: string; name: string; count: number }>;
+  sets: Array<{ id: string; name: string; count: number; updatedAt?: string | null }>;
   activeSetId: string;
   activeSetName: string;
   createSet: (name?: string) => void;
@@ -377,7 +377,7 @@ export function MyBoardPage() {
   const [board, setBoard] = useState<BoardRow[] | null>(null);
   const [version, setVersion] = useState<string | null>(null);
   const [mode, setMode] = useState<'board' | 'rapid'>('board');
-  const [position, setPosition] = useState<(typeof BOARD_POSITIONS)[number]>('RB');
+  const [position, setPosition] = useState<(typeof BOARD_POSITIONS)[number]>('ALL');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lastEditedBySet, setLastEditedBySet] = useState<Record<string, string>>(readLastEditedMap);
 
@@ -418,13 +418,14 @@ export function MyBoardPage() {
   }, [bootstrap]);
 
   const effective = (row: BoardRow) => overlay[row.playerId]?.base ?? row.mean;
-  const lastEditedAt = lastEditedBySet[activeSetId] ?? null;
+  const activeSetUpdatedAt = sets.find((set) => set.id === activeSetId)?.updatedAt ?? null;
+  const lastEditedAt = lastEditedBySet[activeSetId] ?? activeSetUpdatedAt;
   const modelState = overrideCount === 0 ? 'Baseline' : isStaleEdit(lastEditedAt) ? 'Stale' : 'Active';
   const statusSegments = [
     `Pricing model: ${overrideCount === 0 ? 'Franco baseline' : 'Your board'}`,
     `Baseline: Franco ${baselineDate(version)}`,
     ...(overrideCount > 0 ? [`Last edited: ${relativeTime(lastEditedAt)}`] : []),
-    'Used in matchup, season, trade',
+    'Used in matchup, league, market',
   ];
 
   const markEdited = useCallback(() => {
@@ -466,7 +467,7 @@ export function MyBoardPage() {
     reset();
   }, [markEdited, reset]);
 
-  // GOD rating: built from the whole board (season totals + VOR), league-aware
+  // GOD rating: whole-board season totals plus VOR, league-aware
   // via the roster slots, recomputed live as overrides change implied totals.
   const starters = useMemo(
     () => computeStarters(bootstrap?.league.rosterPositions),

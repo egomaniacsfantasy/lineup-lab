@@ -66,6 +66,7 @@ export function LeagueFutures({
     [futures, market],
   );
   const cutoffLabel = market === 'playoffs' ? 'Bubble line' : 'Playoff line';
+  const allTeamsReachPlayoffs = market === 'playoffs' && playoffTeams >= totalTeams;
 
   return (
     <section aria-labelledby="league-futures-title" className="league-futures">
@@ -103,6 +104,12 @@ export function LeagueFutures({
         ))}
       </div>
 
+      {allTeamsReachPlayoffs ? (
+        <p className="league-futures__format-note">
+          All {totalTeams} teams reach the playoffs in this format.
+        </p>
+      ) : null}
+
       <div className="league-futures__board">
         {sortedFutures.map((team, index) => (
           <div className="league-futures__slot" key={team.teamName}>
@@ -128,7 +135,9 @@ export function LeagueFutures({
                   {team.isUser ? <span className="league-futures__you">YOU</span> : null}
                 </div>
                 <div className="league-futures__context">
-                  <span className="league-futures__record">{team.record}</span>
+                  <span className="league-futures__record">
+                    {team.projRecord ? `Proj ${team.projRecord}` : team.record}
+                  </span>
                 </div>
               </div>
 
@@ -140,7 +149,9 @@ export function LeagueFutures({
                   .filter(Boolean)
                   .join(' ')}
               >
-                {market === 'playoffs' && team.playoffClinched
+                {allTeamsReachPlayoffs
+                  ? 'In'
+                  : market === 'playoffs' && team.playoffClinched
                   ? 'Clinched'
                   : formatAmericanOdds(getMarketOdds(team, market))}
               </span>

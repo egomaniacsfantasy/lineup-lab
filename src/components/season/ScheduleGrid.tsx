@@ -7,6 +7,11 @@ export interface ScheduleGridItem {
   opponentRecord: string;
   status: 'projected' | 'live' | 'bye' | 'win' | 'loss';
   yourLine?: number;
+  winProb?: number;
+  projection?: number;
+  opponentProjection?: number;
+  note?: string;
+  isPlayoff?: boolean;
   isHome?: boolean;
   score?: string;
 }
@@ -29,6 +34,16 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
       <div className="schedule-grid__rows">
         {items.map((item) => {
           const clickable = Boolean(onSelectWeek) && item.status !== 'bye';
+          const opponentMeta =
+            item.status === 'bye'
+              ? 'Recovery week'
+              : item.isPlayoff
+                ? 'Playoff week'
+                : item.opponentRecord && item.opponentRecord !== '0-0'
+                  ? `${item.isHome ? 'vs' : '@'} ${item.opponentRecord}`
+                  : item.isHome
+                    ? 'vs'
+                    : '@';
           return (
           <article
             className={[
@@ -62,11 +77,7 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
 
             <div className="schedule-grid__opponent">
               <p className="schedule-grid__opponent-name">{item.opponent}</p>
-              <p className="schedule-grid__opponent-meta">
-                {item.status === 'bye'
-                  ? 'Recovery week'
-                  : `${item.isHome ? 'vs' : '@'} ${item.opponentRecord}`}
-              </p>
+              <p className="schedule-grid__opponent-meta">{opponentMeta}</p>
             </div>
 
             <div className="schedule-grid__result">

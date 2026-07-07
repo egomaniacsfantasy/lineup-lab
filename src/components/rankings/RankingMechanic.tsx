@@ -109,7 +109,7 @@ export function RankingMechanic() {
       </button>
 
       <p className="ranking-mechanic__meta">
-        Your rank shapes the consensus. Submitting enters this week&apos;s Pro raffle.
+        Your rank shapes the consensus.
       </p>
 
       {toastVisible ? (

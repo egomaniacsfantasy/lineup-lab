@@ -10,6 +10,7 @@ interface PlayerAvailabilityProps {
   rankings: ConsensusRanking[];
   leagueStyle: LeagueStyle;
   onLeagueStyleChange: (value: LeagueStyle) => void;
+  slotCount: number;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -61,6 +62,7 @@ export function PlayerAvailability({
   rankings,
   leagueStyle,
   onLeagueStyleChange,
+  slotCount,
 }: PlayerAvailabilityProps) {
   const [query, setQuery] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
@@ -109,9 +111,9 @@ export function PlayerAvailability({
           <span className="player-availability__label">Pick #</span>
           <input
             className="player-availability__input"
-            max={12}
+            max={slotCount}
             min={1}
-            onChange={(event) => setPickNumber(clamp(Number(event.target.value), 1, 12))}
+            onChange={(event) => setPickNumber(clamp(Number(event.target.value), 1, slotCount))}
             type="number"
             value={pickNumber}
           />
@@ -135,7 +137,7 @@ export function PlayerAvailability({
         </article>
       ) : (
         <div className="player-availability__placeholder">
-          Search for a player and set your pick to see live-looking availability odds.
+          Search for a player and set your pick.
         </div>
       )}
     </section>

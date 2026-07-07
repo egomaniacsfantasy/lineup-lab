@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * Olympus Supabase project. The publishable key is designed to ship in the
+ * Odds Gods Supabase project. The publishable key is designed to ship in the
  * browser — Row Level Security on every table is what actually protects data,
  * so a user only ever sees their own rows. Overridable via Vite env if needed.
  */

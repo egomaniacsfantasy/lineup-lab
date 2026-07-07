@@ -4,6 +4,9 @@ import { MOCK_MATCHUP } from './matchup';
 export interface LeagueFutureRow {
   teamName: string;
   record: string;
+  projRecord?: string;
+  projWins?: number;
+  projLosses?: number;
   championOdds: number;
   finalsOdds: number;
   playoffOdds: number;

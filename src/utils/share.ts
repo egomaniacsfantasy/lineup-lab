@@ -9,9 +9,15 @@ export async function shareText({
   text: string;
   url?: string;
 }): Promise<ShareResult> {
+  const payload = [text, url].filter(Boolean).join('\n');
   if (navigator.share) {
     try {
-      await navigator.share({ title, text, url });
+      await Promise.race([
+        navigator.share({ title, text, url }),
+        new Promise((_, reject) => {
+          window.setTimeout(() => reject(new Error('share_timeout')), 4500);
+        }),
+      ]);
       return 'shared';
     } catch {
       // In-app/local browser surfaces often expose navigator.share but reject
@@ -19,7 +25,9 @@ export async function shareText({
     }
   }
 
-  const payload = [text, url].filter(Boolean).join('\n');
+  if (!navigator.clipboard?.writeText) {
+    throw new Error('clipboard_unavailable');
+  }
   await navigator.clipboard.writeText(payload);
   return 'copied';
 }

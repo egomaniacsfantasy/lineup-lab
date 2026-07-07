@@ -1,5 +1,5 @@
 /**
- * Olympus server — serves the built SPA and proxies/caches all league
+ * Odds Gods server — serves the built SPA and proxies/caches all league
  * provider traffic. The browser never calls provider APIs directly.
  */
 import express from 'express';

@@ -335,7 +335,11 @@ export function LeaguePage() {
                 MOCK_SEASON_OUTLOOK.playoffProbability
               }
               recordLabel={connectedSeason.userFuture ? 'Projected record' : 'Record'}
-              recordValue={connectedSeason.userFuture?.record ?? connectedSeason.record}
+              recordValue={
+                connectedSeason.userFuture?.projRecord ??
+                connectedSeason.userFuture?.record ??
+                connectedSeason.record
+              }
               title={`Your ${bootstrap?.league.season} season futures`}
             />
           ) : (

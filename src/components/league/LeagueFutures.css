@@ -81,6 +81,13 @@
   background: color-mix(in srgb, var(--bg-inset) 74%, transparent);
 }
 
+.league-futures__format-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
 .league-futures__row {
   display: flex;
   align-items: center;

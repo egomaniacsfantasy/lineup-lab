@@ -1,5 +1,5 @@
 /**
- * Olympus pricing engine (server-side).
+ * Odds Gods pricing engine (server-side).
  *
  * Inputs per matchup: both rosters' starters (+ user bench for swap
  * pricing), per-player Projection (mean, stdev) from the active import,
@@ -389,11 +389,36 @@ export function priceLeague(ctx) {
         (m) => m.matchupId === mine.matchupId && m.rosterId !== mine.rosterId,
       );
       if (!theirs) continue;
+
+      if (entry.week === week) {
+        const currentLine = lines.find((line) => line.matchupId === mine.matchupId);
+        const currentSide = currentLine?.sides?.[String(userTeamForWeekly.rosterId)];
+        const opponentSide = currentLine?.sides?.[String(theirs.rosterId)];
+        if (currentSide && opponentSide) {
+          weeklyLines.push({
+            week: entry.week,
+            opponentRosterId: theirs.rosterId,
+            opponentName: teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`,
+            moneyline: currentSide.moneyline,
+            winProb: currentSide.winProbability,
+            projection: currentSide.projection,
+            opponentProjection: opponentSide.projection,
+            note: 'Same live line as Matchup.',
+          });
+          continue;
+        }
+      }
+
       const me = distForWeek(userTeamForWeekly.rosterId, entry.week);
       const opp = distForWeek(theirs.rosterId, entry.week);
       const winProb = normalCdf(
         (me.mean - opp.mean) / Math.sqrt((me.sigma ** 2 + opp.sigma ** 2) || 1),
       );
+      const swing = Math.abs((me.mean ?? 0) - (opp.mean ?? 0));
+      const note =
+        swing >= 8
+          ? 'Week-specific player projections drive this line.'
+          : 'Priced from that week’s projected starters.';
       weeklyLines.push({
         week: entry.week,
         opponentRosterId: theirs.rosterId,
@@ -402,6 +427,7 @@ export function priceLeague(ctx) {
         winProb: Number((winProb * 100).toFixed(1)),
         projection: Number(me.mean.toFixed(1)),
         opponentProjection: Number(opp.mean.toFixed(1)),
+        note,
       });
     }
   }
@@ -822,7 +848,7 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
   return teams.map((t) => {
     const playoffProb = playoffCounts.get(t.rosterId) / FUTURES_SIMS;
     const finalsProb = finalsCounts.get(t.rosterId) / FUTURES_SIMS;
-    const titleProb = Math.max(0.005, titleCounts.get(t.rosterId) / FUTURES_SIMS);
+    const titleProb = titleCounts.get(t.rosterId) / FUTURES_SIMS;
     const projWins = Math.round(winSums.get(t.rosterId) / FUTURES_SIMS);
     const projLosses = Math.max(0, totalGames - projWins);
 
@@ -931,7 +957,12 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   }
 
   const seed = parseInt(
-    crypto.createHash('sha1').update([userRosterId, partnerRosterId, ...give, ...get].join('|')).digest('hex').slice(0, 8),
+    computeInputsHash({
+      projectionVersion: active.version,
+      teams,
+      week,
+      overlay: overlay ?? null,
+    }).slice(0, 8),
     16,
   );
 
@@ -941,6 +972,24 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const baseDist = new Map(
     teams.map((t) => [t.rosterId, bestLineupDistribution(t.players, slotLabels, projectionMap, catalog, null)]),
   );
+  const currentStarterDist = new Map(
+    teams.map((t) => [t.rosterId, teamDistribution(t.starters, projectionMap, catalog, week)]),
+  );
+  const weekDistCache = new Map();
+  const distForWeek = (rosterId, w) => {
+    const key = `${rosterId}|${w}`;
+    let dist = weekDistCache.get(key);
+    if (!dist) {
+      dist = teamDistribution(
+        teams.find((t) => t.rosterId === rosterId)?.starters ?? [],
+        projectionMap,
+        catalog,
+        w,
+      );
+      weekDistCache.set(key, dist);
+    }
+    return dist;
+  };
 
   const userPoolAfter = user.players.filter((id) => !give.includes(id)).concat(get);
   const partnerPoolAfter = partner.players.filter((id) => !get.includes(id)).concat(give);
@@ -961,8 +1010,16 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const userAfter = userImpact.after;
   const partnerAfter = partnerImpact.after;
 
-  const futuresBefore = simulateFutures({ league, teams, distByRoster: baseDist, scheduleWeeks, week, seed });
-  const afterDist = new Map(baseDist);
+  const futuresBefore = simulateFutures({
+    league,
+    teams,
+    distByRoster: currentStarterDist,
+    scheduleWeeks,
+    week,
+    distForWeek,
+    seed,
+  });
+  const afterDist = new Map(currentStarterDist);
   afterDist.set(userRosterId, userAfter);
   afterDist.set(partnerRosterId, partnerAfter);
   const futuresAfter = simulateFutures({ league, teams, distByRoster: afterDist, scheduleWeeks, week, seed });

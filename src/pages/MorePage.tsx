@@ -10,6 +10,10 @@ export function MorePage() {
   const { bootstrap, stored } = useLeagueConnection();
   const { user, signOut } = useAuth();
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
+  const isOwner =
+    user?.app_metadata?.role === 'owner' ||
+    user?.user_metadata?.role === 'owner' ||
+    Boolean(window.localStorage.getItem('og.projections.adminpw'));
   const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : null;
   const leagueDestination = bootstrap
     ? {
@@ -22,26 +26,31 @@ export function MorePage() {
         body: 'Add or switch to a synced Sleeper or ESPN league.',
         path: '/league#connect',
       };
+  const toolLinks = [
+    {
+      title: 'Draft tools',
+      body: 'Draft-slot boards and availability windows.',
+      path: '/draft',
+    },
+    {
+      title: 'Projections',
+      body: 'Player projection table and agreement columns.',
+      path: '/projections',
+    },
+    ...(isOwner
+      ? [
+          {
+            title: 'Projections admin',
+            body: 'Owner import flow for weekly Franco workbooks.',
+            path: '/admin/projections',
+          },
+        ]
+      : []),
+  ];
   const groups = [
     {
       title: 'Tools',
-      links: [
-        {
-          title: 'Draft tools',
-          body: 'Draft-slot boards and availability windows.',
-          path: '/draft',
-        },
-        {
-          title: 'Projections',
-          body: 'Player projection table and agreement columns.',
-          path: '/projections',
-        },
-        {
-          title: 'Projections admin',
-          body: 'Owner import flow for weekly Franco workbooks.',
-          path: '/admin/projections',
-        },
-      ],
+      links: toolLinks,
     },
     {
       title: 'League',

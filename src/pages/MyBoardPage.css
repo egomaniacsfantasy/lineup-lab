@@ -13,7 +13,7 @@
 
 .myboard__kicker {
   margin: 0;
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
   font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 600;
@@ -136,7 +136,7 @@
 }
 
 .setsw__set--on {
-  background: rgba(232, 84, 29, 0.1);
+  background: rgba(184, 125, 24, 0.1);
 }
 
 .setsw__set-name {
@@ -150,7 +150,7 @@
 }
 
 .setsw__set--on .setsw__set-name {
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
 }
 
 .setsw__set-count {
@@ -197,7 +197,7 @@
 .setsw__input {
   width: 100%;
   padding: 9px 10px;
-  border: 1px solid var(--amber, #e8541d);
+  border: 1px solid var(--amber, #b87d18);
   border-radius: 9px;
   background: var(--bg-inset, #0b0d0f);
   color: var(--text-primary);
@@ -264,7 +264,7 @@
 }
 
 .myboard__mode--on {
-  background: var(--amber, #e8541d);
+  background: var(--amber, #b87d18);
   color: #fff;
 }
 
@@ -313,7 +313,7 @@
 }
 
 .rapid__card:hover {
-  border-color: var(--amber, #e8541d);
+  border-color: var(--amber, #b87d18);
 }
 
 .rapid__card:active {
@@ -322,10 +322,10 @@
 
 /* The chosen card — same feedback for a tap or an arrow key. */
 .rapid__card--picked {
-  border-color: var(--amber-bright, #ff6a33);
-  background: rgba(232, 84, 29, 0.18);
+  border-color: var(--amber-bright, #d09a3a);
+  background: rgba(184, 125, 24, 0.18);
   transform: scale(1.04);
-  box-shadow: 0 0 0 2px var(--amber, #e8541d), 0 12px 32px rgba(232, 84, 29, 0.25);
+  box-shadow: 0 0 0 2px var(--amber, #b87d18), 0 12px 32px rgba(184, 125, 24, 0.25);
 }
 
 /* The other card recedes as you commit. */
@@ -348,7 +348,7 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--amber, #e8541d), var(--amber-bright, #ff6a33));
+  background: linear-gradient(90deg, var(--amber, #b87d18), var(--amber-bright, #d09a3a));
   transition: width 0.3s ease;
 }
 
@@ -365,7 +365,7 @@
 }
 
 .rapid__streak {
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
   font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 700;
@@ -422,13 +422,13 @@
 }
 
 .rapid__reveal--with { color: var(--green, #3ad29f); }
-.rapid__reveal--hot { color: var(--amber-bright, #ff6a33); }
+.rapid__reveal--hot { color: var(--amber-bright, #d09a3a); }
 .rapid__reveal--coin { color: var(--text-muted, #a9aea4); }
 
 /* ── Session summary ── */
 .rapid__done-kicker {
   margin: 0;
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
   font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 600;
@@ -508,7 +508,7 @@
 }
 
 .rapid__yours {
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
   font-family: var(--font-num, monospace);
   font-size: 12px;
   font-weight: 600;
@@ -542,9 +542,9 @@
 }
 
 .rapid__conv--on {
-  border-color: var(--amber, #e8541d);
-  background: rgba(232, 84, 29, 0.12);
-  color: var(--amber-bright, #ff6a33);
+  border-color: var(--amber, #b87d18);
+  background: rgba(184, 125, 24, 0.12);
+  color: var(--amber-bright, #d09a3a);
 }
 
 .rapid__foot {
@@ -595,11 +595,11 @@
 }
 
 .rapid__again {
-  border: 1px solid var(--amber, #e8541d);
+  border: 1px solid var(--amber, #b87d18);
   border-radius: 999px;
   background: none;
   padding: 9px 18px;
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
   font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 600;
@@ -628,8 +628,8 @@
 }
 
 .myboard__pos--on {
-  border-color: var(--amber, #e8541d);
-  background: var(--amber, #e8541d);
+  border-color: var(--amber, #b87d18);
+  background: var(--amber, #b87d18);
   color: #fff;
 }
 
@@ -651,7 +651,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
   cursor: help;
 }
 
@@ -735,7 +735,7 @@
 
 .myboard__caret--open {
   transform: rotate(90deg);
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
 }
 
 .myboard__rank {
@@ -840,7 +840,7 @@
 .dial__slider {
   width: 100%;
   margin: 12px 0 4px;
-  accent-color: var(--amber, #e8541d);
+  accent-color: var(--amber, #b87d18);
 }
 
 .dial__scale {
@@ -877,7 +877,7 @@
 }
 
 .dial__god {
-  color: var(--amber-bright, #ff6a33);
+  color: var(--amber-bright, #d09a3a);
   font-family: var(--font-num, monospace);
   font-size: 15px;
   font-weight: 600;

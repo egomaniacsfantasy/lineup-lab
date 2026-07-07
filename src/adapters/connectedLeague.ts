@@ -152,6 +152,9 @@ export function toLeagueFutures(
           f.record.ties > 0
             ? `${f.record.wins}-${f.record.losses}-${f.record.ties}`
             : `${f.record.wins}-${f.record.losses}`,
+        projRecord: f.projRecord,
+        projWins: f.projWins,
+        projLosses: f.projLosses,
         championOdds: f.championOdds,
         finalsOdds: f.finalsOdds,
         playoffOdds: f.playoffOdds,
@@ -530,13 +533,22 @@ export function toScheduleItems(
       }
 
       const priced = pricedWeeks.get(weekEntry.week);
+      const isPlayoff =
+        typeof bootstrap.league.playoffWeekStart === 'number' &&
+        weekEntry.week >= bootstrap.league.playoffWeekStart;
 
       return {
         week: weekEntry.week,
         opponent: opp.teamName,
         opponentRecord: recordLabel(opp),
         status: weekEntry.week === bootstrap.week ? 'live' : 'projected',
+        isHome: true,
+        isPlayoff,
         yourLine: priced?.moneyline ?? line.yours.moneyline,
+        winProb: priced?.winProb,
+        projection: priced?.projection,
+        opponentProjection: priced?.opponentProjection,
+        note: priced?.note,
       };
     })
     .filter((item): item is ScheduleGridItem => item !== null);

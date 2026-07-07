@@ -78,6 +78,13 @@ export function ScoutingView() {
     ? dismissedKeys.has(stored.leagueId) || window.localStorage.getItem(revealKey(stored.leagueId)) === '1'
     : false;
   const showReveal = Boolean(stored && !dismissed && superlatives.length >= 2);
+  const tagFrequency = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const read of sortedReads) {
+      for (const tag of scoutingTags(read)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+    return counts;
+  }, [sortedReads]);
 
   if (!stored || !bootstrap) {
     return <div className={styles.empty}>Syncing market reads.</div>;
@@ -114,6 +121,7 @@ export function ScoutingView() {
         {sortedReads.map((read) => {
           const isUser = read.manager_key === stored.userId;
           const isVacant = read.manager_key.startsWith('vacant:') || read.manager.name === 'Unmanaged team';
+          const tags = scoutingTags(read).filter((tag) => (tagFrequency.get(tag) ?? 0) < sortedReads.length);
           return (
             <button
               className={[styles.card, isUser ? styles.self : '', isVacant ? styles.vacant : '']
@@ -130,9 +138,9 @@ export function ScoutingView() {
               <div className={styles.copy}>
                 <h3>{read.manager.team_name}</h3>
                 <p>{read.manager.name} · <span>{read.manager.record ?? '0-0'}</span></p>
-                {scoutingTags(read).length > 0 ? (
+                {tags.length > 0 ? (
                   <div className={styles.tags}>
-                    {scoutingTags(read).map((tag) => <span key={tag}>{tag}</span>)}
+                    {tags.map((tag) => <span key={tag}>{tag}</span>)}
                   </div>
                 ) : null}
               </div>

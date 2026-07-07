@@ -50,7 +50,6 @@ function needsText(read: ScoutingRead | null) {
     ...(needs?.weak ?? []).map((pos) => `Thin at ${pos}`),
     ...(needs?.surplus ?? []).map((pos) => `Surplus ${pos}`),
   ];
-  parts.push(recordFor(read));
   return parts.join(' · ');
 }
 
@@ -153,6 +152,7 @@ export function ScoutingCard({
 
   const display = read?.manager;
   const teamTag = favoriteTeam || read?.edit?.favorite_team || read?.traits.team_bias?.team || '';
+  const needsCopy = needsText(read);
 
   return (
     <aside
@@ -221,10 +221,12 @@ export function ScoutingCard({
                 </section>
               ) : null}
 
-              <section className={styles.section}>
+              {needsCopy ? (
+                <section className={styles.section}>
                 <p className={styles.label}>This week / Needs</p>
-                <p className={styles.body}>{needsText(read)}</p>
+                <p className={styles.body}>{needsCopy}</p>
               </section>
+              ) : null}
 
               {read.edit?.notes ? (
                 <section className={styles.section}>

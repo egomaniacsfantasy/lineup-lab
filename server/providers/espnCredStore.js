@@ -12,7 +12,7 @@
  * a server key. On Render this file lives on the persistent disk.
  *
  * Privacy note: access is keyed by ESPN league id. Anyone who knows a synced
- * league's id can read it through Olympus — acceptable for league tooling and
+ * league's id can read it through Odds Gods — acceptable for league tooling and
  * a closed beta, but real per-user gating wants user accounts (a follow-up).
  */
 import crypto from 'node:crypto';

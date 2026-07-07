@@ -1,5 +1,5 @@
 /**
- * Client for the Olympus server API. Provider-agnostic: the browser never
+ * Client for the Odds Gods server API. Provider-agnostic: the browser never
  * talks to Sleeper (or any provider) directly.
  */
 
@@ -156,6 +156,7 @@ export interface LeaguePricing {
     winProb: number;
     projection: number;
     opponentProjection: number;
+    note?: string;
   }[];
 }
 

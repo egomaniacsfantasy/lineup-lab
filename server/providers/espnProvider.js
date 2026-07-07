@@ -9,7 +9,7 @@
  * The whole league comes back in ONE call (with views), so every provider
  * method derives its slice from that single cached blob.
  *
- * Player identity: ESPN uses its own player ids, but Olympus prices against
+ * Player identity: ESPN uses its own player ids, but Odds Gods prices against
  * Franco's projections, which are keyed to SLEEPER ids. So we crosswalk every
  * ESPN player into the Sleeper catalog by normalized name + position. That
  * keeps projections, headshots, and the engine working unchanged; anyone who

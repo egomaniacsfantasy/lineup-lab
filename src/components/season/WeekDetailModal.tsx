@@ -9,6 +9,7 @@ interface WeeklyLine {
   winProb: number;
   projection: number;
   opponentProjection: number;
+  note?: string;
 }
 
 interface WeekDetailModalProps {
@@ -80,10 +81,10 @@ export function WeekDetailModal({ week, userTeamName, line, onClose }: WeekDetai
             <div className="week-detail__line">
               <div>
                 <p className="week-detail__line-value">{formatAmericanOdds(line.moneyline)}</p>
-                <p className="week-detail__line-label">your line</p>
+                <p className="week-detail__line-label">moneyline</p>
               </div>
               <div>
-                <p className="week-detail__line-value">{line.winProb.toFixed(0)}%</p>
+                <p className="week-detail__line-value">{line.winProb.toFixed(1)}%</p>
                 <p className="week-detail__line-label">win probability</p>
               </div>
               <div>
@@ -96,9 +97,10 @@ export function WeekDetailModal({ week, userTeamName, line, onClose }: WeekDetai
             </div>
 
             <p className="week-detail__note">
-              {favored
+              {line.note ??
+                (favored
                 ? `Favored by ${spread.toFixed(1)} on projection. Reprices as rosters change.`
-                : `Underdog by ${spread.toFixed(1)} on projection. Reprices as rosters change.`}
+                : `Underdog by ${spread.toFixed(1)} on projection. Reprices as rosters change.`)}
             </p>
           </>
         ) : (

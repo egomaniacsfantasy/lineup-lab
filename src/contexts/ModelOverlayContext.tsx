@@ -29,6 +29,7 @@ export interface ModelSet {
   name: string;
   overlay: Overlay;
   flags: Flags;
+  updatedAt?: string | null;
 }
 
 interface Persisted {
@@ -47,7 +48,7 @@ function newId() {
 }
 
 function freshSet(name = 'My board'): ModelSet {
-  return { id: newId(), name, overlay: {}, flags: {} };
+  return { id: newId(), name, overlay: {}, flags: {}, updatedAt: null };
 }
 
 function readLocal(): Persisted {
@@ -95,7 +96,7 @@ interface ModelOverlayValue {
   toggleFlag: (playerId: string, kind: 'high' | 'low') => void;
   reset: () => void;
   // ── Named sets ──
-  sets: Array<{ id: string; name: string; count: number }>;
+  sets: Array<{ id: string; name: string; count: number; updatedAt?: string | null }>;
   activeSetId: string;
   activeSetName: string;
   createSet: (name?: string) => void;
@@ -130,7 +131,7 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
       overlay: s.overlay,
       flags: s.flags,
       is_active: s.id === activeId,
-      updated_at: new Date().toISOString(),
+      updated_at: s.updatedAt ?? new Date().toISOString(),
     }));
     void supabase
       .from('olympus_models')
@@ -161,7 +162,7 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void supabase
       .from('olympus_models')
-      .select('id, name, overlay, flags, is_active, created_at')
+      .select('id, name, overlay, flags, is_active, created_at, updated_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
@@ -175,6 +176,7 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
           name: (r.name as string) ?? 'My board',
           overlay: (r.overlay as Overlay) ?? {},
           flags: (r.flags as Flags) ?? {},
+          updatedAt: (r.updated_at as string | null) ?? (r.created_at as string | null) ?? null,
         }));
         const activeRow = rows.find((r) => r.is_active) ?? rows[0];
         const next: Persisted = { sets, activeId: activeRow.id as string };
@@ -199,7 +201,12 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
       const prev = stateRef.current;
       const act = activeOf(prev);
       const nextSet = fn(act);
-      commit({ sets: prev.sets.map((s) => (s.id === act.id ? nextSet : s)), activeId: prev.activeId });
+      commit({
+        sets: prev.sets.map((s) =>
+          s.id === act.id ? { ...nextSet, updatedAt: new Date().toISOString() } : s,
+        ),
+        activeId: prev.activeId,
+      });
     },
     [commit],
   );
@@ -279,7 +286,11 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
     (id: string, name: string) => {
       const prev = stateRef.current;
       commit({
-        sets: prev.sets.map((s) => (s.id === id ? { ...s, name: name.trim() || s.name } : s)),
+        sets: prev.sets.map((s) =>
+          s.id === id
+            ? { ...s, name: name.trim() || s.name, updatedAt: new Date().toISOString() }
+            : s,
+        ),
         activeId: prev.activeId,
       });
     },
@@ -322,7 +333,12 @@ export function ModelOverlayProvider({ children }: { children: ReactNode }) {
       clearPlayer,
       toggleFlag,
       reset,
-      sets: state.sets.map((s) => ({ id: s.id, name: s.name, count: Object.keys(s.overlay).length })),
+      sets: state.sets.map((s) => ({
+        id: s.id,
+        name: s.name,
+        count: Object.keys(s.overlay).length,
+        updatedAt: s.updatedAt ?? null,
+      })),
       activeSetId: active.id,
       activeSetName: active.name,
       createSet,
