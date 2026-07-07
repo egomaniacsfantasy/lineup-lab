@@ -136,6 +136,21 @@
   font-weight: 600;
 }
 
+.matchup-page__inline-action {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--amber-bright);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.matchup-page__inline-action:hover {
+  text-decoration: underline;
+}
+
 .matchup-page__live-chip {
   display: inline-flex;
   align-items: center;

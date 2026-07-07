@@ -20,6 +20,8 @@ import { cached } from '../cache.js';
 
 const SIMS = 10_000;
 const FUTURES_SIMS = 2_000;
+const LANE_PRICING_LIMIT_PER_OPPONENT = 4;
+const LANE_PRICING_LIMIT_TOTAL = 24;
 
 const FLEX_ELIGIBILITY = {
   FLEX: ['RB', 'WR', 'TE'],
@@ -713,9 +715,11 @@ function computeMovers(ctx) {
 
   const strictLanes = [];
   const fallbackLanes = [];
+  let lanePricesRemaining = LANE_PRICING_LIMIT_TOTAL;
 
   for (const opp of teams) {
     if (opp.rosterId === userTeam.rosterId) continue;
+    if (lanePricesRemaining <= 0) break;
     const userSingles = tradeableOf(userTeam);
     const oppSingles = tradeableOf(opp);
     const userPairs = pairsOf(benchOf(userTeam).filter((id) => TRADEABLE.includes(catalog[id]?.position))).slice(0, 24);
@@ -751,14 +755,43 @@ function computeMovers(ctx) {
         seen.add(key);
         return true;
       })
-      .sort((a, b) => {
-        const aScore = Math.abs(a.give.reduce((sum, id) => sum + projected(id), 0) - a.get.reduce((sum, id) => sum + projected(id), 0));
-        const bScore = Math.abs(b.give.reduce((sum, id) => sum + projected(id), 0) - b.get.reduce((sum, id) => sum + projected(id), 0));
-        return aScore - bScore;
+      .map((candidate) => {
+        const userPoolAfter = userTeam.players.filter((id) => !candidate.give.includes(id)).concat(candidate.get);
+        const oppPoolAfter = opp.players.filter((id) => !candidate.get.includes(id)).concat(candidate.give);
+        const youGain = computeStarterImpact(
+          userTeam.players,
+          userPoolAfter,
+          slotLabels,
+          projectionMap,
+          catalog,
+        ).delta;
+        const themGain = computeStarterImpact(
+          opp.players,
+          oppPoolAfter,
+          slotLabels,
+          projectionMap,
+          catalog,
+        ).delta;
+        const strict = youGain > 0 && themGain > 0;
+        const fallback = youGain > 0 && themGain >= -1;
+        if (!strict && !fallback) return null;
+        return { candidate, youGain, themGain, strict };
       })
-      .slice(0, 90);
+      .filter(Boolean)
+      .sort((a, b) => {
+        const strictDelta = Number(b.strict) - Number(a.strict);
+        if (strictDelta !== 0) return strictDelta;
+        const gainDelta = (b.youGain + b.themGain) - (a.youGain + a.themGain);
+        if (gainDelta !== 0) return gainDelta;
+        const aFairness = Math.abs(a.candidate.give.reduce((sum, id) => sum + projected(id), 0) - a.candidate.get.reduce((sum, id) => sum + projected(id), 0));
+        const bFairness = Math.abs(b.candidate.give.reduce((sum, id) => sum + projected(id), 0) - b.candidate.get.reduce((sum, id) => sum + projected(id), 0));
+        return aFairness - bFairness;
+      })
+      .slice(0, Math.min(LANE_PRICING_LIMIT_PER_OPPONENT, lanePricesRemaining))
+      .map(({ candidate }) => candidate);
 
     for (const candidate of scored) {
+      lanePricesRemaining -= 1;
       const priced = priceTrade(ctx, {
         userRosterId: userTeam.rosterId,
         partnerRosterId: opp.rosterId,

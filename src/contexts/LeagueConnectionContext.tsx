@@ -339,12 +339,13 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           if (lines.available) {
             const h = await fetchLineHistory(connection.leagueId).catch(() => null);
             setLineHistory(h?.history ?? null);
-            return;
           }
+          return;
         } catch {
           setPricing(null);
         }
       }
+      setPricing({ available: false, reason: 'pricing_timeout' });
     };
 
     try {
@@ -380,6 +381,12 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     } catch {
       // private mode: connection lives for the session only
     }
+    setBootstrap(null);
+    setSchedule(null);
+    setPricing(null);
+    setLineHistory(null);
+    setError(null);
+    setIsLoading(true);
     setStored(connection);
   }, []);
 

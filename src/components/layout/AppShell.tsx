@@ -5,6 +5,7 @@ import { ScoutingCardProvider } from '../../contexts/ScoutingCardContext';
 import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { AppHeader } from './AppHeader';
 import { BottomTabBar } from './BottomTabBar';
+import { PricingCurtain } from './PricingCurtain';
 import './AppShell.css';
 
 export function AppShell() {
@@ -26,6 +27,7 @@ export function AppShell() {
         </ScoutingCardProvider>
       </PlayerDetailProvider>
       <BottomTabBar />
+      <PricingCurtain />
     </div>
   );
 }

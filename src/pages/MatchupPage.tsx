@@ -1995,7 +1995,7 @@ function CompareBoard({
 }
 
 export function MatchupPage() {
-  const { stored, bootstrap, pricing, lineHistory, isLoading, error } = useLeagueConnection();
+  const { stored, bootstrap, pricing, lineHistory, isLoading, error, refresh } = useLeagueConnection();
 
   if (stored && !bootstrap) {
     return (
@@ -2057,6 +2057,20 @@ export function MatchupPage() {
 
   if (connectedMatchup && !pricingReady) {
     return <MatchupPricingLoading matchup={connectedMatchup} />;
+  }
+
+  if (connectedMatchup && pricing && !pricing.available) {
+    return (
+      <div className="matchup-page">
+        <h1 className="visually-hidden">The Odds Gods matchup screen</h1>
+        <SeasonalNotice>
+          The book could not price this league yet.{' '}
+          <button className="matchup-page__inline-action" onClick={() => void refresh()} type="button">
+            Try again
+          </button>
+        </SeasonalNotice>
+      </div>
+    );
   }
 
   return (

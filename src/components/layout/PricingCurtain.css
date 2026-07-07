@@ -1,0 +1,93 @@
+.pricing-curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: var(--space-lg);
+  pointer-events: auto;
+}
+
+.pricing-curtain__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(232, 84, 29, 0.08), transparent 34%),
+    color-mix(in srgb, var(--bg-overlay) 88%, black);
+  backdrop-filter: blur(14px) saturate(0.82);
+}
+
+.pricing-curtain__card {
+  position: relative;
+  width: min(420px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, var(--amber));
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 46%),
+    color-mix(in srgb, var(--bg-surface) 90%, black);
+  box-shadow: var(--shadow-elevated);
+  text-align: center;
+}
+
+.pricing-curtain__spinner {
+  width: 46px;
+  height: 46px;
+  margin-bottom: var(--space-sm);
+  border: 2px solid rgba(244, 245, 242, 0.14);
+  border-top-color: var(--amber);
+  border-radius: 999px;
+  animation: pricing-curtain-spin 860ms linear infinite;
+}
+
+.pricing-curtain__kicker {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.pricing-curtain h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 9vw, 4.6rem);
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.pricing-curtain__line {
+  min-height: 1.35em;
+  margin: var(--space-sm) 0 0;
+  color: var(--amber-bright);
+  font-family: var(--font-num);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pricing-curtain__sub {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+@keyframes pricing-curtain-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pricing-curtain__spinner {
+    animation-duration: 1.8s;
+  }
+}

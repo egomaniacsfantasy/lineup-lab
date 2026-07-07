@@ -299,11 +299,19 @@ export function saveScoutingEdit(
   );
 }
 
+const LINE_FETCH_TIMEOUT_MS = 45_000;
+
 export function fetchLines(leagueId: string, userId: string, opts?: { house?: boolean }) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), LINE_FETCH_TIMEOUT_MS);
+
   return get<LeaguePricing>(
     `/api/league/${leagueId}/lines?userId=${encodeURIComponent(userId)}`,
-    opts?.house ? { headers: { 'x-skip-overlay': '1' } } : undefined,
-  );
+    {
+      ...(opts?.house ? { headers: { 'x-skip-overlay': '1' } } : {}),
+      signal: controller.signal,
+    },
+  ).finally(() => window.clearTimeout(timeout));
 }
 
 export interface BoardRow {
