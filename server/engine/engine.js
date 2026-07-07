@@ -1311,7 +1311,7 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   if (yourValueDelta >= 4 && titleGain >= 0) verdict = 'Smash accept';
   else if (yourValueDelta >= 1) verdict = 'Good value';
   else if (yourValueDelta > -1) verdict = 'Fair';
-  else if (fillsNeed || depthAfter) verdict = yourValueDelta >= -3 ? 'Justifiable overpay' : 'Overpay';
+  else if (yourValueDelta >= -3) verdict = 'Justifiable overpay';
   else verdict = 'Overpay';
 
   const isDepthPackage =
