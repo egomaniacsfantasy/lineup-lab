@@ -5,6 +5,7 @@ import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useModelOverlay } from '../contexts/ModelOverlayContext';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
+import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { fetchLines } from '../services/leagueApi';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import { useNflSchedule } from '../hooks/useNflSchedule';
@@ -722,6 +723,7 @@ function MatchupLive({
   const { stored, bootstrap } = useLeagueConnection();
   const { overrideCount } = useModelOverlay();
   const { format: oddsFormat } = useOddsFormat();
+  const { openScoutingCard } = useScoutingCard();
   const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : 'your fantasy app';
   const userRosterId = bootstrap?.teams.find((team) => team.isUser)?.rosterId ?? null;
   const scheduleSeason = bootstrap?.league.season ? Number(bootstrap.league.season) : null;
@@ -1204,7 +1206,18 @@ function MatchupLive({
                   teamName={matchup.opponentTeam.teamName}
                 />
                 <div>
-                  <p className="matchup-page__team-name">{matchup.opponentTeam.teamName}</p>
+                  <button
+                    className="matchup-page__team-name matchup-page__team-name--button"
+                    disabled={!matchup.opponentTeam.managerKey}
+                    onClick={() => {
+                      if (matchup.opponentTeam.managerKey) {
+                        openScoutingCard(matchup.opponentTeam.managerKey);
+                      }
+                    }}
+                    type="button"
+                  >
+                    {matchup.opponentTeam.teamName}
+                  </button>
                   <p className="matchup-page__meta-copy">
                     {matchup.opponentTeam.managerName} · {matchup.opponentTeam.record}
                   </p>

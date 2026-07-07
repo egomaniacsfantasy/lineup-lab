@@ -362,6 +362,7 @@ export function toMatchupData(
     week: bootstrap.week,
     scoringFormat: bootstrap.league.scoringFamily,
     yourTeam: {
+      managerKey: userTeam.ownerId,
       teamName: userTeam.teamName,
       managerName: userTeam.ownerName,
       record: recordLabel(userTeam),
@@ -370,6 +371,7 @@ export function toMatchupData(
       bench: buildBench(userTeam, userMatchup),
     },
     opponentTeam: {
+      managerKey: oppTeam.ownerId,
       teamName: oppTeam.teamName,
       managerName: oppTeam.ownerName,
       record: recordLabel(oppTeam),
@@ -460,6 +462,7 @@ function buildOffseasonMatchupData(
     week: 1,
     scoringFormat: bootstrap.league.scoringFamily,
     yourTeam: {
+      managerKey: userTeam.ownerId,
       teamName: userTeam.teamName,
       managerName: userTeam.ownerName,
       record: recordLabel(userTeam),
@@ -467,6 +470,7 @@ function buildOffseasonMatchupData(
       bench,
     },
     opponentTeam: {
+      managerKey: null,
       teamName: 'League median',
       managerName: 'Field',
       record: '—',

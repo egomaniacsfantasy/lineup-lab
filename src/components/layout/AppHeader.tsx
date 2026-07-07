@@ -39,13 +39,13 @@ export function AppHeader() {
     season,
     displayedWeek,
   );
-  // Trade tools are redraft-only for now; hide the tab in dynasty/keeper.
+  // Market tools are redraft-only for now; hide the tab in dynasty/keeper.
   const hideTrade = isSynced && bootstrap.league.leagueType !== 'redraft';
   const navItems = stored
     ? [
         { label: 'Matchup', path: '/matchup' },
         { label: 'League', path: '/league' },
-        ...(hideTrade ? [] : [{ label: 'Trade', path: '/trade' }]),
+        ...(hideTrade ? [] : [{ label: 'Market', path: '/market' }]),
         { label: 'Board', path: '/rankings' },
         { label: 'More', path: '/more' },
       ]

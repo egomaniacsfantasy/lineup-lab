@@ -14,8 +14,18 @@ import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStor
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 import { getNflSchedule } from '../services/nflSchedule.js';
+import { getRequestUserId } from '../services/supabaseAdmin.js';
+import { runScoutingHarvest } from '../services/scoutingHarvest/index.js';
+import {
+  getScoutingEdits,
+  getScoutingReads,
+  mergeReadAndEdit,
+  upsertScoutingEdit,
+} from '../services/scoutingStore.js';
+import { computeRosterNeeds, computeSuperlatives } from '../services/scoutingSignals.js';
 
 const DAY = 24 * 60 * 60_000;
+const autoHarvested = new Set();
 
 /**
  * A user's "Build Your Own Rankings" overlay rides on a base64 JSON header so
@@ -55,6 +65,21 @@ function getProvider(req) {
 }
 
 export const apiRouter = Router();
+
+function providerName(req) {
+  return req.query.provider === 'espn' || req.body?.provider === 'espn' ? 'espn' : 'sleeper';
+}
+
+function scoutingError(res, error) {
+  if (error.message === 'scouting_store_unconfigured') {
+    res.status(503).json({
+      error: 'scouting_store_unconfigured',
+      message: 'Scouting storage is not configured on this server.',
+    });
+    return true;
+  }
+  return false;
+}
 
 apiRouter.get('/health', (_req, res) => {
   res.json({ ok: true, gameWindow: isGameWindow() });
@@ -300,8 +325,9 @@ async function loadLeagueContext(provider, leagueId, userId) {
 /** Everything one league needs to render: league, teams, week matchups, players. */
 apiRouter.get('/league/:leagueId/bootstrap', async (req, res, next) => {
   try {
+    const provider = getProvider(req);
     const ctx = await loadLeagueContext(
-      getProvider(req),
+      provider,
       req.params.leagueId,
       req.query.userId ?? null,
     );
@@ -315,8 +341,152 @@ apiRouter.get('/league/:leagueId/bootstrap', async (req, res, next) => {
     }
 
     res.json({ ...ctx, players: ctx.players, lastUpdated: Date.now() });
+
+    const key = `${provider.providerId}:${req.params.leagueId}`;
+    if (!autoHarvested.has(key)) {
+      autoHarvested.add(key);
+      runScoutingHarvest({
+        provider: provider.providerId,
+        leagueId: req.params.leagueId,
+        season: req.query.season,
+        espnS2: req.get('x-espn-s2') || null,
+        swid: req.get('x-espn-swid') || null,
+      }).catch((error) => {
+        if (error.message !== 'scouting_store_unconfigured') {
+          console.error('[scouting] background harvest failed', error);
+        }
+      });
+    }
   } catch (error) {
     next(error);
+  }
+});
+
+apiRouter.post('/scouting/harvest', async (req, res, next) => {
+  try {
+    const ownerUserId = await getRequestUserId(req);
+    if (!ownerUserId) {
+      res.status(401).json({ error: 'unauthorized', message: 'Sign in before harvesting scouting reports.' });
+      return;
+    }
+
+    const leagueId = req.body?.leagueId ?? req.query.leagueId;
+    if (!leagueId) {
+      res.status(400).json({ error: 'missing_league_id' });
+      return;
+    }
+
+    const result = await runScoutingHarvest({
+      provider: providerName(req),
+      leagueId,
+      season: req.body?.season ?? req.query.season,
+      espnS2: req.get('x-espn-s2') || null,
+      swid: req.get('x-espn-swid') || null,
+    });
+
+    res.json({
+      ok: true,
+      provider: result.provider,
+      leagueId: result.leagueId,
+      eventCount: result.eventCount,
+      readCount: result.readCount,
+      report: result.report,
+      reads: result.reads,
+      scheduler: { available: false, note: 'No existing scheduled-job convention is present; use this route for refreshes.' },
+    });
+  } catch (error) {
+    if (!scoutingError(res, error)) next(error);
+  }
+});
+
+apiRouter.get('/scouting/league/:leagueId', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const ownerUserId = await getRequestUserId(req);
+    const ctx = await loadLeagueContext(provider, req.params.leagueId, req.query.userId ?? null);
+    if (!ctx) {
+      res.status(404).json({ error: 'league_not_found' });
+      return;
+    }
+
+    const [reads, edits] = await Promise.all([
+      getScoutingReads({ provider: provider.providerId, leagueId: req.params.leagueId }),
+      getScoutingEdits({ ownerUserId, leagueId: req.params.leagueId }),
+    ]);
+    const readsByManager = new Map(reads.map((read) => [read.manager_key, read]));
+    const editsByManager = new Map(edits.map((edit) => [edit.manager_key, edit]));
+    const identity = new Map(
+      ctx.teams.map((team) => [team.ownerId ?? `vacant:${team.rosterId}`, team]),
+    );
+
+    res.json([...identity.keys()].map((managerKey) => {
+      const team = identity.get(managerKey) ?? {};
+      const ownedManagerKey = String(managerKey).startsWith('vacant:') ? null : managerKey;
+      const effective = mergeReadAndEdit(
+        ownedManagerKey ? readsByManager.get(ownedManagerKey) : null,
+        ownedManagerKey ? editsByManager.get(ownedManagerKey) : null,
+        ownedManagerKey ? computeRosterNeeds(ownedManagerKey, ctx) : null,
+      );
+      return {
+        ...effective,
+        manager_key: ownedManagerKey ?? managerKey,
+        provider: provider.providerId,
+        league_id: req.params.leagueId,
+        manager: {
+          manager_key: managerKey,
+          name: team.ownerName ?? 'Manager',
+          team_name: team.teamName ?? 'Team',
+          roster_id: team.rosterId ?? null,
+          avatar_url: team.avatarUrl ?? null,
+          record: team.record
+            ? `${team.record.wins}-${team.record.losses}${team.record.ties ? `-${team.record.ties}` : ''}`
+            : '0-0',
+        },
+      };
+    }));
+  } catch (error) {
+    if (!scoutingError(res, error)) next(error);
+  }
+});
+
+apiRouter.put('/scouting/edits/:leagueId/:managerKey', async (req, res, next) => {
+  try {
+    const ownerUserId = await getRequestUserId(req);
+    if (!ownerUserId) {
+      res.status(401).json({ error: 'unauthorized', message: 'Sign in before editing scouting reports.' });
+      return;
+    }
+
+    const saved = await upsertScoutingEdit({
+      ownerUserId,
+      leagueId: req.params.leagueId,
+      managerKey: req.params.managerKey,
+      overrides: req.body?.overrides ?? {},
+      untouchables: req.body?.untouchables ?? [],
+      favoriteTeam: req.body?.favorite_team ?? req.body?.favoriteTeam ?? null,
+      negotiationStyle: req.body?.negotiation_style ?? req.body?.negotiationStyle ?? null,
+      notes: req.body?.notes ?? null,
+    });
+
+    res.json({ ok: true, edit: saved });
+  } catch (error) {
+    if (!scoutingError(res, error)) next(error);
+  }
+});
+
+apiRouter.get('/scouting/league/:leagueId/superlatives', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const ctx = await loadLeagueContext(provider, req.params.leagueId, req.query.userId ?? null);
+    if (!ctx) {
+      res.status(404).json({ error: 'league_not_found' });
+      return;
+    }
+    const managerKeys = new Set(ctx.teams.map((team) => team.ownerId).filter(Boolean));
+    const reads = await getScoutingReads({ provider: provider.providerId, leagueId: req.params.leagueId });
+    res.json({ superlatives: computeSuperlatives(reads.filter((read) => managerKeys.has(read.manager_key))) });
+  } catch (error) {
+    if (!scoutingError(res, error)) next(error);
   }
 });
 

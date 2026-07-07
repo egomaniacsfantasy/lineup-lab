@@ -1,3 +1,43 @@
+.market-page {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 28px);
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.market-page .trade-page {
+  padding: 0;
+}
+
+.market-page__view-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+}
+
+.market-page__view-tab {
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 8px;
+}
+
+.market-page__view-tab--active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
 .trade-page {
   width: 100%;
   max-width: 1040px;
@@ -232,6 +272,22 @@
   margin-top: 2px;
 }
 
+.trade-cc__lane-read,
+.trade-cc__partner-read {
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.trade-cc__partner-read {
+  margin: -2px 0 8px;
+}
+
 .trade-cc__lane-price {
   flex-shrink: 0;
   font-family: var(--font-num);
@@ -317,61 +373,6 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
-}
-
-.trade-cc__traits {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.trade-cc__traits-label {
-  margin: 0 0 10px;
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 12px;
-}
-
-.trade-cc__trait {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.trade-cc__trait > span {
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.trade-cc__seg {
-  display: inline-flex;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.trade-cc__seg button {
-  padding: 5px 10px;
-  border: none;
-  background: var(--bg-inset);
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.trade-cc__seg button + button {
-  border-left: 1px solid var(--border-subtle);
-}
-
-.trade-cc__seg .trade-cc__seg-on {
-  background: var(--amber);
-  color: #fff;
 }
 
 .trade-cc__price-btn {
@@ -652,107 +653,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* ── Scouting dials (1–10 notches) ── */
-.trade-cc__traits {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.trade-cc__dial {
-  margin-bottom: 16px;
-}
-
-.trade-cc__dial-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.trade-cc__dial-label {
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.trade-cc__dial-tag {
-  color: var(--amber-bright);
-  font-family: var(--font-display);
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.trade-cc__range {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 8px;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    var(--amber) var(--fill, 50%),
-    var(--bg-inset) var(--fill, 50%)
-  );
-  cursor: pointer;
-}
-
-.trade-cc__range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--amber-bright);
-  border: 2px solid var(--bg-deep);
-  box-shadow: 0 0 8px rgba(232, 84, 29, 0.5);
-}
-
-.trade-cc__range::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--amber-bright);
-  border: 2px solid var(--bg-deep);
-}
-
-.trade-cc__dial-ends {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 5px;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 11px;
-}
-
-.trade-cc__fandom {
-  margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--border-subtle);
-}
-
-.trade-cc__fandom-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.trade-cc__fandom-select {
-  flex: 1;
-  max-width: 220px;
-  padding: 7px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-inset);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
 }
 
 .trade-cc__lane-gain {

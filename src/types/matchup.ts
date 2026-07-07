@@ -24,6 +24,7 @@ export interface MatchupData {
 }
 
 export interface TeamMatchupData {
+  managerKey?: string | null;
   teamName: string;
   managerName: string;
   record: string;

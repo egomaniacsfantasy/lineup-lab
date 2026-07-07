@@ -282,6 +282,23 @@
   line-height: 1.05;
 }
 
+.matchup-page__team-name--button {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.matchup-page__team-name--button:disabled {
+  cursor: default;
+}
+
+.matchup-page__team-name--button:not(:disabled):hover {
+  color: var(--text-soft);
+}
+
 .matchup-page__hero-line,
 .matchup-page__trajectory-headline {
   display: flex;

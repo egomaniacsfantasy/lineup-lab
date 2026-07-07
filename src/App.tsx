@@ -49,7 +49,8 @@ function AppRoutes() {
                 <Route path="/matchup" element={<MatchupPage />} />
                 <Route path="/season" element={<SeasonPage />} />
                 <Route path="/draft" element={<DraftPage />} />
-                <Route path="/trade" element={<TradePage />} />
+                <Route path="/trade" element={<Navigate replace to="/market?view=deals" />} />
+                <Route path="/market" element={<TradePage />} />
                 <Route path="/rankings" element={<MyBoardPage />} />
                 <Route path="/league" element={<LeaguePage />} />
                 <Route path="/more" element={<MorePage />} />

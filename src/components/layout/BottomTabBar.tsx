@@ -26,8 +26,8 @@ const BASE_TABS = [
     ),
   },
   {
-    label: 'Trade',
-    path: '/trade',
+    label: 'Market',
+    path: '/market',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
         <path d="M4 7h10.5M12 4.2 15 7l-3 2.8" />
@@ -59,11 +59,11 @@ const BASE_TABS = [
 
 export function BottomTabBar() {
   const { bootstrap, stored } = useLeagueConnection();
-  // The trade tools price redraft value; they don't fit dynasty/keeper yet.
+  // The market tools price redraft value; they don't fit dynasty/keeper yet.
   const hideTrade = bootstrap != null && bootstrap.league.leagueType !== 'redraft';
   const tabs = stored
     ? hideTrade
-      ? BASE_TABS.filter((t) => t.path !== '/trade')
+      ? BASE_TABS.filter((t) => t.path !== '/market')
       : BASE_TABS
     : BASE_TABS.filter((t) => t.path === '/league').map((tab) => ({
         ...tab,

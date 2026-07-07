@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
+import { ScoutingView } from './market/ScoutingView';
+import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { toPlayer } from '../adapters/connectedLeague';
 import {
@@ -39,60 +42,12 @@ const VERDICT_RAIL: Record<string, number> = {
   'Smash accept': 0.9,
 };
 
-const NFL_TEAMS: [string, string][] = [
-  ['ARI', 'Cardinals'], ['ATL', 'Falcons'], ['BAL', 'Ravens'], ['BUF', 'Bills'],
-  ['CAR', 'Panthers'], ['CHI', 'Bears'], ['CIN', 'Bengals'], ['CLE', 'Browns'],
-  ['DAL', 'Cowboys'], ['DEN', 'Broncos'], ['DET', 'Lions'], ['GB', 'Packers'],
-  ['HOU', 'Texans'], ['IND', 'Colts'], ['JAX', 'Jaguars'], ['KC', 'Chiefs'],
-  ['LAC', 'Chargers'], ['LAR', 'Rams'], ['LV', 'Raiders'], ['MIA', 'Dolphins'],
-  ['MIN', 'Vikings'], ['NE', 'Patriots'], ['NO', 'Saints'], ['NYG', 'Giants'],
-  ['NYJ', 'Jets'], ['PHI', 'Eagles'], ['PIT', 'Steelers'], ['SEA', 'Seahawks'],
-  ['SF', '49ers'], ['TB', 'Buccaneers'], ['TEN', 'Titans'], ['WAS', 'Commanders'],
-];
-
-const TOUGH_TAGS = (v: number) => (v <= 3 ? 'Pushover' : v <= 6 ? 'Fair' : v <= 8 ? 'Tough' : 'Shark');
-const APPETITE_TAGS = (v: number) =>
-  v <= 3 ? 'Ghosts offers' : v <= 6 ? 'Selective' : v <= 8 ? 'Active' : 'Wheeler-dealer';
-const FANDOM_TAGS = (v: number) => (v <= 3 ? 'Casual' : v <= 6 ? 'Fan' : v <= 8 ? 'Diehard' : 'Homer');
-
-/** Draggable 1–10 dial in the ember identity. */
-function RangeDial({
-  label,
-  value,
-  onChange,
-  tag,
-  ends,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-  tag: (value: number) => string;
-  ends: [string, string];
-}) {
-  return (
-    <div className="trade-cc__dial">
-      <div className="trade-cc__dial-head">
-        <span className="trade-cc__dial-label">{label}</span>
-        <span className="trade-cc__dial-tag">{tag(value)}</span>
-      </div>
-      <input
-        aria-label={label}
-        className="trade-cc__range"
-        max={10}
-        min={1}
-        onChange={(event) => onChange(Number(event.target.value))}
-        step={1}
-        style={{ '--fill': `${((value - 1) / 9) * 100}%` } as CSSProperties}
-        type="range"
-        value={value}
-      />
-      <div className="trade-cc__dial-ends">
-        <span>{ends[0]}</span>
-        <span>{ends[1]}</span>
-      </div>
-    </div>
-  );
-}
+const NEUTRAL_TRADE_TRAITS: TradeTraits = {
+  toughness: 5,
+  dealAppetite: 5,
+  fandomTeam: null,
+  fandomLevel: 5,
+};
 
 // Starters first, in their lineup order, then the bench — the way a manager
 // reads a roster.
@@ -107,8 +62,9 @@ function rosterRows(bootstrap: LeagueBootstrap, rosterId: number) {
     .filter((row) => row.player);
 }
 
-export function TradePage() {
+function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error } = useLeagueConnection();
+  const { openScoutingCard } = useScoutingCard();
 
   const userTeam = bootstrap?.teams.find((t) => t.isUser) ?? null;
   const partners = useMemo(
@@ -119,35 +75,10 @@ export function TradePage() {
   const [partnerRosterId, setPartnerRosterId] = useState<number | null>(null);
   const [give, setGive] = useState<string[]>([]);
   const [getIds, setGetIds] = useState<string[]>([]);
-  const [traits, setTraits] = useState<TradeTraits>({
-    toughness: 5,
-    dealAppetite: 5,
-    fandomTeam: null,
-    fandomLevel: 5,
-  });
   const [result, setResult] = useState<TradeResult | null>(null);
   const [isPricing, setIsPricing] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
-
-  // Live re-price when you adjust the scouting dials, so the acceptance read
-  // (and the meter) update as you drag — no need to hit the button again.
-  useEffect(() => {
-    if (!result || !result.available) return;
-    if (!stored || partnerRosterId == null || give.length === 0 || getIds.length === 0) return;
-    const timer = setTimeout(async () => {
-      const priced = await priceTrade(stored.leagueId, {
-        userId: stored.userId,
-        partnerRosterId,
-        give,
-        get: getIds,
-        traits,
-      });
-      setResult(priced);
-    }, 350);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [traits.toughness, traits.dealAppetite, traits.fandomTeam, traits.fandomLevel]);
 
   // Connected leagues get the Trade Command Center; the mock targets are
   // demo-only and never render next to a real roster.
@@ -218,7 +149,7 @@ export function TradePage() {
         partnerRosterId,
         give,
         get: getIds,
-        traits,
+        traits: NEUTRAL_TRADE_TRAITS,
       });
       setResult(priced);
     } finally {
@@ -241,7 +172,7 @@ export function TradePage() {
         partnerRosterId,
         give: nextGive,
         get: nextGet,
-        traits,
+        traits: NEUTRAL_TRADE_TRAITS,
       });
       setResult(priced);
     } finally {
@@ -325,6 +256,27 @@ export function TradePage() {
                 <span className="trade-cc__lane-headline">{lane.headline}</span>
                 <span className="trade-cc__lane-detail">{lane.detail}</span>
               </span>
+              {lane.getPlayerId ? (
+                <span
+                  className="trade-cc__lane-read"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const owner = bootstrap.teams.find((team) => team.players.includes(lane.getPlayerId!));
+                    if (owner?.ownerId) openScoutingCard(owner.ownerId);
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const owner = bootstrap.teams.find((team) => team.players.includes(lane.getPlayerId!));
+                    if (owner?.ownerId) openScoutingCard(owner.ownerId);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  Card
+                </span>
+              ) : null}
               <span className="trade-cc__lane-gain">
                 <strong>+{(lane.valueGain ?? 0).toFixed(1)}</strong>
                 <span> pts/wk to your starters</span>
@@ -364,61 +316,22 @@ export function TradePage() {
               ))}
             </select>
             {partnerRosterId != null ? (
+              <button
+                className="trade-cc__partner-read"
+                onClick={() => {
+                  const owner = bootstrap.teams.find((team) => team.rosterId === partnerRosterId);
+                  if (owner?.ownerId) openScoutingCard(owner.ownerId);
+                }}
+                type="button"
+              >
+                Open card
+              </button>
+            ) : null}
+            {partnerRosterId != null ? (
               renderPool(partnerRosterId, getIds, setGetIds, getSearch, setGetSearch)
             ) : (
               <p className="trade-cc__hint">Pick a manager to see their roster.</p>
             )}
-          </div>
-        </div>
-
-        {/* Per-trade read on the other manager: dials you set, nothing
-            fabricated. This is the "scouting report" that makes the
-            acceptance call feel like a real league, not a calculator. */}
-        <div className="trade-cc__traits">
-          <p className="trade-cc__traits-label">Scout the other manager</p>
-
-          <RangeDial
-            ends={['Pushover', 'Shark']}
-            label="Negotiator"
-            onChange={(v) => setTraits({ ...traits, toughness: v })}
-            tag={TOUGH_TAGS}
-            value={traits.toughness}
-          />
-          <RangeDial
-            ends={['Ghosts offers', 'Wheeler-dealer']}
-            label="Deal appetite"
-            onChange={(v) => setTraits({ ...traits, dealAppetite: v })}
-            tag={APPETITE_TAGS}
-            value={traits.dealAppetite}
-          />
-
-          <div className="trade-cc__fandom">
-            <div className="trade-cc__fandom-row">
-              <span className="trade-cc__dial-label">Fandom</span>
-              <select
-                className="trade-cc__fandom-select"
-                onChange={(event) =>
-                  setTraits({ ...traits, fandomTeam: event.target.value || null })
-                }
-                value={traits.fandomTeam ?? ''}
-              >
-                <option value="">No team bias</option>
-                {NFL_TEAMS.map(([abbr, name]) => (
-                  <option key={abbr} value={abbr}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {traits.fandomTeam ? (
-              <RangeDial
-                ends={['Casual fan', 'Diehard homer']}
-                label={`${traits.fandomTeam} bias`}
-                onChange={(v) => setTraits({ ...traits, fandomLevel: v })}
-                tag={FANDOM_TAGS}
-                value={traits.fandomLevel}
-              />
-            ) : null}
           </div>
         </div>
 
@@ -590,6 +503,44 @@ export function TradePage() {
             : 'Pick at least one player on each side to price the trade.'}
         </SeasonalNotice>
       ) : null}
+    </div>
+  );
+}
+
+export function TradePage() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'scouting' ? 'scouting' : 'deals';
+
+  const setView = (next: 'deals' | 'scouting') => {
+    setParams({ view: next }, { replace: true });
+  };
+
+  return (
+    <div className="market-page">
+      <h1 className="visually-hidden">Market</h1>
+      <div className="market-page__view-tabs" role="tablist" aria-label="Market views">
+        {[
+          ['deals', 'Deals'],
+          ['scouting', 'Scouting'],
+        ].map(([key, label]) => (
+          <button
+            aria-selected={view === key}
+            className={[
+              'market-page__view-tab',
+              view === key ? 'market-page__view-tab--active' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            key={key}
+            onClick={() => setView(key as 'deals' | 'scouting')}
+            role="tab"
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'deals' ? <TradeDealsView /> : <ScoutingView />}
     </div>
   );
 }

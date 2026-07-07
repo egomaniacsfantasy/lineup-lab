@@ -184,6 +184,53 @@ export interface MarketMover {
   titleOddsAfter: number;
 }
 
+export interface ScoutingEvidence {
+  trait: string;
+  text: string;
+  weight: number;
+}
+
+export interface ScoutingRead {
+  manager_key: string;
+  provider: 'sleeper' | 'espn';
+  league_id: string;
+  traits: {
+    trade_appetite?: number;
+    team_bias?: { team: string; strength: number };
+    their_guys?: { player_id: string; seasons: number; leagues: number }[];
+    reach_tendency?: number;
+    waiver_aggression?: number;
+    activity?: number;
+    roster_philosophy?: 'rb_heavy' | 'wr_heavy' | 'balanced' | 'late_qb' | null;
+    needs?: { weak?: string[]; surplus?: string[] } | null;
+    negotiation_style?: string | null;
+  };
+  evidence: ScoutingEvidence[];
+  edit: {
+    overrides: Record<string, unknown>;
+    untouchables: string[];
+    favorite_team: string | null;
+    negotiation_style: 'clean' | 'counters' | 'ghosts' | null;
+    notes: string | null;
+    updated_at: string;
+  } | null;
+  computed_at: string | null;
+  manager: {
+    manager_key: string;
+    name: string;
+    team_name: string;
+    roster_id: number | null;
+    avatar_url: string | null;
+    record: string;
+  };
+}
+
+export interface ScoutingSuperlative {
+  key: 'stingiest' | 'biggest_homer' | 'waiver_shark' | 'fastest_trigger';
+  manager_key: string;
+  value_text: string;
+}
+
 export interface LineHistoryEntry {
   computedAt: number;
   inputsHash: string;
@@ -197,6 +244,51 @@ export interface LineHistoryEntry {
 
 export function fetchLineHistory(leagueId: string) {
   return get<{ history: LineHistoryEntry[] }>(`/api/league/${leagueId}/line-history`);
+}
+
+function authHeaders(ownerUserId?: string | null) {
+  const headers: Record<string, string> = {};
+  if (ownerUserId) headers['x-owner-user-id'] = ownerUserId;
+  return headers;
+}
+
+export function fetchScoutingLeague(
+  leagueId: string,
+  userId: string,
+  ownerUserId?: string | null,
+) {
+  return get<ScoutingRead[]>(
+    `/api/scouting/league/${leagueId}?userId=${encodeURIComponent(userId)}`,
+    { headers: authHeaders(ownerUserId) },
+  );
+}
+
+export function fetchScoutingSuperlatives(leagueId: string) {
+  return get<{ superlatives: ScoutingSuperlative[] }>(
+    `/api/scouting/league/${leagueId}/superlatives`,
+  );
+}
+
+export function saveScoutingEdit(
+  leagueId: string,
+  managerKey: string,
+  ownerUserId: string,
+  body: {
+    overrides: Record<string, unknown>;
+    untouchables: string[];
+    favorite_team: string | null;
+    negotiation_style: 'clean' | 'counters' | 'ghosts' | null;
+    notes: string | null;
+  },
+) {
+  return get<{ ok: boolean; edit: ScoutingRead['edit'] }>(
+    `/api/scouting/edits/${leagueId}/${encodeURIComponent(managerKey)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(ownerUserId) },
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export function fetchLines(leagueId: string, userId: string, opts?: { house?: boolean }) {
