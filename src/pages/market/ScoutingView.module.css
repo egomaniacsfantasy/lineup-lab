@@ -15,11 +15,14 @@
   position: relative;
   display: grid;
   gap: var(--space-md);
-  padding: var(--space-lg);
+  place-items: center;
+  min-height: 320px;
+  padding: clamp(var(--space-lg), 5vw, 56px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
   box-shadow: var(--shadow-card);
+  text-align: center;
 }
 
 .reveal h2 {
@@ -31,17 +34,10 @@
   letter-spacing: -0.04em;
 }
 
-.revealClose {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  color: var(--text-muted);
-  font-size: 22px;
-}
-
 .superlatives {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 10px 18px;
 }
 
@@ -57,6 +53,17 @@
   font-family: var(--font-mono);
 }
 
+.revealDismiss {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--text-soft);
+  border-radius: var(--radius-pill);
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -64,6 +71,7 @@
 }
 
 .card {
+  position: relative;
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
   gap: var(--space-md);
@@ -81,8 +89,21 @@
 }
 
 .self {
-  margin-top: var(--space-sm);
+  margin-top: var(--space-xl);
   border-style: dashed;
+}
+
+.self::before {
+  content: "Your card";
+  position: absolute;
+  top: calc(-1 * var(--space-lg));
+  left: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .vacant {

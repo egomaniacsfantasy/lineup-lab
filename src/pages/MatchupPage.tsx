@@ -362,6 +362,7 @@ function MarketMoverRow({
   gain,
   avatar,
   crestTeam,
+  href,
 }: {
   label: string;
   sublabel: string;
@@ -371,9 +372,10 @@ function MarketMoverRow({
   gain?: number;
   avatar?: Player | null;
   crestTeam?: string;
+  href?: string | null;
 }) {
-  return (
-    <div className="matchup-page__mover-row">
+  const content = (
+    <>
       <div className="matchup-page__mover-identity">
         {avatar ? (
           <PlayerHeadshot
@@ -402,6 +404,20 @@ function MarketMoverRow({
           </span>
         </p>
       )}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a className="matchup-page__mover-row matchup-page__mover-row--link" href={href}>
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div className="matchup-page__mover-row">
+      {content}
     </div>
   );
 }
@@ -640,6 +656,9 @@ interface PricedMover {
   headline: string;
   detail: string;
   playerId?: string;
+  givePlayerIds?: string[];
+  getPlayerIds?: string[];
+  partnerRosterId?: number;
   gain?: number;
   before: number;
   after: number;
@@ -806,6 +825,14 @@ function MatchupLive({
         espnTeamId: stored.provider === 'espn' ? userRosterId : null,
       })
     : null;
+  const marketHrefForMover = (mover: PricedMover) => {
+    if (mover.kind !== 'trade') return '/market?view=deals';
+    const params = new URLSearchParams({ view: 'deals' });
+    if (mover.partnerRosterId != null) params.set('managerRosterId', String(mover.partnerRosterId));
+    if (mover.givePlayerIds?.length) params.set('give', mover.givePlayerIds.join(','));
+    if (mover.getPlayerIds?.length) params.set('get', mover.getPlayerIds.join(','));
+    return `/market?${params.toString()}`;
+  };
   const formatDisplayedOdds = (moneyline: number, winProbability?: number) =>
     oddsFormat === 'percent' && winProbability != null
       ? `${winProbability.toFixed(1)}%`
@@ -1349,6 +1376,9 @@ function MatchupLive({
                   <p className="matchup-page__meta-copy">
                     {matchup.opponentTeam.managerName} · {matchup.opponentTeam.record}
                   </p>
+                  {!matchup.opponentTeam.managerKey ? (
+                    <p className="matchup-page__meta-copy">Unmanaged team — no read.</p>
+                  ) : null}
                 </div>
               </div>
               <span className="matchup-page__hero-number matchup-page__hero-number--opp">
@@ -1511,7 +1541,7 @@ function MatchupLive({
           movers.length > 0 ? (
             <section className="matchup-page__module">
               <div className="matchup-page__module-row">
-                <h2 className="matchup-page__module-title">Market movers</h2>
+                <h2 className="matchup-page__module-title">The market</h2>
                 <p className="matchup-page__meta-copy">added to your lineup</p>
               </div>
               {movers.map((mover) => (
@@ -1533,6 +1563,7 @@ function MatchupLive({
                   }
                   from={mover.before}
                   gain={mover.gain}
+                  href={marketHrefForMover(mover)}
                   key={mover.headline}
                   label={mover.headline}
                   sublabel={mover.detail}
@@ -1541,10 +1572,10 @@ function MatchupLive({
               ))}
             </section>
           ) : null
-        ) : !isConnected ? (
-        <section className="matchup-page__module">
-          <div className="matchup-page__module-row">
-            <h2 className="matchup-page__module-title">Market movers</h2>
+          ) : !isConnected ? (
+          <section className="matchup-page__module">
+            <div className="matchup-page__module-row">
+              <h2 className="matchup-page__module-title">The market</h2>
             <p className="matchup-page__meta-copy">
               title odds <span className="matchup-page__inline-number">+450</span>
             </p>
@@ -2015,6 +2046,9 @@ export function MatchupPage() {
           headline: mover.headline,
           detail: mover.detail,
           playerId: mover.playerId,
+          givePlayerIds: mover.givePlayerIds,
+          getPlayerIds: mover.getPlayerIds,
+          partnerRosterId: mover.partnerRosterId,
           gain: mover.valueGain,
           before: mover.titleOddsBefore,
           after: mover.titleOddsAfter,

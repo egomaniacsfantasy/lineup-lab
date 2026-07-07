@@ -8,7 +8,7 @@ import {
   type ScoutingRead,
   type ScoutingSuperlative,
 } from '../../services/leagueApi';
-import { scoutingTags } from '../../components/scouting/scoutingTags';
+import { scoutingTagCandidates } from '../../components/scouting/scoutingTags';
 import styles from './ScoutingView.module.css';
 
 function initials(name: string) {
@@ -17,6 +17,10 @@ function initials(name: string) {
 
 function revealKey(leagueId: string) {
   return `og.scouting.reveal.${leagueId}`;
+}
+
+function isVacantRead(read: ScoutingRead) {
+  return read.manager_key.startsWith('vacant:') || read.manager.name === 'Unmanaged team';
 }
 
 function superlativeLabel(item: ScoutingSuperlative, reads: ScoutingRead[]) {
@@ -78,12 +82,17 @@ export function ScoutingView() {
     ? dismissedKeys.has(stored.leagueId) || window.localStorage.getItem(revealKey(stored.leagueId)) === '1'
     : false;
   const showReveal = Boolean(stored && !dismissed && superlatives.length >= 2);
-  const tagFrequency = useMemo(() => {
+  const tagStats = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const read of sortedReads) {
-      for (const tag of scoutingTags(read)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    const strongest = new Map<string, number>();
+    const managedReads = sortedReads.filter((read) => !isVacantRead(read));
+    for (const read of managedReads) {
+      for (const tag of scoutingTagCandidates(read)) {
+        counts.set(tag.label, (counts.get(tag.label) ?? 0) + 1);
+        strongest.set(tag.label, Math.max(strongest.get(tag.label) ?? 0, tag.score));
+      }
     }
-    return counts;
+    return { counts, strongest, managedCount: managedReads.length };
   }, [sortedReads]);
 
   if (!stored || !bootstrap) {
@@ -94,17 +103,6 @@ export function ScoutingView() {
     <section className={styles.scouting} aria-label="Scouting reports">
       {showReveal ? (
         <article className={styles.reveal} data-share-surface="league-read">
-          <button
-            aria-label="Dismiss"
-            className={styles.revealClose}
-            onClick={() => {
-              window.localStorage.setItem(revealKey(stored.leagueId), '1');
-              setDismissedKeys((current) => new Set([...current, stored.leagueId]));
-            }}
-            type="button"
-          >
-            ×
-          </button>
           <h2>The book has read your league.</h2>
           <div className={styles.superlatives}>
             {superlatives.map((item) => (
@@ -114,14 +112,33 @@ export function ScoutingView() {
               </p>
             ))}
           </div>
+          <button
+            className={styles.revealDismiss}
+            onClick={() => {
+              window.localStorage.setItem(revealKey(stored.leagueId), '1');
+              setDismissedKeys((current) => new Set([...current, stored.leagueId]));
+            }}
+            type="button"
+          >
+            Enter the market
+          </button>
         </article>
       ) : null}
 
       <div className={styles.grid}>
         {sortedReads.map((read) => {
           const isUser = read.manager_key === stored.userId;
-          const isVacant = read.manager_key.startsWith('vacant:') || read.manager.name === 'Unmanaged team';
-          const tags = scoutingTags(read).filter((tag) => (tagFrequency.get(tag) ?? 0) < sortedReads.length);
+          const isVacant = isVacantRead(read);
+          const tags = scoutingTagCandidates(read)
+            .filter((tag) => {
+              const count = tagStats.counts.get(tag.label) ?? 0;
+              if (tagStats.managedCount > 1 && count >= tagStats.managedCount) {
+                return tag.score === tagStats.strongest.get(tag.label);
+              }
+              return true;
+            })
+            .slice(0, 3)
+            .map((tag) => tag.label);
           return (
             <button
               className={[styles.card, isUser ? styles.self : '', isVacant ? styles.vacant : '']

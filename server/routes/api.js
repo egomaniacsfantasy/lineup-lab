@@ -528,7 +528,7 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
   }
 });
 
-/** Price a proposed trade for both sides (Trade Command Center). */
+/** Price a proposed trade for both sides (Market). */
 apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
   try {
     const provider = getProvider(req);

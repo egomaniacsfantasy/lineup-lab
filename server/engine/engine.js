@@ -598,6 +598,18 @@ function titleOddsWithUserDelta({ league, teams, distByRoster, scheduleWeeks, we
   return futures.find((f) => f.rosterId === userRosterId) ?? null;
 }
 
+export function tradeLaneMatchesPricedResult(lane, priced) {
+  if (!priced?.available || !priced.you || !priced.them) return false;
+  const youGain = Number((priced.you.valueDelta ?? 0).toFixed(1));
+  const themGain = Number((priced.them.valueDelta ?? 0).toFixed(1));
+  return (
+    Math.sign(lane.valueGain ?? 0) === Math.sign(youGain) &&
+    Math.abs((lane.valueGain ?? 0) - youGain) <= 0.3 &&
+    Math.sign(lane.partnerGain ?? 0) === Math.sign(themGain) &&
+    Math.abs((lane.partnerGain ?? 0) - themGain) <= 0.3
+  );
+}
+
 /**
  * Off-season market movers, priced in title-odds movement:
  *  1. best free-agent claim that upgrades a user starter slot
@@ -663,7 +675,8 @@ function computeMovers(ctx) {
     });
   }
 
-  // 2) mutual-need 1-for-1 trade lane
+  // 2) trade lanes: generate candidates, then let the existing trade pricer
+  // decide whether the card is real enough to show.
   const benchOf = (team) => {
     const teamStarters = new Set(
       (matchups.find((m) => m.rosterId === team.rosterId)?.starters?.length
@@ -673,84 +686,123 @@ function computeMovers(ctx) {
     return team.players.filter((id) => !teamStarters.has(id) && projectionMap.has(id));
   };
 
-  // Only skill positions trade, and value bands must match: no kicker-for-WR1.
   const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
-  const sameValueBand = (a, b) => {
-    const low = Math.min(a.mean, b.mean);
-    const high = Math.max(a.mean, b.mean);
-    return high > 0 && low / high >= 0.65;
+  const projected = (id) => projectionMap.get(id)?.mean ?? 0;
+  const names = (ids) => ids.map((id) => catalog[id]?.name ?? `Player ${id}`).join(' + ');
+  const tradeableOf = (team) => {
+    const starters = new Set(
+      (matchups.find((m) => m.rosterId === team.rosterId)?.starters?.length
+        ? matchups.find((m) => m.rosterId === team.rosterId).starters
+        : team.starters),
+    );
+    return team.players
+      .filter((id) => TRADEABLE.includes(catalog[id]?.position) && projectionMap.has(id))
+      .sort((a, b) => {
+        const starterDelta = Number(starters.has(a)) - Number(starters.has(b));
+        return starterDelta || projected(b) - projected(a);
+      })
+      .slice(0, 12);
+  };
+  const pairsOf = (ids) => {
+    const pairs = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) pairs.push([ids[i], ids[j]]);
+    }
+    return pairs.sort((a, b) => projected(b[0]) + projected(b[1]) - projected(a[0]) - projected(a[1]));
   };
 
-  // A sensible trade is CROSS-position (you don't swap a WR for a WR), both
-  // sides upgrade a starter, and neither team guts itself — you only deal a
-  // position where a backup remains. That kills "they need WR, here's a WR
-  // for a WR" without drying the board up entirely.
-  const dedicated = (pos) => slotLabels.filter((s) => s === pos).length || 1;
-  const canSpare = (team, pos) => depthByPosition(team.players, catalog)[pos] >= dedicated(pos) + 1;
-
-  const lanes = [];
+  const strictLanes = [];
+  const fallbackLanes = [];
 
   for (const opp of teams) {
     if (opp.rosterId === userTeam.rosterId) continue;
-    const oppBench = benchOf(opp);
+    const userSingles = tradeableOf(userTeam);
+    const oppSingles = tradeableOf(opp);
+    const userPairs = pairsOf(benchOf(userTeam).filter((id) => TRADEABLE.includes(catalog[id]?.position))).slice(0, 24);
+    const oppPairs = pairsOf(benchOf(opp).filter((id) => TRADEABLE.includes(catalog[id]?.position))).slice(0, 24);
+    const candidates = [];
 
-    for (const giveId of benchOf(userTeam)) {
-      const give = projectionMap.get(giveId);
-      if (!TRADEABLE.includes(give.position)) continue;
-      if (!canSpare(userTeam, give.position)) continue; // keep a backup
-
-      for (const getId of oppBench) {
-        const get = projectionMap.get(getId);
-        if (!TRADEABLE.includes(get.position)) continue;
-        if (get.position === give.position) continue; // cross-position only
-        if (!canSpare(opp, get.position)) continue; // they keep a backup too
-        if (!sameValueBand(give, get)) continue;
-
-        const userGain = computeStarterImpact(
-          userTeam.players,
-          userTeam.players.filter((id) => id !== giveId).concat(getId),
-          slotLabels,
-          projectionMap,
-          catalog,
-        ).delta;
-        if (userGain <= 0) continue;
-
-        const oppGain = computeStarterImpact(
-          opp.players,
-          opp.players.filter((id) => id !== getId).concat(giveId),
-          slotLabels,
-          projectionMap,
-          catalog,
-        ).delta;
-        if (oppGain <= 0) continue;
-
-        lanes.push({ opp, give, get, userGain, oppGain, score: userGain + oppGain });
+    for (const giveId of userSingles) {
+      for (const getId of oppSingles) {
+        const ratio = projected(getId) > 0 ? projected(giveId) / projected(getId) : 1;
+        if (ratio >= 0.45 && ratio <= 1.9) candidates.push({ give: [giveId], get: [getId] });
       }
+    }
+    for (const give of userPairs) {
+      for (const getId of oppSingles.slice(0, 8)) {
+        const ratio = projected(getId) > 0 ? (projected(give[0]) + projected(give[1])) / projected(getId) : 1;
+        if (ratio >= 0.6 && ratio <= 2.2) candidates.push({ give, get: [getId] });
+      }
+    }
+    for (const giveId of userSingles.slice(0, 8)) {
+      for (const get of oppPairs) {
+        const ratio = (projected(get[0]) + projected(get[1])) > 0
+          ? projected(giveId) / (projected(get[0]) + projected(get[1]))
+          : 1;
+        if (ratio >= 0.45 && ratio <= 1.8) candidates.push({ give: [giveId], get });
+      }
+    }
+
+    const seen = new Set();
+    const scored = candidates
+      .filter((candidate) => {
+        const key = `${candidate.give.join(',')}|${candidate.get.join(',')}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => {
+        const aScore = Math.abs(a.give.reduce((sum, id) => sum + projected(id), 0) - a.get.reduce((sum, id) => sum + projected(id), 0));
+        const bScore = Math.abs(b.give.reduce((sum, id) => sum + projected(id), 0) - b.get.reduce((sum, id) => sum + projected(id), 0));
+        return aScore - bScore;
+      })
+      .slice(0, 90);
+
+    for (const candidate of scored) {
+      const priced = priceTrade(ctx, {
+        userRosterId: userTeam.rosterId,
+        partnerRosterId: opp.rosterId,
+        give: candidate.give,
+        get: candidate.get,
+        traits: { toughness: 5, dealAppetite: 5, fandomTeam: null, fandomLevel: 5 },
+      });
+      if (!priced.available || !priced.you || !priced.them) continue;
+
+      const youGain = Number((priced.you.valueDelta ?? 0).toFixed(1));
+      const themGain = Number((priced.them.valueDelta ?? 0).toFixed(1));
+      const strict = youGain > 0 && themGain > 0;
+      const fallback = youGain > 0 && themGain >= -0.5 && ['Smash accept', 'Good value', 'Fair'].includes(priced.verdict ?? '');
+      if (!strict && !fallback) continue;
+
+      const lane = {
+        kind: 'trade',
+        headline: strict ? `${opp.teamName}: both sides gain` : `${opp.teamName}: near-fair, you gain`,
+        detail: `Send ${names(candidate.give)}, get ${names(candidate.get)}`,
+        givePlayerId: candidate.give[0],
+        getPlayerId: candidate.get[0],
+        givePlayerIds: candidate.give,
+        getPlayerIds: candidate.get,
+        partnerRosterId: opp.rosterId,
+        partnerGain: themGain,
+        valueGain: youGain,
+        framing: strict ? 'both_upgrade' : 'near_fair_you_win',
+        acceptanceReason: priced.acceptance?.reasons?.[0] ?? null,
+        pricedAt: Date.now(),
+        titleOddsBefore: priced.you.titleBefore,
+        titleOddsAfter: priced.you.titleAfter,
+        score: (strict ? 100 : 0) + youGain + themGain,
+      };
+      if (!tradeLaneMatchesPricedResult(lane, priced)) continue;
+      (strict ? strictLanes : fallbackLanes).push(lane);
     }
   }
 
-  // top lane per opponent, best three overall
   const bestPerOpponent = new Map();
-  for (const lane of lanes.sort((a, b) => b.score - a.score)) {
-    if (!bestPerOpponent.has(lane.opp.rosterId)) bestPerOpponent.set(lane.opp.rosterId, lane);
+  for (const lane of [...strictLanes, ...fallbackLanes].sort((a, b) => b.score - a.score)) {
+    if (!bestPerOpponent.has(lane.partnerRosterId)) bestPerOpponent.set(lane.partnerRosterId, lane);
   }
 
-  for (const lane of [...bestPerOpponent.values()].slice(0, 3)) {
-    const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, lane.userGain);
-    movers.push({
-      kind: 'trade',
-      headline: `${lane.opp.teamName} wants ${lane.give.position}, you want ${lane.get.position}`,
-      detail: `Send ${lane.give.name}, get ${lane.get.name}`,
-      givePlayerId: lane.give.playerId,
-      getPlayerId: lane.get.playerId,
-      valueGain: Number(lane.userGain.toFixed(1)),
-      titleOddsBefore: baseUser.championOdds,
-      titleOddsAfter: noWorseThan(
-        baseUser.championOdds,
-        after?.championOdds ?? baseUser.championOdds,
-      ),
-    });
-  }
+  movers.push(...[...bestPerOpponent.values()].slice(0, 4).map(({ score, ...lane }) => lane));
 
   return movers;
 }
@@ -1119,16 +1171,25 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     reasons.push(`It leaves them with no ${partnerHole} to start — they'd need one back in the deal.`);
   }
 
-  // their thin spots: positions where they sit at or below the slot need
+  // Fit note is judged against their roster after the trade, so the copy cannot
+  // claim a need that was created by the deal itself.
   const partnerDepth = depthByPosition(partner.players, catalog);
   const slotNeed = (pos) => slotLabels.filter((s) => slotAllows(s, pos)).length;
-  const fillsNeed = give.some((id) => {
-    const pos = catalog[id]?.position;
-    return pos && partnerDepth[pos] != null && partnerDepth[pos] <= slotNeed(pos);
-  });
-  if (fillsNeed) {
+  const incomingPositions = new Set(give.map((id) => catalog[id]?.position).filter(Boolean));
+  const outgoingPositions = new Set(get.map((id) => catalog[id]?.position).filter(Boolean));
+  const replacementPos = [...incomingPositions].find((pos) => outgoingPositions.has(pos));
+  const addsScarcePos = [...incomingPositions].find(
+    (pos) => partnerDepth[pos] != null &&
+      partnerDepth[pos] <= slotNeed(pos) &&
+      (partnerDepthAfter[pos] ?? 0) <= slotNeed(pos),
+  );
+  if (replacementPos || addsScarcePos) {
     score += 2;
-    reasons.push('It plugs a position they are thin at.');
+    reasons.push(
+      replacementPos
+        ? `Replaces the ${replacementPos} they're sending.`
+        : `Adds help at ${addsScarcePos}, still a scarce spot for them.`,
+    );
   }
 
   // Fandom: a homer overvalues their NFL team's players — hard to pry one

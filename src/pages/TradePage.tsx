@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
@@ -65,6 +65,8 @@ function rosterRows(bootstrap: LeagueBootstrap, rosterId: number) {
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error } = useLeagueConnection();
   const { openScoutingCard } = useScoutingCard();
+  const [params, setParams] = useSearchParams();
+  const builderRef = useRef<HTMLElement | null>(null);
 
   const userTeam = bootstrap?.teams.find((t) => t.isUser) ?? null;
   const partners = useMemo(
@@ -80,12 +82,50 @@ function TradeDealsView() {
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
 
-  // Connected leagues get the Trade Command Center; the mock targets are
+  const lanes = useMemo(
+    () => (pricing?.available
+      ? (pricing.movers ?? []).filter((mover) => mover.kind === 'trade')
+      : []),
+    [pricing],
+  );
+
+  useEffect(() => {
+    if (!bootstrap || !stored) return;
+    const rosterParam = Number(params.get('managerRosterId'));
+    const managerParam = params.get('manager');
+    const giveParam = params.get('give');
+    const getParam = params.get('get');
+    const partner = Number.isFinite(rosterParam) && rosterParam > 0
+      ? bootstrap.teams.find((team) => team.rosterId === rosterParam)
+      : managerParam
+        ? bootstrap.teams.find((team) => team.ownerId === managerParam)
+        : null;
+    if (!partner || partner.isUser) return;
+
+    const matchingLane = lanes.find((lane) =>
+      lane.partnerRosterId === partner.rosterId ||
+      (lane.getPlayerId && partner.players.includes(lane.getPlayerId)),
+    );
+    const nextGive = giveParam
+      ? giveParam.split(',').filter(Boolean)
+      : matchingLane?.givePlayerIds ?? (matchingLane?.givePlayerId ? [matchingLane.givePlayerId] : []);
+    const nextGet = getParam
+      ? getParam.split(',').filter(Boolean)
+      : matchingLane?.getPlayerIds ?? (matchingLane?.getPlayerId ? [matchingLane.getPlayerId] : []);
+
+    setPartnerRosterId(partner.rosterId);
+    setGive(nextGive);
+    setGetIds(nextGet);
+    setResult(null);
+    window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
+  }, [bootstrap, lanes, params, stored]);
+
+  // Connected leagues get Market deals; the mock targets are
   // demo-only and never render next to a real roster.
   if (stored && !bootstrap) {
     return (
       <div className="trade-page">
-        <h1 className="visually-hidden">Trade Command Center</h1>
+        <h1 className="visually-hidden">Market</h1>
         <SeasonalNotice>
           {isLoading
             ? 'Syncing your trade board…'
@@ -109,9 +149,9 @@ function TradeDealsView() {
   if (bootstrap.league.leagueType !== 'redraft') {
     return (
       <div className="trade-page">
-        <h1 className="visually-hidden">Trade Command Center</h1>
+        <h1 className="visually-hidden">Market</h1>
         <SeasonalNotice>
-          The Trade Command Center is built for redraft leagues. Dynasty and
+          Market deals are built for redraft leagues. Dynasty and
           keeper trades turn on player age and pick value, which we don&apos;t
           price yet. It&apos;s coming.
         </SeasonalNotice>
@@ -119,25 +159,29 @@ function TradeDealsView() {
     );
   }
 
-  const lanes = pricing?.available
-    ? (pricing.movers ?? []).filter((mover) => mover.kind === 'trade')
-    : [];
-
   const toggle = (list: string[], set: (v: string[]) => void, id: string) => {
     set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
     setResult(null);
   };
 
-  const loadLane = (givePlayerId?: string, getPlayerId?: string) => {
-    if (!getPlayerId) return;
-    const ownerRosterId = bootstrap.teams.find((t) =>
-      t.players.includes(getPlayerId),
+  const loadLane = (lane: (typeof lanes)[number]) => {
+    const getPlayerIds = lane.getPlayerIds ?? (lane.getPlayerId ? [lane.getPlayerId] : []);
+    const givePlayerIds = lane.givePlayerIds ?? (lane.givePlayerId ? [lane.givePlayerId] : []);
+    const ownerRosterId = lane.partnerRosterId ?? bootstrap.teams.find((t) =>
+      getPlayerIds.some((id) => t.players.includes(id)),
     )?.rosterId;
     if (ownerRosterId == null) return;
     setPartnerRosterId(ownerRosterId);
-    setGive(givePlayerId ? [givePlayerId] : []);
-    setGetIds([getPlayerId]);
+    setGive(givePlayerIds);
+    setGetIds(getPlayerIds);
     setResult(null);
+    setParams({
+      view: 'deals',
+      managerRosterId: String(ownerRosterId),
+      give: givePlayerIds.join(','),
+      get: getPlayerIds.join(','),
+    }, { replace: true });
+    window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   };
 
   const runPricing = async () => {
@@ -235,21 +279,22 @@ function TradeDealsView() {
 
   return (
     <div className="trade-page">
-      <h1 className="visually-hidden">Trade Command Center</h1>
+      <h1 className="visually-hidden">Market</h1>
 
       {/* ── Partner finder ── */}
-      {lanes.length > 0 ? (
-        <section className="trade-cc__finder">
-          <p className="trade-cc__kicker">Deals on the board</p>
-          <h2 className="trade-cc__title">Managers you match with</h2>
+      <section className="trade-cc__finder">
+        <p className="trade-cc__kicker">Deals on the board</p>
+        <h2 className="trade-cc__title">Managers you match with</h2>
+        {lanes.length > 0 ? (
+          <>
           <p className="trade-cc__sub">
-            Both sides upgrade a starter. Tap one to load it into the builder.
+            Tap one to load the exact priced deal into the builder.
           </p>
           {lanes.map((lane) => (
             <button
               className="trade-cc__lane"
               key={lane.headline + lane.detail}
-              onClick={() => loadLane(lane.givePlayerId, lane.getPlayerId)}
+              onClick={() => loadLane(lane)}
               type="button"
             >
               <span>
@@ -279,15 +324,35 @@ function TradeDealsView() {
               ) : null}
               <span className="trade-cc__lane-gain">
                 <strong>+{(lane.valueGain ?? 0).toFixed(1)}</strong>
-                <span> pts/wk to your starters</span>
+                <span> you</span>
+                {typeof lane.partnerGain === 'number' ? (
+                  <span> · {lane.partnerGain >= 0 ? '+' : ''}{lane.partnerGain.toFixed(1)} them</span>
+                ) : null}
               </span>
+              <span className="trade-cc__lane-context">
+                {lane.framing === 'near_fair_you_win'
+                  ? 'Near-fair lane'
+                  : 'Both starters gain'}
+                {lane.acceptanceReason ? ` · ${lane.acceptanceReason}` : ''}
+              </span>
+              {lane.pricedAt ? (
+                <span className="trade-cc__lane-freshness">
+                  priced {new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(
+                    Math.round((lane.pricedAt - Date.now()) / 3_600_000),
+                    'hour',
+                  )}
+                </span>
+              ) : null}
             </button>
           ))}
-        </section>
-      ) : null}
+          </>
+        ) : (
+          <p className="trade-cc__empty-lane">No deal on this board improves both sides this week.</p>
+        )}
+      </section>
 
       {/* ── Builder ── */}
-      <section className="trade-cc__builder">
+      <section className="trade-cc__builder" ref={builderRef}>
         <p className="trade-cc__kicker">Build a trade</p>
         <h2 className="trade-cc__title">Who is moving?</h2>
 

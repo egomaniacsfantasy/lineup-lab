@@ -199,7 +199,7 @@
   flex-shrink: 0;
 }
 
-/* ── Trade Command Center ── */
+/* ── Market deals ── */
 .trade-cc__finder,
 .trade-cc__builder,
 .trade-cc__verdict {
@@ -241,6 +241,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   width: 100%;
   padding: 12px;
@@ -300,6 +301,30 @@
 
 .trade-cc__lane-price strong {
   color: var(--amber-bright);
+}
+
+.trade-cc__empty-lane,
+.trade-cc__lane-context,
+.trade-cc__lane-freshness {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.trade-cc__empty-lane {
+  margin: 10px 0 0;
+}
+
+.trade-cc__lane-context,
+.trade-cc__lane-freshness {
+  display: block;
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+
+.trade-cc__lane-freshness {
+  font-family: var(--font-num);
+  font-size: 11px;
 }
 
 .trade-cc__columns {

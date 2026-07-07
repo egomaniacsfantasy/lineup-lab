@@ -32,12 +32,6 @@ function avatarInitials(name: string) {
   return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'OG';
 }
 
-function bestEvidence(read: ScoutingRead) {
-  return [...(read.evidence ?? [])]
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 2);
-}
-
 function shortPlayerName(name: string) {
   const parts = name.trim().split(/\s+/);
   if (parts.length < 2) return name;
@@ -128,8 +122,20 @@ export function ScoutingCard({
     ]),
   ];
   const evidenceByTrait = read
-    ? new Map(bestEvidence(read).map((entry) => [entry.trait, entry.text]))
+    ? new Map([...read.evidence].sort((a, b) => b.weight - a.weight).map((entry) => [entry.trait, entry.text]))
     : new Map<string, string>();
+  const resolvedTheirGuys = theirGuys
+    .map((id) => {
+      const player = bootstrap?.players[id];
+      if (!player || !bootstrap) return null;
+      return {
+        id,
+        isLocked: untouchables.includes(id),
+        model: toPlayer(id, bootstrap.players),
+        name: shortPlayerName(player.name),
+      };
+    })
+    .filter((player): player is NonNullable<typeof player> => Boolean(player));
 
   const save = async () => {
     if (!stored || !user || !managerKey) return;
@@ -187,13 +193,14 @@ export function ScoutingCard({
                   {SLIDERS.map(([key, label]) => {
                     const value = read.traits[key];
                     const evidence = evidenceByTrait.get(key);
-                    if (typeof value !== 'number') return null;
+                    const hasSignal = Boolean(evidence || read.edit?.overrides?.[key] != null);
+                    const showValue = typeof value === 'number' && hasSignal;
                     return (
-                      <div className={styles.meter} key={key}>
+                      <div className={[styles.meter, showValue ? '' : styles.meterDim].filter(Boolean).join(' ')} key={key}>
                         <span>{label}</span>
-                        <span className={styles.mono}>{value}</span>
+                        <span className={styles.mono}>{showValue ? value : '—'}</span>
                         <span className={styles.track}>
-                          <span className={styles.fill} style={{ width: `${value}%` }} />
+                          {showValue ? <span className={styles.fill} style={{ width: `${value}%` }} /> : null}
                         </span>
                         {evidence ? <span className={styles.evidence}>{evidence}</span> : null}
                       </div>
@@ -202,21 +209,17 @@ export function ScoutingCard({
                 </div>
               </section>
 
-              {theirGuys.length > 0 ? (
+              {resolvedTheirGuys.length > 0 ? (
                 <section className={styles.section}>
                   <p className={styles.label}>Their guys</p>
                   <div className={styles.players}>
-                    {theirGuys.map((id) => {
-                      const player = bootstrap?.players[id];
-                      const playerModel = player && bootstrap ? toPlayer(id, bootstrap.players) : undefined;
-                      return (
-                        <span className={styles.playerChip} key={id}>
-                          <PlayerHeadshot player={playerModel} />
-                          {playerModel?.shortName ?? (player?.name ? shortPlayerName(player.name) : id)}
-                          {untouchables.includes(id) ? <span aria-hidden="true">⌕</span> : null}
-                        </span>
-                      );
-                    })}
+                    {resolvedTheirGuys.map((player) => (
+                      <span className={styles.playerChip} key={player.id}>
+                        <PlayerHeadshot player={player.model} />
+                        {player.model.shortName ?? player.name}
+                        {player.isLocked ? <span className={styles.lock}>Locked</span> : null}
+                      </span>
+                    ))}
                   </div>
                 </section>
               ) : null}
@@ -239,9 +242,11 @@ export function ScoutingCard({
                 <button className={styles.textButton} onClick={() => setMode('edit')} type="button">
                   Edit read
                 </button>
-                <a className={styles.dealLink} href="/market?view=deals">
-                  Open a deal →
-                </a>
+                {managerKey !== stored?.userId ? (
+                  <a className={styles.dealLink} href={`/market?view=deals&manager=${encodeURIComponent(managerKey ?? '')}`}>
+                    Open a deal →
+                  </a>
+                ) : null}
               </footer>
             </>
           ) : (
@@ -289,13 +294,30 @@ export function ScoutingCard({
                     ))}
                   </div>
                 ) : null}
-                <div className={styles.players}>
-                  {untouchables.map((id) => (
-                    <button className={styles.playerChip} key={id} onClick={() => setUntouchables(untouchables.filter((x) => x !== id))} type="button">
-                      {bootstrap?.players[id]?.name ?? id} ×
-                    </button>
-                  ))}
-                </div>
+                {resolvedTheirGuys.length > 0 ? (
+                  <div className={styles.players}>
+                    {resolvedTheirGuys.map((player) => (
+                      player.isLocked ? (
+                        <button
+                          className={styles.playerChip}
+                          key={player.id}
+                          onClick={() => setUntouchables(untouchables.filter((x) => x !== player.id))}
+                          type="button"
+                        >
+                          <PlayerHeadshot player={player.model} />
+                          {player.model.shortName ?? player.name}
+                          <span className={styles.lock}>Locked</span>
+                          ×
+                        </button>
+                      ) : (
+                        <span className={styles.playerChip} key={player.id}>
+                          <PlayerHeadshot player={player.model} />
+                          {player.model.shortName ?? player.name}
+                        </span>
+                      )
+                    ))}
+                  </div>
+                ) : null}
               </section>
 
               <section className={styles.section}>

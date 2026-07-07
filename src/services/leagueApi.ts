@@ -179,6 +179,13 @@ export interface MarketMover {
   playerId?: string;
   givePlayerId?: string;
   getPlayerId?: string;
+  givePlayerIds?: string[];
+  getPlayerIds?: string[];
+  partnerRosterId?: number;
+  partnerGain?: number;
+  framing?: 'both_upgrade' | 'near_fair_you_win';
+  acceptanceReason?: string;
+  pricedAt?: number;
   /** Projected points the move adds to your starting lineup. */
   valueGain?: number;
   titleOddsBefore: number;

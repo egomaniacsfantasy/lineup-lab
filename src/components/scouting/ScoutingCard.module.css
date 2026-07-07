@@ -126,6 +126,10 @@
   font-size: 13px;
 }
 
+.meterDim {
+  color: var(--text-muted);
+}
+
 .track {
   grid-column: 1 / -1;
   height: 7px;
@@ -164,6 +168,18 @@
   color: var(--text-soft);
   font-family: var(--font-ui);
   font-size: 12px;
+}
+
+.lock {
+  padding: 1px 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .playerChip img,
