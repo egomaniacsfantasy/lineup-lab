@@ -85,12 +85,42 @@ function buildProviderIndex() {
  * { playerId, name, position, team, mean, stdev, weekly:{week:pts},
  *   weeklyCI:{week:{floor,ceiling}}, floor, ceiling, seasonTotal, depthRank }.
  */
-let _cache = { at: 0, data: null };
+let _cache = { at: 0, data: null, refreshing: false };
 
+/**
+ * Stale-while-revalidate: once warm, ALWAYS return the cached value instantly
+ * and refresh in the background. This keeps the Supabase consensus fetch off the
+ * league-pricing critical path (the cause of the earlier "pricing your league"
+ * stall). Only the very first call (cold) awaits, and that's bounded by the 4s
+ * consensus timeout; warmAdjustedProjections() at boot removes even that.
+ */
 export async function getAdjustedProjections() {
-  const now = Date.now();
-  if (_cache.data && now - _cache.at < 60_000) return _cache.data;
+  if (_cache.data) {
+    if (Date.now() - _cache.at >= 60_000 && !_cache.refreshing) {
+      _cache.refreshing = true;
+      _computeAdjusted()
+        .then((d) => { _cache = { at: Date.now(), data: d, refreshing: false }; })
+        .catch((e) => { _cache.refreshing = false; console.error('[adjusted] bg refresh failed', e); });
+    }
+    return _cache.data;
+  }
+  const d = await _computeAdjusted();
+  _cache = { at: Date.now(), data: d, refreshing: false };
+  return d;
+}
 
+/** Precompute + cache at boot so the first pricing request never waits. */
+export async function warmAdjustedProjections() {
+  try {
+    const d = await _computeAdjusted();
+    _cache = { at: Date.now(), data: d, refreshing: false };
+    console.log(`[adjusted] warmed: ${d.matched}/${d.total} matched, ${d.consensusCount} consensus`);
+  } catch (e) {
+    console.error('[adjusted] warm failed', e);
+  }
+}
+
+async function _computeAdjusted() {
   const dataset = loadProjections();
   const consensus = await loadConsensus();
   const idx = buildProviderIndex();
@@ -179,6 +209,5 @@ export async function getAdjustedProjections() {
     total: dataset.players.length,
     consensusCount,
   };
-  _cache = { at: now, data: result };
   return result;
 }
