@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { tiltFromConsensus, adjustStat, adjustFP, scaleBound } from '../services/agreementTilt';
 import './ProjectionsPage.css';
 
 /**
@@ -21,6 +22,8 @@ interface Player {
   floor: number | null;
   ceiling: number | null;
   agreement?: Record<string, string>;
+  /** Average agreement across all users + how many scored this player. */
+  consensus?: { avg: number; n: number } | null;
   season: Row;
   weekly: Row[];
 }
@@ -247,6 +250,12 @@ export function ProjectionsPage() {
   const cols = STATS[pos];
   const totalColumns = cols.length + 6 + agreeCols.length;
 
+  // Edit mode = rate against the pure PPR model: force the PPR view and show
+  // model numbers (delta 0). Normal view shows consensus-adjusted numbers.
+  const viewScoring: Scoring = editing ? '' : scoring;
+  const showModel = editing;
+  const deltaFor = (p: Player) => (showModel ? 0 : tiltFromConsensus(p.consensus?.avg));
+
   function readBaseAgreementValue(player: Player, columnKey: string): string {
     return player.agreement?.[columnKey] ?? '';
   }
@@ -259,10 +268,6 @@ export function ProjectionsPage() {
     const key = cellKey(player, columnKey);
     if (hasKey(savedMap, key)) return savedMap[key];
     return readBaseAgreementValue(player, columnKey);
-  }
-
-  function readCommittedAgreementValue(player: Player, columnKey: string): string {
-    return readCommittedAgreementValueFromMap(player, columnKey, agreeSaved);
   }
 
   function readAgreementValueFromMaps(
@@ -304,15 +309,19 @@ export function ProjectionsPage() {
       .filter((p) => !q || p.name.toLowerCase().includes(q) || (p.team ?? '').toLowerCase().includes(q));
 
     const valueOf = (p: Player): number => {
+      const d = editing ? 0 : tiltFromConsensus(p.consensus?.avg);
       if (sortKey === 'point' || sortKey === 'floor' || sortKey === 'ceiling') {
-        return num(scoredSeason(p, scoring)[sortKey]);
+        const sv = scoredSeason(p, viewScoring);
+        const adjPoint = adjustFP(p.position, sv.point, p.season, viewScoring, 'season', d);
+        if (sortKey === 'point') return num(adjPoint);
+        return num(scaleBound(sv[sortKey], sv.point, adjPoint));
       }
-      return num(p.season[sortKey]);
+      return num(adjustStat(p.position, sortKey, p.season[sortKey], d));
     };
     const sorted = [...filtered].sort((a, b) => valueOf(b) - valueOf(a));
     if (sortDir === 'asc') sorted.reverse();
     return sorted;
-  }, [data, pos, query, sortKey, sortDir, scoring]);
+  }, [data, pos, query, sortKey, sortDir, viewScoring, editing]);
 
   function unlockEditing() {
     if (!userId) {
@@ -501,9 +510,10 @@ export function ProjectionsPage() {
           {SCORING_OPTIONS.map((o) => (
             <button
               key={o.key}
-              className={`proj-scoring__btn${o.key === scoring ? ' proj-scoring__btn--on' : ''}`}
-              onClick={() => setScoring(o.key)}
-              title={`Show ${o.label} fantasy points`}
+              className={`proj-scoring__btn${o.key === viewScoring ? ' proj-scoring__btn--on' : ''}`}
+              onClick={() => !editing && setScoring(o.key)}
+              disabled={editing}
+              title={editing ? 'Ratings are made against PPR' : `Show ${o.label} fantasy points`}
             >
               {o.label}
             </button>
@@ -588,6 +598,7 @@ export function ProjectionsPage() {
               <span className="proj-agree-hint__scale">
                 <b>50</b> aligned · higher = up · lower = down
               </span>
+              <span className="proj-agree-hint__ppr">Rate in <b>PPR</b> — your score applies across all formats.</span>
             </div>
           ) : null}
         </div>
@@ -640,18 +651,25 @@ export function ProjectionsPage() {
                       {p.depthRank ? <span className="proj-dr">{p.position}{p.depthRank}</span> : null}
                     </td>
                     <td className="proj-td">{p.team ?? '—'}</td>
-                    {cols.map((c) => (
-                      <td key={c.key} className="proj-td proj-td--num">
-                        {fmt(p.season[c.key])}
-                      </td>
-                    ))}
                     {(() => {
-                      const sv = scoredSeason(p, scoring);
+                      const d = deltaFor(p);
+                      return cols.map((c) => (
+                        <td key={c.key} className="proj-td proj-td--num">
+                          {fmt(adjustStat(p.position, c.key, p.season[c.key], d))}
+                        </td>
+                      ));
+                    })()}
+                    {(() => {
+                      const d = deltaFor(p);
+                      const sv = scoredSeason(p, viewScoring);
+                      const point = adjustFP(p.position, sv.point, p.season, viewScoring, 'season', d);
+                      const floor = scaleBound(sv.floor, sv.point, point);
+                      const ceiling = scaleBound(sv.ceiling, sv.point, point);
                       return (
                         <>
-                          <td className="proj-td proj-td--num proj-td--fp">{fmt(sv.point)}</td>
-                          <td className="proj-td proj-td--num proj-td--floor">{fmt(sv.floor)}</td>
-                          <td className="proj-td proj-td--num proj-td--ceil">{fmt(sv.ceiling)}</td>
+                          <td className="proj-td proj-td--num proj-td--fp">{fmt(point)}</td>
+                          <td className="proj-td proj-td--num proj-td--floor">{fmt(floor)}</td>
+                          <td className="proj-td proj-td--num proj-td--ceil">{fmt(ceiling)}</td>
                         </>
                       );
                     })()}
@@ -683,7 +701,18 @@ export function ProjectionsPage() {
                               onKeyDown={(e) => handleAgreeKeyDown(e, p, column.key)}
                             />
                           ) : (
-                            <span className="proj-agree-val">{readCommittedAgreementValue(p, column.key) || '—'}</span>
+                            <span
+                              className={['proj-agree-val', agreeToneClass(p.consensus ? String(Math.round(p.consensus.avg)) : '')]
+                                .filter(Boolean)
+                                .join(' ')}
+                              title={
+                                p.consensus
+                                  ? `Consensus of ${p.consensus.n} ${p.consensus.n === 1 ? 'rating' : 'ratings'}`
+                                  : 'No ratings yet'
+                              }
+                            >
+                              {p.consensus ? Math.round(p.consensus.avg) : '—'}
+                            </span>
                           )}
                         </td>
                       );
@@ -692,7 +721,7 @@ export function ProjectionsPage() {
                   {isOpen && (
                     <tr className="proj-week-row">
                       <td className="proj-week-cell" colSpan={totalColumns}>
-                        <WeeklyGrid player={p} cols={cols} scoring={scoring} />
+                        <WeeklyGrid player={p} cols={cols} scoring={viewScoring} delta={deltaFor(p)} />
                       </td>
                     </tr>
                   )}
@@ -713,7 +742,17 @@ export function ProjectionsPage() {
   );
 }
 
-function WeeklyGrid({ player, cols, scoring }: { player: Player; cols: StatCol[]; scoring: Scoring }) {
+function WeeklyGrid({
+  player,
+  cols,
+  scoring,
+  delta,
+}: {
+  player: Player;
+  cols: StatCol[];
+  scoring: Scoring;
+  delta: number;
+}) {
   if (!player.weekly.length) {
     return <p className="proj-week-empty">No week-by-week schedule available.</p>;
   }
@@ -741,6 +780,9 @@ function WeeklyGrid({ player, cols, scoring }: { player: Player; cols: StatCol[]
           {player.weekly.map((w, idx) => {
             const home = Number(w.game_location) === 1; // 1 = home, -1 = away
             const sw = scoredWeek(player, w, scoring);
+            const point = adjustFP(player.position, numOrNull(sw.point), w, scoring, 'weekly', delta);
+            const floor = scaleBound(numOrNull(sw.floor), numOrNull(sw.point), point);
+            const ceiling = scaleBound(numOrNull(sw.ceiling), numOrNull(sw.point), point);
             return (
               <tr key={`${w.week}-${idx}`}>
                 <td>{String(w.week ?? idx + 1)}</td>
@@ -748,14 +790,17 @@ function WeeklyGrid({ player, cols, scoring }: { player: Player; cols: StatCol[]
                   {home ? 'vs ' : '@ '}
                   {String(w.opponent ?? '—')}
                 </td>
-                {cols.map((c) => (
-                  <td key={c.key} className="proj-td--num">
-                    {zeroWk ? fmt(0) : fmt(w[c.weeklyKey ?? c.key])}
-                  </td>
-                ))}
-                <td className="proj-td--num proj-td--fp">{zeroWk ? fmt(0) : fmt(sw.point)}</td>
-                <td className="proj-td--num proj-week-floor">{zeroWk ? fmt(0) : fmt(sw.floor)}</td>
-                <td className="proj-td--num proj-week-ceil">{zeroWk ? fmt(0) : fmt(sw.ceiling)}</td>
+                {cols.map((c) => {
+                  const key = c.weeklyKey ?? c.key;
+                  return (
+                    <td key={c.key} className="proj-td--num">
+                      {zeroWk ? fmt(0) : fmt(adjustStat(player.position, key, w[key], delta))}
+                    </td>
+                  );
+                })}
+                <td className="proj-td--num proj-td--fp">{zeroWk ? fmt(0) : fmt(point)}</td>
+                <td className="proj-td--num proj-week-floor">{zeroWk ? fmt(0) : fmt(floor)}</td>
+                <td className="proj-td--num proj-week-ceil">{zeroWk ? fmt(0) : fmt(ceiling)}</td>
               </tr>
             );
           })}

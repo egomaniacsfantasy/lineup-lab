@@ -363,6 +363,13 @@
 .proj-agree-hint__scale b {
   color: var(--text-amber);
 }
+.proj-agree-hint__ppr {
+  flex-basis: 100%;
+  opacity: 0.85;
+}
+.proj-agree-hint__ppr b {
+  color: var(--text-amber);
+}
 .proj-agree-hint kbd {
   display: inline-block;
   min-width: 16px;
