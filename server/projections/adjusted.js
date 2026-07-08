@@ -120,9 +120,14 @@ export async function warmAdjustedProjections() {
   }
 }
 
+// Phase 0 isolation: keep the Supabase consensus fetch OUT of the picture until
+// the pure data-injection path is proven live. Flip to true to re-enable the
+// live consensus tilt once Phase 0 is confirmed stable on the deployed league.
+const CONSENSUS_ENABLED = false;
+
 async function _computeAdjusted() {
   const dataset = loadProjections();
-  const consensus = await loadConsensus();
+  const consensus = CONSENSUS_ENABLED ? await loadConsensus() : {};
   const idx = buildProviderIndex();
 
   const projections = [];

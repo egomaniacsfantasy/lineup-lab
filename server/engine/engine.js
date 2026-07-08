@@ -217,7 +217,7 @@ export function applyOverlay(projectionMap, overlay) {
  * @param {object} ctx { league, teams, matchups, week, catalog, scheduleWeeks }
  */
 export function priceLeague(ctx) {
-  const active = getActiveProjections();
+  const active = ctx.projections ?? getActiveProjections();
 
   if (!active) {
     return { available: false, reason: 'no_projections' };
@@ -1494,6 +1494,19 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
 export async function getLeaguePricing(ctxLoader, leagueId) {
   return cached(`pricing:${leagueId}`, 60_000, async () => {
     const ctx = await ctxLoader();
-    return priceLeague(ctx);
+    // Safety net: if pricing on the live-adjusted projections throws or comes
+    // back unavailable, re-price on the snapshot so the league can never stall.
+    try {
+      const result = priceLeague(ctx);
+      if (result && result.available) return result;
+      if (ctx.projections) return priceLeague({ ...ctx, projections: null });
+      return result;
+    } catch (err) {
+      if (ctx.projections) {
+        console.error('[pricing] adjusted priceLeague failed; retrying snapshot', err);
+        return priceLeague({ ...ctx, projections: null });
+      }
+      throw err;
+    }
   });
 }

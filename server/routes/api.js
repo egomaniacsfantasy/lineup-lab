@@ -13,6 +13,7 @@ import { getLeaguePricing, priceTrade } from '../engine/engine.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
+import { getAdjustedProjections } from '../projections/adjusted.js';
 import { getNflSchedule } from '../services/nflSchedule.js';
 import { getRequestUserId } from '../services/supabaseAdmin.js';
 import { runScoutingHarvest } from '../services/scoutingHarvest/index.js';
@@ -511,7 +512,16 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
         return all;
       });
 
-      return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay };
+      // Phase 0: live model-adjusted projections (warm + cached; never blocks).
+      // Any failure -> undefined -> engine falls back to the snapshot.
+      let liveProjections;
+      try {
+        const adjusted = await getAdjustedProjections();
+        if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+      } catch (err) {
+        console.error('[pricing] adjusted projections failed; using snapshot', err);
+      }
+      return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections };
     }, `${leagueId}:${userId}:${overlayHash(overlay)}`);
 
     if (pricing.available) {
