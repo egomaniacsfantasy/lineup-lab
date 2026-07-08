@@ -46,8 +46,69 @@ function verdictRailPosition(verdict?: string) {
   return VERDICT_RAIL[verdict ?? 'Fair'] ?? 0.5;
 }
 
+function verdictStamp(verdict?: string) {
+  if (verdict === 'Fair') return 'FAIR DEAL.';
+  if (verdict === 'Good value') return 'GOOD VALUE.';
+  if (verdict === 'Smash accept') return 'SMASH ACCEPT.';
+  if (verdict === 'Justifiable overpay') return 'JUSTIFIABLE OVERPAY.';
+  if (verdict === 'Overpay') return 'OVERPAY.';
+  return `${(verdict ?? 'Fair').toUpperCase()}.`;
+}
+
+function priceRailStyle(position: number): CSSProperties {
+  const pct = Math.max(0, Math.min(1, position)) * 100;
+  return {
+    '--trade-price-position': `${pct}%`,
+    '--trade-price-fill-left': `${Math.min(50, pct)}%`,
+    '--trade-price-fill-width': `${Math.abs(pct - 50)}%`,
+  } as CSSProperties;
+}
+
+function verdictAcceptanceStyle(probability = 50): CSSProperties {
+  const pct = Math.min(100, Math.max(0, probability));
+  return { '--trade-acceptance-pct': `${pct}%` } as CSSProperties;
+}
+
+function acceptanceBandLabel(band?: string) {
+  if (band === 'Smash accept') return "They'd jump";
+  return band ?? 'Coin flip';
+}
+
 function signedDelta(value = 0) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+}
+
+function titleOddsImproved(before: number, after: number) {
+  return impliedTitleProbability(after) > impliedTitleProbability(before);
+}
+
+function impliedTitleProbability(odds: number) {
+  return odds <= -100 ? -odds / (-odds + 100) : 100 / (odds + 100);
+}
+
+function cleanAcceptReason(reason: string) {
+  if (reason.includes('Barely moves their starters')) {
+    return 'Their starters barely move.';
+  }
+  if (reason.includes('little reason to say yes')) {
+    return reason.replace(/, so there's little reason to say yes\.?/i, '.');
+  }
+  return reason;
+}
+
+function acceptReasonTone(reason: string) {
+  const lower = reason.toLowerCase();
+  return [
+    'barely',
+    'best player',
+    'downgrade',
+    'give up',
+    'lose',
+    'overpay',
+    'thin',
+  ].some((needle) => lower.includes(needle))
+    ? 'hurt'
+    : 'help';
 }
 
 function laneIds(primary?: string[], fallback?: string) {
@@ -571,155 +632,242 @@ function TradeDealsView() {
 
       {/* ── Verdict ── */}
       {result && result.available && result.you && result.them ? (
-        <section className="trade-cc__verdict">
-          <div className="trade-cc__verdict-head">
-            <span
-              className={`trade-cc__verdict-tag trade-cc__verdict-tag--${
-                VERDICT_TONE[result.verdict ?? 'Fair'] ?? 'neutral'
-              }`}
-            >
-              {result.verdict}
-            </span>
-            <span
-              className={`trade-cc__band trade-cc__band--${
-                BAND_TONE[result.acceptance?.band ?? 'Coin flip'] ?? 'neutral'
-              }`}
-            >
-              {result.acceptance?.probability ?? 50}% to accept · {result.acceptance?.band}
-            </span>
-          </div>
-
-          {result.fairCounter ? (
-            <div className="trade-cc__counter">
-              <p className="trade-cc__counter-title">
-                {result.fairCounter.whoAdds === 'them'
-                  ? `You're overpaying by ${result.fairCounter.gapBefore} pts of value`
-                  : `You're winning this by ${result.fairCounter.gapBefore} pts of value`}
-              </p>
-              <p className="trade-cc__counter-body">
-                {result.fairCounter.whoAdds === 'them'
-                  ? `Even it out: ask ${result.fairCounter.teamName} to add ${result.fairCounter.add
-                      .map((a) => a.name)
-                      .join(' + ')}`
-                  : `Make it fair: add ${result.fairCounter.add
-                      .map((a) => a.name)
-                      .join(' + ')}`}
-                {result.fairCounter.allDepth ? ' — bench depth, not starters.' : '.'}
-              </p>
-              <button
-                className="trade-cc__counter-btn"
-                onClick={() => applyCounter(result.fairCounter!)}
-                type="button"
-              >
-                {result.fairCounter.whoAdds === 'them'
-                  ? 'Add it to what you get'
-                  : 'Add it to what you give'}
-              </button>
-            </div>
-          ) : null}
-
-          {/* fairness rail */}
-          <div className="trade-cc__rail" aria-hidden="true">
-            <span className="trade-cc__rail-track" />
-            <span
-              className="trade-cc__rail-marker"
-              style={{ left: `${verdictRailPosition(result.verdict) * 100}%` }}
-            />
-          </div>
-          <div className="trade-cc__rail-labels">
-            <span>Overpay</span>
-            <span>Fair</span>
-            <span>Steal</span>
-          </div>
-
-          {/* Two-sided value. A single trade barely moves season title odds,
-              so we lead with starting-lineup value (the number that actually
-              moves) and show the title-odds shift only when it's real. */}
-          <div className="trade-cc__odds">
-            {[
-              { side: result.you, isYou: true },
-              { side: result.them, isYou: false },
-            ].map(({ side, isYou }) => {
-              const titleMoved = side.titleAfter !== side.titleBefore;
-              return (
-                <div className="trade-cc__odds-side" key={side.teamName}>
-                  <p className="trade-cc__odds-name">
-                    {side.teamName}
-                    {isYou ? ' (you)' : ''}
-                  </p>
-                  <p
-                    className={`trade-cc__odds-value ${
-                      side.valueDelta > 0
-                        ? 'trade-cc__odds-value--up'
-                        : side.valueDelta < 0
-                          ? 'trade-cc__odds-value--down'
-                          : ''
-                    }`}
-                  >
-                    {side.valueDelta >= 0 ? '+' : ''}
-                    {side.valueDelta}
-                    <span> pts/wk to starters</span>
-                  </p>
-                  {titleMoved ? (
-                    <p className="trade-cc__odds-meta">
-                      Title odds {formatAmericanOdds(side.titleBefore)} →{' '}
-                      {formatAmericanOdds(side.titleAfter)}
-                    </p>
-                  ) : (
-                    <p className="trade-cc__odds-meta">
-                      Title odds unchanged (one trade rarely moves the season line)
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* why they would / wouldn't say yes */}
-          <div className="trade-cc__reasons">
-            <p className="trade-cc__reasons-title">Will they accept?</p>
-            <ul>
-              {(result.acceptance?.reasons ?? []).map((reason) => (
-                <li key={reason}>{reason}</li>
+        (() => {
+          const pricePosition = verdictRailPosition(result.verdict);
+          const acceptanceProbability = result.acceptance?.probability ?? 50;
+          const renderFaces = (ids: string[], tone: 'get' | 'give') => (
+            <div className={`trade-cc__verdict-face-group trade-cc__verdict-face-group--${tone}`}>
+              {ids.map((id) => (
+                <span
+                  className={`trade-cc__verdict-face trade-cc__verdict-face--${tone}`}
+                  key={id}
+                  title={playerName(bootstrap, id)}
+                >
+                  <PlayerHeadshot
+                    name={playerName(bootstrap, id)}
+                    player={toPlayer(id, bootstrap.players)}
+                  />
+                </span>
               ))}
-            </ul>
-          </div>
+            </div>
+          );
 
-          {/* roster fit */}
-          <div className="trade-cc__fit">
-            <p className="trade-cc__reasons-title">Your depth after</p>
-            <div className="trade-cc__fit-rows">
-              {['QB', 'RB', 'WR', 'TE'].map((pos) => {
-                const before = result.you!.depthBefore[pos] ?? 0;
-                const after = result.you!.depthAfter[pos] ?? 0;
-                const thin = after <= 1 && ['QB', 'TE'].includes(pos)
-                  ? after < 1
-                  : after <= 2 && ['RB', 'WR'].includes(pos);
-                return (
-                  <div className="trade-cc__fit-row" key={pos}>
-                    <span className="trade-cc__fit-pos">{pos}</span>
-                    <span
-                      className={`trade-cc__fit-count ${
-                        thin ? 'trade-cc__fit-count--thin' : ''
-                      }`}
-                    >
-                      {before}
-                      {after !== before ? ` → ${after}` : ''}
-                      {thin ? ' · thin' : ''}
+          return (
+            <section className="trade-cc__verdict">
+              <p
+                className={`trade-cc__verdict-stamp trade-cc__verdict-stamp--${
+                  VERDICT_TONE[result.verdict ?? 'Fair'] ?? 'neutral'
+                }`}
+              >
+                {verdictStamp(result.verdict)}
+              </p>
+
+              <div className="trade-cc__verdict-faces" aria-label="Trade players">
+                <div className="trade-cc__verdict-face-side">
+                  <span className="trade-cc__verdict-face-label">You send</span>
+                  {renderFaces(give, 'give')}
+                </div>
+                <span className="trade-cc__verdict-arrows" aria-hidden="true">
+                  <span>→</span>
+                  <span>←</span>
+                </span>
+                <div className="trade-cc__verdict-face-side">
+                  <span className="trade-cc__verdict-face-label">You get</span>
+                  {renderFaces(getIds, 'get')}
+                </div>
+              </div>
+
+              <div className="trade-cc__verdict-axis-grid">
+                <section className="trade-cc__price-module">
+                  <p className="trade-cc__module-label">The price</p>
+                  <div
+                    className={[
+                      'trade-cc__price-rail',
+                      pricePosition > 0.5 ? 'trade-cc__price-rail--steal' : '',
+                      pricePosition < 0.5 ? 'trade-cc__price-rail--overpay' : '',
+                    ].filter(Boolean).join(' ')}
+                    style={priceRailStyle(pricePosition)}
+                    aria-label={`Price verdict: ${result.verdict ?? 'Fair'}`}
+                  >
+                    <span className="trade-cc__price-track" />
+                    <span className="trade-cc__price-center" />
+                    <span className="trade-cc__price-fill" />
+                    <span className="trade-cc__price-marker" />
+                  </div>
+                  <div className="trade-cc__price-labels" aria-hidden="true">
+                    <span>Overpay</span>
+                    <span>Fair</span>
+                    <span>Steal</span>
+                  </div>
+                </section>
+
+                <section
+                  className={`trade-cc__accept-module trade-cc__accept-module--${
+                    BAND_TONE[result.acceptance?.band ?? 'Coin flip'] ?? 'neutral'
+                  }`}
+                  style={verdictAcceptanceStyle(acceptanceProbability)}
+                >
+                  <p className="trade-cc__module-label">Will they take it?</p>
+                  <div className="trade-cc__accept-top">
+                    <span className="trade-cc__accept-number">{acceptanceProbability}%</span>
+                    <span className="trade-cc__accept-tag">
+                      {acceptanceBandLabel(result.acceptance?.band)}
                     </span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                  <div
+                    className="trade-cc__accept-track"
+                    aria-label={`Acceptance probability: ${acceptanceProbability}%`}
+                    data-acceptance-pct={acceptanceProbability}
+                  >
+                    <span className="trade-cc__accept-fill" />
+                    <span className="trade-cc__accept-marker" />
+                  </div>
+                </section>
+              </div>
 
-          {result.isDepthPackage ? (
-            <SeasonalNotice>
-              This is a depth package: you&apos;re sending several players but only
-              one would start for them. It&apos;s worth less than it looks.
-            </SeasonalNotice>
-          ) : null}
-        </section>
+              {result.fairCounter ? (
+                <div className="trade-cc__counter">
+                  <p className="trade-cc__counter-title">
+                    {result.fairCounter.whoAdds === 'them'
+                      ? `You're overpaying by ${result.fairCounter.gapBefore} pts of value`
+                      : `You're winning this by ${result.fairCounter.gapBefore} pts of value`}
+                  </p>
+                  <p className="trade-cc__counter-body">
+                    {result.fairCounter.whoAdds === 'them'
+                      ? `Even it out: ask ${result.fairCounter.teamName} to add ${result.fairCounter.add
+                          .map((a) => a.name)
+                          .join(' + ')}`
+                      : `Make it fair: add ${result.fairCounter.add
+                          .map((a) => a.name)
+                          .join(' + ')}`}
+                    {result.fairCounter.allDepth ? ' — bench depth, not starters.' : '.'}
+                  </p>
+                  <button
+                    className="trade-cc__counter-btn"
+                    onClick={() => applyCounter(result.fairCounter!)}
+                    type="button"
+                  >
+                    {result.fairCounter.whoAdds === 'them'
+                      ? 'Add it to what you get'
+                      : 'Add it to what you give'}
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="trade-cc__consequences">
+                {[
+                  { side: result.you, isYou: true },
+                  { side: result.them, isYou: false },
+                ].map(({ side, isYou }) => {
+                  const titleMoved = side.titleAfter !== side.titleBefore;
+                  const titleUp = titleMoved && titleOddsImproved(side.titleBefore, side.titleAfter);
+                  return (
+                    <div className="trade-cc__consequence-card" key={side.teamName}>
+                      <p className="trade-cc__consequence-team">
+                        {side.teamName}
+                        {isYou ? ' (you)' : ''}
+                      </p>
+                      <p
+                        className={`trade-cc__consequence-delta ${
+                          side.valueDelta > 0
+                            ? 'trade-cc__consequence-delta--up'
+                            : side.valueDelta < 0
+                              ? 'trade-cc__consequence-delta--down'
+                              : ''
+                        }`}
+                      >
+                        {signedDelta(side.valueDelta)}
+                        <span> pts/wk</span>
+                      </p>
+                      <p
+                        className={`trade-cc__consequence-title ${
+                          titleMoved
+                            ? titleUp
+                              ? 'trade-cc__consequence-title--up'
+                              : 'trade-cc__consequence-title--down'
+                            : ''
+                        }`}
+                      >
+                        Title odds{' '}
+                        {titleMoved ? (
+                          <>
+                            {formatAmericanOdds(side.titleBefore)} →{' '}
+                            {formatAmericanOdds(side.titleAfter)} {titleUp ? '▲' : '▼'}
+                          </>
+                        ) : (
+                          'unchanged'
+                        )}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="trade-cc__reasons">
+                <p className="trade-cc__reasons-title">Will they accept?</p>
+                <ul>
+                  {(result.acceptance?.reasons ?? []).map((reason) => {
+                    const tone = acceptReasonTone(reason);
+                    return (
+                      <li className={`trade-cc__reason trade-cc__reason--${tone}`} key={reason}>
+                        <span aria-hidden="true">{tone === 'help' ? '✓' : '✗'}</span>
+                        {cleanAcceptReason(reason)}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <div className="trade-cc__fit">
+                <p className="trade-cc__reasons-title">Your depth after</p>
+                <div className="trade-cc__fit-rows">
+                  {['QB', 'RB', 'WR', 'TE', 'K', 'DEF']
+                    .filter((pos) => {
+                      const before = result.you!.depthBefore[pos] ?? 0;
+                      const after = result.you!.depthAfter[pos] ?? 0;
+                      return !['K', 'DEF'].includes(pos) || before !== after;
+                    })
+                    .map((pos) => {
+                      const before = result.you!.depthBefore[pos] ?? 0;
+                      const after = result.you!.depthAfter[pos] ?? 0;
+                      const changed = after !== before;
+                      const improved = after > before;
+                      return (
+                        <div className="trade-cc__fit-row" key={pos}>
+                          <span className="trade-cc__fit-pos">{pos}</span>
+                          <span
+                            className={[
+                              'trade-cc__fit-count',
+                              changed
+                                ? improved
+                                  ? 'trade-cc__fit-count--up'
+                                  : 'trade-cc__fit-count--down'
+                                : '',
+                            ].filter(Boolean).join(' ')}
+                          >
+                            {changed ? (
+                              <>
+                                {before} → {after} {improved ? '▲' : '▼'}
+                              </>
+                            ) : (
+                              after
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {result.isDepthPackage ? (
+                <SeasonalNotice>
+                  This is a depth package: you&apos;re sending several players but only
+                  one would start for them. It&apos;s worth less than it looks.
+                </SeasonalNotice>
+              ) : null}
+            </section>
+          );
+        })()
       ) : result && !result.available ? (
         <SeasonalNotice>
           {result.reason === 'no_projections'
