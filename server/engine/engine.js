@@ -20,6 +20,8 @@ import { cached } from '../cache.js';
 
 const SIMS = 10_000;
 const FUTURES_SIMS = 2_000;
+const MATCHUP_SIMS = 5_000; // seeded player-level sims for the headline matchup win%
+const Z80 = 1.2815515594; // 80% CI half-width in sigmas (matches our weekly CI)
 const LANE_PRICING_LIMIT_PER_OPPONENT = 2;
 const LANE_PRICING_LIMIT_TOTAL = 12;
 
@@ -151,6 +153,77 @@ function simulateWinProb(a, b, rng) {
   return wins / SIMS;
 }
 
+/**
+ * Per-player split-normal parameters for the week: the adjusted weekly mean plus
+ * ASYMMETRIC sigmas backed out of our floor/ceiling. sigma = (bound - mean)/z is
+ * the exact inverse of how the pipeline built the CI, so drawing
+ * mean + z*(z>=0 ? sigmaUp : sigmaDown) reproduces floor=P10, ceiling=P90 exactly
+ * (a monotonic warp of a standard normal preserves percentiles). Falls back to a
+ * symmetric sigma when no per-week CI is present (e.g. the legacy snapshot).
+ */
+function playerSimParams(playerId, projectionMap, catalogEntry, week) {
+  const base = playerDistribution(playerId, projectionMap, catalogEntry, week);
+  let sigmaDown = base.stdev;
+  let sigmaUp = base.stdev;
+  const ci = projectionMap.get(playerId)?.weeklyCI;
+  if (base.mean > 0 && ci && week != null) {
+    const wk = ci[week] ?? ci[String(week)];
+    if (wk) {
+      const fl = Number(wk.floor);
+      const ce = Number(wk.ceiling);
+      if (Number.isFinite(fl) && fl < base.mean) sigmaDown = (base.mean - fl) / Z80;
+      if (Number.isFinite(ce) && ce > base.mean) sigmaUp = (ce - base.mean) / Z80;
+    }
+  }
+  return { mean: base.mean, sigmaDown, sigmaUp, unpriced: base.unpriced, zeroed: base.zeroed };
+}
+
+/** Starter split-normal params + aggregate mean for a roster's starters. */
+function starterParams(starterIds, projectionMap, catalog, week = null) {
+  const players = [];
+  let mean = 0;
+  for (const id of starterIds) {
+    const p = playerSimParams(id, projectionMap, catalog[id], week);
+    players.push(p);
+    mean += p.mean;
+  }
+  return { players, mean };
+}
+
+const INV_SQRT_2PI = 0.3989422804014327;
+
+/**
+ * One draw from the player's asymmetric CI, CENTERED ON THE MEAN. A raw
+ * split-normal averages above its mode when right-skewed, which would bias team
+ * totals (and unfairly reward high-skew lineups). Subtracting the skew offset
+ * makes E[draw] = mean while keeping the CI's asymmetric shape, so upsets still
+ * come from real skew but win% stays unbiased.
+ */
+function splitNormalDraw(p, rng) {
+  const z = gaussian(rng);
+  const s = z >= 0 ? p.sigmaUp : p.sigmaDown;
+  const skewOffset = (p.sigmaUp - p.sigmaDown) * INV_SQRT_2PI;
+  return Math.max(0, p.mean - skewOffset + z * s);
+}
+
+/**
+ * Player-level Monte Carlo win probability: each sim draws every starter from
+ * their own asymmetric CI, sums the lineup, and compares to the opponent's.
+ * Seeded shared rng -> identical every run, and A's win% + B's win% = 100%.
+ */
+function simulateMatchupWinProb(a, b, rng) {
+  let wins = 0;
+  for (let i = 0; i < MATCHUP_SIMS; i += 1) {
+    let scoreA = 0;
+    for (const p of a.players) scoreA += splitNormalDraw(p, rng);
+    let scoreB = 0;
+    for (const p of b.players) scoreB += splitNormalDraw(p, rng);
+    if (scoreA > scoreB) wins += 1;
+    else if (scoreA === scoreB) wins += 0.5;
+  }
+  return wins / MATCHUP_SIMS;
+}
+
 function lineFromDistributions(a, b, winProb) {
   return {
     moneyline: probToAmerican(winProb),
@@ -243,6 +316,10 @@ export function priceLeague(ctx) {
   const distByRoster = new Map(
     teams.map((t) => [t.rosterId, teamDistribution(t.starters, projectionMap, catalog, week)]),
   );
+  // Per-player split-normal params (asymmetric CI) for the headline matchup sim.
+  const paramsByRoster = new Map(
+    teams.map((t) => [t.rosterId, starterParams(t.starters, projectionMap, catalog, week)]),
+  );
 
   // Per-week distributions for the futures sim: each remaining week uses
   // that week's game-level projections (byes priced as real zeros).
@@ -280,7 +357,13 @@ export function priceLeague(ctx) {
     const [a, b] = pair;
     const distA = distByRoster.get(a.rosterId);
     const distB = distByRoster.get(b.rosterId);
-    const winProbA = simulateWinProb(distA, distB, linesRng);
+    // Player-level asymmetric sim for win% (projection/spread/total below stay
+    // the sum of player means, so displayed totals are unchanged).
+    const winProbA = simulateMatchupWinProb(
+      paramsByRoster.get(a.rosterId),
+      paramsByRoster.get(b.rosterId),
+      linesRng,
+    );
 
     lines.push({
       matchupId,
