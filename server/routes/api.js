@@ -13,7 +13,6 @@ import { getLeaguePricing, priceTrade } from '../engine/engine.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
-import { getAdjustedProjections } from '../projections/adjusted.js';
 import { getNflSchedule } from '../services/nflSchedule.js';
 import { getRequestUserId } from '../services/supabaseAdmin.js';
 import { runScoutingHarvest } from '../services/scoutingHarvest/index.js';
@@ -512,16 +511,7 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
         return all;
       });
 
-      // Live agreement-weighted projections (warm + cached; never blocks). Any
-      // failure -> undefined -> engine uses the snapshot.
-      let liveProjections;
-      try {
-        const adjusted = await getAdjustedProjections();
-        if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-      } catch (err) {
-        console.error('[pricing] adjusted projections failed; using snapshot', err);
-      }
-      return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections };
+      return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay };
     }, `${leagueId}:${userId}:${overlayHash(overlay)}`);
 
     if (pricing.available) {
@@ -558,14 +548,7 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
       return all;
     });
 
-    let liveProjections;
-    try {
-      const adjusted = await getAdjustedProjections();
-      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-    } catch (err) {
-      console.error('[trade] adjusted projections failed; using snapshot', err);
-    }
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay };
     const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
 
     res.json(

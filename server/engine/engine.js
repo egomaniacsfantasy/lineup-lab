@@ -20,9 +20,6 @@ import { cached } from '../cache.js';
 
 const SIMS = 10_000;
 const FUTURES_SIMS = 2_000;
-const MATCHUP_SIMS = 5_000;
-const Z80 = 1.2815515594;
-const INV_SQRT_2PI = 0.3989422804014327;
 const LANE_PRICING_LIMIT_PER_OPPONENT = 2;
 const LANE_PRICING_LIMIT_TOTAL = 12;
 
@@ -154,56 +151,6 @@ function simulateWinProb(a, b, rng) {
   return wins / SIMS;
 }
 
-function playerSimParams(playerId, projectionMap, catalogEntry, week) {
-  const base = playerDistribution(playerId, projectionMap, catalogEntry, week);
-  let sigmaDown = base.stdev;
-  let sigmaUp = base.stdev;
-  const ci = projectionMap.get(playerId)?.weeklyCI;
-  if (base.mean > 0 && ci && week != null) {
-    const wk = ci[week] ?? ci[String(week)];
-    if (wk) {
-      const fl = Number(wk.floor);
-      const ce = Number(wk.ceiling);
-      if (Number.isFinite(fl) && fl < base.mean) sigmaDown = (base.mean - fl) / Z80;
-      if (Number.isFinite(ce) && ce > base.mean) sigmaUp = (ce - base.mean) / Z80;
-    }
-  }
-  return { mean: base.mean, sigmaDown, sigmaUp, unpriced: base.unpriced, zeroed: base.zeroed };
-}
-
-function starterParams(starterIds, projectionMap, catalog, week = null) {
-  const players = [];
-  let mean = 0;
-  for (const id of starterIds) {
-    const p = playerSimParams(id, projectionMap, catalog[id], week);
-    players.push(p);
-    mean += p.mean;
-  }
-  return { players, mean };
-}
-
-/** One draw from the player's asymmetric CI, centered on the mean (no skew bias). */
-function splitNormalDraw(p, rng) {
-  const z = gaussian(rng);
-  const s = z >= 0 ? p.sigmaUp : p.sigmaDown;
-  const skewOffset = (p.sigmaUp - p.sigmaDown) * INV_SQRT_2PI;
-  return Math.max(0, p.mean - skewOffset + z * s);
-}
-
-/** Player-level seeded Monte Carlo win probability (5000 sims). */
-function simulateMatchupWinProb(a, b, rng) {
-  let wins = 0;
-  for (let i = 0; i < MATCHUP_SIMS; i += 1) {
-    let scoreA = 0;
-    for (const p of a.players) scoreA += splitNormalDraw(p, rng);
-    let scoreB = 0;
-    for (const p of b.players) scoreB += splitNormalDraw(p, rng);
-    if (scoreA > scoreB) wins += 1;
-    else if (scoreA === scoreB) wins += 0.5;
-  }
-  return wins / MATCHUP_SIMS;
-}
-
 function lineFromDistributions(a, b, winProb) {
   return {
     moneyline: probToAmerican(winProb),
@@ -270,7 +217,7 @@ export function applyOverlay(projectionMap, overlay) {
  * @param {object} ctx { league, teams, matchups, week, catalog, scheduleWeeks }
  */
 export function priceLeague(ctx) {
-  const active = ctx.projections ?? getActiveProjections();
+  const active = getActiveProjections();
 
   if (!active) {
     return { available: false, reason: 'no_projections' };
@@ -293,9 +240,6 @@ export function priceLeague(ctx) {
   const teamsByRoster = new Map(teams.map((t) => [t.rosterId, t]));
   const distByRoster = new Map(
     teams.map((t) => [t.rosterId, teamDistribution(t.starters, projectionMap, catalog, week)]),
-  );
-  const paramsByRoster = new Map(
-    teams.map((t) => [t.rosterId, starterParams(t.starters, projectionMap, catalog, week)]),
   );
 
   // Per-week distributions for the futures sim: each remaining week uses
@@ -334,11 +278,7 @@ export function priceLeague(ctx) {
     const [a, b] = pair;
     const distA = distByRoster.get(a.rosterId);
     const distB = distByRoster.get(b.rosterId);
-    const winProbA = simulateMatchupWinProb(
-      paramsByRoster.get(a.rosterId),
-      paramsByRoster.get(b.rosterId),
-      linesRng,
-    );
+    const winProbA = simulateWinProb(distA, distB, linesRng);
 
     lines.push({
       matchupId,
@@ -427,19 +367,12 @@ export function priceLeague(ctx) {
       });
     }
 
-  }
-
-  // Per-player week-specific means for EVERY rostered player, so both lineups
-  // display our week value instead of the provider's fallback.
-  for (const id of new Set(teams.flatMap((t) => t.players))) {
-    const dist = playerDistribution(id, projectionMap, catalog[id], week);
-    playerMeans[id] = {
-      mean: Number(dist.mean.toFixed(1)),
-      stdev: Number(dist.stdev.toFixed(1)),
-      unpriced: dist.unpriced,
-      zeroed: dist.zeroed,
-      derived: projectionMap.get(id)?.derived ?? false,
-    };
+    playerMeans = Object.fromEntries(
+      userTeam.players.map((id) => {
+        const dist = playerDistribution(id, projectionMap, catalog[id], week);
+        return [id, { mean: Number(dist.mean.toFixed(1)), stdev: Number(dist.stdev.toFixed(1)), unpriced: dist.unpriced, zeroed: dist.zeroed, derived: projectionMap.get(id)?.derived ?? false }];
+      }),
+    );
   }
 
   // ── season futures: simulate the remaining schedule ──
@@ -1195,7 +1128,7 @@ function depthByPosition(playerIds, catalog) {
  * acceptance read is parameterized truth, never fabricated psychology.
  */
 export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get = [], traits = {} }) {
-  const active = ctx.projections ?? getActiveProjections();
+  const active = getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
 
   const { league, teams, catalog, scheduleWeeks, week, overlay } = ctx;
@@ -1561,20 +1494,6 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
 export async function getLeaguePricing(ctxLoader, leagueId) {
   return cached(`pricing:${leagueId}`, 60_000, async () => {
     const ctx = await ctxLoader();
-    // Safety net: if pricing on the live-adjusted projections ever throws or
-    // comes back unavailable, fall back to the snapshot so the league can never
-    // get stuck on the "pricing your league" screen.
-    try {
-      const result = priceLeague(ctx);
-      if (result && result.available) return result;
-      if (ctx.projections) return priceLeague({ ...ctx, projections: null });
-      return result;
-    } catch (err) {
-      if (ctx.projections) {
-        console.error('[pricing] adjusted priceLeague failed; retrying snapshot', err);
-        return priceLeague({ ...ctx, projections: null });
-      }
-      throw err;
-    }
+    return priceLeague(ctx);
   });
 }

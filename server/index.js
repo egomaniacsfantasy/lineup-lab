@@ -10,7 +10,6 @@ import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
 import { projectionsRouter } from './routes/projections.js';
 import { loadProjections } from './projections/loadFromRepo.js';
-import { warmAdjustedProjections } from './projections/adjusted.js';
 import { callLog, callsInLastMinute } from './cache.js';
 import { isGameWindow } from './gameWindows.js';
 
@@ -47,9 +46,6 @@ app.listen(PORT, () => {
   } catch (error) {
     console.error('[projections] boot load failed', error);
   }
-  // Warm the agreement-weighted projections off the critical path so league
-  // pricing never waits on the consensus fetch.
-  warmAdjustedProjections();
 });
 
 // Call-volume heartbeat: Sleeper asks < 1000 calls/min per IP — ours
