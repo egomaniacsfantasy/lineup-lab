@@ -369,12 +369,21 @@ export function priceLeague(ctx) {
       });
     }
 
-    playerMeans = Object.fromEntries(
-      userTeam.players.map((id) => {
-        const dist = playerDistribution(id, projectionMap, catalog[id], week);
-        return [id, { mean: Number(dist.mean.toFixed(1)), stdev: Number(dist.stdev.toFixed(1)), unpriced: dist.unpriced, zeroed: dist.zeroed, derived: projectionMap.get(id)?.derived ?? false }];
-      }),
-    );
+  }
+
+  // Per-player week-specific means for EVERY rostered player in the league, so
+  // both lineups (yours AND the opponent's) display OUR adjusted week value
+  // instead of falling back to the provider's number. playerDistribution reads
+  // weekly[week] from the (now live, agreement-weighted) projection map.
+  for (const id of new Set(teams.flatMap((t) => t.players))) {
+    const dist = playerDistribution(id, projectionMap, catalog[id], week);
+    playerMeans[id] = {
+      mean: Number(dist.mean.toFixed(1)),
+      stdev: Number(dist.stdev.toFixed(1)),
+      unpriced: dist.unpriced,
+      zeroed: dist.zeroed,
+      derived: projectionMap.get(id)?.derived ?? false,
+    };
   }
 
   // ── season futures: simulate the remaining schedule ──
