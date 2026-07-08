@@ -29,7 +29,14 @@ function num(v) {
 async function loadConsensus() {
   const admin = getSupabaseAdmin();
   if (!admin) return {};
-  const { data, error } = await admin.from('olympus_agreement').select('position, player, score');
+  // Never let a slow/hung DB call stall league pricing — time out to no-consensus.
+  const timeout = new Promise((resolve) =>
+    setTimeout(() => resolve({ data: null, error: { message: 'consensus timeout' } }), 4000),
+  );
+  const { data, error } = await Promise.race([
+    admin.from('olympus_agreement').select('position, player, score'),
+    timeout,
+  ]);
   if (error) {
     console.error('[adjusted] consensus read failed:', error.message ?? error);
     return {};
@@ -78,7 +85,12 @@ function buildProviderIndex() {
  * { playerId, name, position, team, mean, stdev, weekly:{week:pts},
  *   weeklyCI:{week:{floor,ceiling}}, floor, ceiling, seasonTotal, depthRank }.
  */
+let _cache = { at: 0, data: null };
+
 export async function getAdjustedProjections() {
+  const now = Date.now();
+  if (_cache.data && now - _cache.at < 60_000) return _cache.data;
+
   const dataset = loadProjections();
   const consensus = await loadConsensus();
   const idx = buildProviderIndex();
@@ -147,15 +159,26 @@ export async function getAdjustedProjections() {
       ceiling: seasonCeil,
       depthRank: p.depthRank ?? null,
       source: 'live-adjusted',
+      // Field parity with the snapshot's records so no downstream consumer
+      // trips on a missing key.
+      scoringBasis: 'ppr',
+      derived: false,
+      defaultedVariance: false,
+      stats: null,
+      tier: null,
+      rank: null,
     });
   }
 
   const consensusCount = Object.values(consensus).reduce((a, m) => a + Object.keys(m).length, 0);
-  return {
+  const result = {
     version: `${idx?.version ?? 'noimport'}:adj:${consensusCount}`,
+    meta: { scoringBasis: 'ppr', source: 'live-adjusted' },
     projections,
     matched,
     total: dataset.players.length,
     consensusCount,
   };
+  _cache = { at: now, data: result };
+  return result;
 }

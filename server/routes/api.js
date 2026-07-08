@@ -512,15 +512,21 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
         return all;
       });
 
-      // Live agreement-weighted projections (falls back to the snapshot inside
-      // the engine if nothing matched, e.g. before the first import).
-      const adjusted = await getAdjustedProjections();
+      // Live agreement-weighted projections. Guarded: any failure/timeout falls
+      // back to the snapshot inside the engine rather than stalling pricing.
+      let liveProjections;
+      try {
+        const adjusted = await getAdjustedProjections();
+        if (adjusted.matched > 0) liveProjections = adjusted;
+      } catch (err) {
+        console.error('[pricing] adjusted projections failed; using snapshot', err);
+      }
       return {
         ...ctx,
         catalog: ctx.players,
         scheduleWeeks,
         overlay,
-        projections: adjusted.matched > 0 ? adjusted : undefined,
+        projections: liveProjections,
       };
     }, `${leagueId}:${userId}:${overlayHash(overlay)}`);
 
@@ -558,13 +564,19 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
       return all;
     });
 
-    const adjusted = await getAdjustedProjections();
+    let liveProjections;
+    try {
+      const adjusted = await getAdjustedProjections();
+      if (adjusted.matched > 0) liveProjections = adjusted;
+    } catch (err) {
+      console.error('[trade] adjusted projections failed; using snapshot', err);
+    }
     const ctx = {
       ...ctxBase,
       catalog: ctxBase.players,
       scheduleWeeks,
       overlay,
-      projections: adjusted.matched > 0 ? adjusted : undefined,
+      projections: liveProjections,
     };
     const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
 
