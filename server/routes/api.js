@@ -13,6 +13,7 @@ import { getLeaguePricing, priceTrade } from '../engine/engine.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
+import { getAdjustedProjections } from '../projections/adjusted.js';
 import { getNflSchedule } from '../services/nflSchedule.js';
 import { getRequestUserId } from '../services/supabaseAdmin.js';
 import { runScoutingHarvest } from '../services/scoutingHarvest/index.js';
@@ -511,7 +512,16 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
         return all;
       });
 
-      return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay };
+      // Live agreement-weighted projections (falls back to the snapshot inside
+      // the engine if nothing matched, e.g. before the first import).
+      const adjusted = await getAdjustedProjections();
+      return {
+        ...ctx,
+        catalog: ctx.players,
+        scheduleWeeks,
+        overlay,
+        projections: adjusted.matched > 0 ? adjusted : undefined,
+      };
     }, `${leagueId}:${userId}:${overlayHash(overlay)}`);
 
     if (pricing.available) {
@@ -548,7 +558,14 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
       return all;
     });
 
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay };
+    const adjusted = await getAdjustedProjections();
+    const ctx = {
+      ...ctxBase,
+      catalog: ctxBase.players,
+      scheduleWeeks,
+      overlay,
+      projections: adjusted.matched > 0 ? adjusted : undefined,
+    };
     const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
 
     res.json(

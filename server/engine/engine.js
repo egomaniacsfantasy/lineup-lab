@@ -217,7 +217,9 @@ export function applyOverlay(projectionMap, overlay) {
  * @param {object} ctx { league, teams, matchups, week, catalog, scheduleWeeks }
  */
 export function priceLeague(ctx) {
-  const active = getActiveProjections();
+  // Prefer the live agreement-weighted projections passed in via ctx; fall back
+  // to the last admin snapshot only if none were supplied.
+  const active = ctx.projections ?? getActiveProjections();
 
   if (!active) {
     return { available: false, reason: 'no_projections' };
@@ -1128,7 +1130,7 @@ function depthByPosition(playerIds, catalog) {
  * acceptance read is parameterized truth, never fabricated psychology.
  */
 export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get = [], traits = {} }) {
-  const active = getActiveProjections();
+  const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
 
   const { league, teams, catalog, scheduleWeeks, week, overlay } = ctx;
