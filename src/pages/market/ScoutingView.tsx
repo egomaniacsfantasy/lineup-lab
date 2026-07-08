@@ -79,9 +79,21 @@ export function ScoutingView() {
   }, [reads, stored]);
 
   const dismissed = stored
-    ? dismissedKeys.has(stored.leagueId) || window.localStorage.getItem(revealKey(stored.leagueId)) === '1'
+    ? dismissedKeys.has(stored.leagueId) ||
+      window.localStorage.getItem(revealKey(stored.leagueId)) === '1'
     : false;
-  const showReveal = Boolean(stored && !dismissed && superlatives.length >= 2);
+  const eligibleSuperlatives = useMemo(() => {
+    if (!stored) return [];
+    const readByManager = new Map(reads.map((read) => [read.manager_key, read]));
+    return superlatives.filter((item) => {
+      if (item.manager_key === stored.userId) return false;
+      const read = readByManager.get(item.manager_key);
+      return read && !isVacantRead(read);
+    });
+  }, [reads, stored, superlatives]);
+  const revealManagers = new Set(eligibleSuperlatives.map((item) => item.manager_key));
+  const showReveal = Boolean(stored && !dismissed && eligibleSuperlatives.length >= 2 && revealManagers.size >= 2);
+
   const tagStats = useMemo(() => {
     const counts = new Map<string, number>();
     const strongest = new Map<string, number>();
@@ -105,7 +117,7 @@ export function ScoutingView() {
         <article className={styles.reveal} data-share-surface="league-read">
           <h2>The book has read your league.</h2>
           <div className={styles.superlatives}>
-            {superlatives.map((item) => (
+            {eligibleSuperlatives.map((item) => (
               <p key={item.key}>
                 <span>{superlativeLabel(item, reads).split(':')[0]}:</span>{' '}
                 <code>{superlativeLabel(item, reads).split(':').slice(1).join(':').trim()}</code>

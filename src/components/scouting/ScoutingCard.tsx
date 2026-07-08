@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { toPlayer } from '../../adapters/connectedLeague';
@@ -159,6 +160,12 @@ export function ScoutingCard({
   const display = read?.manager;
   const teamTag = favoriteTeam || read?.edit?.favorite_team || read?.traits.team_bias?.team || '';
   const needsCopy = needsText(read);
+  const dealHref =
+    stored && managerKey && read?.manager.roster_id != null
+      ? `/market?view=deals&leagueId=${encodeURIComponent(stored.leagueId)}&managerRosterId=${read.manager.roster_id}&manager=${encodeURIComponent(managerKey)}`
+      : stored && managerKey
+        ? `/market?view=deals&leagueId=${encodeURIComponent(stored.leagueId)}&manager=${encodeURIComponent(managerKey)}`
+        : '/market?view=deals';
 
   return (
     <aside
@@ -243,9 +250,9 @@ export function ScoutingCard({
                   Edit read
                 </button>
                 {managerKey !== stored?.userId ? (
-                  <a className={styles.dealLink} href={`/market?view=deals&manager=${encodeURIComponent(managerKey ?? '')}`}>
+                  <Link className={styles.dealLink} to={dealHref}>
                     Open a deal →
-                  </a>
+                  </Link>
                 ) : null}
               </footer>
             </>

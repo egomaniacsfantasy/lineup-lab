@@ -12,7 +12,7 @@ import {
   type TradeResult,
   type TradeTraits,
 } from '../services/leagueApi';
-import type { LeagueBootstrap } from '../services/leagueApi';
+import type { LeagueBootstrap, MarketMover } from '../services/leagueApi';
 import { formatAmericanOdds } from '../utils/formatOdds';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
 import './TradePage.css';
@@ -236,6 +236,29 @@ function rosterRows(bootstrap: LeagueBootstrap, rosterId: number) {
     .filter((row) => row.player);
 }
 
+function laneBelongsToLeague(
+  lane: MarketMover,
+  bootstrap: LeagueBootstrap,
+  leagueId: string,
+) {
+  if (lane.leagueId && lane.leagueId !== leagueId) return false;
+  const partner = lane.partnerRosterId == null
+    ? null
+    : bootstrap.teams.find((team) => team.rosterId === lane.partnerRosterId);
+  if (!partner) return false;
+
+  const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
+  const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
+  if (givePlayerIds.length === 0 || getPlayerIds.length === 0) return false;
+
+  const userTeam = bootstrap.teams.find((team) => team.isUser);
+  if (!userTeam) return false;
+  return (
+    givePlayerIds.every((id) => userTeam.players.includes(id)) &&
+    getPlayerIds.every((id) => partner.players.includes(id))
+  );
+}
+
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error } = useLeagueConnection();
   const { openScoutingCard } = useScoutingCard();
@@ -257,14 +280,20 @@ function TradeDealsView() {
   const [getSearch, setGetSearch] = useState('');
 
   const lanes = useMemo(
-    () => (pricing?.available
-      ? (pricing.movers ?? []).filter((mover) => mover.kind === 'trade')
-      : []),
-    [pricing],
+    () => {
+      if (!pricing?.available || !bootstrap || !stored) return [];
+      return (pricing.movers ?? []).filter((mover) =>
+        mover.kind === 'trade' && laneBelongsToLeague(mover, bootstrap, stored.leagueId),
+      );
+    },
+    [bootstrap, pricing, stored],
   );
+  const lanesResolved = pricing != null;
 
   useEffect(() => {
     if (!bootstrap || !stored) return;
+    const leagueParam = params.get('leagueId');
+    if (leagueParam && leagueParam !== stored.leagueId) return;
     const rosterParam = Number(params.get('managerRosterId'));
     const managerParam = params.get('manager');
     const giveParam = params.get('give');
@@ -351,6 +380,7 @@ function TradeDealsView() {
     setResult(null);
     setParams({
       view: 'deals',
+      leagueId: stored.leagueId,
       managerRosterId: String(ownerRosterId),
       give: givePlayerIds.join(','),
       get: getPlayerIds.join(','),
@@ -493,7 +523,13 @@ function TradeDealsView() {
 
       <section className="trade-cc__finder">
         <h2 className="trade-cc__section-label">Managers you match with</h2>
-        {lanes.length > 0 ? (
+        {!lanesResolved ? (
+          <div className="trade-cc__lane-skeleton" aria-label="Pricing trade lanes">
+            <span />
+            <span />
+            <span />
+          </div>
+        ) : lanes.length > 0 ? (
           <>
           {lanes.map((lane, index) => {
             const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
@@ -566,8 +602,10 @@ function TradeDealsView() {
             );
           })}
           </>
-        ) : (
+        ) : pricing?.available ? (
           <p className="trade-cc__empty-lane">No deal on this board improves both sides this week.</p>
+        ) : (
+          <p className="trade-cc__empty-lane">Trade lanes need a priced league.</p>
         )}
       </section>
 

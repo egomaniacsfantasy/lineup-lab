@@ -615,24 +615,45 @@ export function tradeLaneMatchesPricedResult(lane, priced) {
   );
 }
 
-function laneAcceptReason({ opp, give, get, priced, catalog }) {
+export function laneAcceptReasons({ opp, give, get, priced, catalog, framing = 'both_upgrade' }) {
   const youGain = Number((priced.you?.valueDelta ?? 0).toFixed(1));
   const themGain = Number((priced.them?.valueDelta ?? 0).toFixed(1));
   const names = (ids) => ids.map((id) => catalog[id]?.name ?? `Player ${id}`).join(' + ');
 
   if (priced.volatilityReason) {
-    return priced.volatilityReason;
+    return [priced.volatilityReason];
+  }
+
+  if (framing === 'near_fair_you_win') {
+    const cost = themGain >= 0 ? 'nothing this week' : `${Math.abs(themGain).toFixed(1)} pts/wk`;
+    return [
+      `Costs ${opp.teamName} ${cost}; you add ${youGain.toFixed(1)}.`,
+      `${opp.teamName}'s lineup stays flat; your starters gain ${youGain.toFixed(1)}.`,
+      `Low-cost ask for ${opp.teamName}; you add ${youGain.toFixed(1)} this week.`,
+    ];
   }
 
   if (themGain > 0) {
-    return `${opp.teamName} upgrades starters by ${themGain.toFixed(1)} pts/wk; you add ${youGain.toFixed(1)}.`;
+    return [
+      `${opp.teamName} upgrades starters by ${themGain.toFixed(1)} pts/wk; you add ${youGain.toFixed(1)}.`,
+      `Both starters move: ${opp.teamName} +${themGain.toFixed(1)}, you +${youGain.toFixed(1)}.`,
+      `Your lineup gains ${youGain.toFixed(1)} while ${opp.teamName} gains ${themGain.toFixed(1)}.`,
+    ];
   }
 
   if (priced.bestPlayer?.toThem) {
-    return `${opp.teamName} gets the best player (${priced.bestPlayer.name}); you add ${youGain.toFixed(1)} pts/wk.`;
+    return [
+      `${opp.teamName} gets the best player (${priced.bestPlayer.name}); you add ${youGain.toFixed(1)} pts/wk.`,
+      `Best player goes their way; your starters gain ${youGain.toFixed(1)}.`,
+      `${opp.teamName} gets the headline name; you get ${youGain.toFixed(1)} pts/wk.`,
+    ];
   }
 
-  return `${names(get)} adds ${youGain.toFixed(1)} pts/wk to your starters; ${names(give)} barely moves theirs.`;
+  return [
+    `${names(get)} adds ${youGain.toFixed(1)} pts/wk to your starters.`,
+    `You add ${youGain.toFixed(1)} with ${names(get)}.`,
+    `${names(get)} is the weekly upgrade; ${names(give)} is the ask.`,
+  ];
 }
 
 /**
@@ -872,6 +893,7 @@ function computeMovers(ctx) {
 
       const lane = {
         kind: 'trade',
+        leagueId: String(league.id),
         headline: `${names(candidate.get)} for ${names(candidate.give)}`,
         detail: `Send ${names(candidate.give)}, get ${names(candidate.get)}`,
         givePlayerId: candidate.give[0],
@@ -885,12 +907,13 @@ function computeMovers(ctx) {
         verdict: priced.verdict,
         valueGap: priced.valueGap,
         acceptanceProbability: priced.acceptance?.probability ?? null,
-        acceptanceReason: laneAcceptReason({
+        acceptanceReasons: laneAcceptReasons({
           opp,
           give: candidate.give,
           get: candidate.get,
           priced: { ...priced, volatilityReason: candidate.volatilityReason },
           catalog,
+          framing: strict ? 'both_upgrade' : 'near_fair_you_win',
         }),
         pricedAt: Date.now(),
         titleOddsBefore: priced.you.titleBefore,
@@ -907,7 +930,16 @@ function computeMovers(ctx) {
     if (!bestPerOpponent.has(lane.partnerRosterId)) bestPerOpponent.set(lane.partnerRosterId, lane);
   }
 
-  movers.push(...[...bestPerOpponent.values()].slice(0, 4).map(({ score, ...lane }) => lane));
+  movers.push(
+    ...[...bestPerOpponent.values()]
+      .slice(0, 4)
+      .map(({ score, acceptanceReasons = [], ...lane }, index) => ({
+        ...lane,
+        acceptanceReason:
+          acceptanceReasons[index % Math.max(1, acceptanceReasons.length)] ??
+          lane.acceptanceReason,
+      })),
+  );
 
   return movers;
 }

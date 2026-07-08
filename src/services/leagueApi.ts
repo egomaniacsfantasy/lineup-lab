@@ -174,6 +174,7 @@ export interface DraftWrappedReal {
 
 export interface MarketMover {
   kind: 'waiver' | 'trade';
+  leagueId?: string;
   headline: string;
   detail: string;
   playerId?: string;

@@ -653,6 +653,7 @@ function CompareSheet({
 
 interface PricedMover {
   kind: string;
+  leagueId?: string;
   headline: string;
   detail: string;
   playerId?: string;
@@ -828,6 +829,7 @@ function MatchupLive({
   const marketHrefForMover = (mover: PricedMover) => {
     if (mover.kind !== 'trade') return '/market?view=deals';
     const params = new URLSearchParams({ view: 'deals' });
+    if (stored?.leagueId) params.set('leagueId', stored.leagueId);
     if (mover.partnerRosterId != null) params.set('managerRosterId', String(mover.partnerRosterId));
     if (mover.givePlayerIds?.length) params.set('give', mover.givePlayerIds.join(','));
     if (mover.getPlayerIds?.length) params.set('get', mover.getPlayerIds.join(','));
@@ -2043,6 +2045,7 @@ export function MatchupPage() {
     connectedMatchup && pricing?.available
       ? (pricing.movers ?? []).map((mover) => ({
           kind: mover.kind,
+          leagueId: mover.leagueId,
           headline: mover.headline,
           detail: mover.detail,
           playerId: mover.playerId,
