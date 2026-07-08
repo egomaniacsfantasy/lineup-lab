@@ -116,7 +116,7 @@ export function computeScoutingReads({ events, leagueId, provider, managers = []
     const seasons = new Set(prior.map((e) => e.season));
     if (seasons.size) {
       const trades = prior.filter((e) => e.event_type === 'trade').length;
-      tradeScores.set(managerKey, trades / seasons.size);
+      if (trades > 0) tradeScores.set(managerKey, trades);
     }
 
     const earlyWaiver = mine.filter((e) => (
@@ -144,7 +144,7 @@ export function computeScoutingReads({ events, leagueId, provider, managers = []
     if (tradeScores.has(managerKey) && tradeScores.size >= Math.max(2, Math.ceil(allManagerKeys.length / 2))) {
       const score = tradeScores.get(managerKey);
       traits.trade_appetite = percentile(score, [...tradeScores.values()]);
-      addEvidence(evidence, 'trade_appetite', `Completed ${score.toFixed(1)} trades per prior season`, score);
+      addEvidence(evidence, 'trade_appetite', `Completed ${score} ${score === 1 ? 'trade' : 'trades'} in verified history`, score);
     }
 
     const teamWeights = new Map();

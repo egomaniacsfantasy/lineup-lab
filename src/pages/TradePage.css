@@ -439,7 +439,7 @@
   color: var(--green);
 }
 
-.trade-cc__lane-lean {
+.trade-cc__lane-acceptance {
   display: grid;
   gap: 3px;
   width: min(210px, 100%);
@@ -458,42 +458,45 @@
   margin: 10px 0 0;
 }
 
-.trade-cc__lane-lean-labels {
+.trade-cc__lane-acceptance-label {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 9px;
+  font-family: var(--font-num);
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
 }
 
-.trade-cc__lane-lean-track {
+.trade-cc__lane-acceptance-track {
   position: relative;
   height: 7px;
   border-radius: 999px;
   background: rgba(244, 245, 242, 0.16);
 }
 
-.trade-cc__lane-lean-fill {
+.trade-cc__lane-acceptance-fill {
   position: absolute;
   top: 0;
-  left: var(--lane-lean-left);
-  width: max(5px, var(--lane-lean-width));
+  left: 0;
+  width: var(--lane-acceptance-pct);
   height: 100%;
   border-radius: inherit;
 }
 
-.trade-cc__lane-lean-fill--steal {
+.trade-cc__lane-acceptance-fill--good {
   background: var(--green);
 }
 
-.trade-cc__lane-lean-fill--overpay {
-  background: var(--red);
+.trade-cc__lane-acceptance-fill--neutral {
+  background: var(--text-muted);
 }
 
-.trade-cc__lane-lean-notch {
+.trade-cc__lane-acceptance-fill--muted {
+  background: var(--ink-3);
+}
+
+.trade-cc__lane-acceptance-notch {
   position: absolute;
   top: -4px;
   left: 50%;
@@ -502,16 +505,15 @@
   background: rgba(244, 245, 242, 0.55);
 }
 
-.trade-cc__lane-lean-marker {
+.trade-cc__lane-acceptance-marker {
   position: absolute;
-  top: 50%;
-  left: var(--lane-lean-pos);
-  width: 13px;
+  top: -3px;
+  left: var(--lane-acceptance-pct);
+  width: 2px;
   height: 13px;
-  border: 2px solid var(--bg-deep);
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--text-primary);
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.54);
 }
 
@@ -573,7 +575,7 @@
     font-size: clamp(12px, 3.9vw, 15px);
   }
 
-  .trade-cc__lane-lean {
+  .trade-cc__lane-acceptance {
     width: 100%;
     justify-self: stretch;
   }

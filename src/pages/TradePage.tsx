@@ -144,14 +144,15 @@ function generatedAt(timestamp?: number) {
   return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function leanStyle(position: number): CSSProperties {
-  const left = Math.min(position, 0.5) * 100;
-  const width = Math.abs(position - 0.5) * 100;
-  return {
-    '--lane-lean-pos': `${position * 100}%`,
-    '--lane-lean-left': `${left}%`,
-    '--lane-lean-width': `${width}%`,
-  } as CSSProperties;
+function acceptanceStyle(probability = 50): CSSProperties {
+  const pct = Math.min(100, Math.max(0, probability));
+  return { '--lane-acceptance-pct': `${pct}%` } as CSSProperties;
+}
+
+function acceptanceTone(probability = 50) {
+  if (probability >= 60) return 'trade-cc__lane-acceptance-fill--good';
+  if (probability < 40) return 'trade-cc__lane-acceptance-fill--muted';
+  return 'trade-cc__lane-acceptance-fill--neutral';
 }
 
 const NEUTRAL_TRADE_TRAITS: TradeTraits = {
@@ -440,7 +441,7 @@ function TradeDealsView() {
             const fullOutgoing = laneSideLabel(bootstrap, givePlayerIds, false);
             const compressedIncoming = laneSideLabel(bootstrap, getPlayerIds, true);
             const compressedOutgoing = laneSideLabel(bootstrap, givePlayerIds, true);
-            const marker = verdictRailPosition(lane.verdict);
+            const acceptanceProbability = lane.acceptanceProbability ?? 50;
             const time = generatedAt(lane.pricedAt);
             const compact = index > 0;
 
@@ -473,26 +474,21 @@ function TradeDealsView() {
                     <span className="trade-cc__lane-numbers">
                       <span className="trade-cc__lane-you">you {signedDelta(lane.valueGain)}</span>
                       <span> · them {signedDelta(lane.partnerGain ?? 0)}</span>
-                      <span> · {lane.acceptanceProbability ?? 50}% to accept</span>
                     </span>
                   </span>
-                  <span className="trade-cc__lane-lean" style={leanStyle(marker)}>
-                    <span className="trade-cc__lane-lean-labels">
-                      <span>Overpay</span>
-                      <span>Fair</span>
-                      <span>Steal</span>
+                  <span className="trade-cc__lane-acceptance" style={acceptanceStyle(acceptanceProbability)}>
+                    <span className="trade-cc__lane-acceptance-label">
+                      <span>{acceptanceProbability}% to accept</span>
                     </span>
-                    <span className="trade-cc__lane-lean-track">
+                    <span className="trade-cc__lane-acceptance-track">
                       <span
                         className={[
-                          'trade-cc__lane-lean-fill',
-                          marker >= 0.5
-                            ? 'trade-cc__lane-lean-fill--steal'
-                            : 'trade-cc__lane-lean-fill--overpay',
+                          'trade-cc__lane-acceptance-fill',
+                          acceptanceTone(acceptanceProbability),
                         ].join(' ')}
                       />
-                      <span className="trade-cc__lane-lean-notch" />
-                      <span className="trade-cc__lane-lean-marker" />
+                      <span className="trade-cc__lane-acceptance-notch" />
+                      <span className="trade-cc__lane-acceptance-marker" />
                     </span>
                   </span>
                 </span>

@@ -1219,6 +1219,10 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     const vor = (p.seasonTotal ?? 0) - replacementTotal(p.position);
     return vor * (TRADE_POS_W[p.position] ?? 1);
   };
+  const sumValue = (ids) => ids.reduce((s, id) => s + Math.max(0, valueOf(id)), 0);
+  const giveValue = sumValue(give);
+  const getValue = sumValue(get);
+  const valueGap = Number((giveValue - getValue).toFixed(0)); // >0 = you overpay
 
   const everyPlayer = [...give, ...get]
     .map((id) => ({
@@ -1240,42 +1244,6 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const depthBefore = depthByPosition(user.players, catalog);
   const depthAfter = depthByPosition(userPoolAfter, catalog);
 
-  // ── acceptance read: computable facts, nudged by the user's read on the
-  //    other manager (1–10 dials, supplied by you — not fabricated) ──
-  const clamp10 = (n, fallback) => Math.min(10, Math.max(1, n ?? fallback));
-  const toughness = clamp10(traits.toughness, 5); // pushover ↔ shark
-  const dealAppetite = clamp10(traits.dealAppetite, 5); // ghosts ↔ wheeler-dealer
-  const fandomTeam = traits.fandomTeam ?? null;
-  const fandomLevel = clamp10(traits.fandomLevel, 5);
-
-  const reasons = [];
-  let score = 0;
-
-  if (theirValueDelta > 0.5) {
-    score += theirValueDelta;
-    reasons.push(`Upgrades their starters by ${theirValueDelta} pts a week, rest of season.`);
-  } else if (theirValueDelta < -0.5) {
-    score += theirValueDelta;
-    reasons.push(`Downgrades their starters by ${Math.abs(theirValueDelta)} pts a week, rest of season.`);
-  } else {
-    reasons.push("Barely moves their starters, so there's little reason to say yes.");
-  }
-
-  if (bestPlayer.toThem) {
-    score += 2;
-    reasons.push(`They land the best player in the deal (${bestPlayer.name}).`);
-  } else {
-    score -= 3;
-    reasons.push(`They give up the best player in the deal (${bestPlayer.name}).`);
-  }
-
-  // The honest reason a "great value" offer still gets declined: it would
-  // leave them unable to field a starter somewhere.
-  if (partnerHole) {
-    score -= 3;
-    reasons.push(`It leaves them with no ${partnerHole} to start — they'd need one back in the deal.`);
-  }
-
   // Fit note is judged against their roster after the trade, so the copy cannot
   // claim a need that was created by the deal itself.
   const partnerDepth = depthByPosition(partner.players, catalog);
@@ -1288,8 +1256,50 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
       partnerDepth[pos] <= slotNeed(pos) &&
       (partnerDepthAfter[pos] ?? 0) <= slotNeed(pos),
   );
+
+  // ── acceptance read: computable facts, nudged by the user's read on the
+  //    other manager (1–10 dials, supplied by you — not fabricated) ──
+  const clamp10 = (n, fallback) => Math.min(10, Math.max(1, n ?? fallback));
+  const toughness = clamp10(traits.toughness, 5); // pushover ↔ shark
+  const dealAppetite = clamp10(traits.dealAppetite, 5); // ghosts ↔ wheeler-dealer
+  const fandomTeam = traits.fandomTeam ?? null;
+  const fandomLevel = clamp10(traits.fandomLevel, 5);
+
+  const reasons = [];
+  let score = 0.35;
+
+  if (theirValueDelta > 0.5) {
+    score += theirValueDelta * 1.15;
+    reasons.push(`Upgrades their starters by ${theirValueDelta} pts a week, rest of season.`);
+  } else if (theirValueDelta < -0.5) {
+    score += theirValueDelta * 1.35;
+    reasons.push(`Downgrades their starters by ${Math.abs(theirValueDelta)} pts a week, rest of season.`);
+  } else {
+    score -= 0.8;
+    reasons.push("Barely moves their starters, so there's little reason to say yes.");
+  }
+
+  if (bestPlayer.toThem) {
+    score += 1.8;
+    reasons.push(`They land the best player in the deal (${bestPlayer.name}).`);
+  } else {
+    score -= 2.5;
+    reasons.push(`They give up the best player in the deal (${bestPlayer.name}).`);
+  }
+
+  // Positive valueGap means you give more total value than you receive, which
+  // makes acceptance likelier; negative means you're asking them to overpay.
+  score += Math.max(-3.5, Math.min(3.5, valueGap / 18));
+
+  // The honest reason a "great value" offer still gets declined: it would
+  // leave them unable to field a starter somewhere.
+  if (partnerHole) {
+    score -= 3.2;
+    reasons.push(`It leaves them with no ${partnerHole} to start — they'd need one back in the deal.`);
+  }
+
   if (replacementPos || addsScarcePos) {
-    score += 2;
+    score += replacementPos ? 1.1 : 1.6;
     reasons.push(
       replacementPos
         ? `Replaces the ${replacementPos} they're sending.`
@@ -1318,10 +1328,10 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
 
   // Deal appetite: low = they ghost most offers; high = they love to wheel.
   if (dealAppetite <= 3) {
-    score -= 2;
+    score -= 1.7;
     reasons.push('You marked them as someone who ignores most offers.');
   } else if (dealAppetite >= 8) {
-    score += 1;
+    score += 1.1;
     reasons.push('You marked them as an active trader who loves to wheel and deal.');
   }
 
@@ -1333,15 +1343,11 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
             : 'Long shot';
   // Continuous probability so the scouting dials visibly move the read, not
   // just flip a coarse band. Logistic on the same score (k=2.5).
-  const acceptanceProb = Math.round(100 / (1 + Math.exp(-score / 2.5)));
+  const acceptanceProb = Math.max(3, Math.min(97, Math.round(100 / (1 + Math.exp(-score / 3.2)))));
 
   // ── fair-deal counter: if the player value is lopsided, suggest throw-ins
   //    that even it out (value = points over replacement, the same currency we
   //    rank trades by). The side that's getting more value adds the player(s).
-  const sumValue = (ids) => ids.reduce((s, id) => s + Math.max(0, valueOf(id)), 0);
-  const giveValue = sumValue(give);
-  const getValue = sumValue(get);
-  const valueGap = Number((giveValue - getValue).toFixed(0)); // >0 = you overpay
   const FAIR_TOL = 15; // season-total value points; deals within this read as fair
   let fairCounter = null;
   if (Math.abs(valueGap) > FAIR_TOL) {

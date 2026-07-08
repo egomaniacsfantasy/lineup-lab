@@ -253,13 +253,13 @@ export async function harvestSleeperScouting({ leagueId }) {
     for (const season of [currentSeason, currentSeason - 1]) {
       const leagues = await sleeperGet(`/user/${managerKey}/leagues/nfl/${season}`, 'user/leagues');
       const sorted = [...(leagues ?? [])].sort((a, b) => Number(b.last_transaction_id ?? b.last_read_id ?? 0) - Number(a.last_transaction_id ?? a.last_read_id ?? 0));
-      const capped = sorted.slice(0, 8);
+      const capped = sorted.slice(0, 4);
       if (sorted.length > capped.length) {
         report.crossLeagueCaps.push({ manager_key: managerKey, season, seen: sorted.length, harvested: capped.length });
       }
       for (const league of capped) {
         if (String(league.league_id) === String(leagueId) || priorIds.includes(String(league.league_id))) continue;
-        const harvested = await harvestLeagueOnce(league.league_id, { includeTransactions: false, catalog, report });
+        const harvested = await harvestLeagueOnce(league.league_id, { includeTransactions: true, catalog, report });
         events.push(...harvested.events);
       }
     }
