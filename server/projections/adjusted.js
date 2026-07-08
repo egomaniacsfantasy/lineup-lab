@@ -142,7 +142,11 @@ async function _computeAdjusted() {
     const seasonFloor = scaleBound(p.floor, p.point, seasonPoint);
     const seasonCeil = scaleBound(p.ceiling, p.point, seasonPoint);
 
-    // Per-week adjusted mean + CI.
+    // Per-week adjusted mean + CI. Kickers store weekly FP in total_projected_fp,
+    // everyone else in fantasy_pts. (Reading the wrong column left the weekly grid
+    // empty and fell back to the SEASON total as the weekly value — the ~150-pt
+    // kicker inflation.)
+    const wfpCol = pos === 'K' ? 'total_projected_fp' : 'fantasy_pts';
     const weekly = {};
     const weeklyCI = {};
     const perGameSig = [];
@@ -150,7 +154,7 @@ async function _computeAdjusted() {
     for (const w of p.weekly) {
       const wk = Number(w.week);
       if (!Number.isFinite(wk)) continue;
-      const wStored = num(w.fantasy_pts);
+      const wStored = num(w[wfpCol]);
       if (wStored == null) continue;
       const wAdj = adjustFP(pos, wStored, w, 'weekly', delta);
       const wFloor = scaleBound(num(w.fantasy_pts_floor), wStored, wAdj);
