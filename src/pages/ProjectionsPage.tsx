@@ -728,18 +728,21 @@ export function ProjectionsPage() {
                               onKeyDown={(e) => handleAgreeKeyDown(e, p, column.key)}
                             />
                           ) : (
-                            <span
-                              className={['proj-agree-val', agreeToneClass(p.consensus ? String(Math.round(p.consensus.avg)) : '')]
-                                .filter(Boolean)
-                                .join(' ')}
-                              title={
-                                p.consensus
-                                  ? `Consensus of ${p.consensus.n} ${p.consensus.n === 1 ? 'rating' : 'ratings'}`
-                                  : 'No ratings yet'
-                              }
-                            >
-                              {p.consensus ? Math.round(p.consensus.avg) : '—'}
-                            </span>
+                            // Show the logged-in user's OWN score (reflects their
+                            // in-session edits immediately), not the cached crowd
+                            // consensus — which loads stale and made edits look
+                            // like they reverted after locking.
+                            (() => {
+                              const own = readCommittedAgreementValueFromMap(p, column.key, agreeSaved);
+                              return (
+                                <span
+                                  className={['proj-agree-val', agreeToneClass(own || null)].filter(Boolean).join(' ')}
+                                  title={userId ? 'Your agreement score' : 'Log in to rate'}
+                                >
+                                  {own || '—'}
+                                </span>
+                              );
+                            })()
                           )}
                         </td>
                       );
