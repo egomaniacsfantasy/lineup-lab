@@ -9,6 +9,81 @@
   justify-content: space-between;
 }
 
+.schedule-grid__heat {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22px, 1fr));
+  gap: 4px;
+}
+
+.schedule-grid__heat-cell {
+  display: grid;
+  place-items: center;
+  min-height: 24px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  background: var(--heat-color);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.schedule-grid__heat-cell--playoff {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(244, 245, 242, 0.08) 0,
+      rgba(244, 245, 242, 0.08) 4px,
+      rgba(244, 245, 242, 0.02) 4px,
+      rgba(244, 245, 242, 0.02) 8px
+    );
+}
+
+.schedule-grid__heat-cell--bye {
+  color: var(--text-muted);
+  background: var(--bg-inset);
+}
+
+.schedule-grid__worm {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-inset) 80%, transparent);
+}
+
+.schedule-grid__worm svg {
+  width: 100%;
+  height: 90px;
+}
+
+.schedule-grid__worm-line,
+.schedule-grid__worm-baseline {
+  fill: none;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.schedule-grid__worm-line {
+  stroke: var(--amber);
+}
+
+.schedule-grid__worm-baseline {
+  stroke: var(--ink-3);
+  stroke-dasharray: 4 4;
+}
+
+.schedule-grid__worm-meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .schedule-grid__kicker {
   margin: 0;
   color: var(--text-primary);
@@ -17,6 +92,14 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: none;
+}
+
+.schedule-grid__note {
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 
 .schedule-grid__rows {
@@ -72,6 +155,9 @@
 }
 
 .schedule-grid__opponent-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 15px;

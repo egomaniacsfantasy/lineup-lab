@@ -248,9 +248,21 @@ export interface LineHistoryEntry {
   inputsHash: string;
   projectionVersion: string;
   week: number;
+  trigger?: string;
   lines: {
     matchupId: number;
     sides: Record<string, { moneyline: number; winProbability: number }>;
+  }[];
+  titleOdds?: Record<string, number>;
+  playoffOdds?: Record<string, number>;
+  teamSnapshots?: {
+    rosterId: number;
+    teamName?: string;
+    winProbThisWeek?: number | null;
+    titleOdds?: number | null;
+    playoffOdds?: number | null;
+    trigger?: string;
+    computedAt: number;
   }[];
 }
 

@@ -1,15 +1,19 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { LeagueSettings } from '../components/league/LeagueSettings';
 import { WelcomeCard } from '../components/onboarding/WelcomeCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { toLeagueConnection } from '../adapters/connectedLeague';
 import { PROVIDER_LABEL } from '../utils/provider';
 import './MorePage.css';
+import '../components/league/LeagueSettings.css';
 
 export function MorePage() {
-  const { bootstrap, stored } = useLeagueConnection();
+  const { bootstrap, stored, disconnect } = useLeagueConnection();
   const { user, signOut } = useAuth();
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
+  const navigate = useNavigate();
   const isOwner =
     user?.app_metadata?.role === 'owner' ||
     user?.user_metadata?.role === 'owner' ||
@@ -115,6 +119,20 @@ export function MorePage() {
           </div>
         </section>
       ))}
+      {bootstrap ? (
+        <section className="more-page__section">
+          <p className="more-page__eyebrow">League settings</p>
+          <LeagueSettings
+            connection={toLeagueConnection(bootstrap)}
+            onDisconnect={() => {
+              disconnect();
+            }}
+            onSwitchLeague={() => {
+              navigate('/league#connect');
+            }}
+          />
+        </section>
+      ) : null}
       <WelcomeCard isOpen={isWelcomeOpen} onDismiss={() => setIsWelcomeOpen(false)} />
     </div>
   );

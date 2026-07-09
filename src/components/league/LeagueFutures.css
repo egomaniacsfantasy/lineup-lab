@@ -88,6 +88,110 @@
   font-size: 13px;
 }
 
+.league-futures__chart-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-inset) 78%, transparent);
+}
+
+.league-futures__chart-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.league-futures__history-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.league-futures__history-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(96px, 150px) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.league-futures__history-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.league-futures__history-row svg {
+  width: 100%;
+  height: 44px;
+}
+
+.league-futures__history-line {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.league-futures__history-line--user {
+  stroke: var(--amber);
+}
+
+.league-futures__history-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.league-futures__scatter {
+  position: relative;
+  height: 240px;
+  border-left: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  background:
+    linear-gradient(rgba(244, 245, 242, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(244, 245, 242, 0.04) 1px, transparent 1px);
+  background-size: 25% 25%;
+}
+
+.league-futures__scatter-point {
+  position: absolute;
+  transform: translate(-50%, 50%);
+}
+
+.league-futures__scatter-point--user .team-avatar {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 2px rgba(232, 84, 29, 0.24);
+}
+
+.league-futures__scatter-x,
+.league-futures__scatter-y {
+  position: absolute;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.league-futures__scatter-x {
+  right: 0;
+  bottom: -20px;
+}
+
+.league-futures__scatter-y {
+  top: -18px;
+  left: 0;
+}
+
 .league-futures__row {
   display: flex;
   align-items: center;
@@ -119,6 +223,11 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.league-futures__team .team-avatar {
+  width: 30px;
+  height: 30px;
 }
 
 .league-futures__team-name {
@@ -204,6 +313,14 @@
   .league-futures__odds {
     min-width: 80px;
     font-size: 16px;
+  }
+
+  .league-futures__history-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .league-futures__history-row svg {
+    grid-column: 1 / -1;
   }
 }
 

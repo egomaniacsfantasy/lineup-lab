@@ -504,6 +504,9 @@ export function priceLeague(ctx) {
   // ── the user's line for every scheduled week (Season tab schedule) ──
   const weeklyLines = [];
   const userTeamForWeekly = teams.find((t) => t.isUser);
+  const scheduleSlotLabels = (league.rosterPositions ?? []).filter(
+    (p) => !['BN', 'IR', 'TAXI'].includes(p),
+  );
   if (userTeamForWeekly) {
     for (const entry of scheduleWeeks ?? []) {
       const mine = entry.matchups.find(
@@ -534,8 +537,21 @@ export function priceLeague(ctx) {
         }
       }
 
-      const me = distForWeek(userTeamForWeekly.rosterId, entry.week);
-      const opp = distForWeek(theirs.rosterId, entry.week);
+      const me = bestLineupDistribution(
+        userTeamForWeekly.players,
+        scheduleSlotLabels,
+        projectionMap,
+        catalog,
+        entry.week,
+      );
+      const oppTeam = teamsByRoster.get(theirs.rosterId);
+      const opp = bestLineupDistribution(
+        oppTeam?.players ?? [],
+        scheduleSlotLabels,
+        projectionMap,
+        catalog,
+        entry.week,
+      );
       const winProb = normalCdf(
         (me.mean - opp.mean) / Math.sqrt((me.sigma ** 2 + opp.sigma ** 2) || 1),
       );
@@ -543,7 +559,7 @@ export function priceLeague(ctx) {
       const note =
         swing >= 8
           ? 'Week-specific player projections drive this line.'
-          : 'Priced from that week’s projected starters.';
+          : 'Future weeks assume best lineups.';
       weeklyLines.push({
         week: entry.week,
         opponentRosterId: theirs.rosterId,

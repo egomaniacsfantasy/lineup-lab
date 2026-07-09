@@ -2,7 +2,9 @@ import type { LeagueConnection } from '../types';
 import { MOCK_MATCHUP } from './matchup';
 
 export interface LeagueFutureRow {
+  rosterId?: number;
   teamName: string;
+  avatarUrl?: string | null;
   record: string;
   projRecord?: string;
   projWins?: number;
@@ -16,12 +18,21 @@ export interface LeagueFutureRow {
 }
 
 export interface LeagueWeekMatchup {
+  matchupId?: number;
+  teamARosterId?: number;
   teamA: string;
+  teamAAvatarUrl?: string | null;
   teamARecord: string;
   teamAOdds: number;
+  teamAWinProb?: number;
+  teamAProjection?: number;
+  teamBRosterId?: number;
   teamB: string;
+  teamBAvatarUrl?: string | null;
   teamBRecord: string;
   teamBOdds: number;
+  teamBWinProb?: number;
+  teamBProjection?: number;
   isUserGame: boolean;
 }
 

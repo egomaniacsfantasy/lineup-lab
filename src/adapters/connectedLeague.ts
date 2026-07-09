@@ -148,6 +148,8 @@ export function toLeagueFutures(
       .sort((a, b) => b.titleProb - a.titleProb)
       .map((f) => ({
         teamName: f.teamName,
+        rosterId: f.rosterId,
+        avatarUrl: bootstrap.teams.find((team) => team.rosterId === f.rosterId)?.avatarUrl ?? null,
         record:
           f.record.ties > 0
             ? `${f.record.wins}-${f.record.losses}-${f.record.ties}`
@@ -196,7 +198,9 @@ function provisionalFutures(bootstrap: LeagueBootstrap): LeagueFutureRow[] {
     );
 
     return {
+      rosterId: team.rosterId,
       teamName: team.teamName,
+      avatarUrl: team.avatarUrl,
       record: recordLabel(team),
       championOdds: probabilityToAmerican(titleProb),
       finalsOdds: probabilityToAmerican(Math.min(0.9, titleProb * 2)),
@@ -235,16 +239,27 @@ export function toWeekMatchups(
 
     const priced = pricedByMatchup.get(a.matchupId);
     const line = provisionalLine(teamPpg(teamA), teamPpg(teamB));
-    const oddsA = priced?.sides[String(a.rosterId)]?.moneyline ?? line.yours.moneyline;
-    const oddsB = priced?.sides[String(b.rosterId)]?.moneyline ?? line.opponent.moneyline;
+    const pricedA = priced?.sides[String(a.rosterId)];
+    const pricedB = priced?.sides[String(b.rosterId)];
+    const oddsA = pricedA?.moneyline ?? line.yours.moneyline;
+    const oddsB = pricedB?.moneyline ?? line.opponent.moneyline;
 
     result.push({
+      matchupId: a.matchupId,
+      teamARosterId: a.rosterId,
       teamA: teamA.teamName,
+      teamAAvatarUrl: teamA.avatarUrl,
       teamARecord: recordLabel(teamA),
       teamAOdds: oddsA,
+      teamAWinProb: pricedA?.winProbability,
+      teamAProjection: pricedA?.projection,
+      teamBRosterId: b.rosterId,
       teamB: teamB.teamName,
+      teamBAvatarUrl: teamB.avatarUrl,
       teamBRecord: recordLabel(teamB),
       teamBOdds: oddsB,
+      teamBWinProb: pricedB?.winProbability,
+      teamBProjection: pricedB?.projection,
       isUserGame: teamA.isUser || teamB.isUser,
     });
   });
@@ -509,6 +524,9 @@ export function toScheduleItems(
           opponent: 'Bye',
           opponentRecord: '',
           status: 'bye',
+          isPlayoff:
+            typeof bootstrap.league.playoffWeekStart === 'number' &&
+            weekEntry.week >= bootstrap.league.playoffWeekStart,
         };
       }
 
@@ -517,6 +535,20 @@ export function toScheduleItems(
       );
       const opp = theirs ? teamsByRoster.get(theirs.rosterId) : undefined;
       if (!opp || !theirs) return null;
+      const isPlayoff =
+        typeof bootstrap.league.playoffWeekStart === 'number' &&
+        weekEntry.week >= bootstrap.league.playoffWeekStart;
+
+      if (isPlayoff && weekEntry.week > lastScored) {
+        return {
+          week: weekEntry.week,
+          opponent: 'Opponent TBD',
+          opponentRecord: '',
+          status: 'projected',
+          isPlayoff: true,
+          isHome: true,
+        };
+      }
 
       const played = weekEntry.week <= lastScored;
       const line = provisionalLine(teamPpg(userTeam), teamPpg(opp));
@@ -526,6 +558,7 @@ export function toScheduleItems(
         return {
           week: weekEntry.week,
           opponent: opp.teamName,
+          opponentAvatarUrl: opp.avatarUrl,
           opponentRecord: recordLabel(opp),
           status: won ? 'win' : 'loss',
           score: `${mine.points.toFixed(1)} - ${theirs.points.toFixed(1)}`,
@@ -533,13 +566,10 @@ export function toScheduleItems(
       }
 
       const priced = pricedWeeks.get(weekEntry.week);
-      const isPlayoff =
-        typeof bootstrap.league.playoffWeekStart === 'number' &&
-        weekEntry.week >= bootstrap.league.playoffWeekStart;
-
       return {
         week: weekEntry.week,
         opponent: opp.teamName,
+        opponentAvatarUrl: opp.avatarUrl,
         opponentRecord: recordLabel(opp),
         status: weekEntry.week === bootstrap.week ? 'live' : 'projected',
         isHome: true,

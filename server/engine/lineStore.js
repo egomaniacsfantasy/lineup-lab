@@ -29,6 +29,13 @@ export function readHistory(leagueId) {
   }
 }
 
+function inferTrigger(latest, pricing) {
+  if (!latest) return 'line opened';
+  if (latest.week !== pricing.week) return 'weekly roll';
+  if (latest.projectionVersion !== pricing.projectionVersion) return 'projection update';
+  return 'reprice';
+}
+
 /**
  * Append a pricing snapshot if its inputsHash differs from the latest
  * entry. Returns true when a new entry was recorded (the line moved).
@@ -38,10 +45,19 @@ export function recordPricing(leagueId, pricing) {
 
   const history = readHistory(leagueId);
   const latest = history.at(-1);
+  const trigger = inferTrigger(latest, pricing);
 
   // (entries from before titleOdds existed get superseded once)
   if (latest && latest.inputsHash === pricing.inputsHash && latest.titleOdds) {
     return false;
+  }
+
+  const futuresByRoster = new Map((pricing.futures ?? []).map((f) => [String(f.rosterId), f]));
+  const winProbByRoster = new Map();
+  for (const line of pricing.lines ?? []) {
+    for (const [rosterId, side] of Object.entries(line.sides ?? {})) {
+      winProbByRoster.set(rosterId, side.winProbability);
+    }
   }
 
   history.push({
@@ -49,6 +65,7 @@ export function recordPricing(leagueId, pricing) {
     inputsHash: pricing.inputsHash,
     projectionVersion: pricing.projectionVersion,
     week: pricing.week,
+    trigger,
     lines: pricing.lines.map((line) => ({
       matchupId: line.matchupId,
       sides: Object.fromEntries(
@@ -61,6 +78,18 @@ export function recordPricing(leagueId, pricing) {
     titleOdds: Object.fromEntries(
       (pricing.futures ?? []).map((f) => [f.rosterId, f.championOdds]),
     ),
+    playoffOdds: Object.fromEntries(
+      (pricing.futures ?? []).map((f) => [f.rosterId, f.playoffOdds]),
+    ),
+    teamSnapshots: [...futuresByRoster.entries()].map(([rosterId, future]) => ({
+      rosterId: Number(rosterId),
+      teamName: future.teamName,
+      computedAt: pricing.computedAt,
+      trigger,
+      winProbThisWeek: winProbByRoster.get(rosterId) ?? null,
+      titleOdds: future.championOdds,
+      playoffOdds: future.playoffOdds,
+    })),
   });
 
   fs.mkdirSync(DIR, { recursive: true });

@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { LeagueFutures } from '../components/league/LeagueFutures';
-import { LeagueSettings } from '../components/league/LeagueSettings';
 import { MatchupSlate } from '../components/league/MatchupSlate';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -36,13 +35,12 @@ import './ConnectPage.css';
 import './LeaguePage.css';
 
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
-type LeagueView = 'this-week' | 'futures' | 'schedule' | 'settings';
+type LeagueView = 'this-week' | 'futures' | 'schedule';
 
 const LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
   { key: 'this-week', label: 'This week' },
   { key: 'futures', label: 'Futures' },
   { key: 'schedule', label: 'Schedule' },
-  { key: 'settings', label: 'Settings' },
 ];
 
 function flowFromHash(hash: string): ConnectFlow | null {
@@ -64,7 +62,7 @@ function recordLabel(team: { record: { wins: number; losses: number; ties: numbe
 
 export function LeaguePage() {
   const { mode } = useSeasonMode();
-  const { stored, bootstrap, schedule, pricing, isLoading, error, connect, disconnect } =
+  const { stored, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect } =
     useLeagueConnection();
   const location = useLocation();
   const navigate = useNavigate();
@@ -303,7 +301,11 @@ export function LeaguePage() {
           {!connected ? <TradeTargetTeaser groups={MOCK_TRADE_TARGET_GROUPS} /> : null}
 
           {slate.length > 0 ? (
-            <MatchupSlate currentWeek={connection.currentWeek} matchups={slate} />
+            <MatchupSlate
+              currentWeek={connection.currentWeek}
+              history={lineHistory}
+              matchups={slate}
+            />
           ) : null}
         </>
       ) : null}
@@ -318,6 +320,7 @@ export function LeaguePage() {
             mode={connected ? 'inseason' : mode}
             playoffTeams={bootstrap?.league.playoffTeams ?? 6}
             scoringFormat={connection.scoringFormat}
+            history={lineHistory}
             totalTeams={connection.totalTeams}
           />
 
@@ -378,23 +381,6 @@ export function LeaguePage() {
             <ScheduleGrid items={preseasonSchedule} title="Upcoming schedule" />
           )}
         </>
-      ) : null}
-
-      {activeView === 'settings' ? (
-        <div className="league-page__settings">
-          <LeagueSettings
-            connection={connection}
-            onDisconnect={() => {
-              // Removes this league; the context falls through to the next saved
-              // one, or to the demo prompt when none remain.
-              disconnect();
-            }}
-            onSwitchLeague={() => {
-              setManualFlow('none');
-              setShowWizard(true);
-            }}
-          />
-        </div>
       ) : null}
 
       {selectedWeek && bootstrap && connectedSeason ? (
