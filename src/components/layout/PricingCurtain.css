@@ -88,10 +88,11 @@
   min-height: 1.35em;
   margin: var(--space-sm) 0 0;
   color: var(--amber-bright);
-  font-family: var(--font-ui);
-  font-size: 1rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 400;
   letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .pricing-curtain__sub {

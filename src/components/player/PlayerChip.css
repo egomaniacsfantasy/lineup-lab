@@ -1,0 +1,106 @@
+.player-chip {
+  --chip-size: 34px;
+  --chip-pos-bg: rgba(244, 245, 242, 0.1);
+  --chip-pos-border: rgba(244, 245, 242, 0.16);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.player-chip--sm {
+  --chip-size: 26px;
+}
+
+.player-chip--lg {
+  --chip-size: 38px;
+}
+
+.player-chip--qb {
+  --chip-pos-bg: rgba(232, 84, 29, 0.18);
+  --chip-pos-border: rgba(232, 84, 29, 0.34);
+}
+
+.player-chip--rb {
+  --chip-pos-bg: rgba(58, 210, 159, 0.16);
+  --chip-pos-border: rgba(58, 210, 159, 0.3);
+}
+
+.player-chip--wr {
+  --chip-pos-bg: rgba(96, 165, 250, 0.16);
+  --chip-pos-border: rgba(96, 165, 250, 0.3);
+}
+
+.player-chip--te {
+  --chip-pos-bg: rgba(255, 128, 73, 0.16);
+  --chip-pos-border: rgba(255, 128, 73, 0.3);
+}
+
+.player-chip--k,
+.player-chip--def {
+  --chip-pos-bg: rgba(244, 245, 242, 0.1);
+  --chip-pos-border: rgba(244, 245, 242, 0.18);
+}
+
+.player-chip__position {
+  min-width: 25px;
+  padding: 2px 5px;
+  border: 1px solid var(--chip-pos-border);
+  border-radius: 999px;
+  background: var(--chip-pos-bg);
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.player-chip__portrait {
+  position: relative;
+  display: inline-flex;
+  width: var(--chip-size);
+  height: var(--chip-size);
+  flex: none;
+}
+
+.player-chip__headshot {
+  width: var(--chip-size);
+  height: var(--chip-size);
+  border-color: var(--border-subtle);
+}
+
+.player-chip--accent .player-chip__headshot {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px rgba(232, 84, 29, 0.28);
+}
+
+.player-chip__image,
+.player-chip__fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.player-chip__team {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--bg-surface);
+  border-radius: 999px;
+  background: var(--bg-inset);
+  object-fit: contain;
+}
+
+.player-chip--sm .player-chip__position {
+  min-width: 21px;
+  padding-inline: 4px;
+  font-size: 8px;
+}
+
+.player-chip--sm .player-chip__team {
+  width: 13px;
+  height: 13px;
+}

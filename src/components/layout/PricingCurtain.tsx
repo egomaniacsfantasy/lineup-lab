@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import './PricingCurtain.css';
 
+const PRICING_CURTAIN_SEEN_KEY = 'og.pricingCurtain.seenThisSession';
+
 const PRICING_LINES = [
   'Setting the line',
   'Balancing the book',
@@ -14,9 +16,13 @@ const PRICING_LINES = [
 export function PricingCurtain() {
   const { stored, bootstrap, pricing, isLoading, error } = useLeagueConnection();
   const [lineIndex, setLineIndex] = useState(0);
-  const showCurtain = Boolean(
+  const [hasShownThisSession, setHasShownThisSession] = useState(
+    () => window.sessionStorage.getItem(PRICING_CURTAIN_SEEN_KEY) === 'true',
+  );
+  const wouldShowCurtain = Boolean(
     stored && !error && ((!bootstrap && isLoading) || (bootstrap && !pricing)),
   );
+  const showCurtain = wouldShowCurtain && !hasShownThisSession;
   const title = bootstrap ? 'Pricing your league' : 'Syncing your league';
   const activeLine = useMemo(
     () => PRICING_LINES[lineIndex % PRICING_LINES.length],
@@ -30,7 +36,11 @@ export function PricingCurtain() {
       setLineIndex((current) => (current + 1) % PRICING_LINES.length);
     }, 1500);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      window.sessionStorage.setItem(PRICING_CURTAIN_SEEN_KEY, 'true');
+      setHasShownThisSession(true);
+    };
   }, [showCurtain]);
 
   if (!showCurtain) return null;
@@ -46,7 +56,6 @@ export function PricingCurtain() {
           <span className="pricing-curtain__progress-fill" />
         </span>
         <p className="pricing-curtain__line">{activeLine}…</p>
-        <p className="pricing-curtain__sub">Hold the ticket. The book is moving.</p>
       </section>
     </div>
   );

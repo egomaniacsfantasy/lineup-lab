@@ -45,16 +45,24 @@ function formatMatchupForMeta(gameLine: string) {
   return `${match[1]} ${match[2]} ${match[3]}`;
 }
 
-function formatKickoff(iso: string) {
+export function formatKickoffTime(iso: string | number | Date) {
   return new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
-    weekday: 'short',
     hour: 'numeric',
     minute: '2-digit',
-    hour12: false,
+    hour12: true,
   })
     .format(new Date(iso))
-    .replace('24:', '00:');
+    .replace(/\s/g, ' ');
+}
+
+function formatKickoff(iso: string) {
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+  }).format(new Date(iso));
+
+  return `${weekday} ${formatKickoffTime(iso)}`;
 }
 
 function kickoffOrder(iso: string | null, fallback: number) {
@@ -168,7 +176,7 @@ export function buildExposureWindows(roster: RosterSlot[], source: GameContextSo
 
     const [dayPart, ...timeParts] = context.kickoff.split(' ');
     const dayLabel = dayPart.slice(0, 3).toUpperCase();
-    const timeLabel = timeParts.join(' ').replace('pm', '').replace('am', '').trim();
+    const timeLabel = timeParts.join(' ').trim();
     const key = context.kickoffIso ?? `${dayLabel}-${timeLabel}`;
     const existing = grouped.get(key);
     const lockLabel = dayLabel === 'THU' ? `${timeLabel} tonight` : timeLabel;

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
-import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
+import { PlayerChip } from '../components/player/PlayerChip';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useModelOverlay } from '../contexts/ModelOverlayContext';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
-import { fetchLines } from '../services/leagueApi';
+import { fetchLines, type LeagueBootstrap, type LeaguePricing } from '../services/leagueApi';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import { useNflSchedule } from '../hooks/useNflSchedule';
 import {
@@ -360,6 +360,7 @@ function MarketMoverRow({
   from,
   to,
   gain,
+  acceptanceProbability,
   avatar,
   crestTeam,
   href,
@@ -370,6 +371,7 @@ function MarketMoverRow({
   to: number;
   /** Projected points the move adds to your starting lineup, if known. */
   gain?: number;
+  acceptanceProbability?: number | null;
   avatar?: Player | null;
   crestTeam?: string;
   href?: string | null;
@@ -378,12 +380,7 @@ function MarketMoverRow({
     <>
       <div className="matchup-page__mover-identity">
         {avatar ? (
-          <PlayerHeadshot
-            className="matchup-page__headshot matchup-page__headshot--mover"
-            fallbackClassName="matchup-page__headshot-fallback"
-            imageClassName="matchup-page__headshot-image"
-            player={avatar}
-          />
+          <PlayerChip player={avatar} size="sm" />
         ) : crestTeam ? (
           <TeamCrest teamName={crestTeam} />
         ) : null}
@@ -394,16 +391,28 @@ function MarketMoverRow({
       </div>
       {/* Title odds barely move on a single roster change, so lead with the
           real number: projected points added to your starting lineup. */}
-      {gain != null ? (
-        <p className="matchup-page__mover-gain">+{gain.toFixed(1)}<span> pts/wk</span></p>
-      ) : (
-        <p className="matchup-page__price-shift">
-          <span className="matchup-page__price-old">{formatAmericanOdds(from)}</span>{' '}
-          <span className={to < from ? 'matchup-page__price-new matchup-page__price-new--up' : 'matchup-page__price-new matchup-page__price-new--down'}>
-            {formatAmericanOdds(to)}
+      <div className="matchup-page__mover-market">
+        {gain != null ? (
+          <p className="matchup-page__mover-gain">+{gain.toFixed(1)}<span> pts/wk</span></p>
+        ) : (
+          <p className="matchup-page__price-shift">
+            <span className="matchup-page__price-old">{formatAmericanOdds(from)}</span>{' '}
+            <span className={to < from ? 'matchup-page__price-new matchup-page__price-new--up' : 'matchup-page__price-new matchup-page__price-new--down'}>
+              {formatAmericanOdds(to)}
+            </span>
+          </p>
+        )}
+        {acceptanceProbability != null ? (
+          <span
+            aria-label={`${acceptanceProbability}% to accept`}
+            className="matchup-page__mover-accept"
+            title={`${acceptanceProbability}% to accept`}
+          >
+            <span className="matchup-page__mover-accept-fill" style={{ width: `${clamp(acceptanceProbability, 0, 100)}%` }} />
+            <span className="matchup-page__mover-accept-label">{acceptanceProbability}%</span>
           </span>
-        </p>
-      )}
+        ) : null}
+      </div>
     </>
   );
 
@@ -563,12 +572,7 @@ function CompareSheet({
             >
               {winner ? <span className="matchup-page__compare-edge-tag">Edge</span> : null}
               <div className="matchup-page__compare-player">
-                <PlayerHeadshot
-                  className="matchup-page__headshot matchup-page__headshot--compare"
-                  fallbackClassName="matchup-page__headshot-fallback"
-                  imageClassName="matchup-page__headshot-image"
-                  player={player}
-                />
+                <PlayerChip player={player} size="lg" />
                 <div>
                   <h3 className="matchup-page__row-name">{player.shortName}</h3>
                   <p className="matchup-page__row-secondary">
@@ -661,6 +665,7 @@ interface PricedMover {
   getPlayerIds?: string[];
   partnerRosterId?: number;
   gain?: number;
+  acceptanceProbability?: number | null;
   before: number;
   after: number;
 }
@@ -674,6 +679,31 @@ interface MatchupLiveProps {
   unpricedStarterCount?: number;
   seasonLabel?: string;
   movers?: PricedMover[];
+}
+
+function hasPricedCurrentMatchupLine(
+  bootstrap: LeagueBootstrap | null,
+  pricing: LeaguePricing | null | undefined,
+) {
+  if (!bootstrap || !pricing?.available) return false;
+
+  const userTeam = bootstrap.teams.find((team) => team.isUser);
+  if (!userTeam) return false;
+
+  const userMatchup = bootstrap.matchups.find((matchup) => matchup.rosterId === userTeam.rosterId);
+  if (!userMatchup) {
+    return Boolean(pricing.playerMeans && Object.keys(pricing.playerMeans).length > 0);
+  }
+
+  const opponentMatchup = bootstrap.matchups.find(
+    (matchup) => matchup.matchupId === userMatchup.matchupId && matchup.rosterId !== userTeam.rosterId,
+  );
+  const pricedLine = pricing.lines?.find((line) => line.matchupId === userMatchup.matchupId);
+
+  return Boolean(
+    pricedLine?.sides[String(userMatchup.rosterId)] &&
+    (!opponentMatchup || pricedLine.sides[String(opponentMatchup.rosterId)]),
+  );
 }
 
 function MatchupPricingLoading({ matchup }: { matchup: MatchupData }) {
@@ -774,12 +804,7 @@ function MatchupPricingLoading({ matchup }: { matchup: MatchupData }) {
               <div className="matchup-page__lineup-hitbox">
                 <span className="matchup-page__slot-tag">{row.slotLabel}</span>
                 <span className="matchup-page__lineup-player">
-                  <PlayerHeadshot
-                    className="matchup-page__headshot"
-                    fallbackClassName="matchup-page__headshot-fallback"
-                    imageClassName="matchup-page__headshot-image"
-                    player={row.player}
-                  />
+                  <PlayerChip player={row.player} />
                   <span className="matchup-page__lineup-copy">
                     <span className="matchup-page__row-name">{row.player.shortName}</span>
                     <span className="matchup-page__row-secondary">{row.meta}</span>
@@ -807,7 +832,7 @@ function MatchupLive({
 }: MatchupLiveProps) {
   const engine = useMatchupEngine(matchup);
   const { stored, bootstrap } = useLeagueConnection();
-  const { overrideCount } = useModelOverlay();
+  const { overrideCount, reset: resetBoardToFranco } = useModelOverlay();
   const { format: oddsFormat } = useOddsFormat();
   const { openScoutingCard } = useScoutingCard();
   const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : 'your fantasy app';
@@ -878,7 +903,8 @@ function MatchupLive({
     [starterEvaluations],
   );
   const [isCompareMode, setIsCompareMode] = useState(false);
-  const [showOpponentLineup, setShowOpponentLineup] = useState(false);
+  const [lineupView, setLineupView] = useState<'you' | 'opponent'>('you');
+  const [isBoardPopoverOpen, setIsBoardPopoverOpen] = useState(false);
   const [compareSelection, setCompareSelection] = useState<Player[]>([]);
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
@@ -1024,6 +1050,15 @@ function MatchupLive({
   const dismissRecap = () => {
     window.localStorage.setItem(RECAP_DISMISSED_KEY, 'true');
     setIsRecapDismissed(true);
+  };
+
+  const handleResetBoardToFranco = () => {
+    const confirmed = window.confirm(
+      'Reset your board to Franco? Your matchup will reprice on the baseline rankings.',
+    );
+    if (!confirmed) return;
+    resetBoardToFranco();
+    setIsBoardPopoverOpen(false);
   };
 
   const MAX_COMPARE = 2;
@@ -1198,12 +1233,7 @@ function MatchupLive({
         >
           <span className="matchup-page__slot-tag">{slotLabel}</span>
           <span className="matchup-page__lineup-player">
-            <PlayerHeadshot
-              className="matchup-page__headshot"
-              fallbackClassName="matchup-page__headshot-fallback"
-              imageClassName="matchup-page__headshot-image"
-              player={player}
-            />
+            <PlayerChip player={player} />
             <span className="matchup-page__lineup-copy">
               <span className="matchup-page__row-name">{player.shortName}</span>
               <span className="matchup-page__row-secondary">{meta}</span>
@@ -1280,9 +1310,36 @@ function MatchupLive({
             {isPreview ? (
               <span className="matchup-page__preview-chip">Preview lineup</span>
             ) : overrideCount > 0 ? (
-              <a className="matchup-page__model-chip" href="/rankings">
-                PRICED ON YOUR BOARD
-              </a>
+              <div className="matchup-page__model-menu">
+                <button
+                  aria-expanded={isBoardPopoverOpen}
+                  className="matchup-page__model-chip"
+                  onClick={() => setIsBoardPopoverOpen((current) => !current)}
+                  type="button"
+                >
+                  PRICED ON YOUR BOARD
+                </button>
+                {isBoardPopoverOpen ? (
+                  <div className="matchup-page__model-popover" role="dialog">
+                    <p>
+                      These lines are priced on your board — the rankings you set.{' '}
+                      {overrideCount} {overrideCount === 1 ? 'move' : 'moves'} from Franco.
+                    </p>
+                    <div className="matchup-page__model-popover-actions">
+                      <a className="matchup-page__text-link" href="/rankings">
+                        View board
+                      </a>
+                      <button
+                        className="matchup-page__text-link"
+                        onClick={handleResetBoardToFranco}
+                        type="button"
+                      >
+                        Reset to Franco
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <span className="matchup-page__live-chip">
                 <span className="matchup-page__live-dot" aria-hidden="true" />
@@ -1464,18 +1521,8 @@ function MatchupLive({
             <div className="matchup-page__edge-row">
               <div className="matchup-page__edge-copy">
                 <div className="matchup-page__headshot-stack" aria-hidden="true">
-                  <PlayerHeadshot
-                    className="matchup-page__headshot matchup-page__headshot--stack"
-                    fallbackClassName="matchup-page__headshot-fallback"
-                    imageClassName="matchup-page__headshot-image"
-                    player={biggestSwing.starter}
-                  />
-                  <PlayerHeadshot
-                    className="matchup-page__headshot matchup-page__headshot--stack matchup-page__headshot--selected"
-                    fallbackClassName="matchup-page__headshot-fallback"
-                    imageClassName="matchup-page__headshot-image"
-                    player={biggestSwing.alternative}
-                  />
+                  <PlayerChip player={biggestSwing.starter} size="sm" />
+                  <PlayerChip player={biggestSwing.alternative} size="sm" tone="accent" />
                 </div>
                 <div>
                   <p className="matchup-page__edge-label">
@@ -1566,6 +1613,7 @@ function MatchupLive({
                   }
                   from={mover.before}
                   gain={mover.gain}
+                  acceptanceProbability={mover.acceptanceProbability}
                   href={marketHrefForMover(mover)}
                   key={mover.headline}
                   label={mover.headline}
@@ -1633,12 +1681,7 @@ function MatchupLive({
                       className={playerIndex > 0 ? 'matchup-page__mini-wrap matchup-page__mini-wrap--overlap' : 'matchup-page__mini-wrap'}
                       key={`${window.key}-${player.id}`}
                     >
-                      <PlayerHeadshot
-                        className="matchup-page__headshot matchup-page__headshot--mini"
-                        fallbackClassName="matchup-page__headshot-fallback"
-                        imageClassName="matchup-page__headshot-image"
-                        player={player}
-                      />
+                      <PlayerChip player={player} size="sm" />
                     </span>
                   ))}
                   {window.players.length > 4 ? (
@@ -1697,12 +1740,38 @@ function MatchupLive({
       <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--lineup-rail">
         <div className="matchup-page__module-row matchup-page__module-row--lineup">
           <div>
-            <h2 className="matchup-page__module-title">Your lineup</h2>
-            <p className="matchup-page__lineup-hint">{compareHint}</p>
+            <h2 className="matchup-page__module-title">Lineup</h2>
+            <p className="matchup-page__lineup-hint">
+              {lineupView === 'you' ? compareHint : "Opponent's starters · our projections"}
+            </p>
           </div>
+          {matchup.opponentTeam.roster.length > 0 ? (
+            <div className="matchup-page__lineup-toggle" role="tablist" aria-label="Lineup view">
+              <button
+                aria-selected={lineupView === 'you'}
+                className={lineupView === 'you' ? 'matchup-page__lineup-toggle-button matchup-page__lineup-toggle-button--active' : 'matchup-page__lineup-toggle-button'}
+                onClick={() => setLineupView('you')}
+                role="tab"
+                type="button"
+              >
+                You
+              </button>
+              <button
+                aria-selected={lineupView === 'opponent'}
+                className={lineupView === 'opponent' ? 'matchup-page__lineup-toggle-button matchup-page__lineup-toggle-button--active' : 'matchup-page__lineup-toggle-button'}
+                onClick={() => setLineupView('opponent')}
+                role="tab"
+                type="button"
+              >
+                {matchup.opponentTeam.teamName}
+              </button>
+            </div>
+          ) : null}
         </div>
 
-        <div className="matchup-page__lineup-list">
+        {lineupView === 'you' ? (
+        <>
+          <div className="matchup-page__lineup-list">
           {engine.roster.map((slot, slotIndex) => {
             const selectedAlternativeIndex = engine.selectedAlternatives[slotIndex] ?? null;
             const activeAlternative =
@@ -1773,7 +1842,7 @@ function MatchupLive({
         <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
           {benchRows.map((benchRow) => {
             const bestFitMeta = benchRow.bestFit
-              ? `Best fit ${benchRow.bestFit.slot.slotLabel === 'FLEX' ? 'FLX' : benchRow.bestFit.slot.slotLabel} · ${formatAmericanOdds(engine.activeLine.yours.moneyline)} to ${formatAmericanOdds(benchRow.bestFit.line.moneyline)}`
+              ? `Would start at ${benchRow.bestFit.slot.slotLabel === 'FLEX' ? 'FLX' : benchRow.bestFit.slot.slotLabel} · ${formatAmericanOdds(engine.activeLine.yours.moneyline)} → ${formatAmericanOdds(benchRow.bestFit.line.moneyline)}`
               : null;
 
             return renderLineupRow({
@@ -1786,42 +1855,17 @@ function MatchupLive({
             });
           })}
         </div>
-      </section>
-
-      {matchup.opponentTeam.roster.length > 0 ? (
-        <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--lineup-rail">
-          <button
-            className="matchup-page__module-row matchup-page__module-row--lineup"
-            onClick={() => setShowOpponentLineup((v) => !v)}
-            type="button"
-            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-            aria-expanded={showOpponentLineup}
-          >
-            <div>
-              <h2 className="matchup-page__module-title">
-                {showOpponentLineup ? '▾' : '▸'} {matchup.opponentTeam.teamName}
-              </h2>
-              <p className="matchup-page__lineup-hint">
-                {showOpponentLineup ? 'Opponent’s starters · our projections' : 'Tap to see opponent’s lineup'}
-              </p>
-            </div>
-          </button>
-
-          {showOpponentLineup ? (
+        </>
+        ) : (
           <div className="matchup-page__lineup-list">
             {matchup.opponentTeam.roster.map((slot) => (
               <div className="matchup-page__lineup-row" key={`opp-${slot.slotLabel}-${slot.starter.id}`}>
-                <div className="matchup-page__lineup-hitbox">
+                <div className="matchup-page__lineup-hitbox matchup-page__lineup-hitbox--static">
                   <span className="matchup-page__slot-tag">
                     {slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel}
                   </span>
                   <span className="matchup-page__lineup-player">
-                    <PlayerHeadshot
-                      className="matchup-page__headshot"
-                      fallbackClassName="matchup-page__headshot-fallback"
-                      imageClassName="matchup-page__headshot-image"
-                      player={slot.starter}
-                    />
+                    <PlayerChip player={slot.starter} />
                     <span className="matchup-page__lineup-copy">
                       <span className="matchup-page__row-name">{slot.starter.shortName}</span>
                       <span className="matchup-page__row-secondary">{lineupMetaFor(slot.starter)}</span>
@@ -1832,9 +1876,8 @@ function MatchupLive({
               </div>
             ))}
           </div>
-          ) : null}
-        </section>
-      ) : null}
+        )}
+      </section>
 
       {isCompareMode && !compareModalPlayers && !compareBoardPlayers ? (
         <div aria-label="Start or sit slip" className="matchup-page__slip" role="region">
@@ -1853,12 +1896,7 @@ function MatchupLive({
             <div className="matchup-page__slip-chips">
               {compareSelection.map((pick) => (
                 <span className="matchup-page__slip-chip" key={pick.id}>
-                  <PlayerHeadshot
-                    className="matchup-page__headshot matchup-page__headshot--slip"
-                    fallbackClassName="matchup-page__headshot-fallback"
-                    imageClassName="matchup-page__headshot-image"
-                    player={pick}
-                  />
+                  <PlayerChip player={pick} size="sm" />
                   <span className="matchup-page__slip-name">{pick.shortName}</span>
                   <button
                     aria-label={`Remove ${pick.shortName}`}
@@ -2002,12 +2040,7 @@ function CompareBoard({
               key={entry.player.id}
             >
               <span className="matchup-page__board-rank">{index + 1}</span>
-              <PlayerHeadshot
-                className="matchup-page__headshot matchup-page__headshot--slip"
-                fallbackClassName="matchup-page__headshot-fallback"
-                imageClassName="matchup-page__headshot-image"
-                player={entry.player}
-              />
+              <PlayerChip player={entry.player} size="sm" />
               <div className="matchup-page__board-copy">
                 <span className="matchup-page__row-name">
                   {entry.player.shortName}
@@ -2087,7 +2120,7 @@ export function MatchupPage() {
   })();
 
   const connectedMatchup = bootstrap ? toMatchupData(bootstrap, pricing) : null;
-  const pricingReady = !connectedMatchup || Boolean(pricing?.available);
+  const pricingReady = !bootstrap || hasPricedCurrentMatchupLine(bootstrap, pricing);
 
   // Real priced movers (waiver claim + trade lane) for connected leagues.
   const movers =
@@ -2102,6 +2135,7 @@ export function MatchupPage() {
           getPlayerIds: mover.getPlayerIds,
           partnerRosterId: mover.partnerRosterId,
           gain: mover.valueGain,
+          acceptanceProbability: mover.acceptanceProbability ?? null,
           before: mover.titleOddsBefore,
           after: mover.titleOddsAfter,
         }))

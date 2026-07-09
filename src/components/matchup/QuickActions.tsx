@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import type { Player, RosterSlot } from '../../types';
 import type { TradeTarget } from '../../mocks/tradeTargets';
 import type { LineupLockWindow, WaiverSuggestion } from '../../mocks/actions';
+import { formatKickoffTime } from '../../utils/playerGameContext';
 import { Gloss } from '../ui/Gloss';
 import './QuickActions.css';
 
@@ -150,10 +151,7 @@ export function QuickActions({
               </p>
               <p className="quick-actions__context">
                 Your matchup line since{' '}
-                {new Date(lineMovement.at).toLocaleTimeString([], {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
+                {formatKickoffTime(lineMovement.at)}
                 .
               </p>
             </div>
