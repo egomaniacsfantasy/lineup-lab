@@ -98,6 +98,9 @@ function cleanAcceptReason(reason: string) {
 
 function acceptReasonTone(reason: string) {
   const lower = reason.toLowerCase();
+  if (lower.includes('land the best player') || lower.includes('gets the best player')) {
+    return 'help';
+  }
   return [
     'barely',
     'best player',

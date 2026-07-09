@@ -582,7 +582,15 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
       return all;
     });
 
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay };
+    let liveProjections;
+    try {
+      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
+      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+    } catch (err) {
+      console.error('[pricing] adjusted projections failed for trade; using snapshot', err);
+    }
+
+    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
     const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
 
     res.json(

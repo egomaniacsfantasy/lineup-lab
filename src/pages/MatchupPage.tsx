@@ -177,7 +177,7 @@ function buildBenchImpactRows(
 
       const line = getOptionLine(slotIndex, alternativeIndex);
       const currentLine = getOptionLine(slotIndex, null);
-      const delta = roundTo(line.winProbability - currentLine.winProbability);
+      const delta = getDisplayedWinProbabilityDelta(currentLine, line);
 
       if (!best || delta > best.delta) {
         return {

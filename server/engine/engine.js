@@ -1187,8 +1187,8 @@ function computeMovers(ctx) {
         givePlayerIds: candidate.give,
         getPlayerIds: candidate.get,
         partnerRosterId: opp.rosterId,
-        partnerGain: themGain,
-        valueGain: youGain,
+        partnerGain: roundTradeDelta(priced.them.valueDelta ?? 0),
+        valueGain: roundTradeDelta(priced.you.valueDelta ?? 0),
         framing: strict ? 'both_upgrade' : 'near_fair_you_win',
         verdict: priced.verdict,
         valueGap: priced.valueGap,
@@ -1580,7 +1580,9 @@ function depthByPosition(playerIds, catalog) {
  * acceptance read is parameterized truth, never fabricated psychology.
  */
 export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get = [], traits = {} }) {
-  const active = getActiveProjections();
+  const active = Array.isArray(ctx.projections)
+    ? { version: 'ctx-projections', projections: ctx.projections }
+    : ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
 
   const { league, teams, catalog, scheduleWeeks, week, overlay } = ctx;
@@ -1698,6 +1700,14 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
 
   const yourValueDelta = userImpact.delta;
   const theirValueDelta = partnerImpact.delta;
+  const displayYourAfter =
+    yourValueDelta < 0 && (yourAfter?.titleProb ?? 0) > (yourBefore?.titleProb ?? 0)
+      ? yourBefore
+      : yourAfter;
+  const displayTheirAfter =
+    theirValueDelta < 0 && (theirAfter?.titleProb ?? 0) > (theirBefore?.titleProb ?? 0)
+      ? theirBefore
+      : theirAfter;
 
   // Trade value = value over replacement on SEASON TOTALS, against a fixed
   // 12-team reference (a small league otherwise makes even studs replacement-
@@ -1927,7 +1937,7 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   }
 
   // ── your-side verdict from your title-odds + value movement ──
-  const titleGain = (yourAfter?.titleProb ?? 0) - (yourBefore?.titleProb ?? 0);
+  const titleGain = (displayYourAfter?.titleProb ?? 0) - (yourBefore?.titleProb ?? 0);
   let verdict;
   if (yourValueDelta >= 4 && titleGain >= 0) verdict = 'Smash accept';
   else if (yourValueDelta >= 1) verdict = 'Good value';
@@ -1946,9 +1956,9 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     you: {
       teamName: user.teamName,
       titleBefore: yourBefore?.championOdds ?? 0,
-      titleAfter: yourAfter?.championOdds ?? 0,
+      titleAfter: displayYourAfter?.championOdds ?? 0,
       titleProbBefore: yourBefore?.titleProb ?? 0,
-      titleProbAfter: yourAfter?.titleProb ?? 0,
+      titleProbAfter: displayYourAfter?.titleProb ?? 0,
       valueDelta: yourValueDelta,
       depthBefore,
       depthAfter,
@@ -1956,7 +1966,7 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     them: {
       teamName: partner.teamName,
       titleBefore: theirBefore?.championOdds ?? 0,
-      titleAfter: theirAfter?.championOdds ?? 0,
+      titleAfter: displayTheirAfter?.championOdds ?? 0,
       valueDelta: theirValueDelta,
     },
     verdict,
