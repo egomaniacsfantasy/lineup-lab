@@ -219,7 +219,7 @@ apiRouter.get('/connect/:username', async (req, res, next) => {
  * ESPN connect: there's no username lookup, so the user supplies their league
  * id (from the league URL). We return the league + its teams so they can pick
  * which one is theirs. A private league answers 401/403 — we say so plainly so
- * the UI can ask for the espn_s2 + SWID cookies and retry.
+ * the UI can escalate to the ESPN-site connector and retry.
  */
 apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
   try {
@@ -243,7 +243,7 @@ apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
     }
 
     // Linked with fresh cookies → persist them so every later request (any
-    // device, no extension) authenticates from the server store.
+    // device) authenticates from the server store.
     if (espnS2 && swid) saveEspnCreds(leagueId, { espnS2, swid });
 
     res.json(result);
@@ -252,7 +252,7 @@ apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
       res.status(403).json({
         error: 'espn_private',
         message:
-          'This ESPN league is private. Paste your espn_s2 and SWID cookies to connect — they stay on your device and are read-only.',
+          "This ESPN league is private. Connect from ESPN's site to sync it.",
       });
       return;
     }

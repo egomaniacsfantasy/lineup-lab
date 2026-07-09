@@ -1,12 +1,9 @@
 /**
  * Server-side ESPN credential store — the "sync once, works everywhere" piece.
  *
- * FantasyPros keeps an encrypted copy of your ESPN session cookie on their
- * servers after the one-time extension grab, then re-syncs your league on
- * their own — so your phone (no extension) stays current forever. We do the
- * same: link a private league once (extension or manual paste), the cookie
- * lands here encrypted, and every later request — any device, no extension —
- * resolves the cookie from this store by league id.
+ * Link a private league once from an active ESPN session, then re-sync it from
+ * the server so every later request — any device — resolves the session from
+ * this encrypted store by league id.
  *
  * Cookies are auth tokens, so they're encrypted at rest with AES-256-GCM under
  * a server key. On Render this file lives on the persistent disk.

@@ -5,7 +5,11 @@ import {
   type EspnTeamSummary,
 } from '../../services/leagueApi';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
-import { espnLoginEnabled, parseEspnCookiePaste, parseEspnLeagueId } from '../../utils/espnConnect';
+import {
+  espnLoginEnabled,
+  parseEspnLeagueInput,
+  parseEspnSessionPaste,
+} from '../../utils/espnConnect';
 import './EspnConnect.css';
 
 interface EspnConnectProps {
@@ -29,20 +33,20 @@ type Step =
 export function EspnConnect({ onConnected }: EspnConnectProps) {
   const [step, setStep] = useState<Step>({ name: 'league' });
   const [leagueInput, setLeagueInput] = useState('');
-  // Season is the current NFL year — no need to ask.
-  const season = CURRENT_SEASON;
   const [privateLeagueId, setPrivateLeagueId] = useState('');
+  const [privateSeason, setPrivateSeason] = useState('');
   const [cookiePaste, setCookiePaste] = useState('');
   const [showFallback, setShowFallback] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const leagueIdRef = useRef('');
-  leagueIdRef.current = parseEspnLeagueId(leagueInput);
+  const leagueInputRef = useRef({ leagueId: '', season: '' });
+  leagueInputRef.current = parseEspnLeagueInput(leagueInput);
 
   // Core connect. Cookies are optional (public leagues need none).
   const doConnect = async (creds?: { espnS2: string; swid: string }) => {
-    const id = privateLeagueId || leagueIdRef.current;
+    const id = privateLeagueId || leagueInputRef.current.leagueId;
+    const connectSeason = privateSeason || leagueInputRef.current.season || CURRENT_SEASON;
     if (id.length === 0) {
       setError('Paste an ESPN league URL or league ID.');
       return;
@@ -50,11 +54,11 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await connectEspn(id, season, creds);
+      const result = await connectEspn(id, connectSeason, creds);
       setStep({
         name: 'pick-team',
         leagueId: id,
-        season,
+        season: connectSeason,
         leagueName: result.league.name,
         teams: result.teams,
         espnS2: creds?.espnS2 ?? null,
@@ -63,6 +67,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
     } catch (caught) {
       if (caught instanceof LeagueApiError && caught.code === 'espn_private') {
         setPrivateLeagueId(id);
+        setPrivateSeason(connectSeason);
         setShowFallback(true);
         setError(null);
       } else {
@@ -83,18 +88,19 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
   };
 
   const connectFromPaste = () => {
-    const creds = parseEspnCookiePaste(cookiePaste);
+    const { creds, missing } = parseEspnSessionPaste(cookiePaste);
     if (!creds) {
-      setError('Paste the full ESPN cookie header or text containing espn_s2 and SWID.');
+      setError(`Missing ${missing.join(' and ')}. Paste the full ESPN session text and try again.`);
       return;
     }
     void doConnect(creds);
   };
 
   const openEspnLeague = () => {
-    const id = privateLeagueId || leagueIdRef.current;
+    const id = privateLeagueId || leagueInputRef.current.leagueId;
+    const connectSeason = privateSeason || leagueInputRef.current.season || CURRENT_SEASON;
     const url = id
-      ? `https://fantasy.espn.com/football/league?leagueId=${encodeURIComponent(id)}&seasonId=${encodeURIComponent(season)}`
+      ? `https://fantasy.espn.com/football/league?leagueId=${encodeURIComponent(id)}&seasonId=${encodeURIComponent(connectSeason)}`
       : 'https://fantasy.espn.com/football/';
     window.open(url, '_blank', 'noopener,noreferrer');
   };
@@ -126,6 +132,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                 setLeagueInput(event.target.value);
                 setShowFallback(false);
                 setPrivateLeagueId('');
+                setPrivateSeason('');
               }}
               placeholder="https://fantasy.espn.com/football/league?leagueId=..."
               value={leagueInput}
@@ -162,7 +169,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                 <p className="espn-connect__fallback-title">Connect from ESPN&apos;s site</p>
                 <ol className="espn-connect__steps">
                   <li>Open your league on ESPN in a browser where you&apos;re already signed in.</li>
-                  <li>Paste the full cookie text here. We extract only the ESPN session values.</li>
+                  <li>Paste the full ESPN session text here. We extract only what the sync needs.</li>
                   <li>Your password is never requested or stored.</li>
                 </ol>
                 <button className="espn-connect__linkbtn" onClick={openEspnLeague} type="button">
@@ -173,7 +180,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                   <textarea
                     className="espn-connect__input espn-connect__textarea"
                     onChange={(event) => setCookiePaste(event.target.value)}
-                    placeholder="Cookie: SWID=...; espn_s2=..."
+                    placeholder="SWID=...; espn_s2=..."
                     rows={5}
                     value={cookiePaste}
                   />
@@ -208,7 +215,9 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
           ) : null}
 
           <p className="espn-connect__privacy">
-            Read-only. Your password is never requested or stored.
+            {espnLoginEnabled
+              ? 'Read-only. Your password is used once and never stored.'
+              : 'Read-only. Your password is never requested or stored.'}
           </p>
         </form>
       ) : null}
