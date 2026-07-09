@@ -204,6 +204,10 @@ export function ProjectionsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const agreeDraftRef = useRef<Record<string, string>>({});
   const agreeSavedRef = useRef<Record<string, string>>({});
+  // The user's own scores AS OF PAGE LOAD — i.e. the values the server's
+  // consensus already includes. Used to fold their live edits into the displayed
+  // consensus so it never looks stale after they save.
+  const initialOwnRef = useRef<Record<string, string>>({});
 
   const agreeCols = DEFAULT_AGREE_COLS;
   const rowId = (p: Player) => p.id;
@@ -225,6 +229,7 @@ export function ProjectionsPage() {
   useEffect(() => {
     if (!userId || !data) {
       agreeSavedRef.current = {};
+      initialOwnRef.current = {};
       queueMicrotask(() => setAgreeSaved({}));
       return;
     }
@@ -241,6 +246,7 @@ export function ProjectionsPage() {
           if (pid) saved[`${pid}::agreement`] = String(r.score);
         }
         agreeSavedRef.current = saved;
+        initialOwnRef.current = { ...saved };
         setAgreeSaved(saved);
       });
     return () => {
@@ -255,7 +261,31 @@ export function ProjectionsPage() {
   // model numbers (delta 0). Normal view shows consensus-adjusted numbers.
   const viewScoring: Scoring = editing ? '' : scoring;
   const showModel = editing;
-  const deltaFor = (p: Player) => (showModel ? 0 : tiltFromConsensus(p.consensus?.avg));
+
+  /**
+   * The population consensus for a player, folding in THIS user's live edits so
+   * it never shows stale after they save (the server caches consensus ~30s). We
+   * take the server aggregate {avg,n}, remove the user's page-load value, and add
+   * their current value. For the only voter, this equals exactly what they typed.
+   */
+  function consensusAvg(p: Player): number | null {
+    const key = cellKey(p, 'agreement');
+    const nowStr = readCommittedAgreementValueFromMap(p, 'agreement', agreeSaved);
+    const initStr = hasKey(initialOwnRef.current, key) ? initialOwnRef.current[key] : '';
+    const now = nowStr === '' ? null : Number(nowStr);
+    const init = initStr === '' ? null : Number(initStr);
+    const server = p.consensus ?? null;
+    if (now === init || (now != null && init != null && now === init)) {
+      return server ? server.avg : null;
+    }
+    let sum = server ? server.avg * server.n : 0;
+    let n = server ? server.n : 0;
+    if (init != null && !Number.isNaN(init)) { sum -= init; n -= 1; }
+    if (now != null && !Number.isNaN(now)) { sum += now; n += 1; }
+    return n > 0 ? sum / n : null;
+  }
+
+  const deltaFor = (p: Player) => (showModel ? 0 : tiltFromConsensus(consensusAvg(p)));
 
   function readBaseAgreementValue(player: Player, columnKey: string): string {
     return player.agreement?.[columnKey] ?? '';
@@ -310,7 +340,7 @@ export function ProjectionsPage() {
       .filter((p) => !q || p.name.toLowerCase().includes(q) || (p.team ?? '').toLowerCase().includes(q));
 
     const valueOf = (p: Player): number => {
-      const d = editing ? 0 : tiltFromConsensus(p.consensus?.avg);
+      const d = editing ? 0 : tiltFromConsensus(consensusAvg(p));
       if (sortKey === 'point' || sortKey === 'floor' || sortKey === 'ceiling') {
         const sv = scoredSeason(p, viewScoring);
         const adjPoint = adjustFP(p.position, sv.point, p.season, viewScoring, 'season', d);
@@ -728,18 +758,21 @@ export function ProjectionsPage() {
                               onKeyDown={(e) => handleAgreeKeyDown(e, p, column.key)}
                             />
                           ) : (
-                            // Show the logged-in user's OWN score (reflects their
-                            // in-session edits immediately), not the cached crowd
-                            // consensus — which loads stale and made edits look
-                            // like they reverted after locking.
+                            // Overall view: the population consensus (average of
+                            // everyone who rated), folding in this user's live
+                            // edits so it's never stale after they save.
                             (() => {
-                              const own = readCommittedAgreementValueFromMap(p, column.key, agreeSaved);
+                              const avg = consensusAvg(p);
+                              const shown = avg == null ? null : Math.round(avg);
+                              const n = p.consensus?.n ?? 0;
                               return (
                                 <span
-                                  className={['proj-agree-val', agreeToneClass(own || null)].filter(Boolean).join(' ')}
-                                  title={userId ? 'Your agreement score' : 'Log in to rate'}
+                                  className={['proj-agree-val', agreeToneClass(shown == null ? null : String(shown))]
+                                    .filter(Boolean)
+                                    .join(' ')}
+                                  title={shown == null ? 'No ratings yet' : `Consensus of ${Math.max(1, n)} ${Math.max(1, n) === 1 ? 'rating' : 'ratings'}`}
                                 >
-                                  {own || '—'}
+                                  {shown ?? '—'}
                                 </span>
                               );
                             })()
