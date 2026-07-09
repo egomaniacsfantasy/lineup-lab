@@ -243,6 +243,63 @@ function sumMeans(params) {
   return params.players.reduce((s, p) => s + p.mean, 0);
 }
 
+/** Optimal starter assignment (slot -> playerId) for a week; byes (proj 0) lose. */
+function optimalAssign(playerIds, slotLabels, projectionMap, catalog, week) {
+  const orderedSlots = flexLastSlots(slotLabels);
+  const pool = playerIds
+    .map((id) => ({ id, position: catalog[id]?.position, mean: playerDistribution(id, projectionMap, catalog[id], week).mean }))
+    .filter((p) => p.position);
+  const used = new Set();
+  const assign = [];
+  for (const slot of orderedSlots) {
+    let best = null;
+    for (const p of pool) {
+      if (used.has(p.id)) continue;
+      if (!slotAllows(slot, p.position)) continue;
+      if (!best || p.mean > best.mean) best = p;
+    }
+    if (best) { used.add(best.id); assign.push({ slot, playerId: best.id }); }
+    else assign.push({ slot, playerId: null });
+  }
+  return assign;
+}
+
+/** Actual starter assignment from a provider starters array (aligned to slots). */
+function actualAssign(starterIds, slotLabels) {
+  return slotLabels.map((slot, i) => {
+    const id = starterIds?.[i];
+    return { slot, playerId: id && id !== '0' ? id : null };
+  });
+}
+
+/**
+ * Full roster detail for one team in one week: the starting lineup (by slot) plus
+ * the bench (everyone else), each with that week's projection, plus the sim params
+ * for the starters. Lets the schedule week view compare starters vs bench.
+ */
+function rosterDetail(starterAssign, allPlayerIds, projectionMap, catalog, week) {
+  const proj = (id) => (id ? Number(playerDistribution(id, projectionMap, catalog[id], week).mean.toFixed(1)) : 0);
+  const starters = starterAssign.map(({ slot, playerId }) => ({
+    slot,
+    playerId: playerId ?? null,
+    name: playerId ? (catalog[playerId]?.name ?? String(playerId)) : '—',
+    position: playerId ? (catalog[playerId]?.position ?? null) : null,
+    projection: proj(playerId),
+  }));
+  const starterSet = new Set(starterAssign.map((s) => s.playerId).filter(Boolean));
+  const bench = allPlayerIds
+    .filter((id) => !starterSet.has(id))
+    .map((id) => ({
+      slot: 'BN',
+      playerId: id,
+      name: catalog[id]?.name ?? String(id),
+      position: catalog[id]?.position ?? null,
+      projection: proj(id),
+    }))
+    .sort((a, b) => b.projection - a.projection);
+  return { starters, bench, params: starterParams([...starterSet], projectionMap, catalog, week) };
+}
+
 /**
  * One draw from a player's asymmetric CI, CENTERED ON THE MEAN. A raw split-normal
  * averages above its mode when right-skewed, which would bias team totals and
@@ -579,22 +636,31 @@ export function priceLeague(ctx) {
 
       const oppTeam = teamsByRoster.get(theirs.rosterId);
       const opponentName = teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`;
-      // Optimal lineup detail for BOTH sides this week (byes auto-benched), so the
-      // schedule week view can show exactly who is projected to start.
-      const my = optimalLineup(userTeamForWeekly.players, slotLabels, projectionMap, catalog, entry.week);
-      const opp = optimalLineup(oppTeam?.players ?? [], slotLabels, projectionMap, catalog, entry.week);
+      const isCurrent = entry.week === week;
+
+      // Current week: the ACTUAL set lineup (what you're really starting).
+      // Future weeks: the OPTIMAL lineup (byes auto-benched). Both include the
+      // full bench so you can compare starters vs bench for that week.
+      const myAssign = isCurrent
+        ? actualAssign(mine.starters, slotLabels)
+        : optimalAssign(userTeamForWeekly.players, slotLabels, projectionMap, catalog, entry.week);
+      const oppAssign = isCurrent
+        ? actualAssign(theirs.starters, slotLabels)
+        : optimalAssign(oppTeam?.players ?? [], slotLabels, projectionMap, catalog, entry.week);
+      const my = rosterDetail(myAssign, userTeamForWeekly.players, projectionMap, catalog, entry.week);
+      const opp = rosterDetail(oppAssign, oppTeam?.players ?? [], projectionMap, catalog, entry.week);
 
       let moneyline, winProb, projection, opponentProjection, note;
-      const currentLine = entry.week === week ? lines.find((line) => line.matchupId === mine.matchupId) : null;
+      const currentLine = isCurrent ? lines.find((line) => line.matchupId === mine.matchupId) : null;
       const currentSide = currentLine?.sides?.[String(userTeamForWeekly.rosterId)];
       const opponentSide = currentLine?.sides?.[String(theirs.rosterId)];
       if (currentSide && opponentSide) {
-        // Current week: headline stays the live matchup line (actual lineup).
+        // Current week: headline is the live matchup line (your actual lineup).
         moneyline = currentSide.moneyline;
         winProb = currentSide.winProbability;
         projection = currentSide.projection;
         opponentProjection = opponentSide.projection;
-        note = 'Same live line as Matchup.';
+        note = 'Live line — your current lineup.';
       } else {
         // Future week: optimal lineup vs optimal lineup, player-level sim.
         const wp = simulateMatchupWinProb(my.params, opp.params, weeklyRng);
@@ -602,7 +668,7 @@ export function priceLeague(ctx) {
         winProb = Number((wp * 100).toFixed(1));
         projection = Number(sumMeans(my.params).toFixed(1));
         opponentProjection = Number(sumMeans(opp.params).toFixed(1));
-        note = 'Your optimal lineup vs theirs, simulated player-by-player.';
+        note = 'Optimal lineups, simulated player-by-player.';
       }
 
       weeklyLines.push({
@@ -614,8 +680,11 @@ export function priceLeague(ctx) {
         projection,
         opponentProjection,
         note,
-        yourLineup: my.lineup,
-        opponentLineup: opp.lineup,
+        isCurrent,
+        yourStarters: my.starters,
+        yourBench: my.bench,
+        opponentStarters: opp.starters,
+        opponentBench: opp.bench,
       });
     }
   }

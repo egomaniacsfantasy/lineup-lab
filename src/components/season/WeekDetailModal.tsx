@@ -18,8 +18,11 @@ interface WeeklyLine {
   projection: number;
   opponentProjection: number;
   note?: string;
-  yourLineup?: LineupSlot[];
-  opponentLineup?: LineupSlot[];
+  isCurrent?: boolean;
+  yourStarters?: LineupSlot[];
+  yourBench?: LineupSlot[];
+  opponentStarters?: LineupSlot[];
+  opponentBench?: LineupSlot[];
 }
 
 interface WeekDetailModalProps {
@@ -27,6 +30,27 @@ interface WeekDetailModalProps {
   userTeamName: string;
   line: WeeklyLine | null;
   onClose: () => void;
+}
+
+function LineupRow({ slot, name, projection, muted }: { slot: string; name: string; projection: number; muted?: boolean }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 8,
+        padding: '3px 0',
+        fontSize: 13,
+        opacity: muted ? 0.55 : 1,
+      }}
+    >
+      <span style={{ minWidth: 36, color: slot === 'BN' ? '#8a8f98' : '#f59e0b', fontWeight: 600 }}>
+        {slot === 'FLEX' ? 'FLX' : slot}
+      </span>
+      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{projection.toFixed(1)}</span>
+    </div>
+  );
 }
 
 /**
@@ -113,37 +137,29 @@ export function WeekDetailModal({ week, userTeamName, line, onClose }: WeekDetai
                 : `Underdog by ${spread.toFixed(1)} on projection. Reprices as rosters change.`)}
             </p>
 
-            {line.yourLineup && line.opponentLineup ? (
+            {line.yourStarters && line.opponentStarters ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
                 {[
-                  { title: `${userTeamName} · projected lineup`, rows: line.yourLineup },
-                  { title: `${line.opponentName} · projected lineup`, rows: line.opponentLineup },
+                  { name: userTeamName, starters: line.yourStarters, bench: line.yourBench ?? [] },
+                  { name: line.opponentName, starters: line.opponentStarters, bench: line.opponentBench ?? [] },
                 ].map((side, si) => (
                   <div key={si}>
                     <p className="week-detail__proj-label" style={{ marginBottom: 6, fontWeight: 600 }}>
-                      {side.title}
+                      {side.name} · {line.isCurrent ? 'current lineup' : 'optimal lineup'}
                     </p>
-                    {side.rows.map((s, i) => (
-                      <div
-                        key={`${si}-${i}`}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          gap: 8,
-                          padding: '3px 0',
-                          fontSize: 13,
-                          opacity: s.playerId ? 1 : 0.45,
-                        }}
-                      >
-                        <span style={{ minWidth: 36, color: '#f59e0b', fontWeight: 600 }}>
-                          {s.slot === 'FLEX' ? 'FLX' : s.slot}
-                        </span>
-                        <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {s.name}
-                        </span>
-                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{s.projection.toFixed(1)}</span>
-                      </div>
+                    {side.starters.map((s, i) => (
+                      <LineupRow key={`s-${si}-${i}`} slot={s.slot} name={s.name} projection={s.projection} muted={!s.playerId} />
                     ))}
+                    {side.bench.length > 0 ? (
+                      <>
+                        <p className="week-detail__proj-label" style={{ margin: '10px 0 4px', opacity: 0.7 }}>
+                          Bench
+                        </p>
+                        {side.bench.map((s, i) => (
+                          <LineupRow key={`b-${si}-${i}`} slot="BN" name={s.name} projection={s.projection} muted />
+                        ))}
+                      </>
+                    ) : null}
                   </div>
                 ))}
               </div>
