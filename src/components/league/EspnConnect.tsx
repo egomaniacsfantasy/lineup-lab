@@ -6,6 +6,7 @@ import {
 } from '../../services/leagueApi';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import {
+  espnSessionPasteError,
   espnLoginEnabled,
   parseEspnLeagueInput,
   parseEspnSessionPaste,
@@ -65,7 +66,10 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
         swid: creds?.swid ?? null,
       });
     } catch (caught) {
-      if (caught instanceof LeagueApiError && caught.code === 'espn_private') {
+      if (caught instanceof LeagueApiError && caught.code === 'espn_private' && creds) {
+        setShowFallback(true);
+        setError('ESPN rejected this session. It may be expired — open ESPN again, copy the full session line, and paste it here.');
+      } else if (caught instanceof LeagueApiError && caught.code === 'espn_private') {
         setPrivateLeagueId(id);
         setPrivateSeason(connectSeason);
         setShowFallback(true);
@@ -74,7 +78,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
         setError(
           caught instanceof LeagueApiError
             ? caught.message
-            : 'Could not reach ESPN. Try again in a minute.',
+            : 'Could not reach ESPN. Check your connection and try again.',
         );
       }
     } finally {
@@ -90,7 +94,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
   const connectFromPaste = () => {
     const { creds, missing } = parseEspnSessionPaste(cookiePaste);
     if (!creds) {
-      setError(`Missing ${missing.join(' and ')}. Paste the full ESPN session text and try again.`);
+      setError(espnSessionPasteError(missing) ?? 'Paste the full ESPN session line and try again.');
       return;
     }
     void doConnect(creds);

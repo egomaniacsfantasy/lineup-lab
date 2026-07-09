@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { tiltFromConsensus, adjustStat, adjustFP, scaleBound } from '../services/agreementTilt';
@@ -200,6 +200,7 @@ export function ProjectionsPage() {
   const [rapidEntryEnabled, setRapidEntryEnabled] = useState(true);
   const [agreeDraft, setAgreeDraft] = useState<Record<string, string>>({});
   const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
+  const [initialOwn, setInitialOwn] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const agreeDraftRef = useRef<Record<string, string>>({});
@@ -230,7 +231,10 @@ export function ProjectionsPage() {
     if (!userId || !data) {
       agreeSavedRef.current = {};
       initialOwnRef.current = {};
-      queueMicrotask(() => setAgreeSaved({}));
+      queueMicrotask(() => {
+        setAgreeSaved({});
+        setInitialOwn({});
+      });
       return;
     }
     let alive = true;
@@ -248,6 +252,7 @@ export function ProjectionsPage() {
         agreeSavedRef.current = saved;
         initialOwnRef.current = { ...saved };
         setAgreeSaved(saved);
+        setInitialOwn({ ...saved });
       });
     return () => {
       alive = false;
@@ -271,7 +276,7 @@ export function ProjectionsPage() {
   function consensusAvg(p: Player): number | null {
     const key = cellKey(p, 'agreement');
     const nowStr = readCommittedAgreementValueFromMap(p, 'agreement', agreeSaved);
-    const initStr = hasKey(initialOwnRef.current, key) ? initialOwnRef.current[key] : '';
+    const initStr = hasKey(initialOwn, key) ? initialOwn[key] : '';
     const now = nowStr === '' ? null : Number(nowStr);
     const init = initStr === '' ? null : Number(initStr);
     const server = p.consensus ?? null;
@@ -332,7 +337,7 @@ export function ProjectionsPage() {
     setAgreeSaved(next);
   }
 
-  const rows = useMemo(() => {
+  const rows = (() => {
     if (!data) return [];
     const q = query.trim().toLowerCase();
     const filtered = data.players
@@ -352,7 +357,7 @@ export function ProjectionsPage() {
     const sorted = [...filtered].sort((a, b) => valueOf(b) - valueOf(a));
     if (sortDir === 'asc') sorted.reverse();
     return sorted;
-  }, [data, pos, query, sortKey, sortDir, viewScoring, editing]);
+  })();
 
   function unlockEditing() {
     if (!userId) {

@@ -74,4 +74,24 @@ export function parseEspnCookiePaste(raw) {
   return parseEspnSessionPaste(raw).creds;
 }
 
+export function espnSessionPasteError(missing = []) {
+  const missingSet = new Set(missing);
+  const missingS2 = missingSet.has('espn_s2');
+  const missingSwid = missingSet.has('SWID');
+
+  if (missingS2 && missingSwid) {
+    return 'Could not find espn_s2 or SWID — copy the whole ESPN session line and paste it all.';
+  }
+
+  if (missingSwid) {
+    return 'Found espn_s2 but no SWID — copy the whole ESPN session line and paste it all.';
+  }
+
+  if (missingS2) {
+    return 'Found SWID but no espn_s2 — copy the whole ESPN session line and paste it all.';
+  }
+
+  return null;
+}
+
 export const espnLoginEnabled = import.meta.env?.VITE_ESPN_LOGIN_ENABLED === 'true';
