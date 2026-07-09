@@ -201,6 +201,7 @@ export function ProjectionsPage() {
   const [agreeDraft, setAgreeDraft] = useState<Record<string, string>>({});
   const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
   const agreeDraftRef = useRef<Record<string, string>>({});
   const agreeSavedRef = useRef<Record<string, string>>({});
 
@@ -346,24 +347,44 @@ export function ProjectionsPage() {
       return;
     }
     setSaving((s) => ({ ...s, [key]: 'saving' }));
-    try {
-      let error = null;
+
+    const doWrite = async (uid: string) => {
       if (value === '') {
         // Clearing a cell deletes the user's row (RLS restricts it to their own).
-        ({ error } = await supabase
+        return supabase
           .from('olympus_agreement')
           .delete()
           .eq('position', player.position)
-          .eq('player', player.name));
-      } else {
-        const score = Math.max(0, Math.min(100, Math.round(Number(value))));
-        ({ error } = await supabase.from('olympus_agreement').upsert(
-          { user_id: userId, position: player.position, player: player.name, score },
-          { onConflict: 'user_id,position,player' },
-        ));
+          .eq('player', player.name);
       }
-      setSaving((s) => ({ ...s, [key]: error ? 'err' : 'ok' }));
-    } catch {
+      const score = Math.max(0, Math.min(100, Math.round(Number(value))));
+      return supabase.from('olympus_agreement').upsert(
+        { user_id: uid, position: player.position, player: player.name, score },
+        { onConflict: 'user_id,position,player' },
+      );
+    };
+
+    try {
+      let { error } = await doWrite(userId);
+      // A stale/expired session is the usual "can't save" cause: refresh once and retry.
+      if (error) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        const freshUid = refreshed?.session?.user?.id ?? userId;
+        if (refreshed?.session) {
+          ({ error } = await doWrite(freshUid));
+        }
+      }
+      if (error) {
+        console.error('[agreement] save failed:', error);
+        setSaveError(`Couldn’t save: ${error.message ?? error}. Make sure you’re logged in as the account that owns these scores, then try again.`);
+        setSaving((s) => ({ ...s, [key]: 'err' }));
+      } else {
+        setSaveError(null);
+        setSaving((s) => ({ ...s, [key]: 'ok' }));
+      }
+    } catch (e) {
+      console.error('[agreement] save threw:', e);
+      setSaveError(`Couldn’t save: ${e instanceof Error ? e.message : String(e)}`);
       setSaving((s) => ({ ...s, [key]: 'err' }));
     }
   }
@@ -599,6 +620,12 @@ export function ProjectionsPage() {
                 <b>50</b> aligned · higher = up · lower = down
               </span>
               <span className="proj-agree-hint__ppr">Rate in <b>PPR</b> — your score applies across all formats.</span>
+              <span className="proj-agree-hint__ppr">
+                Signed in as <b>{session?.user?.email ?? '—'}</b>. Your scores save to this account only.
+              </span>
+              {saveError ? (
+                <span className="proj-agree-hint__ppr" style={{ color: '#ff6b6b' }}>{saveError}</span>
+              ) : null}
             </div>
           ) : null}
         </div>
