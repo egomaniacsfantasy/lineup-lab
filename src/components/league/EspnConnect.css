@@ -69,6 +69,14 @@
   border-color: var(--amber);
 }
 
+.espn-connect__textarea {
+  min-height: 118px;
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .espn-connect__hint {
   color: var(--ink-3);
   font-family: var(--font-ui);
@@ -101,6 +109,24 @@
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.espn-connect__fallback-card,
+.espn-connect__login-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-inset);
+}
+
+.espn-connect__fallback-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.02em;
 }
 
 .espn-connect__submit {

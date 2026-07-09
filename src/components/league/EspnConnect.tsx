@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   connectEspn,
   LeagueApiError,
   type EspnTeamSummary,
 } from '../../services/leagueApi';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
+import { espnLoginEnabled, parseEspnCookiePaste, parseEspnLeagueId } from '../../utils/espnConnect';
 import './EspnConnect.css';
 
 interface EspnConnectProps {
@@ -27,27 +28,25 @@ type Step =
 
 export function EspnConnect({ onConnected }: EspnConnectProps) {
   const [step, setStep] = useState<Step>({ name: 'league' });
-  const [leagueId, setLeagueId] = useState('');
+  const [leagueInput, setLeagueInput] = useState('');
   // Season is the current NFL year — no need to ask.
   const season = CURRENT_SEASON;
-  const [needsCookies, setNeedsCookies] = useState(false);
-  const [espnS2, setEspnS2] = useState('');
-  const [swid, setSwid] = useState('');
-  const [manual, setManual] = useState(false);
+  const [privateLeagueId, setPrivateLeagueId] = useState('');
+  const [cookiePaste, setCookiePaste] = useState('');
+  const [showFallback, setShowFallback] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The browser extension that reads ESPN's HttpOnly cookie (FantasyPros-style).
-  const [extInstalled, setExtInstalled] = useState(false);
-  const [extSyncing, setExtSyncing] = useState(false);
-  const [showInstall, setShowInstall] = useState(false);
 
-  const leagueIdRef = useRef(leagueId);
-  leagueIdRef.current = leagueId;
+  const leagueIdRef = useRef('');
+  leagueIdRef.current = parseEspnLeagueId(leagueInput);
 
   // Core connect. Cookies are optional (public leagues need none).
   const doConnect = async (creds?: { espnS2: string; swid: string }) => {
-    const id = leagueIdRef.current.trim();
-    if (id.length === 0) return;
+    const id = privateLeagueId || leagueIdRef.current;
+    if (id.length === 0) {
+      setError('Paste an ESPN league URL or league ID.');
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -63,7 +62,8 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
       });
     } catch (caught) {
       if (caught instanceof LeagueApiError && caught.code === 'espn_private') {
-        setNeedsCookies(true);
+        setPrivateLeagueId(id);
+        setShowFallback(true);
         setError(null);
       } else {
         setError(
@@ -74,52 +74,29 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
       }
     } finally {
       setIsLoading(false);
-      setExtSyncing(false);
     }
   };
 
   const attemptConnect = () => {
-    const creds =
-      needsCookies && espnS2.trim() && swid.trim()
-        ? { espnS2: espnS2.trim(), swid: swid.trim() }
-        : undefined;
+    setPrivateLeagueId('');
+    void doConnect();
+  };
+
+  const connectFromPaste = () => {
+    const creds = parseEspnCookiePaste(cookiePaste);
+    if (!creds) {
+      setError('Paste the full ESPN cookie header or text containing espn_s2 and SWID.');
+      return;
+    }
     void doConnect(creds);
   };
 
-  // Talk to the extension (if installed): it reads espn_s2 + SWID and sends
-  // them straight back to this page; we never see a password.
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== window) return;
-      const data = event.data;
-      if (!data || data.source !== 'olympus-ext') return;
-      if (data.type === 'OLYMPUS_ESPN_READY') {
-        setExtInstalled(true);
-      }
-      if (data.type === 'OLYMPUS_ESPN_RESULT') {
-        if (data.espnS2 && data.swid) {
-          setEspnS2(data.espnS2);
-          setSwid(data.swid);
-          void doConnect({ espnS2: data.espnS2, swid: data.swid });
-        } else {
-          setExtSyncing(false);
-          setError(
-            'The extension could not read your ESPN login. Make sure you are signed in to espn.com in this browser.',
-          );
-        }
-      }
-    };
-    window.addEventListener('message', onMessage);
-    // Ping in case the extension's content script loaded before we mounted.
-    window.postMessage({ source: 'olympus-page', type: 'OLYMPUS_ESPN_PING' }, window.location.origin);
-    return () => window.removeEventListener('message', onMessage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const syncWithExtension = () => {
-    setExtSyncing(true);
-    setError(null);
-    window.postMessage({ source: 'olympus-page', type: 'OLYMPUS_ESPN_REQUEST' }, window.location.origin);
+  const openEspnLeague = () => {
+    const id = privateLeagueId || leagueIdRef.current;
+    const url = id
+      ? `https://fantasy.espn.com/football/league?leagueId=${encodeURIComponent(id)}&seasonId=${encodeURIComponent(season)}`
+      : 'https://fantasy.espn.com/football/';
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -140,110 +117,98 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
           }}
         >
           <label className="espn-connect__field">
-            <span className="espn-connect__label">League ID</span>
+            <span className="espn-connect__label">League URL or ID</span>
             <input
               className="espn-connect__input"
-              inputMode="numeric"
-              onChange={(event) => setLeagueId(event.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="From your league URL: leagueId=XXXXXXX"
-              value={leagueId}
+              autoComplete="off"
+              inputMode="url"
+              onChange={(event) => {
+                setLeagueInput(event.target.value);
+                setShowFallback(false);
+                setPrivateLeagueId('');
+              }}
+              placeholder="https://fantasy.espn.com/football/league?leagueId=..."
+              value={leagueInput}
             />
             <span className="espn-connect__hint">
-              In ESPN, open your league and copy the number after{' '}
-              <code>leagueId=</code> in the address bar. Most leagues connect
-              with just this.
+              Public leagues connect with just the URL. If ESPN says the league
+              is private, we&apos;ll show the secure fallback.
             </span>
           </label>
 
-          {needsCookies ? (
+          {showFallback ? (
             <div className="espn-connect__cookies">
               <p className="espn-connect__cookies-note">
-                This league is private. ESPN keeps its login locked away from
-                web pages, so connecting needs the Odds Gods extension. One
-                click, no passwords, read-only.
+                This ESPN league is private.
               </p>
 
-              {extInstalled ? (
-                <button
-                  className="espn-connect__submit"
-                  disabled={extSyncing || isLoading}
-                  onClick={syncWithExtension}
-                  type="button"
-                >
-                  {extSyncing ? 'Reading your ESPN login…' : 'Sync with the extension'}
-                </button>
-              ) : (
-                <>
+              {espnLoginEnabled ? (
+                <div className="espn-connect__login-card">
+                  <p className="espn-connect__cookies-note">
+                    Log in with ESPN is enabled for this environment, but the
+                    Disney login worker is not mounted on this server yet.
+                  </p>
                   <button
                     className="espn-connect__submit"
-                    onClick={() => setShowInstall((s) => !s)}
+                    disabled
                     type="button"
                   >
-                    Get the Odds Gods connector
+                    Log in with ESPN
                   </button>
-                  {showInstall ? (
-                    <ol className="espn-connect__steps">
-                      <li>
-                        Install the Odds Gods ESPN Connector extension and make
-                        sure you&apos;re signed in to espn.com in this browser.
-                      </li>
-                      <li>Refresh this page. The button above becomes “Sync.”</li>
-                    </ol>
-                  ) : null}
-                </>
-              )}
+                </div>
+              ) : null}
+
+              <div className="espn-connect__fallback-card">
+                <p className="espn-connect__fallback-title">Connect from ESPN&apos;s site</p>
+                <ol className="espn-connect__steps">
+                  <li>Open your league on ESPN in a browser where you&apos;re already signed in.</li>
+                  <li>Paste the full cookie text here. We extract only the ESPN session values.</li>
+                  <li>Your password is never requested or stored.</li>
+                </ol>
+                <button className="espn-connect__linkbtn" onClick={openEspnLeague} type="button">
+                  Open ESPN league ↗
+                </button>
+                <label className="espn-connect__field">
+                  <span className="espn-connect__label">Paste anything</span>
+                  <textarea
+                    className="espn-connect__input espn-connect__textarea"
+                    onChange={(event) => setCookiePaste(event.target.value)}
+                    placeholder="Cookie: SWID=...; espn_s2=..."
+                    rows={5}
+                    value={cookiePaste}
+                  />
+                </label>
+                <button
+                  className="espn-connect__submit"
+                  disabled={isLoading}
+                  onClick={connectFromPaste}
+                  type="button"
+                >
+                  {isLoading ? 'Checking ESPN…' : 'Connect from ESPN session'}
+                </button>
+              </div>
 
               <button
                 className="espn-connect__linkbtn espn-connect__linkbtn--block"
-                onClick={() => setManual((m) => !m)}
+                onClick={() => {
+                  setShowFallback(false);
+                  setError(null);
+                }}
                 type="button"
               >
-                {manual ? 'Hide manual entry' : 'Or paste the two cookies manually'}
+                Try a different league URL
               </button>
-
-              {manual ? (
-                <div className="espn-connect__manual">
-                  <p className="espn-connect__hint">
-                    In espn.com, open DevTools → Application → Cookies →{' '}
-                    <code>espn_s2</code> and <code>SWID</code>.
-                  </p>
-                  <label className="espn-connect__field">
-                    <span className="espn-connect__label">espn_s2</span>
-                    <input
-                      className="espn-connect__input"
-                      onChange={(event) => setEspnS2(event.target.value)}
-                      placeholder="Long value starting with AEB..."
-                      value={espnS2}
-                    />
-                  </label>
-                  <label className="espn-connect__field">
-                    <span className="espn-connect__label">SWID</span>
-                    <input
-                      className="espn-connect__input"
-                      onChange={(event) => setSwid(event.target.value)}
-                      placeholder="{XXXXXXXX-XXXX-...}"
-                      value={swid}
-                    />
-                  </label>
-                </div>
-              ) : null}
             </div>
           ) : null}
 
-          {/* The primary button only matters for public leagues or manual entry;
-              the extension/manual sub-buttons drive the private path. */}
-          {!needsCookies || manual ? (
+          {!showFallback ? (
             <button className="espn-connect__submit" disabled={isLoading} type="submit">
-              {isLoading
-                ? 'Looking up your league…'
-                : needsCookies
-                  ? 'Connect with cookies'
-                  : 'Find my league'}
+              {isLoading ? 'Looking up your league…' : 'Find my league'}
             </button>
           ) : null}
 
           <p className="espn-connect__privacy">
-            Read-only. We never ask for your ESPN password.
+            Read-only. Your password is never requested or stored.
           </p>
         </form>
       ) : null}

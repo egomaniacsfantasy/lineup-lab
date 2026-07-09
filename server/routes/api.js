@@ -27,6 +27,7 @@ import { computeRosterNeeds, computeSuperlatives } from '../services/scoutingSig
 
 const DAY = 24 * 60 * 60_000;
 const autoHarvested = new Set();
+const ESPN_LOGIN_ENABLED = process.env.ESPN_LOGIN_ENABLED === 'true';
 
 /**
  * A user's "Build Your Own Rankings" overlay rides on a base64 JSON header so
@@ -265,6 +266,22 @@ apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
     }
     next(error);
   }
+});
+
+apiRouter.post('/espn/login/start', (_req, res) => {
+  if (!ESPN_LOGIN_ENABLED) {
+    res.status(503).json({
+      error: 'espn_login_disabled',
+      message: "Connect from ESPN's site instead.",
+    });
+    return;
+  }
+
+  res.status(501).json({
+    error: 'espn_login_worker_unavailable',
+    message:
+      'Log in with ESPN is not mounted on this server yet. Connect from ESPN’s site instead.',
+  });
 });
 
 async function loadLeagueContext(provider, leagueId, userId) {
