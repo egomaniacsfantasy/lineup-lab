@@ -188,11 +188,15 @@ function starterParams(starterIds, projectionMap, catalog, week = null) {
  * unfairly reward high-ceiling lineups; subtracting the skew offset makes
  * E[draw] = mean while keeping the CI's asymmetric shape.
  */
-function splitNormalDraw(p, rng) {
-  const z = gaussian(rng);
+/** Split-normal draw from a GIVEN standard-normal z (enables common random numbers). */
+function splitNormalFromZ(p, z) {
   const s = z >= 0 ? p.sigmaUp : p.sigmaDown;
   const skewOffset = (p.sigmaUp - p.sigmaDown) * INV_SQRT_2PI;
   return Math.max(0, p.mean - skewOffset + z * s);
+}
+
+function splitNormalDraw(p, rng) {
+  return splitNormalFromZ(p, gaussian(rng));
 }
 
 /**
@@ -394,42 +398,80 @@ export function priceLeague(ctx) {
     const usingFallback = !(userMatchup && oppMatchup) && fallbackStarters.length > 0;
 
     if ((userMatchup && oppMatchup) || usingFallback) {
-      const baseDist = distByRoster.get(userTeam.rosterId);
       const oppDist = usingFallback
         ? leagueMedianDistribution(distByRoster)
         : distByRoster.get(oppMatchup.rosterId);
-      const baseWinProb = normalCdf(
-        (baseDist.mean - oppDist.mean) /
-          Math.sqrt(baseDist.sigma ** 2 + oppDist.sigma ** 2 || 1),
-      );
       const starterIds = usingFallback ? fallbackStarters : userMatchup.starters;
       const bench = userTeam.players.filter((id) => !starterIds.includes(id));
 
+      // Phase 3: start/sit deltas from the SAME player-level split-normal sim as
+      // the matchup win%, using COMMON RANDOM NUMBERS. We pre-draw the opponent
+      // total, each starter's draw, and the standard-normal z per slot, then reuse
+      // them for every candidate swap — so the delta reflects only the swapped
+      // player (a ±0.x% is signal, not simulation noise).
+      const userStarterP = starterIds.map((id) => playerSimParams(id, projectionMap, catalog[id], week));
+      const oppP = usingFallback
+        ? [{ mean: oppDist.mean, sigmaUp: oppDist.sigma, sigmaDown: oppDist.sigma }]
+        : (paramsByRoster.get(oppMatchup.rosterId)?.players ?? []);
+
+      const N = MATCHUP_SIMS;
+      const swapRng = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+      const oppTotal = new Float64Array(N);
+      const baseTotal = new Float64Array(N);
+      const slotZ = userStarterP.map(() => new Float64Array(N));
+      const slotDraw = userStarterP.map(() => new Float64Array(N));
+      for (let i = 0; i < N; i += 1) {
+        let opp = 0;
+        for (const p of oppP) opp += splitNormalDraw(p, swapRng);
+        oppTotal[i] = opp;
+        let base = 0;
+        for (let j = 0; j < userStarterP.length; j += 1) {
+          const z = gaussian(swapRng);
+          slotZ[j][i] = z;
+          const d = splitNormalFromZ(userStarterP[j], z);
+          slotDraw[j][i] = d;
+          base += d;
+        }
+        baseTotal[i] = base;
+      }
+      let baseWins = 0;
+      for (let i = 0; i < N; i += 1) {
+        if (baseTotal[i] > oppTotal[i]) baseWins += 1;
+        else if (baseTotal[i] === oppTotal[i]) baseWins += 0.5;
+      }
+      const baseWinProb = baseWins / N;
+      const baseMean = userStarterP.reduce((s, p) => s + p.mean, 0);
+
       starterIds.forEach((starterId, slotIndex) => {
         const slotLabel = slotLabels[slotIndex] ?? 'FLEX';
-        const starterDist = playerDistribution(starterId, projectionMap, catalog[starterId], week);
+        const starterParam = userStarterP[slotIndex];
+        const zForSlot = slotZ[slotIndex];
+        const drawForSlot = slotDraw[slotIndex];
 
         bench.forEach((benchId) => {
           const benchPosition = catalog[benchId]?.position;
-          if (!benchPosition || !slotAllows(slotLabel, benchPosition)) return; // illegal swap: impossible by construction
+          if (!benchPosition || !slotAllows(slotLabel, benchPosition)) return; // illegal swap
+          const benchParam = playerSimParams(benchId, projectionMap, catalog[benchId], week);
+          if (benchParam.mean <= 0 && starterParam.mean <= 0) return; // both effectively unpriced
 
-          const benchDist = playerDistribution(benchId, projectionMap, catalog[benchId], week);
-          if (benchDist.unpriced && starterDist.unpriced) return;
-
-          const newMean = baseDist.mean - starterDist.mean + benchDist.mean;
-          const newVar =
-            baseDist.sigma ** 2 - starterDist.stdev ** 2 + benchDist.stdev ** 2;
-          const newWinProb = normalCdf(
-            (newMean - oppDist.mean) / Math.sqrt(Math.max(1, newVar + oppDist.sigma ** 2)),
-          );
+          let swapWins = 0;
+          for (let i = 0; i < N; i += 1) {
+            // Same z as this slot in this sim -> only the swapped player changes.
+            const candidateDraw = splitNormalFromZ(benchParam, zForSlot[i]);
+            const swapTotal = baseTotal[i] - drawForSlot[i] + candidateDraw;
+            if (swapTotal > oppTotal[i]) swapWins += 1;
+            else if (swapTotal === oppTotal[i]) swapWins += 0.5;
+          }
+          const newWinProb = swapWins / N;
+          const newMean = baseMean - starterParam.mean + benchParam.mean;
 
           userSwaps.push({
             slotIndex,
             slotLabel,
             starterId,
             benchId,
-            starterMean: Number(starterDist.mean.toFixed(1)),
-            benchMean: Number(benchDist.mean.toFixed(1)),
+            starterMean: Number(starterParam.mean.toFixed(1)),
+            benchMean: Number(benchParam.mean.toFixed(1)),
             deltaWinProb: Number(((newWinProb - baseWinProb) * 100).toFixed(1)),
             resultingWinProb: Number((newWinProb * 100).toFixed(1)),
             resultingMoneyline: probToAmerican(newWinProb),
