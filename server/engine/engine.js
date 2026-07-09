@@ -207,6 +207,38 @@ function optimalLineupParams(playerIds, slotLabels, projectionMap, catalog, week
   return starterParams(starters, projectionMap, catalog, week);
 }
 
+/**
+ * Optimal lineup for a week WITH per-slot detail (name/position/projection) so
+ * the schedule week view can show exactly who each side is projected to start.
+ * Same greedy fill as bestLineupDistribution (best eligible per slot, byes = 0),
+ * but it also returns the slot->player mapping and the sim params.
+ */
+function optimalLineup(playerIds, slotLabels, projectionMap, catalog, week) {
+  const orderedSlots = flexLastSlots(slotLabels);
+  const pool = playerIds
+    .map((id) => ({ id, position: catalog[id]?.position, dist: playerDistribution(id, projectionMap, catalog[id], week) }))
+    .filter((p) => p.position);
+  const used = new Set();
+  const lineup = [];
+  const starterIds = [];
+  for (const slot of orderedSlots) {
+    let best = null;
+    for (const p of pool) {
+      if (used.has(p.id)) continue;
+      if (!slotAllows(slot, p.position)) continue;
+      if (!best || p.dist.mean > best.dist.mean) best = p;
+    }
+    if (best) {
+      used.add(best.id);
+      starterIds.push(best.id);
+      lineup.push({ slot, playerId: best.id, name: catalog[best.id]?.name ?? String(best.id), position: best.position, projection: Number(best.dist.mean.toFixed(1)) });
+    } else {
+      lineup.push({ slot, playerId: null, name: '—', position: null, projection: 0 });
+    }
+  }
+  return { lineup, params: starterParams(starterIds, projectionMap, catalog, week) };
+}
+
 function sumMeans(params) {
   return params.players.reduce((s, p) => s + p.mean, 0);
 }
@@ -545,43 +577,45 @@ export function priceLeague(ctx) {
       );
       if (!theirs) continue;
 
-      if (entry.week === week) {
-        const currentLine = lines.find((line) => line.matchupId === mine.matchupId);
-        const currentSide = currentLine?.sides?.[String(userTeamForWeekly.rosterId)];
-        const opponentSide = currentLine?.sides?.[String(theirs.rosterId)];
-        if (currentSide && opponentSide) {
-          weeklyLines.push({
-            week: entry.week,
-            opponentRosterId: theirs.rosterId,
-            opponentName: teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`,
-            moneyline: currentSide.moneyline,
-            winProb: currentSide.winProbability,
-            projection: currentSide.projection,
-            opponentProjection: opponentSide.projection,
-            note: 'Same live line as Matchup.',
-          });
-          continue;
-        }
+      const oppTeam = teamsByRoster.get(theirs.rosterId);
+      const opponentName = teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`;
+      // Optimal lineup detail for BOTH sides this week (byes auto-benched), so the
+      // schedule week view can show exactly who is projected to start.
+      const my = optimalLineup(userTeamForWeekly.players, slotLabels, projectionMap, catalog, entry.week);
+      const opp = optimalLineup(oppTeam?.players ?? [], slotLabels, projectionMap, catalog, entry.week);
+
+      let moneyline, winProb, projection, opponentProjection, note;
+      const currentLine = entry.week === week ? lines.find((line) => line.matchupId === mine.matchupId) : null;
+      const currentSide = currentLine?.sides?.[String(userTeamForWeekly.rosterId)];
+      const opponentSide = currentLine?.sides?.[String(theirs.rosterId)];
+      if (currentSide && opponentSide) {
+        // Current week: headline stays the live matchup line (actual lineup).
+        moneyline = currentSide.moneyline;
+        winProb = currentSide.winProbability;
+        projection = currentSide.projection;
+        opponentProjection = opponentSide.projection;
+        note = 'Same live line as Matchup.';
+      } else {
+        // Future week: optimal lineup vs optimal lineup, player-level sim.
+        const wp = simulateMatchupWinProb(my.params, opp.params, weeklyRng);
+        moneyline = probToAmerican(wp);
+        winProb = Number((wp * 100).toFixed(1));
+        projection = Number(sumMeans(my.params).toFixed(1));
+        opponentProjection = Number(sumMeans(opp.params).toFixed(1));
+        note = 'Your optimal lineup vs theirs, simulated player-by-player.';
       }
 
-      // Future week: each side plays its OPTIMAL lineup for that week (byes
-      // auto-benched), simulated player-by-player with our split-normal CI —
-      // the same methodology as the live matchup line.
-      const oppTeam = teamsByRoster.get(theirs.rosterId);
-      const myParams = optimalLineupParams(userTeamForWeekly.players, slotLabels, projectionMap, catalog, entry.week);
-      const oppParams = optimalLineupParams(oppTeam?.players ?? [], slotLabels, projectionMap, catalog, entry.week);
-      const winProb = simulateMatchupWinProb(myParams, oppParams, weeklyRng);
-      const myMean = sumMeans(myParams);
-      const oppMean = sumMeans(oppParams);
       weeklyLines.push({
         week: entry.week,
         opponentRosterId: theirs.rosterId,
-        opponentName: teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`,
-        moneyline: probToAmerican(winProb),
-        winProb: Number((winProb * 100).toFixed(1)),
-        projection: Number(myMean.toFixed(1)),
-        opponentProjection: Number(oppMean.toFixed(1)),
-        note: 'Your optimal lineup vs theirs, simulated player-by-player.',
+        opponentName,
+        moneyline,
+        winProb,
+        projection,
+        opponentProjection,
+        note,
+        yourLineup: my.lineup,
+        opponentLineup: opp.lineup,
       });
     }
   }

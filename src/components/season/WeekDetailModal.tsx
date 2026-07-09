@@ -2,6 +2,14 @@ import { useEffect } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import './WeekDetailModal.css';
 
+interface LineupSlot {
+  slot: string;
+  name: string;
+  position: string | null;
+  projection: number;
+  playerId: string | null;
+}
+
 interface WeeklyLine {
   week: number;
   opponentName: string;
@@ -10,6 +18,8 @@ interface WeeklyLine {
   projection: number;
   opponentProjection: number;
   note?: string;
+  yourLineup?: LineupSlot[];
+  opponentLineup?: LineupSlot[];
 }
 
 interface WeekDetailModalProps {
@@ -102,6 +112,42 @@ export function WeekDetailModal({ week, userTeamName, line, onClose }: WeekDetai
                 ? `Favored by ${spread.toFixed(1)} on projection. Reprices as rosters change.`
                 : `Underdog by ${spread.toFixed(1)} on projection. Reprices as rosters change.`)}
             </p>
+
+            {line.yourLineup && line.opponentLineup ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+                {[
+                  { title: `${userTeamName} · projected lineup`, rows: line.yourLineup },
+                  { title: `${line.opponentName} · projected lineup`, rows: line.opponentLineup },
+                ].map((side, si) => (
+                  <div key={si}>
+                    <p className="week-detail__proj-label" style={{ marginBottom: 6, fontWeight: 600 }}>
+                      {side.title}
+                    </p>
+                    {side.rows.map((s, i) => (
+                      <div
+                        key={`${si}-${i}`}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          padding: '3px 0',
+                          fontSize: 13,
+                          opacity: s.playerId ? 1 : 0.45,
+                        }}
+                      >
+                        <span style={{ minWidth: 36, color: '#f59e0b', fontWeight: 600 }}>
+                          {s.slot === 'FLEX' ? 'FLX' : s.slot}
+                        </span>
+                        <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {s.name}
+                        </span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{s.projection.toFixed(1)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </>
         ) : (
           <p className="week-detail__note">
