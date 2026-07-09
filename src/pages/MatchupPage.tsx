@@ -1787,6 +1787,42 @@ function MatchupLive({
         </div>
       </section>
 
+      {matchup.opponentTeam.roster.length > 0 ? (
+        <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--lineup-rail">
+          <div className="matchup-page__module-row matchup-page__module-row--lineup">
+            <div>
+              <h2 className="matchup-page__module-title">{matchup.opponentTeam.teamName}</h2>
+              <p className="matchup-page__lineup-hint">Opponent’s starters · our projections</p>
+            </div>
+          </div>
+
+          <div className="matchup-page__lineup-list">
+            {matchup.opponentTeam.roster.map((slot) => (
+              <div className="matchup-page__lineup-row" key={`opp-${slot.slotLabel}-${slot.starter.id}`}>
+                <div className="matchup-page__lineup-hitbox">
+                  <span className="matchup-page__slot-tag">
+                    {slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel}
+                  </span>
+                  <span className="matchup-page__lineup-player">
+                    <PlayerHeadshot
+                      className="matchup-page__headshot"
+                      fallbackClassName="matchup-page__headshot-fallback"
+                      imageClassName="matchup-page__headshot-image"
+                      player={slot.starter}
+                    />
+                    <span className="matchup-page__lineup-copy">
+                      <span className="matchup-page__row-name">{slot.starter.shortName}</span>
+                      <span className="matchup-page__row-secondary">{lineupMetaFor(slot.starter)}</span>
+                    </span>
+                  </span>
+                  <span className="matchup-page__projection">{formatProjection(slot.projection)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {isCompareMode && !compareModalPlayers && !compareBoardPlayers ? (
         <div aria-label="Start or sit slip" className="matchup-page__slip" role="region">
           <div className="matchup-page__slip-header">
