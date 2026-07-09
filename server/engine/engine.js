@@ -1362,6 +1362,29 @@ function drawTeamScore(params, rng) {
   return s;
 }
 
+/**
+ * Independent RNG seed per (base, sim, week, rosterId). Because every team-week's
+ * draw uses its own stream, changing ONE team's roster leaves every other team's
+ * draws byte-identical between two runs with the same base seed — that's the
+ * common-random-numbers that makes trade-analyzer deltas stable (not sim noise).
+ */
+function streamSeed(base, sim, week, rosterId) {
+  let h = base >>> 0;
+  h = Math.imul(h ^ (sim + 0x9e3779b9), 2654435761) >>> 0;
+  h = Math.imul(h ^ (week + 0x85ebca6b), 2246822519) >>> 0;
+  h = Math.imul(h ^ (rosterId + 0xc2b2ae35), 3266489917) >>> 0;
+  return (h ^ (h >>> 15)) >>> 0;
+}
+
+/** Team score for a (sim, week, rosterId) drawn from its own CRN stream. */
+function drawTeamScoreCRN(params, base, sim, week, rosterId) {
+  if (!params || !params.players) return 0;
+  const rng = mulberry32(streamSeed(base, sim, week, rosterId));
+  let s = 0;
+  for (const p of params.players) s += splitNormalDraw(p, rng);
+  return s;
+}
+
 function nextPow2(n) {
   let p = 1;
   while (p < n) p *= 2;
@@ -1392,7 +1415,6 @@ function standardBracketSeeds(size) {
  * average final seed, and projected record.
  */
 function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed = 1 }) {
-  const rng = mulberry32(seed);
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
@@ -1441,8 +1463,8 @@ function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, cat
       byMatchup.forEach((pair) => {
         if (pair.length !== 2) return;
         const [a, b] = pair;
-        const sa = drawTeamScore(paramsFor(a.rosterId, weekEntry.week), rng);
-        const sb = drawTeamScore(paramsFor(b.rosterId, weekEntry.week), rng);
+        const sa = drawTeamScoreCRN(paramsFor(a.rosterId, weekEntry.week), seed, sim, weekEntry.week, a.rosterId);
+        const sb = drawTeamScoreCRN(paramsFor(b.rosterId, weekEntry.week), seed, sim, weekEntry.week, b.rosterId);
         pf.set(a.rosterId, (pf.get(a.rosterId) ?? 0) + sa);
         pf.set(b.rosterId, (pf.get(b.rosterId) ?? 0) + sb);
         if (sa > sb) wins.set(a.rosterId, wins.get(a.rosterId) + 1);
@@ -1453,7 +1475,7 @@ function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, cat
     rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + wins.get(id)));
 
     // Standings: wins -> points-for -> coin flip.
-    const coin = new Map(rosterIds.map((id) => [id, rng()]));
+    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, sim, 0, id))()]));
     const standings = [...rosterIds].sort(
       (x, y) =>
         (wins.get(y) - wins.get(x)) ||
@@ -1477,8 +1499,8 @@ function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, cat
         else if (a == null) next.push(b);
         else if (b == null) next.push(a);
         else {
-          const sa = drawTeamScore(paramsFor(a, wk), rng);
-          const sb = drawTeamScore(paramsFor(b, wk), rng);
+          const sa = drawTeamScoreCRN(paramsFor(a, wk), seed, sim, wk, a);
+          const sb = drawTeamScoreCRN(paramsFor(b, wk), seed, sim, wk, b);
           next.push(sa >= sb ? a : b);
         }
       }
@@ -1503,6 +1525,7 @@ function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, cat
       projWins,
       projLosses,
       projRecord: `${projWins}-${projLosses}`,
+      expWins: Number((winSums.get(t.rosterId) / SEASON_SIMS).toFixed(2)),
       playoffProb: Number((playoffProb * 100).toFixed(1)),
       playoffClinched: playoffProb >= 0.999,
       playoffOdds: probToAmerican(playoffProb),
@@ -1511,6 +1534,165 @@ function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, cat
       avgSeed: Number((seedSums.get(t.rosterId) / SEASON_SIMS).toFixed(1)),
     };
   });
+}
+
+/**
+ * Starter value of every player on a roster over the given weeks = the sum of
+ * their own projection in the weeks they'd be IN the optimal starting lineup.
+ * A player who never starts scores 0; your only kicker scores every week (so he's
+ * protected); a bye week just contributes 0 that week. This is the coherent drop
+ * metric — it drops your least-used bench player, NOT a redundant star.
+ */
+function starterValues(teamPlayers, slotLabels, projectionMap, catalog, weeks) {
+  const orderedSlots = flexLastSlots(slotLabels);
+  const val = new Map(teamPlayers.map((id) => [id, 0]));
+  for (const w of weeks) {
+    const pool = teamPlayers
+      .map((id) => ({ id, position: catalog[id]?.position, mean: playerDistribution(id, projectionMap, catalog[id], w).mean }))
+      .filter((p) => p.position);
+    const used = new Set();
+    for (const slot of orderedSlots) {
+      let best = null;
+      for (const p of pool) {
+        if (used.has(p.id)) continue;
+        if (!slotAllows(slot, p.position)) continue;
+        if (!best || p.mean > best.mean) best = p;
+      }
+      if (best) {
+        used.add(best.id);
+        val.set(best.id, (val.get(best.id) ?? 0) + best.mean);
+      }
+    }
+  }
+  return val;
+}
+
+/** A player's total projected points over the weeks (regardless of starting). */
+function rawSeasonValue(playerId, projectionMap, catalog, weeks) {
+  let raw = 0;
+  for (const w of weeks) raw += playerDistribution(playerId, projectionMap, catalog[playerId], w).mean;
+  return raw;
+}
+
+// Bench weight: a benched player is worth ~half a starter (only helps on an
+// injury/bye/matchup). Blends starter usage with raw quality so two never-start
+// players are separated by quality (keep the WR, drop the backup kicker).
+const BENCH_WEIGHT = 0.5;
+
+/** Iteratively drop the lowest keep-score player (recompute after each drop). */
+function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projectionMap, catalog, weeks) {
+  const drops = [];
+  let pool = [...teamPlayers];
+  const droppable = new Set(droppableIds.map(String));
+  for (let k = 0; k < n; k += 1) {
+    const starter = starterValues(pool, slotLabels, projectionMap, catalog, weeks);
+    let worst = null;
+    let worstScore = Infinity;
+    for (const id of pool) {
+      if (!droppable.has(String(id))) continue;
+      const score = (starter.get(id) ?? 0) + BENCH_WEIGHT * rawSeasonValue(id, projectionMap, catalog, weeks);
+      if (score < worstScore) { worstScore = score; worst = id; }
+    }
+    if (worst == null) break;
+    drops.push(worst);
+    pool = pool.filter((id) => id !== worst);
+    droppable.delete(String(worst));
+  }
+  return drops;
+}
+
+/**
+ * Trade analyzer: swap the given players between the user and a partner, enforce
+ * roster limits (marginal-value drops), then re-run the season Monte Carlo with
+ * the SAME seed (common random numbers) and report the change in playoff %,
+ * championship %, average seed, and expected wins — for both sides.
+ */
+export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDrops = null }) {
+  const active = ctx.projections ?? getActiveProjections();
+  if (!active) return { available: false, reason: 'no_projections' };
+  const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
+  const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
+  applyOverlay(projectionMap, overlay);
+
+  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+  const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
+
+  const userTeam = teams.find((t) => t.isUser);
+  const partnerTeam = teams.find((t) => t.rosterId === Number(partnerRosterId));
+  if (!userTeam || !partnerTeam) return { available: false, reason: 'team_not_found' };
+
+  const regularWeeks = league.regularSeasonWeeks ?? 14;
+  const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
+  const bracketSize = nextPow2(Math.max(1, Math.min(league.playoffTeams ?? 6, teams.length)));
+  const rounds = Math.max(1, Math.round(Math.log2(bracketSize)));
+  const dropWeeks = [];
+  for (let w = week; w <= regularWeeks; w += 1) dropWeeks.push(w);
+  for (let r = 0; r < rounds; r += 1) dropWeeks.push(playoffWeekStart + r);
+
+  const giveSet = new Set(give.map(String));
+  const getSet = new Set(get.map(String));
+
+  // Post-trade rosters BEFORE drops.
+  const userAfter = [...userTeam.players.filter((id) => !giveSet.has(String(id))), ...get];
+  const partnerAfter = [...partnerTeam.players.filter((id) => !getSet.has(String(id))), ...give];
+
+  // Roster-limit drops (marginal value; user's is a suggestion they can override).
+  const userNeed = Math.max(0, userAfter.length - maxRoster);
+  const partnerNeed = Math.max(0, partnerAfter.length - maxRoster);
+  const userDroppable = userTeam.players.filter((id) => !giveSet.has(String(id)));
+  const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)));
+  const finalUserDrops = userDrops && userDrops.length >= userNeed
+    ? userDrops.slice(0, userNeed)
+    : chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks);
+  const finalPartnerDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks);
+
+  const userDropSet = new Set(finalUserDrops.map(String));
+  const partnerDropSet = new Set(finalPartnerDrops.map(String));
+  const userFinal = userAfter.filter((id) => !userDropSet.has(String(id)));
+  const partnerFinal = partnerAfter.filter((id) => !partnerDropSet.has(String(id)));
+
+  // Same-seed CRN comparison.
+  const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
+  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
+  const baseline = simulateSeason(base);
+  const tradedTeams = teams.map((t) =>
+    t.rosterId === userTeam.rosterId
+      ? { ...t, players: userFinal }
+      : t.rosterId === partnerTeam.rosterId
+        ? { ...t, players: partnerFinal }
+        : t,
+  );
+  const after = simulateSeason({ ...base, teams: tradedTeams });
+
+  const find = (arr, id) => arr.find((f) => f.rosterId === id);
+  const sideDelta = (team) => {
+    const b = find(baseline, team.rosterId);
+    const a = find(after, team.rosterId);
+    return {
+      rosterId: team.rosterId,
+      teamName: team.teamName,
+      isUser: team.isUser ?? false,
+      before: { playoffProb: b.playoffProb, titleProb: b.titleProb, avgSeed: b.avgSeed, expWins: b.expWins },
+      after: { playoffProb: a.playoffProb, titleProb: a.titleProb, avgSeed: a.avgSeed, expWins: a.expWins },
+      delta: {
+        playoffProb: Number((a.playoffProb - b.playoffProb).toFixed(1)),
+        titleProb: Number((a.titleProb - b.titleProb).toFixed(1)),
+        avgSeed: Number((a.avgSeed - b.avgSeed).toFixed(1)),
+        expWins: Number((a.expWins - b.expWins).toFixed(1)),
+      },
+    };
+  };
+
+  const nameOf = (id) => ({ playerId: id, name: catalog[id]?.name ?? String(id) });
+  return {
+    available: true,
+    maxRoster,
+    dropsNeeded: { you: userNeed, partner: partnerNeed },
+    drops: { you: finalUserDrops.map(nameOf), partner: finalPartnerDrops.map(nameOf) },
+    you: sideDelta(userTeam),
+    partner: sideDelta(partnerTeam),
+  };
 }
 
 /**
