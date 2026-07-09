@@ -61,6 +61,15 @@ async function loadConsensus() {
   return out;
 }
 
+// Shared across the three scoring formats so a warm cycle hits Supabase once.
+let _consensusMemo = { at: 0, data: null };
+async function loadConsensusCached() {
+  if (_consensusMemo.data && Date.now() - _consensusMemo.at < 30_000) return _consensusMemo.data;
+  const data = await loadConsensus();
+  _consensusMemo = { at: Date.now(), data };
+  return data;
+}
+
 /**
  * Reuse the last import's identity join: normalized name + position -> provider
  * id (and DEF team code -> id). Returns null if no import has ever run (the
@@ -90,18 +99,28 @@ function buildProviderIndex() {
 // background, so a slow/hung DB call can never stall league pricing.
 const CONSENSUS_ENABLED = true;
 
-let _cache = { at: 0, data: null, refreshing: false };
+// One cache per scoring format: '' = PPR, '_half' = half-PPR, '_nonppr' = standard.
+export const SCORING_SUFFIXES = ['', '_half', '_nonppr'];
+const _caches = new Map(); // suf -> { at, data, refreshing }
+function _cacheFor(suf) {
+  let e = _caches.get(suf);
+  if (!e) { e = { at: 0, data: null, refreshing: false }; _caches.set(suf, e); }
+  return e;
+}
 
-/** Kick off a background compute WITH consensus; updates the cache when done. */
-function _refreshInBackground() {
-  if (_cache.refreshing) return;
-  _cache.refreshing = true;
-  _computeAdjusted(CONSENSUS_ENABLED)
+/** Kick off a background compute (WITH consensus) for one scoring format. */
+function _refreshInBackground(suf) {
+  const e = _cacheFor(suf);
+  if (e.refreshing) return;
+  e.refreshing = true;
+  _computeAdjusted(CONSENSUS_ENABLED, suf)
     .then((d) => {
-      _cache = { at: Date.now(), data: d, refreshing: false };
-      console.log(`[adjusted] refreshed: ${d.matched}/${d.total} matched, ${d.consensusCount} consensus scores`);
+      e.at = Date.now();
+      e.data = d;
+      e.refreshing = false;
+      console.log(`[adjusted:${suf || 'ppr'}] refreshed: ${d.matched}/${d.total} matched, ${d.consensusCount} consensus`);
     })
-    .catch((e) => { _cache.refreshing = false; console.error('[adjusted] bg refresh failed', e); });
+    .catch((err) => { e.refreshing = false; console.error(`[adjusted:${suf || 'ppr'}] bg refresh failed`, err); });
 }
 
 /**
@@ -109,25 +128,40 @@ function _refreshInBackground() {
  *  - warm cache -> return it instantly (refresh in background if stale)
  *  - cold cache -> return a model-only build instantly (no network) AND trigger
  *    the background consensus refresh; once that lands, later calls include it.
- * So consensus flows in without ever being able to block/stall a request.
+ * `suf` selects the scoring format ('' PPR | '_half' | '_nonppr').
  */
-export async function getAdjustedProjections() {
-  if (_cache.data) {
-    if (Date.now() - _cache.at >= 60_000) _refreshInBackground();
-    return _cache.data;
+export async function getAdjustedProjections(suf = '') {
+  const e = _cacheFor(suf);
+  if (e.data) {
+    if (Date.now() - e.at >= 60_000) _refreshInBackground(suf);
+    return e.data;
   }
-  _refreshInBackground();
-  return _computeAdjusted(false); // model-only, no consensus, no network — instant
+  _refreshInBackground(suf);
+  return _computeAdjusted(false, suf); // model-only, no consensus, no network — instant
 }
 
-/** Warm the consensus-adjusted cache at boot (background). */
+/** Warm all three scoring formats at boot (background). */
 export async function warmAdjustedProjections() {
-  _refreshInBackground();
+  for (const suf of SCORING_SUFFIXES) _refreshInBackground(suf);
 }
 
-async function _computeAdjusted(withConsensus) {
+// Only RB/WR/TE differ by scoring format (receptions). QB/K/DEF are invariant, so
+// they always read the base columns regardless of the requested suffix.
+const RECEIVING = new Set(['RB', 'WR', 'TE']);
+function fpCol(pos, suf) {
+  if (pos === 'K') return 'total_projected_fp';
+  return RECEIVING.has(pos) ? `fantasy_pts${suf}` : 'fantasy_pts';
+}
+function floorCol(pos, suf) {
+  return RECEIVING.has(pos) ? `fantasy_pts_floor${suf}` : 'fantasy_pts_floor';
+}
+function ceilCol(pos, suf) {
+  return RECEIVING.has(pos) ? `fantasy_pts_ceiling${suf}` : 'fantasy_pts_ceiling';
+}
+
+async function _computeAdjusted(withConsensus, suf = '') {
   const dataset = loadProjections();
-  const consensus = withConsensus ? await loadConsensus() : {};
+  const consensus = withConsensus ? await loadConsensusCached() : {};
   const idx = buildProviderIndex();
 
   const projections = [];
@@ -137,16 +171,18 @@ async function _computeAdjusted(withConsensus) {
     const avg = consensus[pos]?.[p.name];
     const delta = tiltFromConsensus(avg);
 
-    // Season point + bounds (PPR canonical line).
-    const seasonPoint = adjustFP(pos, p.point, p.season, 'season', delta);
-    const seasonFloor = scaleBound(p.floor, p.point, seasonPoint);
-    const seasonCeil = scaleBound(p.ceiling, p.point, seasonPoint);
+    // Season point + bounds for the requested scoring format.
+    const seasonPtRaw = RECEIVING.has(pos) ? (num(p.season[`fantasy_pts${suf}`]) ?? p.point) : p.point;
+    const seasonFloorRaw = RECEIVING.has(pos) ? (num(p.season[`fantasy_pts_floor${suf}`]) ?? p.floor) : p.floor;
+    const seasonCeilRaw = RECEIVING.has(pos) ? (num(p.season[`fantasy_pts_ceiling${suf}`]) ?? p.ceiling) : p.ceiling;
+    const seasonPoint = adjustFP(pos, seasonPtRaw, p.season, 'season', delta, suf);
+    const seasonFloor = scaleBound(seasonFloorRaw, seasonPtRaw, seasonPoint);
+    const seasonCeil = scaleBound(seasonCeilRaw, seasonPtRaw, seasonPoint);
 
-    // Per-week adjusted mean + CI. Kickers store weekly FP in total_projected_fp,
-    // everyone else in fantasy_pts. (Reading the wrong column left the weekly grid
-    // empty and fell back to the SEASON total as the weekly value — the ~150-pt
-    // kicker inflation.)
-    const wfpCol = pos === 'K' ? 'total_projected_fp' : 'fantasy_pts';
+    // Per-week adjusted mean + CI, in the league's scoring format.
+    const wCol = fpCol(pos, suf);
+    const wFloorCol = floorCol(pos, suf);
+    const wCeilCol = ceilCol(pos, suf);
     const weekly = {};
     const weeklyCI = {};
     const perGameSig = [];
@@ -154,11 +190,11 @@ async function _computeAdjusted(withConsensus) {
     for (const w of p.weekly) {
       const wk = Number(w.week);
       if (!Number.isFinite(wk)) continue;
-      const wStored = num(w[wfpCol]);
+      const wStored = num(w[wCol]);
       if (wStored == null) continue;
-      const wAdj = adjustFP(pos, wStored, w, 'weekly', delta);
-      const wFloor = scaleBound(num(w.fantasy_pts_floor), wStored, wAdj);
-      const wCeil = scaleBound(num(w.fantasy_pts_ceiling), wStored, wAdj);
+      const wAdj = adjustFP(pos, wStored, w, 'weekly', delta, suf);
+      const wFloor = scaleBound(num(w[wFloorCol]), wStored, wAdj);
+      const wCeil = scaleBound(num(w[wCeilCol]), wStored, wAdj);
       const key = String(wk);
       weekly[key] = Number(wAdj.toFixed(2));
       weeklyCI[key] = { floor: wFloor, ceiling: wCeil };
@@ -200,7 +236,7 @@ async function _computeAdjusted(withConsensus) {
       source: 'live-adjusted',
       // Field parity with the snapshot's records so no downstream consumer
       // trips on a missing key.
-      scoringBasis: 'ppr',
+      scoringBasis: suf === '_half' ? 'half-ppr' : suf === '_nonppr' ? 'standard' : 'ppr',
       derived: false,
       defaultedVariance: false,
       stats: null,
@@ -209,10 +245,11 @@ async function _computeAdjusted(withConsensus) {
     });
   }
 
+  const basis = suf === '_half' ? 'half-ppr' : suf === '_nonppr' ? 'standard' : 'ppr';
   const consensusCount = Object.values(consensus).reduce((a, m) => a + Object.keys(m).length, 0);
   const result = {
-    version: `${idx?.version ?? 'noimport'}:adj:${consensusCount}`,
-    meta: { scoringBasis: 'ppr', source: 'live-adjusted' },
+    version: `${idx?.version ?? 'noimport'}:adj:${basis}:${consensusCount}`,
+    meta: { scoringBasis: basis, source: 'live-adjusted' },
     projections,
     matched,
     total: dataset.players.length,

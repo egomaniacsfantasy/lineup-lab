@@ -49,6 +49,13 @@ function overlayHash(overlay) {
   return crypto.createHash('sha1').update(JSON.stringify(overlay)).digest('hex').slice(0, 12);
 }
 
+/** League scoring family -> the adjusted-projections suffix for that format. */
+function scoringSuffix(scoringFamily) {
+  if (scoringFamily === 'half-ppr') return '_half';
+  if (scoringFamily === 'standard') return '_nonppr';
+  return ''; // ppr
+}
+
 /**
  * Pick the provider for this request. ESPN needs a per-request instance bound
  * to the season and (for private leagues) the user's own cookies, passed as
@@ -516,7 +523,7 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
       // Any failure -> undefined -> engine falls back to the snapshot.
       let liveProjections;
       try {
-        const adjusted = await getAdjustedProjections();
+        const adjusted = await getAdjustedProjections(scoringSuffix(ctx.league?.scoringFamily));
         if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
       } catch (err) {
         console.error('[pricing] adjusted projections failed; using snapshot', err);
