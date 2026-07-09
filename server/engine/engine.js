@@ -1503,7 +1503,32 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const afterDist = new Map(currentStarterDist);
   afterDist.set(userRosterId, userAfter);
   afterDist.set(partnerRosterId, partnerAfter);
-  const futuresAfter = simulateFutures({ league, teams, distByRoster: afterDist, scheduleWeeks, week, seed });
+  const afterWeekDistCache = new Map();
+  const distForWeekAfter = (rosterId, w) => {
+    if (rosterId !== userRosterId && rosterId !== partnerRosterId) return distForWeek(rosterId, w);
+    const key = `${rosterId}|${w}`;
+    let dist = afterWeekDistCache.get(key);
+    if (!dist) {
+      dist = bestLineupDistribution(
+        rosterId === userRosterId ? userPoolAfter : partnerPoolAfter,
+        slotLabels,
+        projectionMap,
+        catalog,
+        w,
+      );
+      afterWeekDistCache.set(key, dist);
+    }
+    return dist;
+  };
+  const futuresAfter = simulateFutures({
+    league,
+    teams,
+    distByRoster: afterDist,
+    scheduleWeeks,
+    week,
+    distForWeek: distForWeekAfter,
+    seed,
+  });
 
   const find = (futures, rosterId) => futures.find((f) => f.rosterId === rosterId);
   const yourBefore = find(futuresBefore, userRosterId);

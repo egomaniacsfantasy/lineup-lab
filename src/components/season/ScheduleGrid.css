@@ -164,6 +164,22 @@
   font-weight: 700;
 }
 
+.schedule-grid__tbd-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--bg-inset);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
 .schedule-grid__opponent-meta {
   margin-top: 4px;
   color: var(--text-muted);

@@ -50,15 +50,28 @@ function titleSeriesFor(team: LeagueFutureRow, history: LineHistoryEntry[] | nul
     .filter((entry): entry is { at: number; probability: number } => entry !== null);
 }
 
-function sparkline(points: number[], width = 130, height = 44) {
+function historyTimeLabel(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function historyWindow(points: { at: number }[]) {
+  const first = points[0]?.at;
+  if (!first || !points.at(-1)?.at) return '';
+  return `since ${historyTimeLabel(first)}`;
+}
+
+function sparkline(points: { at: number; probability: number }[], width = 130, height = 44) {
   if (points.length === 0) return '';
-  const min = Math.min(...points);
-  const max = Math.max(...points);
+  const min = Math.min(...points.map((point) => point.probability));
+  const max = Math.max(...points.map((point) => point.probability));
+  const minAt = Math.min(...points.map((point) => point.at));
+  const maxAt = Math.max(...points.map((point) => point.at));
   const span = Math.max(1, max - min);
+  const timeSpan = Math.max(1, maxAt - minAt);
   return points
-    .map((point, index) => {
-      const x = points.length === 1 ? 0 : (index / (points.length - 1)) * width;
-      const y = height - ((point - min) / span) * height;
+    .map((point) => {
+      const x = ((point.at - minAt) / timeSpan) * width;
+      const y = height - ((point.probability - min) / span) * height;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
@@ -108,16 +121,35 @@ export function LeagueFutures({
     [futures, history],
   );
   const contenderRows = useMemo(
-    () =>
-      leagueChartFlags.contenderShape
-        ? futures
-            .filter((team) => team.playoffProb > 0)
-            .map((team) => ({
-              team,
-              playoffProb: team.playoffProb,
-              titleIfIn: (impliedProbability(team.championOdds) * 100) / Math.max(1, team.playoffProb / 100),
-            }))
-        : [],
+    () => {
+      if (!leagueChartFlags.contenderShape) return [];
+      const rows = futures
+        .filter((team) => team.playoffProb > 0)
+        .map((team) => {
+          const titleProb = impliedProbability(team.championOdds) * 100;
+          return {
+            team,
+            playoffProb: team.playoffProb,
+            titleIfIn: titleProb / Math.max(0.01, team.playoffProb / 100),
+          };
+        });
+      if (rows.length === 0) return [];
+      const minY = Math.min(...rows.map((row) => row.titleIfIn));
+      const maxY = Math.max(...rows.map((row) => row.titleIfIn));
+      const spanY = Math.max(1, maxY - minY);
+      return rows.map((row, index) => {
+        const neighbors = rows
+          .slice(0, index)
+          .filter((other) => Math.abs(other.playoffProb - row.playoffProb) < 4 && Math.abs(other.titleIfIn - row.titleIfIn) < spanY * 0.12)
+          .length;
+        const offset = neighbors === 0 ? 0 : neighbors % 2 === 0 ? -neighbors * 6 : neighbors * 6;
+        return {
+          ...row,
+          yPlot: ((row.titleIfIn - minY) / spanY) * 84 + 8,
+          xPlot: Math.max(4, Math.min(96, row.playoffProb + offset * 0.08)),
+        };
+      });
+    },
     [futures],
   );
 
@@ -179,12 +211,13 @@ export function LeagueFutures({
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    points={sparkline(series.map((point) => point.probability))}
+                    points={sparkline(series)}
                   />
                 </svg>
                 <span className="league-futures__history-value">
                   {series.at(-1)?.probability.toFixed(1)}%
                 </span>
+                <span className="league-futures__history-window">{historyWindow(series)}</span>
               </div>
             ))}
           </div>
@@ -195,7 +228,7 @@ export function LeagueFutures({
         <div className="league-futures__chart-card" aria-label="Contender shape scatter">
           <p className="league-futures__chart-title">Contender shape</p>
           <div className="league-futures__scatter">
-            {contenderRows.map(({ team, playoffProb, titleIfIn }) => (
+            {contenderRows.map(({ team, playoffProb, titleIfIn, xPlot, yPlot }) => (
               <span
                 className={[
                   'league-futures__scatter-point',
@@ -205,8 +238,8 @@ export function LeagueFutures({
                   .join(' ')}
                 key={`scatter-${team.teamName}`}
                 style={{
-                  left: `${Math.max(0, Math.min(100, playoffProb))}%`,
-                  bottom: `${Math.max(0, Math.min(100, titleIfIn))}%`,
+                  left: `${xPlot}%`,
+                  bottom: `${yPlot}%`,
                 }}
                 title={`${team.teamName}: ${playoffProb.toFixed(1)}% playoff · ${titleIfIn.toFixed(1)} title if in`}
               >

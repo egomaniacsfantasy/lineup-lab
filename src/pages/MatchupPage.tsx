@@ -15,7 +15,7 @@ import {
   MOCK_TRADE_TARGET_GROUPS,
   MOCK_WAIVER_SUGGESTION,
 } from '../mocks';
-import { toMatchupData } from '../adapters/connectedLeague';
+import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { formatAmericanOdds } from '../utils/formatOdds';
 import {
@@ -361,7 +361,7 @@ function MarketMoverRow({
   to,
   gain,
   acceptanceProbability,
-  avatar,
+  playerChips,
   crestTeam,
   href,
 }: {
@@ -372,15 +372,19 @@ function MarketMoverRow({
   /** Projected points the move adds to your starting lineup, if known. */
   gain?: number;
   acceptanceProbability?: number | null;
-  avatar?: Player | null;
+  playerChips?: { player: Player; tone?: 'default' | 'accent' }[];
   crestTeam?: string;
   href?: string | null;
 }) {
   const content = (
     <>
       <div className="matchup-page__mover-identity">
-        {avatar ? (
-          <PlayerChip player={avatar} size="sm" />
+        {playerChips?.length ? (
+          <span className="matchup-page__mover-chips" aria-hidden="true">
+            {playerChips.map(({ player, tone }) => (
+              <PlayerChip key={player.id} player={player} size="sm" tone={tone} />
+            ))}
+          </span>
         ) : crestTeam ? (
           <TeamCrest teamName={crestTeam} />
         ) : null}
@@ -668,6 +672,7 @@ interface PricedMover {
   acceptanceProbability?: number | null;
   before: number;
   after: number;
+  playerChips?: { player: Player; tone?: 'default' | 'accent' }[];
 }
 
 interface MatchupLiveProps {
@@ -726,7 +731,7 @@ function MatchupPricingLoading({ matchup }: { matchup: MatchupData }) {
 
   return (
     <div className="matchup-page">
-      <h1 className="visually-hidden">The Odds Gods matchup screen</h1>
+      <h1 className="visually-hidden">Matchup</h1>
       <section className="matchup-page__story">
         <section className="matchup-page__module matchup-page__module--hero">
           <div className="matchup-page__module-row">
@@ -809,6 +814,50 @@ function MatchupPricingLoading({ matchup }: { matchup: MatchupData }) {
                     <span className="matchup-page__row-name">{row.player.shortName}</span>
                     <span className="matchup-page__row-secondary">{row.meta}</span>
                   </span>
+                </span>
+                <span className="matchup-page__projection">—</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MatchupColdLoading({ label }: { label: string }) {
+  return (
+    <div className="matchup-page">
+      <h1 className="visually-hidden">Matchup</h1>
+      <section className="matchup-page__story">
+        <section className="matchup-page__module matchup-page__module--hero matchup-page__module--skeleton">
+          <div className="matchup-page__module-row">
+            <span className="matchup-page__eyebrow">{label}</span>
+            <span className="matchup-page__live-chip">Pricing your league…</span>
+          </div>
+          <div className="matchup-page__skeleton-hero" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <p className="matchup-page__meta-copy">Pricing your league…</p>
+        </section>
+      </section>
+      <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--lineup-rail">
+        <div className="matchup-page__module-row matchup-page__module-row--lineup">
+          <div>
+            <h2 className="matchup-page__module-title">Your lineup</h2>
+            <p className="matchup-page__lineup-hint">Tap two players to compare</p>
+          </div>
+        </div>
+        <div className="matchup-page__lineup-list" aria-hidden="true">
+          {Array.from({ length: 8 }, (_, index) => (
+            <div className="matchup-page__lineup-row" key={`skeleton-${index}`}>
+              <div className="matchup-page__lineup-hitbox matchup-page__lineup-hitbox--skeleton">
+                <span className="matchup-page__skeleton-chip" />
+                <span className="matchup-page__skeleton-copy">
+                  <span />
+                  <span />
                 </span>
                 <span className="matchup-page__projection">—</span>
               </div>
@@ -1210,6 +1259,7 @@ function MatchupLive({
     const pickOrder = compareSelection.findIndex(
       (candidate) => candidate.id === player.id,
     );
+    const showSlotLabel = slotLabel.toUpperCase() !== player.position.toUpperCase();
 
     return (
       <div
@@ -1225,13 +1275,18 @@ function MatchupLive({
       >
         <button
           aria-pressed={isCompareMode ? selected : undefined}
-          className="matchup-page__lineup-hitbox"
+          className={[
+            'matchup-page__lineup-hitbox',
+            !showSlotLabel ? 'matchup-page__lineup-hitbox--no-slot' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           // Tapping any player IS the start/sit flow: it picks them and
           // shows who you can weigh them against.
           onClick={() => handleComparePick(player)}
           type="button"
         >
-          <span className="matchup-page__slot-tag">{slotLabel}</span>
+          {showSlotLabel ? <span className="matchup-page__slot-tag">{slotLabel}</span> : null}
           <span className="matchup-page__lineup-player">
             <PlayerChip player={player} />
             <span className="matchup-page__lineup-copy">
@@ -1271,7 +1326,7 @@ function MatchupLive({
 
   return (
     <div className="matchup-page">
-      <h1 className="visually-hidden">The Odds Gods matchup screen</h1>
+      <h1 className="visually-hidden">Matchup</h1>
       <LineChangeFlash
         delta={engine.lastChangeDelta}
         visible={engine.lastChangeDelta !== 0}
@@ -1596,27 +1651,13 @@ function MatchupLive({
               </div>
               {movers.map((mover) => (
                 <MarketMoverRow
-                  avatar={
-                    mover.playerId
-                      ? ({
-                          id: mover.playerId,
-                          name: mover.headline,
-                          shortName: mover.headline,
-                          position: 'WR',
-                          team: '',
-                          headshotUrl: `/api/img/headshot/${mover.playerId}`,
-                          teamLogoUrl: '',
-                          bye: 0,
-                          isActive: true,
-                        } as Player)
-                      : null
-                  }
                   from={mover.before}
                   gain={mover.gain}
                   acceptanceProbability={mover.acceptanceProbability}
                   href={marketHrefForMover(mover)}
                   key={mover.headline}
                   label={mover.headline}
+                  playerChips={mover.playerChips}
                   sublabel={mover.detail}
                   to={mover.after}
                 />
@@ -1633,9 +1674,11 @@ function MatchupLive({
           </div>
 
           <MarketMoverRow
-            avatar={playerMap.get('a-st-brown') ?? playerMap.get('a-stbrown') ?? null}
             from={450}
             label={`Claim ${MOCK_WAIVER_SUGGESTION.player.name} off waivers`}
+            playerChips={(playerMap.get('a-st-brown') ?? playerMap.get('a-stbrown'))
+              ? [{ player: (playerMap.get('a-st-brown') ?? playerMap.get('a-stbrown'))!, tone: 'accent' }]
+              : undefined}
             sublabel="Slots WR3, frees your flex"
             to={425}
           />
@@ -1858,12 +1901,25 @@ function MatchupLive({
         </>
         ) : (
           <div className="matchup-page__lineup-list">
-            {matchup.opponentTeam.roster.map((slot) => (
+            {matchup.opponentTeam.roster.map((slot) => {
+              const staticSlotLabel = slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel;
+              const showStaticSlotLabel = staticSlotLabel.toUpperCase() !== slot.starter.position.toUpperCase();
+              return (
               <div className="matchup-page__lineup-row" key={`opp-${slot.slotLabel}-${slot.starter.id}`}>
-                <div className="matchup-page__lineup-hitbox matchup-page__lineup-hitbox--static">
-                  <span className="matchup-page__slot-tag">
-                    {slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel}
-                  </span>
+                <div
+                  className={[
+                    'matchup-page__lineup-hitbox',
+                    'matchup-page__lineup-hitbox--static',
+                    !showStaticSlotLabel ? 'matchup-page__lineup-hitbox--no-slot' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {showStaticSlotLabel ? (
+                    <span className="matchup-page__slot-tag">
+                      {staticSlotLabel}
+                    </span>
+                  ) : null}
                   <span className="matchup-page__lineup-player">
                     <PlayerChip player={slot.starter} />
                     <span className="matchup-page__lineup-copy">
@@ -1874,7 +1930,8 @@ function MatchupLive({
                   <span className="matchup-page__projection">{formatProjection(slot.projection)}</span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -2082,9 +2139,12 @@ export function MatchupPage() {
   const { stored, bootstrap, pricing, lineHistory, isLoading, error, refresh } = useLeagueConnection();
 
   if (stored && !bootstrap) {
+    if (isLoading) {
+      return <MatchupColdLoading label={stored.leagueName ?? `${PROVIDER_LABEL[stored.provider]} league`} />;
+    }
     return (
       <div className="matchup-page">
-        <h1 className="visually-hidden">The Odds Gods matchup screen</h1>
+        <h1 className="visually-hidden">Matchup</h1>
         <SeasonalNotice>
           {isLoading
             ? `Syncing your ${PROVIDER_LABEL[stored.provider]} league…`
@@ -2124,21 +2184,35 @@ export function MatchupPage() {
 
   // Real priced movers (waiver claim + trade lane) for connected leagues.
   const movers =
-    connectedMatchup && pricing?.available
-      ? (pricing.movers ?? []).map((mover) => ({
-          kind: mover.kind,
-          leagueId: mover.leagueId,
-          headline: mover.headline,
-          detail: mover.detail,
-          playerId: mover.playerId,
-          givePlayerIds: mover.givePlayerIds,
-          getPlayerIds: mover.getPlayerIds,
-          partnerRosterId: mover.partnerRosterId,
-          gain: mover.valueGain,
-          acceptanceProbability: mover.acceptanceProbability ?? null,
-          before: mover.titleOddsBefore,
-          after: mover.titleOddsAfter,
-        }))
+    connectedMatchup && bootstrap && pricing?.available
+      ? (pricing.movers ?? []).map((mover) => {
+          const getIds = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
+          const giveIds = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
+          const playerChips =
+            mover.kind === 'trade'
+              ? [
+                  ...getIds.map((id) => ({ player: toPlayer(id, bootstrap.players), tone: 'accent' as const })),
+                  ...giveIds.map((id) => ({ player: toPlayer(id, bootstrap.players), tone: 'default' as const })),
+                ].slice(0, 4)
+              : mover.playerId
+                ? [{ player: toPlayer(mover.playerId, bootstrap.players), tone: 'accent' as const }]
+                : [];
+          return {
+            kind: mover.kind,
+            leagueId: mover.leagueId,
+            headline: mover.headline,
+            detail: mover.detail,
+            playerId: mover.playerId,
+            givePlayerIds: giveIds,
+            getPlayerIds: getIds,
+            partnerRosterId: mover.partnerRosterId,
+            gain: mover.valueGain,
+            acceptanceProbability: mover.acceptanceProbability ?? null,
+            before: mover.titleOddsBefore,
+            after: mover.titleOddsAfter,
+            playerChips,
+          };
+        })
       : [];
 
   if (connectedMatchup && !pricingReady) {
@@ -2148,7 +2222,7 @@ export function MatchupPage() {
   if (connectedMatchup && pricing && !pricing.available) {
     return (
       <div className="matchup-page">
-        <h1 className="visually-hidden">The Odds Gods matchup screen</h1>
+        <h1 className="visually-hidden">Matchup</h1>
         <SeasonalNotice>
           The book could not price this league yet.{' '}
           <button className="matchup-page__inline-action" onClick={() => void refresh()} type="button">

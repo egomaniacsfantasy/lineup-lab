@@ -28,6 +28,10 @@
     var(--bg-surface);
 }
 
+.matchup-page__module--skeleton {
+  background: var(--bg-surface);
+}
+
 @media (min-width: 1024px) {
   .matchup-page__module--hero {
     padding: 34px 26px;
@@ -518,10 +522,7 @@
 .matchup-page__lock-headshots {
   display: flex;
   align-items: center;
-}
-
-.matchup-page__headshot-stack .player-chip + .player-chip {
-  margin-left: -8px;
+  gap: 6px;
 }
 
 .matchup-page__mini-wrap--overlap {
@@ -712,8 +713,81 @@
   text-align: left;
 }
 
+.matchup-page__lineup-hitbox--no-slot {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .matchup-page__lineup-hitbox--static {
   cursor: default;
+}
+
+.matchup-page__lineup-hitbox--skeleton {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.matchup-page__skeleton-hero,
+.matchup-page__skeleton-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.matchup-page__skeleton-hero {
+  grid-template-columns: 1fr 42px 1fr;
+  align-items: center;
+  min-height: 112px;
+}
+
+.matchup-page__skeleton-hero span,
+.matchup-page__skeleton-chip,
+.matchup-page__skeleton-copy span {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--bg-inset), var(--bg-surface-soft), var(--bg-inset));
+  background-size: 220% 100%;
+  animation: matchup-skeleton 1200ms ease-in-out infinite;
+}
+
+.matchup-page__skeleton-hero span {
+  height: 52px;
+}
+
+.matchup-page__skeleton-hero span:nth-child(2) {
+  height: 28px;
+  opacity: 0.5;
+}
+
+.matchup-page__skeleton-chip {
+  width: 38px;
+  height: 38px;
+}
+
+.matchup-page__skeleton-copy span:first-child {
+  width: min(220px, 70%);
+  height: 13px;
+}
+
+.matchup-page__skeleton-copy span:last-child {
+  width: min(300px, 88%);
+  height: 11px;
+  opacity: 0.62;
+}
+
+@keyframes matchup-skeleton {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matchup-page__skeleton-hero span,
+  .matchup-page__skeleton-chip,
+  .matchup-page__skeleton-copy span {
+    animation: none;
+  }
 }
 
 .matchup-page__lineup-toggle {
@@ -765,6 +839,9 @@
 .matchup-page__row-secondary {
   color: var(--ink-3);
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .matchup-page__projection {
@@ -1439,6 +1516,13 @@
   justify-items: end;
   gap: 5px;
   flex: none;
+}
+
+.matchup-page__mover-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
 }
 
 .matchup-page__mover-accept {

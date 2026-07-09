@@ -38,12 +38,25 @@ function historyFor(matchup: LeagueWeekMatchup, history: LineHistoryEntry[] | nu
   return entries.length > 1 ? entries : null;
 }
 
-function polylineFor(points: number[], width = 130, height = 40) {
+function timeLabel(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function movementWindow(points: { at: number }[]) {
+  const first = points[0]?.at;
+  if (!first || !points.at(-1)?.at) return '';
+  return `since ${timeLabel(first)}`;
+}
+
+function polylineFor(points: { at: number; value: number }[], width = 130, height = 40) {
   if (points.length === 0) return '';
+  const minAt = Math.min(...points.map((point) => point.at));
+  const maxAt = Math.max(...points.map((point) => point.at));
+  const timeSpan = Math.max(1, maxAt - minAt);
   return points
-    .map((point, index) => {
-      const x = points.length === 1 ? 0 : (index / (points.length - 1)) * width;
-      const y = height - (point / 100) * height;
+    .map((point) => {
+      const x = ((point.at - minAt) / timeSpan) * width;
+      const y = height - (point.value / 100) * height;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(' ');
@@ -71,7 +84,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             <div className="matchup-slate__ladder-row" key={`ladder-${matchup.teamA}-${matchup.teamB}`}>
               <TeamAvatar avatarUrl={matchup.teamAAvatarUrl} name={matchup.teamA} />
               <span className="matchup-slate__ladder-track">
-                <span className="matchup-slate__ladder-fill" style={{ width: `${Math.max(0, Math.min(100, aProb))}%` }} />
+                <span className="matchup-slate__ladder-fill" style={{ width: `${Math.max(0, Math.min(100, Math.max(aProb, bProb)))}%` }} />
               </span>
               <TeamAvatar avatarUrl={matchup.teamBAvatarUrl} name={matchup.teamB} />
               <span className="matchup-slate__ladder-number">{aProb.toFixed(1)}%</span>
@@ -154,10 +167,10 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
               {movement ? (
                 <div className="matchup-slate__movement" aria-label={`${matchup.teamA} and ${matchup.teamB} line movement`}>
                   <svg viewBox="0 0 130 40" preserveAspectRatio="none">
-                    <polyline className="matchup-slate__movement-line matchup-slate__movement-line--a" points={polylineFor(movement.map((entry) => entry.a))} />
-                    <polyline className="matchup-slate__movement-line matchup-slate__movement-line--b" points={polylineFor(movement.map((entry) => entry.b))} />
+                    <polyline className="matchup-slate__movement-line matchup-slate__movement-line--a" points={polylineFor(movement.map((entry) => ({ at: entry.at, value: entry.a })))} />
+                    <polyline className="matchup-slate__movement-line matchup-slate__movement-line--b" points={polylineFor(movement.map((entry) => ({ at: entry.at, value: entry.b })))} />
                   </svg>
-                  <span className="matchup-slate__movement-note">{movement.at(-1)?.trigger}</span>
+                  <span className="matchup-slate__movement-note">{movementWindow(movement)}</span>
                 </div>
               ) : null}
 

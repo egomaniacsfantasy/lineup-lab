@@ -260,7 +260,7 @@ function laneBelongsToLeague(
 }
 
 function TradeDealsView() {
-  const { bootstrap, stored, pricing, isLoading, error } = useLeagueConnection();
+  const { bootstrap, stored, pricing, isLoading, error, refresh } = useLeagueConnection();
   const { openScoutingCard } = useScoutingCard();
   const [params, setParams] = useSearchParams();
   const builderRef = useRef<HTMLElement | null>(null);
@@ -278,6 +278,17 @@ function TradeDealsView() {
   const [isPricing, setIsPricing] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
+  const refreshKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!stored || isLoading) return;
+    const computedAt = pricing?.computedAt ?? 0;
+    const stale = !computedAt || Date.now() - computedAt > 2 * 60_000;
+    const key = `${stored.provider}:${stored.leagueId}:${computedAt}`;
+    if (!stale || refreshKeyRef.current === key) return;
+    refreshKeyRef.current = key;
+    void refresh();
+  }, [isLoading, pricing?.computedAt, refresh, stored]);
 
   const lanes = useMemo(
     () => {
@@ -288,7 +299,7 @@ function TradeDealsView() {
     },
     [bootstrap, pricing, stored],
   );
-  const lanesResolved = pricing != null;
+  const lanesResolved = pricing != null && (!pricing.available || Array.isArray(pricing.movers));
 
   useEffect(() => {
     if (!bootstrap || !stored) return;
@@ -919,10 +930,14 @@ function TradeDealsView() {
 
 export function TradePage() {
   const [params, setParams] = useSearchParams();
+  const { stored } = useLeagueConnection();
   const view = params.get('view') === 'scouting' ? 'scouting' : 'deals';
 
   const setView = (next: 'deals' | 'scouting') => {
-    setParams({ view: next }, { replace: true });
+    const nextParams = new URLSearchParams(params);
+    nextParams.set('view', next);
+    if (stored?.leagueId) nextParams.set('leagueId', stored.leagueId);
+    setParams(nextParams, { replace: true });
   };
 
   return (

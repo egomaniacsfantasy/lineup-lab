@@ -113,7 +113,7 @@
 
 .league-futures__history-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(96px, 150px) auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(96px, 150px) auto auto;
   align-items: center;
   gap: 10px;
 }
@@ -149,6 +149,15 @@
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
+}
+
+.league-futures__history-window {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .league-futures__scatter {
@@ -317,6 +326,11 @@
 
   .league-futures__history-row {
     grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .league-futures__history-row svg,
+  .league-futures__history-window {
+    grid-column: 2 / -1;
   }
 
   .league-futures__history-row svg {

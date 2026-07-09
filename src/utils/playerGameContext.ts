@@ -53,7 +53,8 @@ export function formatKickoffTime(iso: string | number | Date) {
     hour12: true,
   })
     .format(new Date(iso))
-    .replace(/\s/g, ' ');
+    .replace(/\s/g, ' ')
+    .replace(/ (AM|PM)$/i, '\u00A0$1');
 }
 
 function formatKickoff(iso: string) {

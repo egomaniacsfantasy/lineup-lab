@@ -131,10 +131,8 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
               : item.isPlayoff
                 ? 'Playoff week · opponent TBD'
                 : item.opponentRecord && item.opponentRecord !== '0-0'
-                  ? `${item.isHome ? 'vs' : '@'} ${item.opponent} · ${item.opponentRecord}`
-                : item.isHome
-                    ? `vs ${item.opponent}`
-                    : `@ ${item.opponent}`;
+                  ? item.opponentRecord
+                  : '';
           return (
           <article
             className={[
@@ -168,9 +166,11 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
 
             <div className="schedule-grid__opponent">
               <p className="schedule-grid__opponent-name">
-                {leagueChartFlags.avatars && item.status !== 'bye' ? (
+                {leagueChartFlags.avatars && item.status !== 'bye' && item.isPlayoff ? (
+                  <span className="schedule-grid__tbd-avatar">TBD</span>
+                ) : leagueChartFlags.avatars && item.status !== 'bye' ? (
                   <TeamAvatar
-                    avatarUrl={item.isPlayoff ? null : item.opponentAvatarUrl}
+                    avatarUrl={item.opponentAvatarUrl}
                     name={item.opponent}
                   />
                 ) : null}
@@ -182,7 +182,7 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
                       : `${item.isHome ? 'vs' : '@'} ${item.opponent}`}
                 </span>
               </p>
-              <p className="schedule-grid__opponent-meta">{opponentMeta}</p>
+              {opponentMeta ? <p className="schedule-grid__opponent-meta">{opponentMeta}</p> : null}
             </div>
 
             <div className="schedule-grid__result">

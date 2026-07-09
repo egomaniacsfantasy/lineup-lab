@@ -256,7 +256,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       .then(({ data }) => {
         if (cancelled) return;
         const rows = (data ?? []) as DbLeagueRow[];
-        if (rows.length === 0) {
+        if (rows.length === 0 && !stored) {
           applyApiContext(null);
           try {
             window.localStorage.removeItem(STORAGE_KEY);
@@ -272,28 +272,50 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           setError(null);
           return;
         }
+        if (rows.length === 0 && stored) {
+          setLeagues([stored]);
+          applyApiContext(stored);
+          return;
+        }
         const all = rows.map(rowToConnection);
         const localActive = stored
           ? all.find((connection) => leagueKey(connection) === leagueKey(stored))
           : null;
-        const dbActive = all.find((_, i) => rows[i].is_active) ?? all[0];
-        const active = localActive && stored
-          ? {
-              ...localActive,
-              leagueName: stored.leagueName ?? localActive.leagueName,
-              allLeagueIds: stored.allLeagueIds.length > 1 ? stored.allLeagueIds : all.map((l) => l.leagueId),
-              allLeagues: stored.allLeagues,
+        const leaguesForSwitcher = stored && !localActive
+          ? [stored, ...all.filter((connection) => leagueKey(connection) !== leagueKey(stored))]
+          : all;
+        setLeagues(leaguesForSwitcher);
+
+        if (stored) {
+          const active = localActive
+            ? {
+                ...localActive,
+                leagueName: stored.leagueName ?? localActive.leagueName,
+                allLeagueIds: stored.allLeagueIds.length > 1 ? stored.allLeagueIds : all.map((l) => l.leagueId),
+                allLeagues: stored.allLeagues,
+              }
+            : stored;
+          applyApiContext(active);
+          if (leagueKey(active) === leagueKey(stored) && activeConnectionChanged(stored, active)) {
+            try {
+              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(active));
+            } catch {
+              // ignore
             }
-          : dbActive;
-        applyApiContext(active);
+            setStored(active);
+          }
+          return;
+        }
+
+        const dbActive = all.find((_, i) => rows[i].is_active) ?? all[0];
+        applyApiContext(dbActive);
         try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(active));
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(dbActive));
         } catch {
           // ignore
         }
-        setLeagues(all);
-        if (activeConnectionChanged(stored, active)) {
-          setStored(active);
+        if (activeConnectionChanged(null, dbActive)) {
+          setStored(dbActive);
         }
       });
     return () => {
@@ -320,16 +342,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
             summaries,
           ),
         );
-        const active =
-          nextConnections.find((connection) => leagueKey(connection) === leagueKey(stored)) ??
-          nextConnections[0];
+        const active = nextConnections.find((connection) => leagueKey(connection) === leagueKey(stored));
         const existingKeys = leagues.map(leagueKey).join('|');
         const nextKeys = nextConnections.map(leagueKey).join('|');
         if (existingKeys !== nextKeys) {
           setLeagues(nextConnections);
-          if (userIdRef.current) void saveLeagueRows(userIdRef.current, nextConnections, active);
+          if (userIdRef.current && active) void saveLeagueRows(userIdRef.current, nextConnections, active);
         }
-        if (leagueKey(active) === leagueKey(stored)) {
+        if (active && leagueKey(active) === leagueKey(stored)) {
           const activeChanged =
             active.leagueName !== stored.leagueName ||
             active.allLeagueIds.length !== stored.allLeagueIds.length ||
