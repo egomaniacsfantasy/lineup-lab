@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { tiltFromConsensus, adjustStat, adjustFP, scaleBound } from '../services/agreementTilt';
@@ -200,15 +200,16 @@ export function ProjectionsPage() {
   const [rapidEntryEnabled, setRapidEntryEnabled] = useState(true);
   const [agreeDraft, setAgreeDraft] = useState<Record<string, string>>({});
   const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
-  const [initialOwn, setInitialOwn] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const agreeDraftRef = useRef<Record<string, string>>({});
   const agreeSavedRef = useRef<Record<string, string>>({});
-  // The user's own scores AS OF PAGE LOAD — i.e. the values the server's
-  // consensus already includes. Used to fold their live edits into the displayed
-  // consensus so it never looks stale after they save.
-  const initialOwnRef = useRef<Record<string, string>>({});
+  // Consensus of OTHER users (excludes you), keyed `position::name`. Refreshed
+  // live via polling + a broadcast on every save; your own value is blended in
+  // locally (instant). So everyone else's edits show up without a refresh.
+  const [othersConsensus, setOthersConsensus] = useState<Record<string, { avg: number; n: number }>>({});
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channelRef = useRef<any>(null);
 
   const agreeCols = DEFAULT_AGREE_COLS;
   const rowId = (p: Player) => p.id;
@@ -230,11 +231,7 @@ export function ProjectionsPage() {
   useEffect(() => {
     if (!userId || !data) {
       agreeSavedRef.current = {};
-      initialOwnRef.current = {};
-      queueMicrotask(() => {
-        setAgreeSaved({});
-        setInitialOwn({});
-      });
+      queueMicrotask(() => setAgreeSaved({}));
       return;
     }
     let alive = true;
@@ -250,14 +247,50 @@ export function ProjectionsPage() {
           if (pid) saved[`${pid}::agreement`] = String(r.score);
         }
         agreeSavedRef.current = saved;
-        initialOwnRef.current = { ...saved };
         setAgreeSaved(saved);
-        setInitialOwn({ ...saved });
       });
     return () => {
       alive = false;
     };
   }, [userId, data]);
+
+  // Pull the current "others" consensus (excludes this user) from the server.
+  const refreshConsensus = useCallback(async () => {
+    try {
+      const headers: Record<string, string> = {};
+      const token = session?.access_token;
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch('/api/projections/consensus', { headers });
+      if (!res.ok) return;
+      const { consensus } = (await res.json()) as {
+        consensus: Record<string, Record<string, { avg: number; n: number }>>;
+      };
+      const flat: Record<string, { avg: number; n: number }> = {};
+      for (const pos2 of Object.keys(consensus ?? {})) {
+        for (const name of Object.keys(consensus[pos2])) {
+          flat[`${pos2}::${name}`] = consensus[pos2][name];
+        }
+      }
+      setOthersConsensus(flat);
+    } catch {
+      /* ignore transient errors */
+    }
+  }, [session?.access_token]);
+
+  // Live updates: refresh on mount, poll as a safety net, and react instantly to
+  // a broadcast whenever anyone (in any tab) saves an agreement score.
+  useEffect(() => {
+    refreshConsensus();
+    const poll = window.setInterval(refreshConsensus, 12_000);
+    const channel = supabase.channel('olympus-agreement');
+    channel.on('broadcast', { event: 'changed' }, () => refreshConsensus()).subscribe();
+    channelRef.current = channel;
+    return () => {
+      window.clearInterval(poll);
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [refreshConsensus]);
 
   const cols = STATS[pos];
   const totalColumns = cols.length + 6 + agreeCols.length;
@@ -268,26 +301,28 @@ export function ProjectionsPage() {
   const showModel = editing;
 
   /**
-   * The population consensus for a player, folding in THIS user's live edits so
-   * it never shows stale after they save (the server caches consensus ~30s). We
-   * take the server aggregate {avg,n}, remove the user's page-load value, and add
-   * their current value. For the only voter, this equals exactly what they typed.
+   * The population consensus for a player = the OTHER users' aggregate (from the
+   * server, refreshed live) blended with THIS user's own current value (local, so
+   * their own edits are instant). No double-counting because the server excludes
+   * this user. For the only voter, it's exactly what they typed.
    */
   function consensusAvg(p: Player): number | null {
-    const key = cellKey(p, 'agreement');
-    const nowStr = readCommittedAgreementValueFromMap(p, 'agreement', agreeSaved);
-    const initStr = hasKey(initialOwn, key) ? initialOwn[key] : '';
-    const now = nowStr === '' ? null : Number(nowStr);
-    const init = initStr === '' ? null : Number(initStr);
-    const server = p.consensus ?? null;
-    if (now === init || (now != null && init != null && now === init)) {
-      return server ? server.avg : null;
+    const others = othersConsensus[`${p.position}::${p.name}`];
+    const ownStr = readCommittedAgreementValueFromMap(p, 'agreement', agreeSaved);
+    const own = ownStr === '' ? null : Number(ownStr);
+    let sum = others ? others.avg * others.n : 0;
+    let n = others ? others.n : 0;
+    if (own != null && !Number.isNaN(own)) {
+      sum += own;
+      n += 1;
     }
-    let sum = server ? server.avg * server.n : 0;
-    let n = server ? server.n : 0;
-    if (init != null && !Number.isNaN(init)) { sum -= init; n -= 1; }
-    if (now != null && !Number.isNaN(now)) { sum += now; n += 1; }
     return n > 0 ? sum / n : null;
+  }
+
+  function consensusCount(p: Player): number {
+    const others = othersConsensus[`${p.position}::${p.name}`]?.n ?? 0;
+    const ownStr = readCommittedAgreementValueFromMap(p, 'agreement', agreeSaved);
+    return others + (ownStr === '' ? 0 : 1);
   }
 
   const deltaFor = (p: Player) => (showModel ? 0 : tiltFromConsensus(consensusAvg(p)));
@@ -416,6 +451,12 @@ export function ProjectionsPage() {
       } else {
         setSaveError(null);
         setSaving((s) => ({ ...s, [key]: 'ok' }));
+        // Tell every open tab (all users) to re-pull the consensus now.
+        try {
+          channelRef.current?.send({ type: 'broadcast', event: 'changed', payload: {} });
+        } catch {
+          /* channel not ready — polling will catch it */
+        }
       }
     } catch (e) {
       console.error('[agreement] save threw:', e);
@@ -769,13 +810,13 @@ export function ProjectionsPage() {
                             (() => {
                               const avg = consensusAvg(p);
                               const shown = avg == null ? null : Math.round(avg);
-                              const n = p.consensus?.n ?? 0;
+                              const n = consensusCount(p);
                               return (
                                 <span
                                   className={['proj-agree-val', agreeToneClass(shown == null ? null : String(shown))]
                                     .filter(Boolean)
                                     .join(' ')}
-                                  title={shown == null ? 'No ratings yet' : `Consensus of ${Math.max(1, n)} ${Math.max(1, n) === 1 ? 'rating' : 'ratings'}`}
+                                  title={shown == null ? 'No ratings yet' : `Consensus of ${n} ${n === 1 ? 'rating' : 'ratings'}`}
                                 >
                                   {shown ?? '—'}
                                 </span>

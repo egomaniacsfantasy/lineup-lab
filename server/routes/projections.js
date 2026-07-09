@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import { loadProjections, reloadProjections } from '../projections/loadFromRepo.js';
 import { getAllAgreement, setAgreement, POSITIONS, COLUMNS, COLUMN_KEYS } from '../projections/agreementStore.js';
-import { getSupabaseAdmin } from '../services/supabaseAdmin.js';
+import { getSupabaseAdmin, getRequestUserId } from '../services/supabaseAdmin.js';
 
 export const projectionsRouter = Router();
 
@@ -27,24 +27,38 @@ function requireAdmin(req, res) {
 // --- Public consensus: the average agreement score per player across ALL users,
 // read with the service role (bypasses RLS) and aggregated so individual scores
 // never leave the server. Cached briefly so we don't hit the DB every request. ---
-let _consensusCache = { at: 0, data: {} };
-async function getConsensus() {
+// Raw agreement rows, cached briefly (2s). Short cache = near-live for the
+// agreement page and it dedupes the burst of refreshes when many tabs react to
+// the same edit broadcast.
+let _rowsCache = { at: 0, rows: [] };
+async function getAgreementRows() {
   const now = Date.now();
-  if (now - _consensusCache.at < 30_000) return _consensusCache.data;
+  if (now - _rowsCache.at < 2_000) return _rowsCache.rows;
   const admin = getSupabaseAdmin();
   if (!admin) {
-    _consensusCache = { at: now, data: {} };
-    return {};
+    _rowsCache = { at: now, rows: [] };
+    return [];
   }
-  const { data, error } = await admin.from('olympus_agreement').select('position, player, score');
+  const { data, error } = await admin.from('olympus_agreement').select('position, player, score, user_id');
   if (error) {
-    // Table may not exist yet (migration not applied) — fail soft, no consensus.
     console.error('[projections] consensus read failed:', error.message ?? error);
-    _consensusCache = { at: now, data: _consensusCache.data };
-    return _consensusCache.data;
+    return _rowsCache.rows;
   }
+  _rowsCache = { at: now, rows: data ?? [] };
+  return _rowsCache.rows;
+}
+
+/**
+ * Average agreement per player. When excludeUserId is set, that user's own rows
+ * are left out — so the client can blend in their OWN (live-edited) value without
+ * double-counting, and see everyone ELSE's edits refresh live. Only aggregates
+ * ever leave the server; individual scores don't.
+ */
+async function getConsensus(excludeUserId = null) {
+  const rows = await getAgreementRows();
   const acc = {}; // position -> player -> { sum, n }
-  for (const row of data ?? []) {
+  for (const row of rows) {
+    if (excludeUserId && row.user_id === excludeUserId) continue;
     const s = Number(row.score);
     if (!Number.isFinite(s)) continue;
     (acc[row.position] ??= {});
@@ -60,7 +74,6 @@ async function getConsensus() {
       out[pos][pl] = { avg: Math.round((sum / n) * 100) / 100, n };
     }
   }
-  _consensusCache = { at: now, data: out };
   return out;
 }
 
@@ -82,6 +95,19 @@ projectionsRouter.get('/', async (_req, res) => {
   } catch (error) {
     console.error('[projections] load failed', error);
     res.status(500).json({ error: 'projections_load_failed', message: String(error?.message ?? error) });
+  }
+});
+
+// Lightweight live-consensus feed: just the aggregate map, so open tabs can
+// re-pull the current consensus (on a broadcast or a poll) without re-downloading
+// the whole projections dataset. Individual scores never leave the server.
+projectionsRouter.get('/consensus', async (req, res) => {
+  try {
+    let userId = null;
+    try { userId = await getRequestUserId(req); } catch { /* anonymous -> full consensus */ }
+    res.json({ consensus: await getConsensus(userId) });
+  } catch (error) {
+    res.status(500).json({ error: 'consensus_failed', message: String(error?.message ?? error) });
   }
 });
 
