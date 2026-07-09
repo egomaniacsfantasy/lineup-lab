@@ -3,7 +3,7 @@
  *
  * Every player carries a public "consensus" score = the average of all users'
  * agreement values (0-100). 50 = "model is right"; below 50 = underrated (boost),
- * above 50 = overrated (cut). We convert that into a bounded (+/-5%) tilt on the
+ * above 50 = overrated (cut). We convert that into a bounded (+/-10%) tilt on the
  * player's STATS, then re-score fantasy points from the tilted stats.
  *
  * The whole point: the tilt lands on the *stats*, not the points. A player catches
@@ -22,7 +22,7 @@
 export type TiltScoring = '' | '_half' | '_nonppr';
 type Row = Record<string, unknown>;
 
-const ALPHA = 0.05; // max +/-5% shift, locked in.
+const ALPHA = 0.1; // max +/-10% shift.
 
 /** Consensus average (0-100) -> signed tilt delta. >0 = boost (underrated). */
 export function tiltFromConsensus(avg: number | null | undefined): number {

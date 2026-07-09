@@ -12,7 +12,7 @@
  * consensus -> agreement-weighted per-week projections.
  */
 
-const ALPHA = 0.05; // max +/-5% shift, locked in.
+const ALPHA = 0.1; // max +/-10% shift.
 
 /** Consensus average (0-100) -> signed tilt delta. >0 = boost (underrated). */
 export function tiltFromConsensus(avg) {
