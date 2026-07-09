@@ -85,49 +85,49 @@ function buildProviderIndex() {
  * { playerId, name, position, team, mean, stdev, weekly:{week:pts},
  *   weeklyCI:{week:{floor,ceiling}}, floor, ceiling, seasonTotal, depthRank }.
  */
+// Live consensus tilt is ON. The Supabase fetch is kept entirely OFF the pricing
+// request path (see getAdjustedProjections): consensus only ever loads in the
+// background, so a slow/hung DB call can never stall league pricing.
+const CONSENSUS_ENABLED = true;
+
 let _cache = { at: 0, data: null, refreshing: false };
 
+/** Kick off a background compute WITH consensus; updates the cache when done. */
+function _refreshInBackground() {
+  if (_cache.refreshing) return;
+  _cache.refreshing = true;
+  _computeAdjusted(CONSENSUS_ENABLED)
+    .then((d) => {
+      _cache = { at: Date.now(), data: d, refreshing: false };
+      console.log(`[adjusted] refreshed: ${d.matched}/${d.total} matched, ${d.consensusCount} consensus scores`);
+    })
+    .catch((e) => { _cache.refreshing = false; console.error('[adjusted] bg refresh failed', e); });
+}
+
 /**
- * Stale-while-revalidate: once warm, ALWAYS return the cached value instantly
- * and refresh in the background. This keeps the Supabase consensus fetch off the
- * league-pricing critical path (the cause of the earlier "pricing your league"
- * stall). Only the very first call (cold) awaits, and that's bounded by the 4s
- * consensus timeout; warmAdjustedProjections() at boot removes even that.
+ * The pricing path calls this and it NEVER awaits Supabase:
+ *  - warm cache -> return it instantly (refresh in background if stale)
+ *  - cold cache -> return a model-only build instantly (no network) AND trigger
+ *    the background consensus refresh; once that lands, later calls include it.
+ * So consensus flows in without ever being able to block/stall a request.
  */
 export async function getAdjustedProjections() {
   if (_cache.data) {
-    if (Date.now() - _cache.at >= 60_000 && !_cache.refreshing) {
-      _cache.refreshing = true;
-      _computeAdjusted()
-        .then((d) => { _cache = { at: Date.now(), data: d, refreshing: false }; })
-        .catch((e) => { _cache.refreshing = false; console.error('[adjusted] bg refresh failed', e); });
-    }
+    if (Date.now() - _cache.at >= 60_000) _refreshInBackground();
     return _cache.data;
   }
-  const d = await _computeAdjusted();
-  _cache = { at: Date.now(), data: d, refreshing: false };
-  return d;
+  _refreshInBackground();
+  return _computeAdjusted(false); // model-only, no consensus, no network — instant
 }
 
-/** Precompute + cache at boot so the first pricing request never waits. */
+/** Warm the consensus-adjusted cache at boot (background). */
 export async function warmAdjustedProjections() {
-  try {
-    const d = await _computeAdjusted();
-    _cache = { at: Date.now(), data: d, refreshing: false };
-    console.log(`[adjusted] warmed: ${d.matched}/${d.total} matched, ${d.consensusCount} consensus`);
-  } catch (e) {
-    console.error('[adjusted] warm failed', e);
-  }
+  _refreshInBackground();
 }
 
-// Phase 0 isolation: keep the Supabase consensus fetch OUT of the picture until
-// the pure data-injection path is proven live. Flip to true to re-enable the
-// live consensus tilt once Phase 0 is confirmed stable on the deployed league.
-const CONSENSUS_ENABLED = false;
-
-async function _computeAdjusted() {
+async function _computeAdjusted(withConsensus) {
   const dataset = loadProjections();
-  const consensus = CONSENSUS_ENABLED ? await loadConsensus() : {};
+  const consensus = withConsensus ? await loadConsensus() : {};
   const idx = buildProviderIndex();
 
   const projections = [];
