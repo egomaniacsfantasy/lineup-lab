@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { tiltFromConsensus, adjustStat, adjustFP, scaleBound } from '../services/agreementTilt';
@@ -254,43 +254,42 @@ export function ProjectionsPage() {
     };
   }, [userId, data]);
 
-  // Pull the current "others" consensus (excludes this user) from the server.
-  const refreshConsensus = useCallback(async () => {
-    try {
-      const headers: Record<string, string> = {};
-      const token = session?.access_token;
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await fetch('/api/projections/consensus', { headers });
-      if (!res.ok) return;
-      const { consensus } = (await res.json()) as {
-        consensus: Record<string, Record<string, { avg: number; n: number }>>;
-      };
-      const flat: Record<string, { avg: number; n: number }> = {};
-      for (const pos2 of Object.keys(consensus ?? {})) {
-        for (const name of Object.keys(consensus[pos2])) {
-          flat[`${pos2}::${name}`] = consensus[pos2][name];
-        }
-      }
-      setOthersConsensus(flat);
-    } catch {
-      /* ignore transient errors */
-    }
-  }, [session?.access_token]);
-
   // Live updates: refresh on mount, poll as a safety net, and react instantly to
   // a broadcast whenever anyone (in any tab) saves an agreement score.
   useEffect(() => {
-    refreshConsensus();
+    const refreshConsensus = async () => {
+      try {
+        const headers: Record<string, string> = {};
+        const token = session?.access_token;
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const res = await fetch('/api/projections/consensus', { headers });
+        if (!res.ok) return;
+        const { consensus } = (await res.json()) as {
+          consensus: Record<string, Record<string, { avg: number; n: number }>>;
+        };
+        const flat: Record<string, { avg: number; n: number }> = {};
+        for (const pos2 of Object.keys(consensus ?? {})) {
+          for (const name of Object.keys(consensus[pos2])) {
+            flat[`${pos2}::${name}`] = consensus[pos2][name];
+          }
+        }
+        setOthersConsensus(flat);
+      } catch {
+        /* ignore transient errors */
+      }
+    };
+    const first = window.setTimeout(() => void refreshConsensus(), 0);
     const poll = window.setInterval(refreshConsensus, 12_000);
     const channel = supabase.channel('olympus-agreement');
     channel.on('broadcast', { event: 'changed' }, () => refreshConsensus()).subscribe();
     channelRef.current = channel;
     return () => {
+      window.clearTimeout(first);
       window.clearInterval(poll);
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [refreshConsensus]);
+  }, [session]);
 
   const cols = STATS[pos];
   const totalColumns = cols.length + 6 + agreeCols.length;
