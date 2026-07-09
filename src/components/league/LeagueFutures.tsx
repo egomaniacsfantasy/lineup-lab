@@ -18,11 +18,10 @@ interface LeagueFuturesProps {
   history?: LineHistoryEntry[] | null;
 }
 
-type LeagueMarket = 'champion' | 'finals' | 'playoffs';
+type LeagueMarket = 'champion' | 'playoffs';
 
 const MARKET_OPTIONS: { label: string; value: LeagueMarket }[] = [
   { label: 'Champion', value: 'champion' },
-  { label: 'Finals', value: 'finals' },
   { label: 'Playoffs', value: 'playoffs' },
 ];
 
@@ -79,8 +78,6 @@ function sparkline(points: { at: number; probability: number }[], width = 130, h
 
 function getMarketOdds(team: LeagueFutureRow, market: LeagueMarket) {
   switch (market) {
-    case 'finals':
-      return team.finalsOdds;
     case 'playoffs':
       return team.playoffOdds;
     case 'champion':
@@ -282,6 +279,7 @@ export function LeagueFutures({
                 <div className="league-futures__context">
                   <span className="league-futures__record">
                     {team.projRecord ? `Proj ${team.projRecord}` : team.record}
+                    {team.avgSeed != null ? ` · Avg seed ${team.avgSeed.toFixed(1)}` : ''}
                   </span>
                 </div>
               </div>

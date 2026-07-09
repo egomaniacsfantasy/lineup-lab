@@ -126,7 +126,8 @@ export interface PricedFuture {
   finalsProb?: number;
   titleProb: number;
   championOdds: number;
-  finalsOdds: number;
+  finalsOdds?: number;
+  avgSeed?: number;
   isUser: boolean;
 }
 

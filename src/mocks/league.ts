@@ -10,10 +10,11 @@ export interface LeagueFutureRow {
   projWins?: number;
   projLosses?: number;
   championOdds: number;
-  finalsOdds: number;
+  finalsOdds?: number;
   playoffOdds: number;
   playoffProb: number;
   playoffClinched?: boolean;
+  avgSeed?: number;
   isUser: boolean;
 }
 

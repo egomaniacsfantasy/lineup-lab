@@ -158,10 +158,10 @@ export function toLeagueFutures(
         projWins: f.projWins,
         projLosses: f.projLosses,
         championOdds: f.championOdds,
-        finalsOdds: f.finalsOdds,
         playoffOdds: f.playoffOdds,
         playoffProb: f.playoffProb,
         playoffClinched: f.playoffClinched,
+        avgSeed: f.avgSeed,
         isUser: f.isUser,
       }));
   }
