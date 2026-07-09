@@ -617,7 +617,7 @@ function CompareSheet({
                     </span>
                     <p className="matchup-page__range-values">
                       <span>{formatRangeValue(volatility.floor)} floor</span>
-                      <span>{formatRangeValue(volatility.median)} Franco median</span>
+                      <span>{formatRangeValue(volatility.median)} mean</span>
                       <span>{formatRangeValue(volatility.ceiling)} ceiling</span>
                     </p>
                   </div>
@@ -878,6 +878,7 @@ function MatchupLive({
     [starterEvaluations],
   );
   const [isCompareMode, setIsCompareMode] = useState(false);
+  const [showOpponentLineup, setShowOpponentLineup] = useState(false);
   const [compareSelection, setCompareSelection] = useState<Player[]>([]);
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
@@ -1789,13 +1790,24 @@ function MatchupLive({
 
       {matchup.opponentTeam.roster.length > 0 ? (
         <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--lineup-rail">
-          <div className="matchup-page__module-row matchup-page__module-row--lineup">
+          <button
+            className="matchup-page__module-row matchup-page__module-row--lineup"
+            onClick={() => setShowOpponentLineup((v) => !v)}
+            type="button"
+            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            aria-expanded={showOpponentLineup}
+          >
             <div>
-              <h2 className="matchup-page__module-title">{matchup.opponentTeam.teamName}</h2>
-              <p className="matchup-page__lineup-hint">Opponent’s starters · our projections</p>
+              <h2 className="matchup-page__module-title">
+                {showOpponentLineup ? '▾' : '▸'} {matchup.opponentTeam.teamName}
+              </h2>
+              <p className="matchup-page__lineup-hint">
+                {showOpponentLineup ? 'Opponent’s starters · our projections' : 'Tap to see opponent’s lineup'}
+              </p>
             </div>
-          </div>
+          </button>
 
+          {showOpponentLineup ? (
           <div className="matchup-page__lineup-list">
             {matchup.opponentTeam.roster.map((slot) => (
               <div className="matchup-page__lineup-row" key={`opp-${slot.slotLabel}-${slot.starter.id}`}>
@@ -1820,6 +1832,7 @@ function MatchupLive({
               </div>
             ))}
           </div>
+          ) : null}
         </section>
       ) : null}
 

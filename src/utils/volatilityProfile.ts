@@ -1,4 +1,5 @@
 import type { Player, ScoringFormat } from '../types';
+import { tiltFromConsensus, adjustFP, scaleBound, type TiltScoring } from '../services/agreementTilt';
 
 export const MATCHUP_STATE_THRESHOLDS = {
   heavyUnderdog: 35,
@@ -31,6 +32,8 @@ type ProjectionRow = {
   name: string;
   team: string | null;
   weekly: Record<string, unknown>[];
+  /** Consensus agreement across all voters, from /api/projections. */
+  consensus?: { avg?: number | null } | null;
 };
 
 export interface VolatilityProjectionSet {
@@ -112,20 +115,28 @@ function readWeeklyProfile(
   const weekly = weeklyFor(row, week);
   if (!weekly) return EMPTY_PROFILE;
 
-  // These are the game_level fields rendered by ProjectionsPage's weekly grid.
-  const median = toNumber(weekly[weeklyMedianKey(row.position, scoringFormat)]);
-  const floor = toNumber(weekly[weeklyFloorKey(row.position, scoringFormat)]);
-  const ceiling = toNumber(weekly[weeklyCeilingKey(row.position, scoringFormat)]);
+  // Raw model values from the game_level grid.
+  const rawMean = toNumber(weekly[weeklyMedianKey(row.position, scoringFormat)]);
+  const rawFloor = toNumber(weekly[weeklyFloorKey(row.position, scoringFormat)]);
+  const rawCeiling = toNumber(weekly[weeklyCeilingKey(row.position, scoringFormat)]);
 
-  if (floor == null || median == null || ceiling == null || median <= 0) {
+  if (rawFloor == null || rawMean == null || rawCeiling == null || rawMean <= 0) {
     return EMPTY_PROFILE;
   }
 
+  // Apply the SAME consensus tilt the Projections page shows, so the compare
+  // range = the agreement-adjusted mean + floor/ceiling for this exact week.
+  const suf = scoringSuffix(row.position, scoringFormat) as TiltScoring;
+  const delta = tiltFromConsensus(row.consensus?.avg ?? null);
+  const mean = adjustFP(row.position, rawMean, weekly, suf, 'weekly', delta) ?? rawMean;
+  const floor = scaleBound(rawFloor, rawMean, mean) ?? rawFloor;
+  const ceiling = scaleBound(rawCeiling, rawMean, mean) ?? rawCeiling;
+
   return {
     floor,
-    median,
+    median: mean, // this is the model MEAN (point projection), not a median
     ceiling,
-    bandWidth: (ceiling - floor) / median,
+    bandWidth: (ceiling - floor) / mean,
     profile: null,
     available: true,
   };
