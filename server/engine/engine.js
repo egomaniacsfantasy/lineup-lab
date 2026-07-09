@@ -725,23 +725,53 @@ function titleOddsWithUserDelta({ league, teams, distByRoster, scheduleWeeks, we
 
 export function tradeLaneMatchesPricedResult(lane, priced) {
   if (!priced?.available || !priced.you || !priced.them) return false;
-  const youGain = Number((priced.you.valueDelta ?? 0).toFixed(1));
-  const themGain = Number((priced.them.valueDelta ?? 0).toFixed(1));
+  const youGain = roundTradeDelta(priced.you.valueDelta ?? 0);
+  const themGain = roundTradeDelta(priced.them.valueDelta ?? 0);
   return (
-    Math.sign(lane.valueGain ?? 0) === Math.sign(youGain) &&
-    Math.abs((lane.valueGain ?? 0) - youGain) <= 0.3 &&
-    Math.sign(lane.partnerGain ?? 0) === Math.sign(themGain) &&
-    Math.abs((lane.partnerGain ?? 0) - themGain) <= 0.3 &&
+    roundTradeDelta(lane.valueGain ?? 0) === youGain &&
+    roundTradeDelta(lane.partnerGain ?? 0) === themGain &&
     (lane.verdict == null || lane.verdict === priced.verdict) &&
     (lane.acceptanceProbability == null || lane.acceptanceProbability === priced.acceptance?.probability) &&
     (lane.valueGap == null || lane.valueGap === priced.valueGap)
   );
 }
 
+export function roundTradeDelta(value = 0) {
+  return Number((value ?? 0).toFixed(1));
+}
+
+export function starterImpactBand(delta = 0) {
+  const rounded = roundTradeDelta(delta);
+  if (rounded > 0.5) return 'upgrade';
+  if (rounded < -0.5) return 'downgrade';
+  return 'flat';
+}
+
+function titleOddsDelta(lane) {
+  return americanToProb(lane.titleOddsAfter ?? 0) - americanToProb(lane.titleOddsBefore ?? 0);
+}
+
+export function rankTradeLanes(lanes) {
+  return [...lanes].sort((a, b) => {
+    const titleDelta = Number(titleOddsDelta(b) >= 0) - Number(titleOddsDelta(a) >= 0);
+    if (titleDelta !== 0) return titleDelta;
+    const strictDelta = Number(b.framing === 'both_upgrade') - Number(a.framing === 'both_upgrade');
+    if (strictDelta !== 0) return strictDelta;
+    return (b.score ?? 0) - (a.score ?? 0);
+  });
+}
+
 export function laneAcceptReasons({ opp, give, get, priced, catalog, framing = 'both_upgrade' }) {
-  const youGain = Number((priced.you?.valueDelta ?? 0).toFixed(1));
-  const themGain = Number((priced.them?.valueDelta ?? 0).toFixed(1));
+  const youGain = roundTradeDelta(priced.you?.valueDelta ?? 0);
+  const themGain = roundTradeDelta(priced.them?.valueDelta ?? 0);
   const names = (ids) => ids.map((id) => catalog[id]?.name ?? `Player ${id}`).join(' + ');
+
+  if (titleOddsDelta({
+    titleOddsBefore: priced.you?.titleBefore,
+    titleOddsAfter: priced.you?.titleAfter,
+  }) < 0) {
+    return [`Adds weekly points; slightly lowers your title odds.`];
+  }
 
   if (priced.volatilityReason) {
     return [priced.volatilityReason];
@@ -756,7 +786,7 @@ export function laneAcceptReasons({ opp, give, get, priced, catalog, framing = '
     ];
   }
 
-  if (themGain > 0) {
+  if (starterImpactBand(themGain) === 'upgrade') {
     return [
       `${opp.teamName} upgrades starters by ${themGain.toFixed(1)} pts/wk; you add ${youGain.toFixed(1)}.`,
       `Both starters move: ${opp.teamName} +${themGain.toFixed(1)}, you +${youGain.toFixed(1)}.`,
@@ -976,7 +1006,7 @@ function computeMovers(ctx) {
           projectionMap,
           catalog,
         ).delta;
-        const strict = youGain > 0 && themGain > 0;
+        const strict = youGain > 0 && starterImpactBand(themGain) === 'upgrade';
         const fallback = youGain > 0 && themGain >= -1;
         if (!strict && !fallback) return null;
         return { candidate, youGain, themGain, strict };
@@ -1004,9 +1034,9 @@ function computeMovers(ctx) {
       });
       if (!priced.available || !priced.you || !priced.them) continue;
 
-      const youGain = Number((priced.you.valueDelta ?? 0).toFixed(1));
-      const themGain = Number((priced.them.valueDelta ?? 0).toFixed(1));
-      const strict = youGain > 0 && themGain > 0;
+      const youGain = roundTradeDelta(priced.you.valueDelta ?? 0);
+      const themGain = roundTradeDelta(priced.them.valueDelta ?? 0);
+      const strict = youGain > 0 && starterImpactBand(themGain) === 'upgrade';
       const fallback =
         youGain > 0 &&
         themGain >= -0.5 &&
@@ -1041,7 +1071,14 @@ function computeMovers(ctx) {
         pricedAt: Date.now(),
         titleOddsBefore: priced.you.titleBefore,
         titleOddsAfter: priced.you.titleAfter,
-        score: (strict ? 100 : 0) + youGain + themGain,
+        score:
+          (strict ? 100 : 0) +
+          youGain +
+          themGain +
+          Math.max(-10, Math.min(10, titleOddsDelta({
+            titleOddsBefore: priced.you.titleBefore,
+            titleOddsAfter: priced.you.titleAfter,
+          }) * 100)),
       };
       if (!tradeLaneMatchesPricedResult(lane, priced)) continue;
       (strict ? strictLanes : fallbackLanes).push(lane);
@@ -1049,12 +1086,12 @@ function computeMovers(ctx) {
   }
 
   const bestPerOpponent = new Map();
-  for (const lane of [...strictLanes, ...fallbackLanes].sort((a, b) => b.score - a.score)) {
+  for (const lane of rankTradeLanes([...strictLanes, ...fallbackLanes])) {
     if (!bestPerOpponent.has(lane.partnerRosterId)) bestPerOpponent.set(lane.partnerRosterId, lane);
   }
 
   movers.push(
-    ...[...bestPerOpponent.values()]
+    ...rankTradeLanes([...bestPerOpponent.values()])
       .slice(0, 4)
       .map(({ score, acceptanceReasons = [], ...lane }, index) => ({
         ...lane,
@@ -1423,15 +1460,16 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const reasons = [];
   let score = 0.35;
 
-  if (theirValueDelta > 0.5) {
+  const theirStarterBand = starterImpactBand(theirValueDelta);
+  if (theirStarterBand === 'upgrade') {
     score += theirValueDelta * 1.15;
     reasons.push(`Upgrades their starters by ${theirValueDelta} pts a week, rest of season.`);
-  } else if (theirValueDelta < -0.5) {
+  } else if (theirStarterBand === 'downgrade') {
     score += theirValueDelta * 1.35;
     reasons.push(`Downgrades their starters by ${Math.abs(theirValueDelta)} pts a week, rest of season.`);
   } else {
     score -= 0.8;
-    reasons.push("Barely moves their starters, so there's little reason to say yes.");
+    reasons.push('Their starters stay flat.');
   }
 
   if (bestPlayer.toThem) {

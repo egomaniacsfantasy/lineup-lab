@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { laneAcceptReasons, tradeLaneMatchesPricedResult } from './engine.js';
+import {
+  laneAcceptReasons,
+  rankTradeLanes,
+  starterImpactBand,
+  tradeLaneMatchesPricedResult,
+} from './engine.js';
 
 test('trade lane display numbers match the priced verdict result', () => {
   const priced = {
@@ -68,6 +73,44 @@ test('trade lane rejects mismatched verdict fields', () => {
   );
 });
 
+test('trade lane card deltas must equal verdict display deltas exactly', () => {
+  const priced = {
+    available: true,
+    you: { valueDelta: 0.64 },
+    them: { valueDelta: 0.24 },
+    verdict: 'Fair',
+    acceptance: { probability: 41 },
+    valueGap: 1,
+  };
+
+  assert.equal(
+    tradeLaneMatchesPricedResult(
+      {
+        valueGain: 0.7,
+        partnerGain: 0.2,
+        verdict: 'Fair',
+        acceptanceProbability: 41,
+        valueGap: 1,
+      },
+      priced,
+    ),
+    false,
+  );
+  assert.equal(
+    tradeLaneMatchesPricedResult(
+      {
+        valueGain: 0.6,
+        partnerGain: 0.2,
+        verdict: 'Fair',
+        acceptanceProbability: 41,
+        valueGap: 1,
+      },
+      priced,
+    ),
+    true,
+  );
+});
+
 test('fallback lane reasons are low-cost asks, not self-sabotage', () => {
   const reasons = laneAcceptReasons({
     opp: { teamName: 'Roster 4' },
@@ -108,4 +151,32 @@ test('lane reason variants use different sentence structures', () => {
   assert.equal(new Set(reasons).size, reasons.length);
   assert.match(reasons[0], /upgrades starters/);
   assert.match(reasons[1], /Both starters move/);
+});
+
+test('lane and verdict share starter-impact bands', () => {
+  assert.equal(starterImpactBand(0.2), 'flat');
+  assert.equal(starterImpactBand(0.6), 'upgrade');
+  assert.equal(starterImpactBand(-0.6), 'downgrade');
+});
+
+test('title-negative lanes cannot rank first over title-positive lanes', () => {
+  const [first, second] = rankTradeLanes([
+    {
+      partnerRosterId: 1,
+      framing: 'both_upgrade',
+      score: 110,
+      titleOddsBefore: 358,
+      titleOddsAfter: 380,
+    },
+    {
+      partnerRosterId: 2,
+      framing: 'near_fair_you_win',
+      score: 20,
+      titleOddsBefore: 358,
+      titleOddsAfter: 330,
+    },
+  ]);
+
+  assert.equal(first.partnerRosterId, 2);
+  assert.equal(second.partnerRosterId, 1);
 });

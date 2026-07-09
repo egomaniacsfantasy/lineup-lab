@@ -94,6 +94,16 @@ function hydrateKey(c: StoredConnection) {
   return `${c.provider}:${c.leagueId}:${c.userId}:${c.season ?? ''}`;
 }
 
+function activeConnectionChanged(a: StoredConnection | null, b: StoredConnection | null) {
+  if (!a || !b) return a !== b;
+  return (
+    leagueKey(a) !== leagueKey(b) ||
+    a.userId !== b.userId ||
+    a.leagueName !== b.leagueName ||
+    a.allLeagueIds.join('|') !== b.allLeagueIds.join('|')
+  );
+}
+
 const LeagueConnectionContext = createContext<LeagueConnectionValue | null>(null);
 
 function readStored(): StoredConnection | null {
@@ -233,7 +243,8 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   userIdRef.current = user?.id ?? null;
 
   // Saved leagues live on the account, so they follow you to any device.
-  // On login, Supabase is the source of truth for which league is active.
+  // If this browser already has an active league, keep it. Supabase fills the
+  // switcher list, but only the explicit league switcher changes the active row.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -262,7 +273,18 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           return;
         }
         const all = rows.map(rowToConnection);
-        const active = all.find((_, i) => rows[i].is_active) ?? all[0];
+        const localActive = stored
+          ? all.find((connection) => leagueKey(connection) === leagueKey(stored))
+          : null;
+        const dbActive = all.find((_, i) => rows[i].is_active) ?? all[0];
+        const active = localActive && stored
+          ? {
+              ...localActive,
+              leagueName: stored.leagueName ?? localActive.leagueName,
+              allLeagueIds: stored.allLeagueIds.length > 1 ? stored.allLeagueIds : all.map((l) => l.leagueId),
+              allLeagues: stored.allLeagues,
+            }
+          : dbActive;
         applyApiContext(active);
         try {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(active));
@@ -270,12 +292,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           // ignore
         }
         setLeagues(all);
-        setStored(active);
+        if (activeConnectionChanged(stored, active)) {
+          setStored(active);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [stored, user]);
 
   useEffect(() => {
     if (!user || !stored || stored.provider !== 'sleeper' || !stored.username) return;
