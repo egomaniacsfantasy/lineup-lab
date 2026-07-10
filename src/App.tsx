@@ -20,6 +20,7 @@ import { SeasonPage } from './pages/SeasonPage';
 import { TradePage } from './pages/TradePage';
 import { AdminProjectionsPage } from './pages/AdminProjectionsPage';
 import { ProjectionsPage } from './pages/ProjectionsPage';
+import { TradeAnalyzerPage } from './pages/TradeAnalyzerPage';
 
 /** League sync is the front door: no connection yet → /connect. */
 function HomeGate() {
@@ -53,6 +54,7 @@ function AppRoutes() {
                 <Route path="/market" element={<TradePage />} />
                 <Route path="/rankings" element={<MyBoardPage />} />
                 <Route path="/league" element={<LeaguePage />} />
+                <Route path="/trade-analyzer" element={<TradeAnalyzerPage />} />
                 <Route path="/more" element={<MorePage />} />
               </Route>
               <Route path="/projections" element={<ProjectionsPage />} />

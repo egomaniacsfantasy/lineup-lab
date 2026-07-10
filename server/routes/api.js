@@ -9,7 +9,7 @@ import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
 import { saveEspnCreds } from '../providers/espnCredStore.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
-import { getLeaguePricing, priceTrade } from '../engine/engine.js';
+import { getLeaguePricing, priceTrade, analyzeTrade } from '../engine/engine.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
@@ -602,6 +602,41 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
         traits,
       }),
     );
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Trade analyzer: re-simulate the season with post-trade rosters, both sides. */
+apiRouter.post('/league/:leagueId/trade-analyze', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const { userId, partnerRosterId, give = [], get = [], userDrops = null } = req.body ?? {};
+    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
+
+    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
+    if (!ctxBase) throw new Error('league_not_found');
+
+    const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
+    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
+      const all = [];
+      for (let week = 1; week <= lastWeek; week += 1) {
+        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
+      }
+      return all;
+    });
+
+    let liveProjections;
+    try {
+      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
+      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+    } catch (err) {
+      console.error('[trade-analyze] adjusted projections failed; using snapshot', err);
+    }
+
+    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    res.json(analyzeTrade(ctx, { partnerRosterId: Number(partnerRosterId), give, get, userDrops }));
   } catch (error) {
     next(error);
   }

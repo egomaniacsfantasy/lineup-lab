@@ -47,6 +47,8 @@ export function AppHeader() {
         { label: 'League', path: '/league' },
         ...(hideTrade ? [] : [{ label: 'Market', path: '/market' }]),
         { label: 'Board', path: '/rankings' },
+        { label: 'Projections', path: '/projections' },
+        ...(hideTrade ? [] : [{ label: 'Trades', path: '/trade-analyzer' }]),
         { label: 'More', path: '/more' },
       ]
     : [{ label: 'Connect', path: '/connect' }];

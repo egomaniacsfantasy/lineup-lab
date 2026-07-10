@@ -541,3 +541,37 @@ export function priceTrade(
     body: JSON.stringify(body),
   });
 }
+
+export interface TradeSideStat {
+  playoffProb: number;
+  titleProb: number;
+  avgSeed: number;
+  expWins: number;
+}
+export interface TradeSideDelta {
+  rosterId: number;
+  teamName: string;
+  isUser: boolean;
+  before: TradeSideStat;
+  after: TradeSideStat;
+  delta: TradeSideStat;
+}
+export interface TradeAnalysis {
+  available: boolean;
+  reason?: string;
+  maxRoster?: number;
+  dropsNeeded?: { you: number; partner: number };
+  drops?: { you: { playerId: string; name: string }[]; partner: { playerId: string; name: string }[] };
+  you?: TradeSideDelta;
+  partner?: TradeSideDelta;
+}
+export function analyzeTradeApi(
+  leagueId: string,
+  body: { userId: string; partnerRosterId: number; give: string[]; get: string[]; userDrops?: string[] | null },
+): Promise<TradeAnalysis> {
+  return get<TradeAnalysis>(`/api/league/${leagueId}/trade-analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
