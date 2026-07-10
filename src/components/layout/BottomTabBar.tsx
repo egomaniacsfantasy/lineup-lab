@@ -45,6 +45,28 @@ const BASE_TABS = [
     ),
   },
   {
+    label: 'Proj',
+    path: '/projections',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M4 16V4M4 16h12" />
+        <rect x="6.5" y="10" width="2.4" height="4" rx="0.5" />
+        <rect x="10.3" y="7" width="2.4" height="7" rx="0.5" />
+        <rect x="14.1" y="4.5" width="2.4" height="9.5" rx="0.5" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Trades',
+    path: '/trade-analyzer',
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M4 7h9M11 4.5 13.5 7 11 9.5" />
+        <path d="M16 13H7M9 10.5 6.5 13 9 15.5" />
+      </svg>
+    ),
+  },
+  {
     label: 'More',
     path: '/more',
     icon: (
@@ -63,7 +85,7 @@ export function BottomTabBar() {
   const hideTrade = bootstrap != null && bootstrap.league.leagueType !== 'redraft';
   const tabs = stored
     ? hideTrade
-      ? BASE_TABS.filter((t) => t.path !== '/market')
+      ? BASE_TABS.filter((t) => t.path !== '/market' && t.path !== '/trade-analyzer')
       : BASE_TABS
     : BASE_TABS.filter((t) => t.path === '/league').map((tab) => ({
         ...tab,
