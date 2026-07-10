@@ -123,4 +123,4 @@ export function buildEspnLaunchCode(returnUrl) {
   return `javascript:${script.replace(/\s+/g, ' ')}`;
 }
 
-export const espnLoginEnabled = import.meta.env?.VITE_ESPN_LOGIN_ENABLED === 'true';
+export const espnLoginEnabled = import.meta.env?.VITE_ESPN_LOGIN_ENABLED !== 'false';

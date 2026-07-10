@@ -17,6 +17,8 @@ services:
         value: "22.13.1"
       - key: ESPN_LOGIN_ENABLED
         value: "true"
+      - key: VITE_ESPN_LOGIN_ENABLED
+        value: "true"
       - key: ESPN_LOGIN_WORKER_URL
         value: "https://odds-gods-espn-login-worker.onrender.com"
       - key: ADMIN_PASSWORD

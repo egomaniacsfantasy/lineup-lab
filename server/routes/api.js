@@ -27,8 +27,9 @@ import { computeRosterNeeds, computeSuperlatives } from '../services/scoutingSig
 
 const DAY = 24 * 60 * 60_000;
 const autoHarvested = new Set();
-const ESPN_LOGIN_ENABLED = process.env.ESPN_LOGIN_ENABLED === 'true';
-const ESPN_LOGIN_WORKER_URL = process.env.ESPN_LOGIN_WORKER_URL || '';
+const DEFAULT_ESPN_LOGIN_WORKER_URL = 'https://odds-gods-espn-login-worker.onrender.com';
+const ESPN_LOGIN_ENABLED = process.env.ESPN_LOGIN_ENABLED !== 'false';
+const ESPN_LOGIN_WORKER_URL = process.env.ESPN_LOGIN_WORKER_URL || DEFAULT_ESPN_LOGIN_WORKER_URL;
 
 function espnLoginWorkerEndpoint() {
   if (!ESPN_LOGIN_WORKER_URL) return '';
