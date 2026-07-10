@@ -11,7 +11,9 @@ import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { toPlayer } from '../adapters/connectedLeague';
 import {
   priceTrade,
+  analyzeTradeApi,
   type TradeResult,
+  type TradeAnalysis,
   type TradeTraits,
 } from '../services/leagueApi';
 import type { LeagueBootstrap, MarketMover } from '../services/leagueApi';
@@ -281,6 +283,10 @@ function TradeDealsView() {
   const [getIds, setGetIds] = useState<string[]>([]);
   const [result, setResult] = useState<TradeResult | null>(null);
   const [isPricing, setIsPricing] = useState(false);
+  const [analysis, setAnalysis] = useState<TradeAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisDrops, setAnalysisDrops] = useState<string[] | null>(null);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
   const refreshKeyRef = useRef<string | null>(null);
@@ -335,7 +341,7 @@ function TradeDealsView() {
     setPartnerRosterId(partner.rosterId);
     setGive(nextGive);
     setGetIds(nextGet);
-    setResult(null);
+    resetOutputs();
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   }, [bootstrap, lanes, params, stored]);
 
@@ -378,9 +384,40 @@ function TradeDealsView() {
     );
   }
 
+  // Any change to the trade invalidates both the price verdict and the sim.
+  const resetOutputs = () => {
+    setResult(null);
+    setAnalysis(null);
+    setAnalysisError(null);
+    setAnalysisDrops(null);
+  };
+
+  const runAnalysis = async (giveIds: string[], getIds2: string[], userDrops: string[] | null = null) => {
+    if (partnerRosterId == null) return;
+    setAnalyzing(true);
+    setAnalysisError(null);
+    try {
+      const a = await analyzeTradeApi(stored.leagueId, {
+        userId: stored.userId,
+        partnerRosterId,
+        give: giveIds,
+        get: getIds2,
+        userDrops,
+      });
+      setAnalysis(a);
+      setAnalysisDrops(userDrops);
+      if (!a.available) setAnalysisError(a.reason ?? 'Could not analyze this trade.');
+    } catch (e) {
+      setAnalysis(null);
+      setAnalysisError(e instanceof Error ? e.message : 'Analysis failed.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const toggle = (list: string[], set: (v: string[]) => void, id: string) => {
     set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
-    setResult(null);
+    resetOutputs();
   };
 
   const loadLane = (lane: (typeof lanes)[number]) => {
@@ -393,7 +430,7 @@ function TradeDealsView() {
     setPartnerRosterId(ownerRosterId);
     setGive(givePlayerIds);
     setGetIds(getPlayerIds);
-    setResult(null);
+    resetOutputs();
     setParams({
       view: 'deals',
       leagueId: stored.leagueId,
@@ -407,15 +444,19 @@ function TradeDealsView() {
   const runPricing = async () => {
     if (partnerRosterId == null || give.length === 0 || getIds.length === 0) return;
     setIsPricing(true);
+    // One press: price the trade AND simulate its full-season impact.
+    const pricePromise = priceTrade(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId,
+      give,
+      get: getIds,
+      traits: NEUTRAL_TRADE_TRAITS,
+    })
+      .then(setResult)
+      .catch(() => {});
+    const analysisPromise = runAnalysis(give, getIds, null);
     try {
-      const priced = await priceTrade(stored.leagueId, {
-        userId: stored.userId,
-        partnerRosterId,
-        give,
-        get: getIds,
-        traits: NEUTRAL_TRADE_TRAITS,
-      });
-      setResult(priced);
+      await Promise.allSettled([pricePromise, analysisPromise]);
     } finally {
       setIsPricing(false);
     }
@@ -430,15 +471,18 @@ function TradeDealsView() {
     setGive(nextGive);
     setGetIds(nextGet);
     setIsPricing(true);
+    const pricePromise = priceTrade(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId,
+      give: nextGive,
+      get: nextGet,
+      traits: NEUTRAL_TRADE_TRAITS,
+    })
+      .then(setResult)
+      .catch(() => {});
+    const analysisPromise = runAnalysis(nextGive, nextGet, null);
     try {
-      const priced = await priceTrade(stored.leagueId, {
-        userId: stored.userId,
-        partnerRosterId,
-        give: nextGive,
-        get: nextGet,
-        traits: NEUTRAL_TRADE_TRAITS,
-      });
-      setResult(priced);
+      await Promise.allSettled([pricePromise, analysisPromise]);
     } finally {
       setIsPricing(false);
     }
@@ -643,7 +687,7 @@ function TradeDealsView() {
               onChange={(event) => {
                 setPartnerRosterId(Number(event.target.value) || null);
                 setGetIds([]);
-                setResult(null);
+                resetOutputs();
               }}
               value={partnerRosterId ?? ''}
             >
@@ -684,11 +728,11 @@ function TradeDealsView() {
         </button>
 
         <TradeAnalyzerPanel
-          leagueId={stored.leagueId}
-          userId={stored.userId}
-          partnerRosterId={partnerRosterId}
-          give={give}
-          get={getIds}
+          analysis={analysis}
+          analyzing={analyzing}
+          error={analysisError}
+          drops={analysisDrops}
+          onOverrideDrops={(d) => void runAnalysis(give, getIds, d)}
           userPlayers={userTeam.players}
           nameOf={(id) => playerName(bootstrap, id)}
           posOf={(id) => bootstrap.players[id]?.position ?? ''}

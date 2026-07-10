@@ -15,6 +15,12 @@
   margin: 0;
 }
 
+.trade-analyzer-panel__loading {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  margin: 0;
+}
+
 .trade-analyzer-panel__results {
   display: flex;
   flex-direction: column;

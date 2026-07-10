@@ -1,76 +1,39 @@
-import { useEffect, useRef, useState } from 'react';
-import { analyzeTradeApi, type TradeAnalysis, type TradeSideDelta } from '../../services/leagueApi';
+import { type TradeAnalysis, type TradeSideDelta } from '../../services/leagueApi';
 
 /**
- * Season-simulation impact for a trade that's being built elsewhere (the Deals
- * "Build a trade" panel owns the give/get/partner selection). Given those
- * selections, it re-simulates the rest of the season 10k× (same seed baseline
- * vs after) and shows Δ championship %, playoff %, expected wins, and seed for
- * both sides, plus any roster drop the trade forces.
+ * Presentational season-simulation impact for the trade being built in the Deals
+ * "Build a trade" panel. The parent runs the analysis (as part of "Price this
+ * trade") and passes the result in; this renders Δ championship %, playoff %,
+ * expected wins, and seed for both sides, plus any forced roster drop. Drop
+ * overrides call back to the parent to re-run the sim.
  */
 export function TradeAnalyzerPanel({
-  leagueId,
-  userId,
-  partnerRosterId,
-  give,
-  get,
+  analysis,
+  analyzing,
+  error,
+  drops,
+  onOverrideDrops,
   userPlayers,
   nameOf,
   posOf,
 }: {
-  leagueId: string;
-  userId: string;
-  partnerRosterId: number | null;
-  give: string[];
-  get: string[];
+  analysis: TradeAnalysis | null;
+  analyzing: boolean;
+  error: string | null;
+  drops: string[] | null;
+  onOverrideDrops: (d: string[]) => void;
   userPlayers: string[];
   nameOf: (id: string) => string;
   posOf: (id: string) => string;
 }) {
-  const [analysis, setAnalysis] = useState<TradeAnalysis | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [drops, setDrops] = useState<string[] | null>(null);
-
-  const canRun = partnerRosterId != null && (give.length > 0 || get.length > 0);
-  // Invalidate a stale result whenever the trade selection changes.
-  const sig = `${partnerRosterId}|${[...give].sort().join(',')}|${[...get].sort().join(',')}`;
-  const lastSig = useRef<string | null>(null);
-  useEffect(() => {
-    if (sig !== lastSig.current) {
-      setAnalysis(null);
-      setError(null);
-      setDrops(null);
-    }
-  }, [sig]);
-
-  async function run(userDrops: string[] | null = null) {
-    if (partnerRosterId == null) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const r = await analyzeTradeApi(leagueId, { userId, partnerRosterId, give, get, userDrops });
-      lastSig.current = sig;
-      setAnalysis(r);
-      setDrops(userDrops);
-      if (!r.available) setError(r.reason ?? 'Could not analyze this trade.');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Analysis failed.');
-    } finally {
-      setLoading(false);
-    }
+  if (!analyzing && !error && !(analysis?.available && analysis.you && analysis.partner)) {
+    return null;
   }
-
   return (
     <div className="trade-analyzer-panel">
-      <button
-        className="trade-cc__price-btn trade-analyzer-panel__btn"
-        disabled={!canRun || loading}
-        onClick={() => void run(null)}
-        type="button"
-      >
-        {loading ? 'Simulating season…' : 'Simulate season impact'}
-      </button>
+      {analyzing && !analysis ? (
+        <p className="trade-analyzer-panel__loading">Simulating rest of season…</p>
+      ) : null}
 
       {error ? <p className="trade-analyzer-panel__error">{error}</p> : null}
 
@@ -79,7 +42,7 @@ export function TradeAnalyzerPanel({
           result={analysis}
           userPlayers={userPlayers}
           drops={drops}
-          onOverrideDrops={(d) => run(d)}
+          onOverrideDrops={onOverrideDrops}
           nameOf={nameOf}
           posOf={posOf}
         />
