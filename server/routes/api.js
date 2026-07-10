@@ -28,6 +28,7 @@ import { computeRosterNeeds, computeSuperlatives } from '../services/scoutingSig
 const DAY = 24 * 60 * 60_000;
 const autoHarvested = new Set();
 const ESPN_LOGIN_ENABLED = process.env.ESPN_LOGIN_ENABLED === 'true';
+const ESPN_LOGIN_WORKER_URL = process.env.ESPN_LOGIN_WORKER_URL || '';
 
 /**
  * A user's "Build Your Own Rankings" overlay rides on a base64 JSON header so
@@ -101,6 +102,22 @@ apiRouter.get('/metrics', (_req, res) => {
     callsInLastMinute: callsInLastMinute(),
     gameWindow: isGameWindow(),
   });
+});
+
+apiRouter.post('/telemetry/event', (req, res) => {
+  const { area, event, payload = {}, at } = req.body ?? {};
+  const cleanPayload = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (/password|espnS2|espn_s2|swid|token|cookie|paste/i.test(key)) continue;
+    cleanPayload[key] = value;
+  }
+  console.log('[telemetry]', {
+    area: String(area ?? 'unknown').slice(0, 80),
+    event: String(event ?? 'unknown').slice(0, 120),
+    at: Number(at) || Date.now(),
+    payload: cleanPayload,
+  });
+  res.json({ ok: true });
 });
 
 apiRouter.get('/state', async (req, res, next) => {
@@ -268,20 +285,72 @@ apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
   }
 });
 
-apiRouter.post('/espn/login/start', (_req, res) => {
+apiRouter.post('/espn/login/start', async (req, res, next) => {
   if (!ESPN_LOGIN_ENABLED) {
     res.status(503).json({
       error: 'espn_login_disabled',
-      message: "Connect from ESPN's site instead.",
+      status: 'fallback',
+      reason: 'disabled',
+      message: "Log in with ESPN is off for this deploy. Use the ESPN-site connector below.",
     });
     return;
   }
 
-  res.status(501).json({
-    error: 'espn_login_worker_unavailable',
-    message:
-      'Log in with ESPN is not mounted on this server yet. Connect from ESPN’s site instead.',
-  });
+  const { leagueId, season, email, password, otp, challengeId } = req.body ?? {};
+  if (!leagueId || !season || !email || !password) {
+    res.status(400).json({
+      error: 'espn_login_missing_fields',
+      status: 'fallback',
+      reason: 'missing_fields',
+      message: 'Enter your ESPN email and password, then try again.',
+    });
+    return;
+  }
+
+  if (!ESPN_LOGIN_WORKER_URL) {
+    res.status(501).json({
+      error: 'espn_login_worker_unavailable',
+      status: 'fallback',
+      reason: 'worker_unavailable',
+      message: 'Log in with ESPN is not mounted on this server yet. Use the ESPN-site connector below.',
+    });
+    return;
+  }
+
+  try {
+    const workerResponse = await fetch(ESPN_LOGIN_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leagueId, season, email, password, otp, challengeId }),
+    });
+    const body = await workerResponse.json().catch(() => ({}));
+
+    if (!workerResponse.ok) {
+      res.status(workerResponse.status).json({
+        error: body.error ?? 'espn_login_failed',
+        status: body.status ?? 'fallback',
+        reason: body.reason ?? 'worker_error',
+        message: body.message ?? 'ESPN would not complete that login. Use the ESPN-site connector below.',
+      });
+      return;
+    }
+
+    if (body.status === 'connected' && body.espnS2 && body.swid) {
+      saveEspnCreds(leagueId, { espnS2: body.espnS2, swid: body.swid });
+      const result = await espnConnect({
+        season,
+        leagueId,
+        espnS2: body.espnS2,
+        swid: body.swid,
+      });
+      res.json({ status: 'connected', ...result });
+      return;
+    }
+
+    res.json(body);
+  } catch (error) {
+    next(error);
+  }
 });
 
 async function loadLeagueContext(provider, leagueId, userId) {

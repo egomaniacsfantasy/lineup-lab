@@ -13,4 +13,5 @@ export function parseEspnLeagueId(raw: string): string;
 export function parseEspnSessionPaste(raw: string): ParsedEspnSession;
 export function parseEspnCookiePaste(raw: string): { espnS2: string; swid: string } | null;
 export function espnSessionPasteError(missing?: string[]): string | null;
+export function buildEspnConnectorBookmarklet(returnUrl: string): string;
 export const espnLoginEnabled: boolean;

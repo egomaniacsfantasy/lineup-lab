@@ -80,18 +80,47 @@ export function espnSessionPasteError(missing = []) {
   const missingSwid = missingSet.has('SWID');
 
   if (missingS2 && missingSwid) {
-    return 'Could not find espn_s2 or SWID — copy the whole ESPN session line and paste it all.';
+    return 'Could not find espn_s2 or SWID — run the Odds Gods connector on your ESPN league page, then paste what it gives you.';
   }
 
   if (missingSwid) {
-    return 'Found espn_s2 but no SWID — copy the whole ESPN session line and paste it all.';
+    return 'Found espn_s2 but no SWID — ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.';
   }
 
   if (missingS2) {
-    return 'Found SWID but no espn_s2 — copy the whole ESPN session line and paste it all.';
+    return 'Found SWID but no espn_s2 — ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.';
   }
 
   return null;
+}
+
+export function buildEspnConnectorBookmarklet(returnUrl) {
+  const target = String(returnUrl || '').replace(/'/g, '%27');
+  const script = `(() => {
+    const send = '${target}';
+    const onEspn = /(^|\\.)fantasy\\.espn\\.com$/i.test(location.hostname);
+    if (!onEspn) {
+      alert('Open your ESPN fantasy league first, then tap Connect Odds Gods again.');
+      return;
+    }
+    const blob = document.cookie || '';
+    const leagueId = new URLSearchParams(location.search).get('leagueId') || '';
+    const seasonId = new URLSearchParams(location.search).get('seasonId') || '';
+    const hasBoth = /espn_s2=/i.test(blob) && /SWID=/i.test(blob);
+    const url = new URL(send);
+    if (leagueId) url.searchParams.set('espnLeagueId', leagueId);
+    if (seasonId) url.searchParams.set('espnSeason', seasonId);
+    url.searchParams.set('espnCapture', blob);
+    if (hasBoth) {
+      location.href = url.toString();
+      return;
+    }
+    navigator.clipboard?.writeText(blob).finally(() => {
+      alert('ESPN did not expose everything Odds Gods needs on this page. Return to Odds Gods; the paste box will tell you exactly what is missing.');
+      location.href = url.toString();
+    });
+  })()`;
+  return `javascript:${encodeURIComponent(script)}`;
 }
 
 export const espnLoginEnabled = import.meta.env?.VITE_ESPN_LOGIN_ENABLED === 'true';

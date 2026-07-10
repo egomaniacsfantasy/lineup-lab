@@ -461,6 +461,46 @@ export function connectEspn(
   });
 }
 
+export type EspnLoginResult =
+  | {
+      status: 'connected';
+      league: { id: string; name: string; season: string; totalTeams: number; scoringFamily: string };
+      teams: EspnTeamSummary[];
+      espnS2?: string;
+      swid?: string;
+    }
+  | { status: 'otp_required'; challengeId: string; message: string }
+  | { status: 'fallback'; reason: string; message: string };
+
+export function startEspnLogin(body: {
+  leagueId: string;
+  season: string;
+  email: string;
+  password: string;
+  otp?: string;
+  challengeId?: string;
+}): Promise<EspnLoginResult> {
+  return get<EspnLoginResult>('/api/espn/login/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function trackEspnConnectEvent(event: string, payload: Record<string, unknown> = {}) {
+  return fetch('/api/telemetry/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      area: 'espn_connect',
+      event,
+      payload,
+      at: Date.now(),
+    }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 export function fetchBootstrap(leagueId: string, userId: string) {
   return get<LeagueBootstrap>(
     `/api/league/${leagueId}/bootstrap?userId=${encodeURIComponent(userId)}`,

@@ -4,7 +4,7 @@
  * The demo stays reachable, one click below.
  */
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
@@ -13,7 +13,9 @@ import './ConnectPage.css';
 export function ConnectPage() {
   const { stored, connect } = useLeagueConnection();
   const navigate = useNavigate();
-  const [flow, setFlow] = useState<'none' | 'sleeper' | 'espn'>('none');
+  const [searchParams] = useSearchParams();
+  const hasEspnCapture = searchParams.has('espnCapture') || searchParams.has('espnLeagueId');
+  const [flow, setFlow] = useState<'none' | 'sleeper' | 'espn'>(hasEspnCapture ? 'espn' : 'none');
 
   // already connected — straight to the board
   if (stored) {
@@ -32,6 +34,9 @@ export function ConnectPage() {
           />
         ) : (
           <EspnConnect
+            initialLeagueInput={searchParams.get('espnLeagueId') ?? ''}
+            initialPaste={searchParams.get('espnCapture') ?? ''}
+            initialSeason={searchParams.get('espnSeason') ?? ''}
             onConnected={(connection) => {
               connect(connection);
               navigate('/matchup', { replace: true });

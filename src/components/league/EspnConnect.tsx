@@ -1,11 +1,14 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   connectEspn,
   LeagueApiError,
+  startEspnLogin,
+  trackEspnConnectEvent,
   type EspnTeamSummary,
 } from '../../services/leagueApi';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import {
+  buildEspnConnectorBookmarklet,
   espnSessionPasteError,
   espnLoginEnabled,
   parseEspnLeagueInput,
@@ -14,6 +17,9 @@ import {
 import './EspnConnect.css';
 
 interface EspnConnectProps {
+  initialLeagueInput?: string;
+  initialPaste?: string;
+  initialSeason?: string;
   onConnected: (connection: StoredConnection) => void;
 }
 
@@ -31,18 +37,39 @@ type Step =
       swid: string | null;
     };
 
-export function EspnConnect({ onConnected }: EspnConnectProps) {
+export function EspnConnect({
+  initialLeagueInput = '',
+  initialPaste = '',
+  initialSeason = '',
+  onConnected,
+}: EspnConnectProps) {
   const [step, setStep] = useState<Step>({ name: 'league' });
-  const [leagueInput, setLeagueInput] = useState('');
-  const [privateLeagueId, setPrivateLeagueId] = useState('');
-  const [privateSeason, setPrivateSeason] = useState('');
-  const [cookiePaste, setCookiePaste] = useState('');
-  const [showFallback, setShowFallback] = useState(false);
+  const [leagueInput, setLeagueInput] = useState(initialLeagueInput);
+  const [privateLeagueId, setPrivateLeagueId] = useState(initialLeagueInput);
+  const [privateSeason, setPrivateSeason] = useState(initialSeason);
+  const [cookiePaste, setCookiePaste] = useState(initialPaste);
+  const [showFallback, setShowFallback] = useState(Boolean(initialPaste));
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginOtp, setLoginOtp] = useState('');
+  const [loginChallengeId, setLoginChallengeId] = useState<string | null>(null);
+  const [copiedConnector, setCopiedConnector] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoTriedPaste = useRef(false);
 
   const leagueInputRef = useRef({ leagueId: '', season: '' });
   leagueInputRef.current = parseEspnLeagueInput(leagueInput);
+
+  const connectorReturnUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '/connect';
+    return `${window.location.origin}/connect`;
+  }, []);
+
+  const connectorHref = useMemo(
+    () => buildEspnConnectorBookmarklet(connectorReturnUrl),
+    [connectorReturnUrl],
+  );
 
   // Core connect. Cookies are optional (public leagues need none).
   const doConnect = async (creds?: { espnS2: string; swid: string }) => {
@@ -68,18 +95,23 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
     } catch (caught) {
       if (caught instanceof LeagueApiError && caught.code === 'espn_private' && creds) {
         setShowFallback(true);
-        setError('ESPN rejected this session. It may be expired — open ESPN again, copy the full session line, and paste it here.');
+        setError('ESPN rejected this login capture. It may be expired — open ESPN again, run the connector, and paste the new output here.');
+        void trackEspnConnectEvent('failure', { reason: 'private_rejected_capture' });
       } else if (caught instanceof LeagueApiError && caught.code === 'espn_private') {
         setPrivateLeagueId(id);
         setPrivateSeason(connectSeason);
         setShowFallback(true);
         setError(null);
+        void trackEspnConnectEvent('privacy_escalation', { leagueId: id, season: connectSeason });
       } else {
         setError(
           caught instanceof LeagueApiError
             ? caught.message
             : 'Could not reach ESPN. Check your connection and try again.',
         );
+        void trackEspnConnectEvent('failure', {
+          reason: caught instanceof LeagueApiError ? caught.code : 'network',
+        });
       }
     } finally {
       setIsLoading(false);
@@ -88,16 +120,93 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
 
   const attemptConnect = () => {
     setPrivateLeagueId('');
+    void trackEspnConnectEvent('league_submit', {
+      hasUrl: leagueInput.includes('fantasy.espn.com'),
+      hasSeason: Boolean(leagueInputRef.current.season),
+    });
     void doConnect();
   };
 
   const connectFromPaste = () => {
     const { creds, missing } = parseEspnSessionPaste(cookiePaste);
+    void trackEspnConnectEvent('paste_submit', {
+      missing: missing.join(',') || 'none',
+      hasLeague: Boolean(privateLeagueId || leagueInputRef.current.leagueId),
+    });
     if (!creds) {
-      setError(espnSessionPasteError(missing) ?? 'Paste the full ESPN session line and try again.');
+      setError(espnSessionPasteError(missing) ?? 'Paste the connector output and try again.');
       return;
     }
     void doConnect(creds);
+  };
+
+  const connectWithLogin = async () => {
+    const id = privateLeagueId || leagueInputRef.current.leagueId;
+    const connectSeason = privateSeason || leagueInputRef.current.season || CURRENT_SEASON;
+    if (!id) {
+      setError('Paste an ESPN league URL or league ID first.');
+      return;
+    }
+    if (!loginEmail || !loginPassword) {
+      setError('Enter your ESPN email and password.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    void trackEspnConnectEvent('login_submit', {
+      leagueId: id,
+      season: connectSeason,
+      hasOtp: Boolean(loginOtp),
+    });
+    try {
+      const result = await startEspnLogin({
+        leagueId: id,
+        season: connectSeason,
+        email: loginEmail,
+        password: loginPassword,
+        otp: loginOtp || undefined,
+        challengeId: loginChallengeId || undefined,
+      });
+
+      if (result.status === 'otp_required') {
+        setLoginChallengeId(result.challengeId);
+        setError(result.message || 'ESPN emailed you a code. Enter it below to continue.');
+        void trackEspnConnectEvent('login_otp_required', { leagueId: id });
+        return;
+      }
+
+      if (result.status === 'connected') {
+        setStep({
+          name: 'pick-team',
+          leagueId: id,
+          season: connectSeason,
+          leagueName: result.league.name,
+          teams: result.teams,
+          espnS2: result.espnS2 ?? null,
+          swid: result.swid ?? null,
+        });
+        setLoginPassword('');
+        void trackEspnConnectEvent('login_success', { leagueId: id, teamCount: result.teams.length });
+        return;
+      }
+
+      setShowFallback(true);
+      setError(result.message);
+      void trackEspnConnectEvent('login_fallback', { reason: result.reason });
+    } catch (caught) {
+      setShowFallback(true);
+      setError(
+        caught instanceof LeagueApiError
+          ? caught.message
+          : 'ESPN login could not finish. Use the ESPN-site connector below.',
+      );
+      void trackEspnConnectEvent('login_fallback', {
+        reason: caught instanceof LeagueApiError ? caught.code : 'network',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const openEspnLeague = () => {
@@ -107,7 +216,38 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
       ? `https://fantasy.espn.com/football/league?leagueId=${encodeURIComponent(id)}&seasonId=${encodeURIComponent(connectSeason)}`
       : 'https://fantasy.espn.com/football/';
     window.open(url, '_blank', 'noopener,noreferrer');
+    void trackEspnConnectEvent('open_espn', { hasLeague: Boolean(id) });
   };
+
+  const copyConnector = async () => {
+    try {
+      await navigator.clipboard.writeText(connectorHref);
+      setCopiedConnector(true);
+      void trackEspnConnectEvent('connector_copy', {});
+    } catch {
+      setCopiedConnector(false);
+      setError('Could not copy the connector. Drag the Connect Odds Gods button to your bookmarks bar instead.');
+    }
+  };
+
+  useEffect(() => {
+    void trackEspnConnectEvent('view', { hasCapture: Boolean(initialPaste) });
+  }, [initialPaste]);
+
+  useEffect(() => {
+    if (!initialPaste || autoTriedPaste.current) return;
+    autoTriedPaste.current = true;
+    const parsed = parseEspnSessionPaste(initialPaste);
+    if (parsed.creds) {
+      void doConnect(parsed.creds);
+      return;
+    }
+    setShowFallback(true);
+    setError(espnSessionPasteError(parsed.missing));
+    // doConnect is intentionally not a dependency; this effect is a one-shot
+    // handoff from the ESPN bookmarklet back into the connector.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPaste]);
 
   return (
     <section aria-labelledby="espn-connect-title" className="espn-connect">
@@ -155,36 +295,95 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
 
               {espnLoginEnabled ? (
                 <div className="espn-connect__login-card">
+                  <p className="espn-connect__fallback-title">Log in with ESPN</p>
                   <p className="espn-connect__cookies-note">
-                    Log in with ESPN is enabled for this environment, but the
-                    Disney login worker is not mounted on this server yet.
+                    Read-only. Your password is used once and never stored.
                   </p>
+                  <label className="espn-connect__field">
+                    <span className="espn-connect__label">ESPN email</span>
+                    <input
+                      autoComplete="username"
+                      className="espn-connect__input"
+                      onChange={(event) => setLoginEmail(event.target.value)}
+                      type="email"
+                      value={loginEmail}
+                    />
+                  </label>
+                  <label className="espn-connect__field">
+                    <span className="espn-connect__label">ESPN password</span>
+                    <input
+                      autoComplete="current-password"
+                      className="espn-connect__input"
+                      onChange={(event) => setLoginPassword(event.target.value)}
+                      type="password"
+                      value={loginPassword}
+                    />
+                  </label>
+                  {loginChallengeId ? (
+                    <label className="espn-connect__field">
+                      <span className="espn-connect__label">Code ESPN emailed you</span>
+                      <input
+                        autoComplete="one-time-code"
+                        className="espn-connect__input"
+                        inputMode="numeric"
+                        onChange={(event) => setLoginOtp(event.target.value)}
+                        value={loginOtp}
+                      />
+                    </label>
+                  ) : null}
                   <button
                     className="espn-connect__submit"
-                    disabled
+                    disabled={isLoading}
+                    onClick={connectWithLogin}
                     type="button"
                   >
-                    Log in with ESPN
+                    {isLoading ? 'Connecting…' : 'Connect with ESPN'}
                   </button>
                 </div>
               ) : null}
 
               <div className="espn-connect__fallback-card">
-                <p className="espn-connect__fallback-title">Connect from ESPN&apos;s site</p>
-                <ol className="espn-connect__steps">
-                  <li>Open your league on ESPN in a browser where you&apos;re already signed in.</li>
-                  <li>Paste the full ESPN session text here. We extract only what the sync needs.</li>
-                  <li>Your password is never requested or stored.</li>
-                </ol>
+                <p className="espn-connect__fallback-title">Use the ESPN-page connector</p>
+                <div className="espn-connect__capture-demo" aria-hidden="true">
+                  <span className="espn-connect__capture-phone">
+                    <span />
+                  </span>
+                  <span className="espn-connect__capture-arrow">→</span>
+                  <span className="espn-connect__capture-ticket">Odds Gods</span>
+                </div>
+                <div className="espn-connect__method-grid">
+                  <div className="espn-connect__method">
+                    <p className="espn-connect__method-title">Desktop</p>
+                    <ol className="espn-connect__steps">
+                      <li>Drag this button to your bookmarks bar.</li>
+                      <li>Open your ESPN league in this browser.</li>
+                      <li>Click the bookmark. Odds Gods fills the box below.</li>
+                    </ol>
+                    <a className="espn-connect__bookmarklet" href={connectorHref}>
+                      Connect Odds Gods
+                    </a>
+                  </div>
+                  <div className="espn-connect__method">
+                    <p className="espn-connect__method-title">iPhone</p>
+                    <ol className="espn-connect__steps">
+                      <li>Tap Copy connector.</li>
+                      <li>In Safari, save a bookmark named Connect Odds Gods and paste the copied address.</li>
+                      <li>Open your ESPN league, then tap that bookmark.</li>
+                    </ol>
+                    <button className="espn-connect__linkbtn" onClick={copyConnector} type="button">
+                      {copiedConnector ? 'Connector copied' : 'Copy connector'}
+                    </button>
+                  </div>
+                </div>
                 <button className="espn-connect__linkbtn" onClick={openEspnLeague} type="button">
                   Open ESPN league ↗
                 </button>
                 <label className="espn-connect__field">
-                  <span className="espn-connect__label">Paste anything</span>
+                  <span className="espn-connect__label">Connector output</span>
                   <textarea
                     className="espn-connect__input espn-connect__textarea"
                     onChange={(event) => setCookiePaste(event.target.value)}
-                    placeholder="SWID=...; espn_s2=..."
+                    placeholder="The connector fills this automatically. If it copied text instead, paste it here."
                     rows={5}
                     value={cookiePaste}
                   />
@@ -195,7 +394,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                   onClick={connectFromPaste}
                   type="button"
                 >
-                  {isLoading ? 'Checking ESPN…' : 'Connect from ESPN session'}
+                  {isLoading ? 'Checking ESPN…' : 'Connect captured ESPN login'}
                 </button>
               </div>
 
@@ -236,7 +435,7 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
               className="espn-connect__team-row"
               disabled={!team.ownerId}
               key={team.rosterId}
-              onClick={() =>
+              onClick={() => {
                 onConnected({
                   provider: 'espn',
                   leagueId: step.leagueId,
@@ -250,8 +449,13 @@ export function EspnConnect({ onConnected }: EspnConnectProps) {
                   // The connection stays cookie-free so it works on any device.
                   espnS2: null,
                   swid: null,
-                })
-              }
+                });
+                void trackEspnConnectEvent('success', {
+                  leagueId: step.leagueId,
+                  season: step.season,
+                  teamPicked: Boolean(team.ownerId),
+                });
+              }}
               type="button"
             >
               <span className="espn-connect__team-name">{team.teamName}</span>

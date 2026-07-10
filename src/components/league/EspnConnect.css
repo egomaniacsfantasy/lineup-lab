@@ -129,6 +129,92 @@
   letter-spacing: 0.02em;
 }
 
+.espn-connect__method-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.espn-connect__method {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.espn-connect__method-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.espn-connect__capture-demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 74px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 55%),
+    var(--bg-surface);
+}
+
+.espn-connect__capture-phone {
+  position: relative;
+  width: 38px;
+  height: 58px;
+  border: 2px solid var(--text-muted);
+  border-radius: 10px;
+  background: var(--bg-inset);
+}
+
+.espn-connect__capture-phone span {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 14px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--amber-bright);
+  animation: espn-capture-scan 2.4s ease-in-out infinite;
+}
+
+.espn-connect__capture-arrow {
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: 20px;
+}
+
+.espn-connect__capture-ticket {
+  padding: 8px 12px;
+  border: 1px solid rgba(232, 84, 29, 0.45);
+  border-radius: 999px;
+  color: var(--amber-bright);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+@keyframes espn-capture-scan {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  45% {
+    transform: translateY(24px);
+    opacity: 1;
+  }
+}
+
 .espn-connect__submit {
   min-height: 46px;
   border: none;
@@ -215,12 +301,12 @@
 }
 
 .espn-connect__steps {
-  margin: 0 0 10px;
+  margin: 0;
   padding-left: 20px;
   color: var(--text-muted);
   font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .espn-connect__bookmarklet {
@@ -260,4 +346,16 @@
   flex-direction: column;
   gap: 10px;
   margin-top: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .espn-connect__capture-phone span {
+    animation: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .espn-connect__method-grid {
+    grid-template-columns: 1fr;
+  }
 }
