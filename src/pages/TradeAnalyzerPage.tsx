@@ -234,6 +234,12 @@ function Results({
         {verdict} — championship <Delta v={you.delta.titleProb} pct />
       </p>
 
+      {result.warnings?.you ? (
+        <div style={{ border: '1px solid #ff6b6b', background: '#ff6b6b1a', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 14 }}>
+          ⚠ {result.warnings.you}
+        </div>
+      ) : null}
+
       {needYou > 0 ? (
         <div style={{ border: '1px solid #f59e0b55', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
           <p style={{ margin: '0 0 6px', fontSize: 14 }}>

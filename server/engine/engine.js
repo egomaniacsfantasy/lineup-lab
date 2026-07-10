@@ -193,6 +193,43 @@ function flexLastSlots(slotLabels) {
 }
 
 /**
+ * Max number of starting slots this roster can fill at once (bipartite matching,
+ * Kuhn's algorithm). Ignores byes/injuries — this is about roster COMPOSITION:
+ * "do I own enough bodies at the right positions to field a legal lineup at all."
+ */
+function maxSlotsFilled(playerIds, slotLabels, catalog) {
+  const players = playerIds
+    .map((id) => ({ id, position: catalog[id]?.position }))
+    .filter((p) => p.position);
+  // For each slot, which player-indices are eligible.
+  const eligible = slotLabels.map((slot) =>
+    players.map((p, i) => (slotAllows(slot, p.position) ? i : -1)).filter((i) => i >= 0),
+  );
+  const matchOfPlayer = new Array(players.length).fill(-1);
+  const tryAssign = (slotIdx, seen) => {
+    for (const pi of eligible[slotIdx]) {
+      if (seen[pi]) continue;
+      seen[pi] = true;
+      if (matchOfPlayer[pi] === -1 || tryAssign(matchOfPlayer[pi], seen)) {
+        matchOfPlayer[pi] = slotIdx;
+        return true;
+      }
+    }
+    return false;
+  };
+  let filled = 0;
+  for (let s = 0; s < slotLabels.length; s += 1) {
+    if (tryAssign(s, new Array(players.length).fill(false))) filled += 1;
+  }
+  return filled;
+}
+
+/** True iff the roster can fill every starting slot (a legal lineup exists). */
+export function canFieldLineup(playerIds, slotLabels, catalog) {
+  return maxSlotsFilled(playerIds, slotLabels, catalog) >= slotLabels.length;
+}
+
+/**
  * Optimal starting lineup for a roster in a given week -> split-normal params.
  * bestLineupDistribution fills each slot with the best eligible unused player by
  * that week's projection; a bye player projects 0, so he's automatically benched.
@@ -1579,24 +1616,51 @@ function rawSeasonValue(playerId, projectionMap, catalog, weeks) {
 // players are separated by quality (keep the WR, drop the backup kicker).
 const BENCH_WEIGHT = 0.5;
 
-/** Iteratively drop the lowest keep-score player (recompute after each drop). */
-function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projectionMap, catalog, weeks) {
+// Streamable positions: a BENCHED K/DEF has almost no hold value — kickers and
+// defenses are waiver fodder you'd never roster for depth. This only discounts
+// the bench (hold) portion; a STARTING kicker keeps full starter value. Result:
+// a surplus backup kicker is dropped before a bench WR/RB/TE/QB.
+const STREAM_FACTOR = { K: 0.15, DEF: 0.15, DST: 0.15 };
+const streamFactor = (pos) => STREAM_FACTOR[pos] ?? 1;
+
+/**
+ * Iteratively drop the lowest keep-score player (recompute after each drop).
+ * HARD CONSTRAINT: never drop a player whose removal breaks the lineup (leaves a
+ * required slot unfillable) — that protects your sole K/DEF absolutely. Only if
+ * no feasible drop exists (roster already short) do we fall back to least-harm.
+ */
+export function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projectionMap, catalog, weeks) {
   const drops = [];
   let pool = [...teamPlayers];
   const droppable = new Set(droppableIds.map(String));
   for (let k = 0; k < n; k += 1) {
     const starter = starterValues(pool, slotLabels, projectionMap, catalog, weeks);
+    const canField = canFieldLineup(pool, slotLabels, catalog);
+    const keepScore = (id) => {
+      const pos = catalog[id]?.position;
+      return (starter.get(id) ?? 0) + BENCH_WEIGHT * streamFactor(pos) * rawSeasonValue(id, projectionMap, catalog, weeks);
+    };
+    // Prefer drops that KEEP a legal lineup; only widen to lineup-breaking drops
+    // when no roster-preserving option exists.
     let worst = null;
     let worstScore = Infinity;
+    let worstUnsafe = null;
+    let worstUnsafeScore = Infinity;
     for (const id of pool) {
       if (!droppable.has(String(id))) continue;
-      const score = (starter.get(id) ?? 0) + BENCH_WEIGHT * rawSeasonValue(id, projectionMap, catalog, weeks);
-      if (score < worstScore) { worstScore = score; worst = id; }
+      const score = keepScore(id);
+      const safe = !canField || canFieldLineup(pool.filter((p) => p !== id), slotLabels, catalog);
+      if (safe) {
+        if (score < worstScore) { worstScore = score; worst = id; }
+      } else if (score < worstUnsafeScore) {
+        worstUnsafeScore = score; worstUnsafe = id;
+      }
     }
-    if (worst == null) break;
-    drops.push(worst);
-    pool = pool.filter((id) => id !== worst);
-    droppable.delete(String(worst));
+    const pick = worst ?? worstUnsafe;
+    if (pick == null) break;
+    drops.push(pick);
+    pool = pool.filter((id) => id !== pick);
+    droppable.delete(String(pick));
   }
   return drops;
 }
@@ -1651,6 +1715,13 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   const userFinal = userAfter.filter((id) => !userDropSet.has(String(id)));
   const partnerFinal = partnerAfter.filter((id) => !partnerDropSet.has(String(id)));
 
+  // A trade that strips your last player at a required position (e.g. your only
+  // kicker) leaves an unfillable slot every week — warn rather than pretend.
+  const warnings = {
+    you: canFieldLineup(userFinal, slotLabels, catalog) ? null : 'This trade leaves you without a legal starting lineup (a required position — likely K or DEF — is now empty). You would need to add one off waivers.',
+    partner: canFieldLineup(partnerFinal, slotLabels, catalog) ? null : `${partnerTeam.teamName} would be left without a legal lineup at a required position.`,
+  };
+
   // Same-seed CRN comparison.
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
   const seed = parseInt(inputsHash.slice(0, 8), 16);
@@ -1690,6 +1761,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
     maxRoster,
     dropsNeeded: { you: userNeed, partner: partnerNeed },
     drops: { you: finalUserDrops.map(nameOf), partner: finalPartnerDrops.map(nameOf) },
+    warnings,
     you: sideDelta(userTeam),
     partner: sideDelta(partnerTeam),
   };

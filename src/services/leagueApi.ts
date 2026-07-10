@@ -562,6 +562,7 @@ export interface TradeAnalysis {
   maxRoster?: number;
   dropsNeeded?: { you: number; partner: number };
   drops?: { you: { playerId: string; name: string }[]; partner: { playerId: string; name: string }[] };
+  warnings?: { you: string | null; partner: string | null };
   you?: TradeSideDelta;
   partner?: TradeSideDelta;
 }
