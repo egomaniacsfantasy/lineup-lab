@@ -23,101 +23,16 @@ import { formatAmericanOdds } from '../utils/formatOdds';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
 import './TradePage.css';
 
-const VERDICT_TONE: Record<string, string> = {
-  'Smash accept': 'good',
-  'Good value': 'good',
-  Fair: 'neutral',
-  'Justifiable overpay': 'warn',
-  Overpay: 'bad',
-};
-
-const BAND_TONE: Record<string, string> = {
-  'Smash accept': 'good',
-  Likely: 'good',
-  'Coin flip': 'neutral',
-  Unlikely: 'warn',
-  'Long shot': 'bad',
-};
-
-// Where the verdict sits on the fairness rail (0 = you're fleeced, 1 = steal).
-const VERDICT_RAIL: Record<string, number> = {
-  Overpay: 0.12,
-  'Justifiable overpay': 0.32,
-  Fair: 0.5,
-  'Good value': 0.72,
-  'Smash accept': 0.9,
-};
-
-function verdictRailPosition(verdict?: string) {
-  return VERDICT_RAIL[verdict ?? 'Fair'] ?? 0.5;
-}
-
-function verdictStamp(verdict?: string) {
-  if (verdict === 'Fair') return 'FAIR DEAL.';
-  if (verdict === 'Good value') return 'GOOD VALUE.';
-  if (verdict === 'Smash accept') return 'SMASH ACCEPT.';
-  if (verdict === 'Justifiable overpay') return 'JUSTIFIABLE OVERPAY.';
-  if (verdict === 'Overpay') return 'OVERPAY.';
-  return `${(verdict ?? 'Fair').toUpperCase()}.`;
-}
-
-function priceRailStyle(position: number): CSSProperties {
-  const pct = Math.max(0, Math.min(1, position)) * 100;
-  return {
-    '--trade-price-position': `${pct}%`,
-    '--trade-price-fill-left': `${Math.min(50, pct)}%`,
-    '--trade-price-fill-width': `${Math.abs(pct - 50)}%`,
-  } as CSSProperties;
-}
-
-function verdictAcceptanceStyle(probability = 50): CSSProperties {
-  const pct = Math.min(100, Math.max(0, probability));
-  return { '--trade-acceptance-pct': `${pct}%` } as CSSProperties;
-}
-
-function acceptanceBandLabel(band?: string) {
-  if (band === 'Smash accept') return "They'd jump";
-  return band ?? 'Coin flip';
-}
-
 function signedDelta(value = 0) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
-}
-
-function titleOddsImproved(before: number, after: number) {
-  return impliedTitleProbability(after) > impliedTitleProbability(before);
 }
 
 function impliedTitleProbability(odds: number) {
   return odds <= -100 ? -odds / (-odds + 100) : 100 / (odds + 100);
 }
 
-function cleanAcceptReason(reason: string) {
-  if (reason.includes('Barely moves their starters')) {
-    return 'Their starters barely move.';
-  }
-  if (reason.includes('little reason to say yes')) {
-    return reason.replace(/, so there's little reason to say yes\.?/i, '.');
-  }
-  return reason;
-}
-
-function acceptReasonTone(reason: string) {
-  const lower = reason.toLowerCase();
-  if (lower.includes('land the best player') || lower.includes('gets the best player')) {
-    return 'help';
-  }
-  return [
-    'barely',
-    'best player',
-    'downgrade',
-    'give up',
-    'lose',
-    'overpay',
-    'thin',
-  ].some((needle) => lower.includes(needle))
-    ? 'hurt'
-    : 'help';
+function titleOddsImproved(before: number, after: number) {
+  return impliedTitleProbability(after) > impliedTitleProbability(before);
 }
 
 function laneIds(primary?: string[], fallback?: string) {
@@ -1028,14 +943,14 @@ function TradeDealsView() {
           userPlayers={userTeam.players}
           nameOf={(id) => playerName(bootstrap, id)}
           posOf={(id) => bootstrap.players[id]?.position ?? ''}
+          leagueId={stored.leagueId}
+          partnerRosterId={partnerRosterId}
         />
       </section>
 
       {/* ── Verdict ── */}
       {result && result.available && result.you && result.them ? (
         (() => {
-          const pricePosition = verdictRailPosition(result.verdict);
-          const acceptanceProbability = result.acceptance?.probability ?? 50;
           const verdictKey = `verdict:${partnerRosterId}-${give.join(',')}-${getIds.join(',')}-${analysisDrops?.join(',') ?? ''}`;
           const verdictWhyOpen = openLaneWhy === verdictKey;
           const renderFaces = (ids: string[], tone: 'get' | 'give') => (
@@ -1057,14 +972,6 @@ function TradeDealsView() {
 
           return (
             <section className="trade-cc__verdict">
-              <p
-                className={`trade-cc__verdict-stamp trade-cc__verdict-stamp--${
-                  VERDICT_TONE[result.verdict ?? 'Fair'] ?? 'neutral'
-                }`}
-              >
-                {verdictStamp(result.verdict)}
-              </p>
-
               <div className="trade-cc__verdict-faces" aria-label="Trade players">
                 <div className="trade-cc__verdict-face-side">
                   <span className="trade-cc__verdict-face-label">You send</span>
@@ -1078,54 +985,6 @@ function TradeDealsView() {
                   <span className="trade-cc__verdict-face-label">You get</span>
                   {renderFaces(getIds, 'get')}
                 </div>
-              </div>
-
-              <div className="trade-cc__verdict-axis-grid">
-                <section className="trade-cc__price-module">
-                  <p className="trade-cc__module-label">The price</p>
-                  <div
-                    className={[
-                      'trade-cc__price-rail',
-                      pricePosition > 0.5 ? 'trade-cc__price-rail--steal' : '',
-                      pricePosition < 0.5 ? 'trade-cc__price-rail--overpay' : '',
-                    ].filter(Boolean).join(' ')}
-                    style={priceRailStyle(pricePosition)}
-                    aria-label={`Price verdict: ${result.verdict ?? 'Fair'}`}
-                  >
-                    <span className="trade-cc__price-track" />
-                    <span className="trade-cc__price-center" />
-                    <span className="trade-cc__price-fill" />
-                    <span className="trade-cc__price-marker" />
-                  </div>
-                  <div className="trade-cc__price-labels" aria-hidden="true">
-                    <span>Overpay</span>
-                    <span>Fair</span>
-                    <span>Steal</span>
-                  </div>
-                </section>
-
-                <section
-                  className={`trade-cc__accept-module trade-cc__accept-module--${
-                    BAND_TONE[result.acceptance?.band ?? 'Coin flip'] ?? 'neutral'
-                  }`}
-                  style={verdictAcceptanceStyle(acceptanceProbability)}
-                >
-                  <p className="trade-cc__module-label">Will they take it?</p>
-                  <div className="trade-cc__accept-top">
-                    <span className="trade-cc__accept-number">{acceptanceProbability}%</span>
-                    <span className="trade-cc__accept-tag">
-                      {acceptanceBandLabel(result.acceptance?.band)}
-                    </span>
-                  </div>
-                  <div
-                    className="trade-cc__accept-track"
-                    aria-label={`Acceptance probability: ${acceptanceProbability}%`}
-                    data-acceptance-pct={acceptanceProbability}
-                  >
-                    <span className="trade-cc__accept-fill" />
-                    <span className="trade-cc__accept-marker" />
-                  </div>
-                </section>
               </div>
 
               {partnerRosterId != null ? (
@@ -1177,70 +1036,6 @@ function TradeDealsView() {
                   </button>
                 </div>
               ) : null}
-
-              <div className="trade-cc__consequences">
-                {[
-                  { side: result.you, isYou: true },
-                  { side: result.them, isYou: false },
-                ].map(({ side, isYou }) => {
-                  const titleMoved = side.titleAfter !== side.titleBefore;
-                  const titleUp = titleMoved && titleOddsImproved(side.titleBefore, side.titleAfter);
-                  return (
-                    <div className="trade-cc__consequence-card" key={side.teamName}>
-                      <p className="trade-cc__consequence-team">
-                        {side.teamName}
-                        {isYou ? ' (you)' : ''}
-                      </p>
-                      <p
-                        className={`trade-cc__consequence-delta ${
-                          side.valueDelta > 0
-                            ? 'trade-cc__consequence-delta--up'
-                            : side.valueDelta < 0
-                              ? 'trade-cc__consequence-delta--down'
-                              : ''
-                        }`}
-                      >
-                        {signedDelta(side.valueDelta)}
-                        <span> pts/wk</span>
-                      </p>
-                      <p
-                        className={`trade-cc__consequence-title ${
-                          titleMoved
-                            ? titleUp
-                              ? 'trade-cc__consequence-title--up'
-                              : 'trade-cc__consequence-title--down'
-                            : ''
-                        }`}
-                      >
-                        Title odds{' '}
-                        {titleMoved ? (
-                          <>
-                            {formatAmericanOdds(side.titleBefore)} →{' '}
-                            {formatAmericanOdds(side.titleAfter)} {titleUp ? '▲' : '▼'}
-                          </>
-                        ) : (
-                          'unchanged'
-                        )}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="trade-cc__reasons">
-                <p className="trade-cc__reasons-title">Will they accept?</p>
-                <ul>
-                  {(result.acceptance?.reasons ?? []).map((reason) => {
-                    const tone = acceptReasonTone(reason);
-                    return (
-                      <li className={`trade-cc__reason trade-cc__reason--${tone}`} key={reason}>
-                        <span aria-hidden="true">{tone === 'help' ? '✓' : '✗'}</span>
-                        {cleanAcceptReason(reason)}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
 
               <div className="trade-cc__fit">
                 <p className="trade-cc__reasons-title">Your depth after</p>
