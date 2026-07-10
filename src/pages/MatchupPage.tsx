@@ -354,9 +354,35 @@ function TeamCrest({
   );
 }
 
+function marketMoverWhy({
+  gain,
+  acceptanceProbability,
+  from,
+  to,
+}: {
+  gain?: number;
+  acceptanceProbability?: number | null;
+  from: number;
+  to: number;
+}) {
+  const parts = [];
+  if (gain != null) {
+    parts.push(`Moves your starters by ${gain >= 0 ? '+' : ''}${gain.toFixed(1)} pts/wk.`);
+  }
+  if (acceptanceProbability != null) {
+    parts.push(`${acceptanceProbability}% to accept.`);
+  }
+  if (Number.isFinite(from) && Number.isFinite(to) && from !== to) {
+    parts.push(`Title price ${formatAmericanOdds(from)} to ${formatAmericanOdds(to)}.`);
+  }
+  parts.push('Opens the exact deal in Market.');
+  return parts.join(' ');
+}
+
 function MarketMoverRow({
   label,
   sublabel,
+  why,
   from,
   to,
   gain,
@@ -366,7 +392,8 @@ function MarketMoverRow({
   href,
 }: {
   label: string;
-  sublabel: string;
+  sublabel?: string;
+  why?: string;
   from: number;
   to: number;
   /** Projected points the move adds to your starting lineup, if known. */
@@ -376,6 +403,7 @@ function MarketMoverRow({
   crestTeam?: string;
   href?: string | null;
 }) {
+  const [whyOpen, setWhyOpen] = useState(false);
   const content = (
     <>
       <div className="matchup-page__mover-identity">
@@ -390,7 +418,7 @@ function MarketMoverRow({
         ) : null}
         <div>
           <p className="matchup-page__mover-label">{label}</p>
-          <p className="matchup-page__mover-meta">{sublabel}</p>
+          {sublabel ? <p className="matchup-page__mover-meta">{sublabel}</p> : null}
         </div>
       </div>
       {/* Title odds barely move on a single roster change, so lead with the
@@ -420,17 +448,30 @@ function MarketMoverRow({
     </>
   );
 
-  if (href) {
-    return (
-      <a className="matchup-page__mover-row matchup-page__mover-row--link" href={href}>
-        {content}
-      </a>
-    );
-  }
-
   return (
-    <div className="matchup-page__mover-row">
-      {content}
+    <div className="matchup-page__mover-card">
+      {href ? (
+        <a className="matchup-page__mover-row matchup-page__mover-row--link" href={href}>
+          {content}
+        </a>
+      ) : (
+        <div className="matchup-page__mover-row">
+          {content}
+        </div>
+      )}
+      {why ? (
+        <>
+          <button
+            aria-expanded={whyOpen}
+            className="matchup-page__mover-why"
+            onClick={() => setWhyOpen((current) => !current)}
+            type="button"
+          >
+            Why this trade?
+          </button>
+          {whyOpen ? <p className="matchup-page__mover-rationale">{why}</p> : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -717,14 +758,14 @@ function MatchupPricingLoading({ matchup }: { matchup: MatchupData }) {
       key: `${slot.slotLabel}-${slot.starter.id}`,
       player: slot.starter,
       slotLabel: slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel,
-      meta: `${slot.starter.position} · ${slot.starter.team}`,
+      meta: slot.starter.team,
       tone: 'starter' as const,
     })),
     ...(matchup.yourTeam.bench ?? []).map((benchRow) => ({
       key: `BEN-${benchRow.player.id}`,
       player: benchRow.player,
-      slotLabel: 'BEN',
-      meta: `${benchRow.player.position} · ${benchRow.player.team}`,
+      slotLabel: benchRow.player.position,
+      meta: benchRow.player.team,
       tone: 'bench' as const,
     })),
   ];
@@ -1224,7 +1265,7 @@ function MatchupLive({
         ? player.injuryStatus
         : null;
 
-    return [`${player.position} · ${player.team}`, gameMeta, status, extra]
+    return [player.team, gameMeta, status, extra]
       .filter(Boolean)
       .join(' · ');
   };
@@ -1377,7 +1418,7 @@ function MatchupLive({
                 {isBoardPopoverOpen ? (
                   <div className="matchup-page__model-popover" role="dialog">
                     <p>
-                      These lines are priced on your board — the rankings you set.{' '}
+                      These lines are priced on your board, the rankings you set.{' '}
                       {overrideCount} {overrideCount === 1 ? 'move' : 'moves'} from Franco.
                     </p>
                     <div className="matchup-page__model-popover-actions">
@@ -1492,7 +1533,7 @@ function MatchupLive({
                     {matchup.opponentTeam.managerName} · {matchup.opponentTeam.record}
                   </p>
                   {!matchup.opponentTeam.managerKey ? (
-                    <p className="matchup-page__meta-copy">Unmanaged team — no read.</p>
+                    <p className="matchup-page__meta-copy">Unmanaged team, no read.</p>
                   ) : null}
                 </div>
               </div>
@@ -1658,8 +1699,16 @@ function MatchupLive({
                   key={mover.headline}
                   label={mover.headline}
                   playerChips={mover.playerChips}
-                  sublabel={mover.detail}
+                  sublabel={mover.kind === 'trade' ? undefined : mover.detail}
                   to={mover.after}
+                  why={mover.kind === 'trade'
+                    ? marketMoverWhy({
+                        acceptanceProbability: mover.acceptanceProbability,
+                        from: mover.before,
+                        gain: mover.gain,
+                        to: mover.after,
+                      })
+                    : undefined}
                 />
               ))}
             </section>
@@ -1687,8 +1736,8 @@ function MatchupLive({
               crestTeam={topTradeTarget.teamName}
               from={topTradeTarget.suggestedPackage.championshipOddsBefore}
               label={`Trade lane: ${topTradeTarget.teamName} want ${topTradeTarget.theirNeed}`}
-              sublabel={`${topTradeTarget.suggestedPackage.youSend.map((player) => player.name).join(' + ')} for ${topTradeTarget.player.name} prices at`}
               to={topTradeTarget.suggestedPackage.championshipOddsAfter}
+              why={`${topTradeTarget.suggestedPackage.youSend.map((player) => player.name).join(' + ')} for ${topTradeTarget.player.name}. Title price ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsBefore)} to ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsAfter)}. Opens the deal in Market.`}
             />
           ) : null}
         </section>
@@ -1893,7 +1942,7 @@ function MatchupLive({
               player: benchRow.player,
               projection: benchRow.projection,
               selected: compareSelection.some((candidate) => candidate.id === benchRow.player.id),
-              slotLabel: 'BEN',
+              slotLabel: benchRow.player.position,
               tone: 'bench',
             });
           })}

@@ -18,6 +18,11 @@ import { getNflSchedule } from '../services/nflSchedule.js';
 import { getRequestUserId } from '../services/supabaseAdmin.js';
 import { runScoutingHarvest } from '../services/scoutingHarvest/index.js';
 import {
+  buildTradeRationaleFactors,
+  maybeNarrateTradeRationale,
+  renderStructuredTradeRationale,
+} from '../services/tradeRationale.js';
+import {
   getScoutingEdits,
   getScoutingReads,
   mergeReadAndEdit,
@@ -30,6 +35,10 @@ const autoHarvested = new Set();
 const DEFAULT_ESPN_LOGIN_WORKER_URL = 'https://odds-gods-espn-login-worker.onrender.com';
 const ESPN_LOGIN_ENABLED = process.env.ESPN_LOGIN_ENABLED !== 'false';
 const ESPN_LOGIN_WORKER_URL = process.env.ESPN_LOGIN_WORKER_URL || DEFAULT_ESPN_LOGIN_WORKER_URL;
+const TRADE_RATIONALE_NARRATION_ENABLED = process.env.TRADE_RATIONALE_NARRATION_ENABLED === 'true';
+const TRADE_RATIONALE_PROVIDER = process.env.TRADE_RATIONALE_PROVIDER || 'structured';
+const TRADE_RATIONALE_MODEL = process.env.TRADE_RATIONALE_MODEL || '';
+const TRADE_RATIONALE_API_KEY = process.env.TRADE_RATIONALE_API_KEY || process.env.OPENAI_API_KEY || '';
 
 function espnLoginWorkerEndpoint() {
   if (!ESPN_LOGIN_WORKER_URL) return '';
@@ -211,7 +220,7 @@ apiRouter.get('/connect/:username', async (req, res, next) => {
       res.status(404).json({
         error: 'unknown_username',
         message:
-          "We couldn't find that Sleeper username. Check the spelling — it's the name you log in with, not your team name.",
+          "We couldn't find that Sleeper username. Check the spelling. Use the name you log in with, not your team name.",
       });
       return;
     }
@@ -717,6 +726,81 @@ apiRouter.post('/league/:leagueId/trade-analyze', async (req, res, next) => {
 
     const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
     res.json(analyzeTrade(ctx, { partnerRosterId: Number(partnerRosterId), give, get, userDrops }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** On-demand grounded trade rationale. Facts first, optional narration second. */
+apiRouter.post('/league/:leagueId/trade-rationale', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const { userId, partnerRosterId, give = [], get = [], traits = {}, userDrops = null } = req.body ?? {};
+    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
+
+    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
+    if (!ctxBase) throw new Error('league_not_found');
+
+    const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
+    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
+      const all = [];
+      for (let week = 1; week <= lastWeek; week += 1) {
+        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
+      }
+      return all;
+    });
+
+    let liveProjections;
+    try {
+      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
+      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+    } catch (err) {
+      console.error('[trade-rationale] adjusted projections failed; using snapshot', err);
+    }
+
+    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
+    const price = priceTrade(ctx, {
+      userRosterId,
+      partnerRosterId: Number(partnerRosterId),
+      give,
+      get,
+      traits,
+    });
+    const analysis = analyzeTrade(ctx, { partnerRosterId: Number(partnerRosterId), give, get, userDrops });
+    const active = Array.isArray(liveProjections)
+      ? { version: 'ctx-projections', projections: liveProjections }
+      : liveProjections ?? getActiveProjections();
+    const factors = buildTradeRationaleFactors({
+      leagueId,
+      projectionVersion: price.projectionVersion ?? active?.version ?? null,
+      league: ctx.league,
+      teams: ctx.teams,
+      catalog: ctx.catalog,
+      projections: active?.projections ?? [],
+      price,
+      analysis,
+      partnerRosterId: Number(partnerRosterId),
+      give,
+      get,
+    });
+    const structured = renderStructuredTradeRationale(factors);
+    const narrated = await maybeNarrateTradeRationale(factors, {
+      enabled: TRADE_RATIONALE_NARRATION_ENABLED,
+      provider: TRADE_RATIONALE_PROVIDER,
+      model: TRADE_RATIONALE_MODEL,
+      apiKey: TRADE_RATIONALE_API_KEY,
+    });
+
+    res.json({
+      available: factors.available,
+      source: narrated ? 'narrated' : 'structured',
+      factors,
+      structured,
+      narration: narrated?.text ?? null,
+      cached: narrated?.cached ?? false,
+    });
   } catch (error) {
     next(error);
   }

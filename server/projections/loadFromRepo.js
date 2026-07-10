@@ -55,7 +55,7 @@ export function loadProjections({ force = false } = {}) {
   for (const [position, cfg] of Object.entries(POS)) {
     const file = path.join(DIR, cfg.file);
     if (!fs.existsSync(file)) {
-      console.warn(`[projections] missing ${cfg.file} — skipping ${position}`);
+      console.warn(`[projections] missing ${cfg.file}. Skipping ${position}`);
       perPosition[position] = 0;
       continue;
     }

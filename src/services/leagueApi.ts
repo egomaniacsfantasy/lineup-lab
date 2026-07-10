@@ -606,11 +606,47 @@ export interface TradeAnalysis {
   you?: TradeSideDelta;
   partner?: TradeSideDelta;
 }
+
+export interface TradeRationaleSection {
+  label: string;
+  facts: string[];
+}
+
+export interface TradeRationaleResponse {
+  available: boolean;
+  source: 'structured' | 'narrated';
+  cached: boolean;
+  narration: string | null;
+  structured: {
+    summary: string;
+    sections: TradeRationaleSection[];
+  };
+  factors: unknown;
+}
+
 export function analyzeTradeApi(
   leagueId: string,
   body: { userId: string; partnerRosterId: number; give: string[]; get: string[]; userDrops?: string[] | null },
 ): Promise<TradeAnalysis> {
   return get<TradeAnalysis>(`/api/league/${leagueId}/trade-analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchTradeRationale(
+  leagueId: string,
+  body: {
+    userId: string;
+    partnerRosterId: number;
+    give: string[];
+    get: string[];
+    traits: TradeTraits;
+    userDrops?: string[] | null;
+  },
+): Promise<TradeRationaleResponse> {
+  return get<TradeRationaleResponse>(`/api/league/${leagueId}/trade-rationale`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

@@ -35,7 +35,7 @@ function LiveLineCard() {
         <span>{yourLine.winProbability.toFixed(1)}% you</span>
         <span>{opponentLine.winProbability.toFixed(1)}% them</span>
       </div>
-      <p className={styles.liveTap}>This is a real board from the demo league — tap through it.</p>
+      <p className={styles.liveTap}>This is a real board from the demo league. Tap through it.</p>
     </a>
   );
 }

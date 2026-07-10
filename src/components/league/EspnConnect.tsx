@@ -95,7 +95,7 @@ export function EspnConnect({
     } catch (caught) {
       if (caught instanceof LeagueApiError && caught.code === 'espn_private' && creds) {
         setShowFallback(true);
-        setError('ESPN rejected this login capture. It may be expired — open ESPN again, run the connector, and paste the new output here.');
+        setError('ESPN rejected this login capture. It may be expired. Open ESPN again, run the connector, and paste the new output here.');
         void trackEspnConnectEvent('failure', { reason: 'private_rejected_capture' });
       } else if (caught instanceof LeagueApiError && caught.code === 'espn_private') {
         setPrivateLeagueId(id);

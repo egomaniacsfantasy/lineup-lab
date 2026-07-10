@@ -62,7 +62,7 @@ test('paste state: espn_s2 present but SWID missing', () => {
   });
   assert.equal(
     espnSessionPasteError(parsed.missing),
-    'Found espn_s2 but no SWID — ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.',
+    'Found espn_s2 but no SWID. ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.',
   );
 });
 
@@ -74,7 +74,7 @@ test('paste state: SWID present but espn_s2 missing', () => {
   });
   assert.equal(
     espnSessionPasteError(parsed.missing),
-    'Found SWID but no espn_s2 — ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.',
+    'Found SWID but no espn_s2. ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.',
   );
 });
 
@@ -86,7 +86,7 @@ test('paste state: neither ESPN session value present', () => {
   });
   assert.equal(
     espnSessionPasteError(parsed.missing),
-    'Could not find espn_s2 or SWID — run the Odds Gods connector on your ESPN league page, then paste what it gives you.',
+    'Could not find espn_s2 or SWID. Run the Odds Gods connector on your ESPN league page, then paste what it gives you.',
   );
 });
 

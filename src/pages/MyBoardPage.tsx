@@ -689,7 +689,7 @@ function RapidFire({
       const diff = francoGodOf(winner) - francoGodOf(loser);
       const r: Reveal =
         Math.abs(diff) < 2
-          ? { kind: 'coin', text: 'Coin flip — too close to call' }
+          ? { kind: 'coin', text: 'Coin flip, too close to call' }
           : diff > 0
             ? { kind: 'with', text: 'With the board' }
             : { kind: 'hot', text: '🔥 Hot take' };

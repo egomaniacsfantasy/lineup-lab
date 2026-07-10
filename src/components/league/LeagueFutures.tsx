@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { ScoringFormat } from '../../types';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import type { LeagueFutureRow } from '../../mocks/league';
@@ -18,10 +18,12 @@ interface LeagueFuturesProps {
   history?: LineHistoryEntry[] | null;
 }
 
-type LeagueMarket = 'champion' | 'playoffs';
+type LeagueMarket = 'champion' | 'finals' | 'playoffs';
+type ExpandedFuturesChart = 'title' | 'contender' | null;
 
 const MARKET_OPTIONS: { label: string; value: LeagueMarket }[] = [
   { label: 'Champion', value: 'champion' },
+  { label: 'Finals', value: 'finals' },
   { label: 'Playoffs', value: 'playoffs' },
 ];
 
@@ -76,10 +78,47 @@ function sparkline(points: { at: number; probability: number }[], width = 130, h
     .join(' ');
 }
 
+function chartLine(points: { at: number; probability: number }[], bounds: { minAt: number; maxAt: number; minValue: number; maxValue: number }) {
+  const timeSpan = Math.max(1, bounds.maxAt - bounds.minAt);
+  const valueSpan = Math.max(1, bounds.maxValue - bounds.minValue);
+  return points
+    .map((point) => {
+      const x = ((point.at - bounds.minAt) / timeSpan) * 100;
+      const y = 100 - ((point.probability - bounds.minValue) / valueSpan) * 100;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+}
+
+function historyTakeaway(rows: { team: LeagueFutureRow; series: { probability: number }[] }[]) {
+  const moves = rows
+    .map(({ team, series }) => {
+      const first = series[0]?.probability ?? 0;
+      const last = series.at(-1)?.probability ?? first;
+      return { team, move: last - first, last };
+    });
+  const leader = [...moves].sort((a, b) => b.last - a.last)[0];
+  const biggest = [...moves]
+    .sort((a, b) => Math.abs(b.move) - Math.abs(a.move))
+    .find((move) => Math.abs(move.move) >= 0.05);
+  if (!leader) return 'No title move yet.';
+  if (!biggest) return `${leader.team.teamName} holds the top title price at ${leader.last.toFixed(1)}%.`;
+  return `${biggest.team.teamName} moved ${biggest.move >= 0 ? 'up' : 'down'} ${Math.abs(biggest.move).toFixed(1)} pts.`;
+}
+
+function contenderTakeaway(rows: { team: LeagueFutureRow; playoffProb: number; titleIfIn: number }[]) {
+  if (rows.length < 2) return 'Reads deepen as the season plays out.';
+  const dangerous = [...rows].sort((a, b) => b.titleIfIn - a.titleIfIn)[0];
+  const safest = [...rows].sort((a, b) => b.playoffProb - a.playoffProb)[0];
+  return `${safest.team.teamName} is safest in; ${dangerous.team.teamName} has the most title bite if they get there.`;
+}
+
 function getMarketOdds(team: LeagueFutureRow, market: LeagueMarket) {
   switch (market) {
     case 'playoffs':
       return team.playoffOdds;
+    case 'finals':
+      return team.finalsOdds ?? team.championOdds;
     case 'champion':
     default:
       return team.championOdds;
@@ -97,6 +136,14 @@ export function LeagueFutures({
   history = null,
 }: LeagueFuturesProps) {
   const [market, setMarket] = useState<LeagueMarket>('champion');
+  const [expandedChart, setExpandedChart] = useState<ExpandedFuturesChart>(null);
+  const marketOptions = useMemo(
+    () => {
+      const hasFinals = totalTeams > playoffTeams && futures.some((team) => team.finalsOdds != null);
+      return MARKET_OPTIONS.filter((option) => option.value !== 'finals' || hasFinals);
+    },
+    [futures, playoffTeams, totalTeams],
+  );
   const sortedFutures = useMemo(
     () =>
       [...futures].sort((teamA, teamB) => {
@@ -117,6 +164,17 @@ export function LeagueFutures({
         : [],
     [futures, history],
   );
+  const titleHistoryBounds = useMemo(() => {
+    const points = titleHistoryTeams.flatMap((row) => row.series);
+    if (points.length === 0) return null;
+    return {
+      minAt: Math.min(...points.map((point) => point.at)),
+      maxAt: Math.max(...points.map((point) => point.at)),
+      minValue: Math.max(0, Math.min(...points.map((point) => point.probability)) - 1),
+      maxValue: Math.max(...points.map((point) => point.probability)) + 1,
+    };
+  }, [titleHistoryTeams]);
+  const titleTakeaway = historyTakeaway(titleHistoryTeams);
   const contenderRows = useMemo(
     () => {
       if (!leagueChartFlags.contenderShape) return [];
@@ -149,6 +207,7 @@ export function LeagueFutures({
     },
     [futures],
   );
+  const contenderSummary = contenderTakeaway(contenderRows);
 
   return (
     <section aria-labelledby="league-futures-title" className="league-futures">
@@ -167,8 +226,9 @@ export function LeagueFutures({
         aria-label="League futures market"
         className="league-futures__markets"
         role="group"
+        style={{ '--market-count': marketOptions.length } as CSSProperties}
       >
-        {MARKET_OPTIONS.map((option) => (
+        {marketOptions.map((option) => (
           <button
             aria-pressed={market === option.value}
             className={[
@@ -193,8 +253,18 @@ export function LeagueFutures({
       ) : null}
 
       {titleHistoryTeams.length > 0 ? (
-        <div className="league-futures__chart-card" aria-label="Title odds over time">
-          <p className="league-futures__chart-title">Title odds over time</p>
+        <button
+          className="league-futures__chart-card"
+          onClick={() => setExpandedChart('title')}
+          type="button"
+        >
+          <span className="league-futures__chart-head">
+            <span>
+              <span className="league-futures__chart-title">Title odds over time</span>
+              <span className="league-futures__chart-subtitle">Each line is a team’s championship price across reprices.</span>
+            </span>
+            <span className="league-futures__inspect">Inspect</span>
+          </span>
           <div className="league-futures__history-grid">
             {titleHistoryTeams.map(({ team, series }) => (
               <div className="league-futures__history-row" key={`history-${team.teamName}`}>
@@ -218,14 +288,25 @@ export function LeagueFutures({
               </div>
             ))}
           </div>
-        </div>
+          <span className="league-futures__takeaway">{titleTakeaway}</span>
+        </button>
       ) : null}
 
-      {contenderRows.length > 1 ? (
-        <div className="league-futures__chart-card" aria-label="Contender shape scatter">
-          <p className="league-futures__chart-title">Contender shape</p>
+      {leagueChartFlags.contenderShape ? (
+        <button
+          className="league-futures__chart-card"
+          onClick={() => setExpandedChart('contender')}
+          type="button"
+        >
+          <span className="league-futures__chart-head">
+            <span>
+              <span className="league-futures__chart-title">Contender shape</span>
+              <span className="league-futures__chart-subtitle">Floor vs. ceiling: playoff odds against title odds if they make it.</span>
+            </span>
+            <span className="league-futures__inspect">Inspect</span>
+          </span>
           <div className="league-futures__scatter">
-            {contenderRows.map(({ team, playoffProb, titleIfIn, xPlot, yPlot }) => (
+            {contenderRows.length > 1 ? contenderRows.map(({ team, playoffProb, titleIfIn, xPlot, yPlot }) => (
               <span
                 className={[
                   'league-futures__scatter-point',
@@ -242,11 +323,16 @@ export function LeagueFutures({
               >
                 <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
               </span>
-            ))}
-            <span className="league-futures__scatter-x">Playoff odds</span>
-            <span className="league-futures__scatter-y">Title if in</span>
+            )) : (
+              <span className="league-futures__scatter-empty">Reads deepen as the season plays out.</span>
+            )}
+            <span className="league-futures__quadrant league-futures__quadrant--safe">Safe but capped</span>
+            <span className="league-futures__quadrant league-futures__quadrant--danger">Long shot but dangerous</span>
+            <span className="league-futures__scatter-x">Chance of making playoffs</span>
+            <span className="league-futures__scatter-y">Title odds if they make it</span>
           </div>
-        </div>
+          <span className="league-futures__takeaway">{contenderSummary}</span>
+        </button>
       ) : null}
 
       <div className="league-futures__board">
@@ -302,6 +388,91 @@ export function LeagueFutures({
           </div>
         ))}
       </div>
+      {expandedChart ? (
+        <div
+          aria-modal="true"
+          className="league-futures__modal"
+          onClick={() => setExpandedChart(null)}
+          role="dialog"
+        >
+          <div className="league-futures__modal-card" onClick={(event) => event.stopPropagation()}>
+            <button className="league-futures__modal-close" onClick={() => setExpandedChart(null)} type="button">
+              Close
+            </button>
+            {expandedChart === 'title' ? (
+              <>
+                <h3 className="league-futures__modal-title">Title odds over time</h3>
+                <p className="league-futures__chart-subtitle">X-axis is reprice time. Y-axis is championship probability.</p>
+                {titleHistoryBounds ? (
+                  <div className="league-futures__detail-chart">
+                    <span className="league-futures__detail-axis league-futures__detail-axis--y">Championship probability</span>
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                      {[0, 25, 50, 75, 100].map((tick) => (
+                        <line className="league-futures__detail-grid" key={`grid-${tick}`} x1="0" x2="100" y1={tick} y2={tick} />
+                      ))}
+                      {titleHistoryTeams.map(({ team, series }) => (
+                        <polyline
+                          className={[
+                            'league-futures__detail-line',
+                            team.isUser ? 'league-futures__detail-line--user' : '',
+                          ].filter(Boolean).join(' ')}
+                          key={`detail-title-${team.teamName}`}
+                          points={chartLine(series, titleHistoryBounds)}
+                        />
+                      ))}
+                    </svg>
+                    <span className="league-futures__detail-axis league-futures__detail-axis--x">Reprice time</span>
+                  </div>
+                ) : null}
+                <div className="league-futures__legend">
+                  {titleHistoryTeams.map(({ team, series }) => (
+                    <span key={`legend-${team.teamName}`}>
+                      <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
+                      {team.teamName} {series.at(-1)?.probability.toFixed(1)}%
+                    </span>
+                  ))}
+                </div>
+                <p className="league-futures__takeaway">{titleTakeaway}</p>
+              </>
+            ) : (
+              <>
+                <h3 className="league-futures__modal-title">Contender shape</h3>
+                <p className="league-futures__chart-subtitle">X-axis: chance of making playoffs. Y-axis: title odds if they make it.</p>
+                <div className="league-futures__scatter league-futures__scatter--detail">
+                  {contenderRows.length > 1 ? contenderRows.map(({ team, playoffProb, titleIfIn, xPlot, yPlot }) => (
+                    <span
+                      className={[
+                        'league-futures__scatter-point',
+                        team.isUser ? 'league-futures__scatter-point--user' : '',
+                      ].filter(Boolean).join(' ')}
+                      key={`detail-scatter-${team.teamName}`}
+                      style={{ left: `${xPlot}%`, bottom: `${yPlot}%` }}
+                      title={`${team.teamName}: ${playoffProb.toFixed(1)}% playoff · ${titleIfIn.toFixed(1)} title if in`}
+                    >
+                      <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
+                    </span>
+                  )) : (
+                    <span className="league-futures__scatter-empty">Reads deepen as the season plays out.</span>
+                  )}
+                  <span className="league-futures__quadrant league-futures__quadrant--safe">Safe but capped</span>
+                  <span className="league-futures__quadrant league-futures__quadrant--danger">Long shot but dangerous</span>
+                  <span className="league-futures__scatter-x">Chance of making playoffs</span>
+                  <span className="league-futures__scatter-y">Title odds if they make it</span>
+                </div>
+                <div className="league-futures__legend">
+                  {contenderRows.map(({ team, playoffProb, titleIfIn }) => (
+                    <span key={`contender-legend-${team.teamName}`}>
+                      <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
+                      {team.teamName} {playoffProb.toFixed(1)}% in · {titleIfIn.toFixed(1)}% if in
+                    </span>
+                  ))}
+                </div>
+                <p className="league-futures__takeaway">{contenderSummary}</p>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

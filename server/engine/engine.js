@@ -698,7 +698,7 @@ export function priceLeague(ctx) {
         winProb = currentSide.winProbability;
         projection = currentSide.projection;
         opponentProjection = opponentSide.projection;
-        note = 'Live line — your current lineup.';
+        note = 'Live line, your current lineup.';
       } else {
         // Future week: optimal lineup vs optimal lineup, player-level sim.
         const wp = simulateMatchupWinProb(my.params, opp.params, weeklyRng);
@@ -940,7 +940,7 @@ export function laneAcceptReasons({ opp, give, get, priced, catalog, framing = '
     titleOddsBefore: priced.you?.titleBefore,
     titleOddsAfter: priced.you?.titleAfter,
   }) < 0) {
-    return [`Adds weekly points; slightly lowers your title odds.`];
+    return ['Weekly points improve. Title odds dip.'];
   }
 
   if (priced.volatilityReason) {
@@ -1077,15 +1077,15 @@ function computeMovers(ctx) {
     const giveRange = giveCeiling - giveFloor;
 
     if (userGetsCeiling && userNeedsSwing) {
-      return `Ceiling for floor — ${catalog[getId]?.name ?? 'the incoming player'} widens your weekly range.`;
+      return `Ceiling for floor: ${catalog[getId]?.name ?? 'the incoming player'} widens your weekly range.`;
     }
 
     if (userGetsFloor && userNeedsSafety) {
-      return `Floor for ceiling — ${catalog[getId]?.name ?? 'the incoming player'} steadies your weekly range.`;
+      return `Floor for ceiling: ${catalog[getId]?.name ?? 'the incoming player'} steadies your weekly range.`;
     }
 
     if (getRange >= giveRange * 1.8 && userNeedsSwing) {
-      return `Ceiling for floor — ${catalog[getId]?.name ?? 'the incoming player'} nearly doubles your weekly range.`;
+      return `Ceiling for floor: ${catalog[getId]?.name ?? 'the incoming player'} nearly doubles your weekly range.`;
     }
 
     return null;
@@ -1732,7 +1732,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   // A trade that strips your last player at a required position (e.g. your only
   // kicker) leaves an unfillable slot every week — warn rather than pretend.
   const warnings = {
-    you: canFieldLineup(userFinal, slotLabels, catalog) ? null : 'This trade leaves you without a legal starting lineup (a required position — likely K or DEF — is now empty). You would need to add one off waivers.',
+    you: canFieldLineup(userFinal, slotLabels, catalog) ? null : 'This trade leaves you without a legal starting lineup (a required position, likely K or DEF, is now empty). You would need to add one off waivers.',
     partner: canFieldLineup(partnerFinal, slotLabels, catalog) ? null : `${partnerTeam.teamName} would be left without a legal lineup at a required position.`,
   };
 
@@ -2083,7 +2083,7 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   // leave them unable to field a starter somewhere.
   if (partnerHole) {
     score -= 3.2;
-    reasons.push(`It leaves them with no ${partnerHole} to start — they'd need one back in the deal.`);
+    reasons.push(`It leaves them with no ${partnerHole} to start. They'd need one back in the deal.`);
   }
 
   if (replacementPos || addsScarcePos) {

@@ -110,7 +110,7 @@ function Results({
   return (
     <div className="trade-analyzer-panel__results">
       <p className="trade-analyzer-panel__verdict" style={{ color: vColor }}>
-        {verdict} — championship <Delta v={you.delta.titleProb} pct />
+        {verdict}. Championship <Delta v={you.delta.titleProb} pct />
       </p>
 
       {result.warnings?.you ? (
@@ -120,7 +120,7 @@ function Results({
       {needYou > 0 ? (
         <div className="trade-analyzer-panel__drops">
           <p className="trade-analyzer-panel__drops-text">
-            Puts you {needYou} over your roster limit — you&apos;d drop {needYou}{' '}
+            Puts you {needYou} over your roster limit. You&apos;d drop {needYou}{' '}
             {needYou === 1 ? 'player' : 'players'} (auto-picked; the sim reflects it). Override:
           </p>
           {Array.from({ length: needYou }).map((_, i) => (

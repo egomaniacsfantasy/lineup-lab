@@ -27,7 +27,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'olympus-admin';
 if (!process.env.ADMIN_PASSWORD) {
   console.warn(
-    '[admin] ADMIN_PASSWORD env var not set — using the dev default. Set it in production.',
+    '[admin] ADMIN_PASSWORD env var not set. Using the dev default. Set it in production.',
   );
 }
 
@@ -101,7 +101,7 @@ adminRouter.post('/projections/confirm', (req, res, next) => {
     if (!entry) {
       res.status(404).json({
         error: 'preview_expired',
-        message: 'That preview expired — upload the file again.',
+        message: 'That preview expired. Upload the file again.',
       });
       return;
     }

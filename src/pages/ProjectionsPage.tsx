@@ -694,7 +694,7 @@ export function ProjectionsPage() {
               <span className="proj-agree-hint__scale">
                 <b>50</b> aligned · higher = up · lower = down
               </span>
-              <span className="proj-agree-hint__ppr">Rate in <b>PPR</b> — your score applies across all formats.</span>
+              <span className="proj-agree-hint__ppr">Rate in <b>PPR</b>. Your score applies across all formats.</span>
               <span className="proj-agree-hint__ppr">
                 Signed in as <b>{session?.user?.email ?? '—'}</b>. Your scores save to this account only.
               </span>

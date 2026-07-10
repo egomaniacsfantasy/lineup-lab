@@ -80,15 +80,15 @@ export function espnSessionPasteError(missing = []) {
   const missingSwid = missingSet.has('SWID');
 
   if (missingS2 && missingSwid) {
-    return 'Could not find espn_s2 or SWID — run the Odds Gods connector on your ESPN league page, then paste what it gives you.';
+    return 'Could not find espn_s2 or SWID. Run the Odds Gods connector on your ESPN league page, then paste what it gives you.';
   }
 
   if (missingSwid) {
-    return 'Found espn_s2 but no SWID — ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.';
+    return 'Found espn_s2 but no SWID. ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.';
   }
 
   if (missingS2) {
-    return 'Found SWID but no espn_s2 — ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.';
+    return 'Found SWID but no espn_s2. ESPN only exposed part of the login. Reopen your league page, run the connector again, and paste the full output.';
   }
 
   return null;

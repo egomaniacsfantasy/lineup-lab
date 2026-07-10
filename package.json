@@ -8,8 +8,10 @@
   },
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm run copy-scan",
     "build": "tsc -b && vite build",
-    "lint": "node scripts/lint.mjs",
+    "copy-scan": "node test/copyScan.test.mjs",
+    "lint": "node scripts/lint.mjs && npm run copy-scan",
     "preview": "vite preview",
     "server": "node server/index.js",
     "start": "node server/index.js"

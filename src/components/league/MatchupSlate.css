@@ -186,13 +186,76 @@
 
 .matchup-slate__movement {
   display: grid;
-  gap: 3px;
+  gap: 5px;
   min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-inset) 72%, transparent);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.matchup-slate__movement:hover {
+  border-color: color-mix(in srgb, var(--amber) 38%, var(--glass-border));
+}
+
+.matchup-slate__movement:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.matchup-slate__movement-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.matchup-slate__movement-title,
+.matchup-slate__modal-title {
+  display: block;
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.matchup-slate__movement-subtitle,
+.matchup-slate__inspect,
+.matchup-slate__movement-axis,
+.matchup-slate__detail-axis {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.matchup-slate__movement-subtitle {
+  display: block;
+  text-transform: none;
+}
+
+.matchup-slate__inspect {
+  color: var(--amber);
+  white-space: nowrap;
 }
 
 .matchup-slate__movement svg {
   width: 100%;
   height: 40px;
+  overflow: visible;
+}
+
+.matchup-slate__movement-grid {
+  stroke: rgba(244, 245, 242, 0.08);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 .matchup-slate__movement-line {
@@ -213,7 +276,125 @@
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 10px;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.matchup-slate__movement-axis {
+  display: flex;
+  justify-content: space-between;
+}
+
+.matchup-slate__modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.66);
+}
+
+.matchup-slate__modal-card {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  width: min(820px, 100%);
+  max-height: min(82vh, 780px);
+  overflow: auto;
+  padding: clamp(18px, 4vw, 26px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.matchup-slate__modal-close {
+  justify-self: end;
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.matchup-slate__movement-chart {
+  position: relative;
+  min-height: 270px;
+  padding: 22px 0 30px 36px;
+}
+
+.matchup-slate__movement-chart svg {
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+  border-left: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.matchup-slate__movement-dot {
+  fill: var(--amber);
+}
+
+.matchup-slate__movement-dot--b {
+  fill: var(--ink-3);
+}
+
+.matchup-slate__detail-axis {
+  position: absolute;
+}
+
+.matchup-slate__detail-axis--y {
+  top: 50%;
+  left: -44px;
+  transform: rotate(-90deg);
+}
+
+.matchup-slate__detail-axis--x {
+  right: 0;
+  bottom: 0;
+}
+
+.matchup-slate__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.matchup-slate__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.matchup-slate__legend .team-avatar {
+  width: 22px;
+  height: 22px;
+}
+
+.matchup-slate__event-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+}
+
+.matchup-slate__event-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.matchup-slate__event-row + .matchup-slate__event-row {
+  border-top: 1px solid var(--border-subtle);
 }
 
 @media (max-width: 767px) {
@@ -248,5 +429,9 @@
 
   .matchup-slate__movement {
     width: 100%;
+  }
+
+  .matchup-slate__event-row {
+    grid-template-columns: 1fr;
   }
 }
