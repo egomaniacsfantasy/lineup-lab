@@ -1,0 +1,109 @@
+.trade-analyzer-panel {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trade-analyzer-panel__btn {
+  width: 100%;
+}
+
+.trade-analyzer-panel__error {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.trade-analyzer-panel__results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trade-analyzer-panel__verdict {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 4px 0 0;
+}
+
+.trade-analyzer-panel__warning {
+  border: 1px solid #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+
+.trade-analyzer-panel__drops {
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.trade-analyzer-panel__drops-text {
+  margin: 0;
+  font-size: 0.85rem;
+  flex: 1 1 100%;
+}
+
+.trade-analyzer-panel__drop-select,
+.trade-analyzer-panel__partner-drop {
+  font-size: 0.82rem;
+}
+
+.trade-analyzer-panel__drop-select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface-2, #17171c);
+  color: inherit;
+  border: 1px solid var(--border, #33333a);
+}
+
+.trade-analyzer-panel__partner-drop {
+  opacity: 0.7;
+  margin: 0;
+}
+
+.trade-analyzer-panel__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .trade-analyzer-panel__cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.trade-analyzer-panel__card {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.13));
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.trade-analyzer-panel__card-team {
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.trade-analyzer-panel__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 0.86rem;
+}
+
+.trade-analyzer-panel__row-label {
+  opacity: 0.75;
+}
+
+.trade-analyzer-panel__row-val {
+  font-variant-numeric: tabular-nums;
+}

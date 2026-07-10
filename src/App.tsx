@@ -53,7 +53,7 @@ function AppRoutes() {
                 <Route path="/market" element={<TradePage />} />
                 <Route path="/rankings" element={<MyBoardPage />} />
                 <Route path="/league" element={<LeaguePage />} />
-                <Route path="/trade-analyzer" element={<Navigate replace to="/market?view=analyzer" />} />
+                <Route path="/trade-analyzer" element={<Navigate replace to="/market?view=deals" />} />
                 <Route path="/more" element={<MorePage />} />
               </Route>
               <Route path="/projections" element={<ProjectionsPage />} />

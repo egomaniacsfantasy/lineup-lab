@@ -4,7 +4,8 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
 import { ScoutingView } from './market/ScoutingView';
-import { TradeAnalyzerPage } from './TradeAnalyzerPage';
+import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
+import '../components/trade/TradeAnalyzerPanel.css';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { toPlayer } from '../adapters/connectedLeague';
@@ -681,6 +682,17 @@ function TradeDealsView() {
         >
           {isPricing ? 'Pricing…' : 'Price this trade'}
         </button>
+
+        <TradeAnalyzerPanel
+          leagueId={stored.leagueId}
+          userId={stored.userId}
+          partnerRosterId={partnerRosterId}
+          give={give}
+          get={getIds}
+          userPlayers={userTeam.players}
+          nameOf={(id) => playerName(bootstrap, id)}
+          posOf={(id) => bootstrap.players[id]?.position ?? ''}
+        />
       </section>
 
       {/* ── Verdict ── */}
@@ -935,11 +947,9 @@ function TradeDealsView() {
 export function TradePage() {
   const [params, setParams] = useSearchParams();
   const { stored } = useLeagueConnection();
-  const raw = params.get('view');
-  const view: 'deals' | 'scouting' | 'analyzer' =
-    raw === 'scouting' ? 'scouting' : raw === 'analyzer' ? 'analyzer' : 'deals';
+  const view = params.get('view') === 'scouting' ? 'scouting' : 'deals';
 
-  const setView = (next: 'deals' | 'scouting' | 'analyzer') => {
+  const setView = (next: 'deals' | 'scouting') => {
     const nextParams = new URLSearchParams(params);
     nextParams.set('view', next);
     if (stored?.leagueId) nextParams.set('leagueId', stored.leagueId);
@@ -952,7 +962,6 @@ export function TradePage() {
       <div className="market-page__view-tabs" role="tablist" aria-label="Market views">
         {[
           ['deals', 'Deals'],
-          ['analyzer', 'Analyzer'],
           ['scouting', 'Scouting'],
         ].map(([key, label]) => (
           <button
@@ -964,7 +973,7 @@ export function TradePage() {
               .filter(Boolean)
               .join(' ')}
             key={key}
-            onClick={() => setView(key as 'deals' | 'scouting' | 'analyzer')}
+            onClick={() => setView(key as 'deals' | 'scouting')}
             role="tab"
             type="button"
           >
@@ -972,7 +981,7 @@ export function TradePage() {
           </button>
         ))}
       </div>
-      {view === 'deals' ? <TradeDealsView /> : view === 'analyzer' ? <TradeAnalyzerPage /> : <ScoutingView />}
+      {view === 'deals' ? <TradeDealsView /> : <ScoutingView />}
     </div>
   );
 }
