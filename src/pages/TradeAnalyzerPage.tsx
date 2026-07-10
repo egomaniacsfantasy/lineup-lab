@@ -41,7 +41,7 @@ export function TradeAnalyzerPage() {
   };
 
   async function analyze(userDrops: string[] | null = null) {
-    if (!partnerRosterId || (give.size === 0 && getP.size === 0)) return;
+    if (!stored || !partnerRosterId || (give.size === 0 && getP.size === 0)) return;
     setLoading(true);
     setError(null);
     try {
