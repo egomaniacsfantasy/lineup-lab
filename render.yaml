@@ -15,5 +15,30 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22.13.1"
+      - key: ESPN_LOGIN_ENABLED
+        value: "true"
+      - key: ESPN_LOGIN_WORKER_URL
+        value: "https://odds-gods-espn-login-worker.onrender.com"
       - key: ADMIN_PASSWORD
+        sync: false
+  - type: web
+    name: odds-gods-espn-login-worker
+    runtime: node
+    plan: starter
+    rootDir: espn-login-worker
+    buildCommand: npm install && npm run install:browsers
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.13.1"
+      - key: ESPN_LOGIN_WORKER_ENABLED
+        value: "true"
+      - key: MAX_CONCURRENT_LOGINS
+        value: "2"
+      - key: MAX_LOGIN_QUEUE
+        value: "10"
+      - key: LOGIN_TIMEOUT_MS
+        value: "30000"
+      - key: PLAYWRIGHT_PROXY_SERVER
         sync: false
