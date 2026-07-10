@@ -1,0 +1,19 @@
+{
+  "name": "@oddsgods/espn-login-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone ESPN/Disney login worker for Odds Gods.",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.mjs && npm run scan:logs",
+    "scan:logs": "node scripts/log-scan.mjs",
+    "install:browsers": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "1.57.0"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

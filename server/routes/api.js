@@ -30,6 +30,12 @@ const autoHarvested = new Set();
 const ESPN_LOGIN_ENABLED = process.env.ESPN_LOGIN_ENABLED === 'true';
 const ESPN_LOGIN_WORKER_URL = process.env.ESPN_LOGIN_WORKER_URL || '';
 
+function espnLoginWorkerEndpoint() {
+  if (!ESPN_LOGIN_WORKER_URL) return '';
+  const trimmed = ESPN_LOGIN_WORKER_URL.replace(/\/+$/, '');
+  return trimmed.endsWith('/login') ? trimmed : `${trimmed}/login`;
+}
+
 /**
  * A user's "Build Your Own Rankings" overlay rides on a base64 JSON header so
  * the polled GET /lines stays a GET. Deltas-only (just the players the user
@@ -297,17 +303,21 @@ apiRouter.post('/espn/login/start', async (req, res, next) => {
   }
 
   const { leagueId, season, email, password, otp, challengeId } = req.body ?? {};
-  if (!leagueId || !season || !email || !password) {
+  const isOtpContinuation = Boolean(challengeId && otp);
+  if (!leagueId || !season || (!isOtpContinuation && (!email || !password))) {
     res.status(400).json({
       error: 'espn_login_missing_fields',
       status: 'fallback',
       reason: 'missing_fields',
-      message: 'Enter your ESPN email and password, then try again.',
+      message: isOtpContinuation
+        ? 'Enter the ESPN code to continue.'
+        : 'Enter your ESPN email and password, then try again.',
     });
     return;
   }
 
-  if (!ESPN_LOGIN_WORKER_URL) {
+  const workerUrl = espnLoginWorkerEndpoint();
+  if (!workerUrl) {
     res.status(501).json({
       error: 'espn_login_worker_unavailable',
       status: 'fallback',
@@ -318,7 +328,7 @@ apiRouter.post('/espn/login/start', async (req, res, next) => {
   }
 
   try {
-    const workerResponse = await fetch(ESPN_LOGIN_WORKER_URL, {
+    const workerResponse = await fetch(workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ leagueId, season, email, password, otp, challengeId }),
