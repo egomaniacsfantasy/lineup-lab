@@ -1456,7 +1456,17 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
   const rosterIds = teams.map((t) => t.rosterId);
-  const remaining = (scheduleWeeks ?? []).filter((w) => w.week >= week && w.week <= regularWeeks);
+  // Simulate only weeks NOT already in the standings. team.record / pointsFor
+  // reflect weeks 1..lastScoredWeek, so we must start at lastScoredWeek+1 — NOT
+  // the displayWeek. Those differ in the window after a week finalizes but
+  // before the platform advances its "current week" pointer, and that gap is
+  // exactly when `w.week >= week` would re-simulate an already-counted week
+  // (double-counting it in wins/pointsFor). lastScoredWeek is the platform's
+  // own scored-week count (Sleeper last_scored_leg / ESPN latestScoringPeriod-1),
+  // robust to that race and to median-scoring formats. Fall back to week-1.
+  const lastScored = Number.isFinite(league.lastScoredWeek) ? league.lastScoredWeek : (week - 1);
+  const startWeek = Math.max(1, (lastScored ?? (week - 1)) + 1);
+  const remaining = (scheduleWeeks ?? []).filter((w) => w.week >= startWeek && w.week <= regularWeeks);
 
   // Playoff structure: fixed single-elimination bracket, one week per round.
   const bracketSize = nextPow2(Math.max(1, playoffTeams));

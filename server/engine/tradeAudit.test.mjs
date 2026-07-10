@@ -170,5 +170,61 @@ const approx = (a, b, eps = 0.6) => Math.abs(a - b) <= eps;
   check('P6d no infeasible-lineup warning', r.warnings.you == null);
 }
 
+// ===== P7: NO current-week double-count (the finding-4 fix) ===============
+// Season fully scored (lastScoredWeek = regularWeeks) while displayWeek still
+// points at the final week. `remaining` must be EMPTY, so expWins equals each
+// team's actual record.wins EXACTLY — no phantom re-sim of an already-counted
+// week. The OLD `w.week >= week` filter would re-simulate week 14 here.
+{
+  const finals = [
+    { rosterId: 1, wins: 10 }, { rosterId: 2, wins: 9 },
+    { rosterId: 3, wins: 6 }, { rosterId: 4, wins: 3 },
+  ];
+  const scoredTeams = teams.map((t, i) => ({
+    ...t,
+    record: { wins: finals[i].wins, losses: REG_WEEKS - finals[i].wins, ties: 0 },
+    pointsFor: 1500 - i * 100,
+  }));
+  const projectionMap = new Map(projections.map((p) => [p.playerId, p]));
+  const res = simulateSeason({
+    league: {
+      rosterPositions: ROSTER_POSITIONS, regularSeasonWeeks: REG_WEEKS,
+      playoffWeekStart: REG_WEEKS + 1, playoffTeams: 2, lastScoredWeek: REG_WEEKS,
+    },
+    teams: scoredTeams, scheduleWeeks, week: REG_WEEKS,
+    projectionMap, catalog, slotLabels: SLOTS, seed: 123,
+  });
+  const byId = (id) => res.find((r) => r.rosterId === id);
+  check('P7a season fully scored -> expWins == record.wins exactly (no phantom week)',
+    finals.every((f) => byId(f.rosterId).expWins === f.wins),
+    `(got ${res.map((r) => r.expWins).join(',')})`);
+  check('P7b season fully scored -> top-2 records make playoffs (100/0)',
+    byId(1).playoffProb === 100 && byId(2).playoffProb === 100 && byId(3).playoffProb === 0 && byId(4).playoffProb === 0);
+}
+
+// ===== P8: mid-season -> only unplayed weeks simulated =====================
+// 5 weeks scored: expWins must be record.wins + something in [0, unplayed].
+{
+  const scoredTeams = teams.map((t, i) => ({
+    ...t,
+    record: { wins: [4, 3, 2, 1][i], losses: [1, 2, 3, 4][i], ties: 0 },
+    pointsFor: 600 - i * 40,
+  }));
+  const projectionMap = new Map(projections.map((p) => [p.playerId, p]));
+  const res = simulateSeason({
+    league: {
+      rosterPositions: ROSTER_POSITIONS, regularSeasonWeeks: REG_WEEKS,
+      playoffWeekStart: REG_WEEKS + 1, playoffTeams: 2, lastScoredWeek: 5,
+    },
+    teams: scoredTeams, scheduleWeeks, week: 6,
+    projectionMap, catalog, slotLabels: SLOTS, seed: 7,
+  });
+  const unplayed = REG_WEEKS - 5;
+  const base = [4, 3, 2, 1];
+  check('P8 mid-season expWins in [record.wins, record.wins + unplayed]',
+    res.every((r, i) => r.expWins >= base[i] - 0.01 && r.expWins <= base[i] + unplayed + 0.01),
+    `(got ${res.map((r) => r.expWins).join(',')}, played 5, unplayed ${unplayed})`);
+}
+
 console.log(`\n${failures === 0 ? 'ALL INVARIANTS HOLD' : failures + ' INVARIANT(S) FAILED'}\n`);
 process.exit(failures === 0 ? 0 : 1);
