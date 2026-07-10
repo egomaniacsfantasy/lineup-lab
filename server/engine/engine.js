@@ -1613,15 +1613,14 @@ function rawSeasonValue(playerId, projectionMap, catalog, weeks) {
 
 // Bench weight: a benched player is worth ~half a starter (only helps on an
 // injury/bye/matchup). Blends starter usage with raw quality so two never-start
-// players are separated by quality (keep the WR, drop the backup kicker).
+// skill players are separated by projected points (keep the WR, drop the scrub).
 const BENCH_WEIGHT = 0.5;
 
-// Streamable positions: a BENCHED K/DEF has almost no hold value — kickers and
-// defenses are waiver fodder you'd never roster for depth. This only discounts
-// the bench (hold) portion; a STARTING kicker keeps full starter value. Result:
-// a surplus backup kicker is dropped before a bench WR/RB/TE/QB.
-const STREAM_FACTOR = { K: 0.15, DEF: 0.15, DST: 0.15 };
-const streamFactor = (pos) => STREAM_FACTOR[pos] ?? 1;
+// K and DEF have exactly one starting slot each and no FLEX, so a SECOND kicker
+// or defense can never enter your lineup: pure redundancy with zero hold value,
+// always dropped before any skill player. (The last/only K or DEF is separately
+// protected by the feasibility check below.)
+const isKickerOrDefense = (pos) => pos === 'K' || pos === 'DEF' || pos === 'DST';
 
 /**
  * Iteratively drop the lowest keep-score player (recompute after each drop).
@@ -1638,7 +1637,12 @@ export function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projection
     const canField = canFieldLineup(pool, slotLabels, catalog);
     const keepScore = (id) => {
       const pos = catalog[id]?.position;
-      return (starter.get(id) ?? 0) + BENCH_WEIGHT * streamFactor(pos) * rawSeasonValue(id, projectionMap, catalog, weeks);
+      // A backup at a single-slot, no-FLEX position (2nd+ K/DEF) can never enter
+      // the lineup -> no bench value; drop it before any skill player. Everyone
+      // else keeps full projected points as depth value (the tiebreaker).
+      const redundant = isKickerOrDefense(pos) && pool.some((o) => o !== id && catalog[o]?.position === pos);
+      const benchVal = redundant ? 0 : rawSeasonValue(id, projectionMap, catalog, weeks);
+      return (starter.get(id) ?? 0) + BENCH_WEIGHT * benchVal;
     };
     // Prefer drops that KEEP a legal lineup; only widen to lineup-breaking drops
     // when no roster-preserving option exists.
