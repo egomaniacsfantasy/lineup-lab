@@ -1451,7 +1451,7 @@ function standardBracketSeeds(size) {
  * normal CI sim as the matchup. Returns per-team playoff %, championship %,
  * average final seed, and projected record.
  */
-function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed = 1 }) {
+export function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed = 1 }) {
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
