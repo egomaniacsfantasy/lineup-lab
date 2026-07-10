@@ -8,7 +8,7 @@ import {
 } from '../../services/leagueApi';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import {
-  buildEspnConnectorBookmarklet,
+  buildEspnLaunchCode,
   espnSessionPasteError,
   espnLoginEnabled,
   parseEspnLeagueInput,
@@ -66,8 +66,8 @@ export function EspnConnect({
     return `${window.location.origin}/connect`;
   }, []);
 
-  const connectorHref = useMemo(
-    () => buildEspnConnectorBookmarklet(connectorReturnUrl),
+  const launchCode = useMemo(
+    () => buildEspnLaunchCode(connectorReturnUrl),
     [connectorReturnUrl],
   );
 
@@ -221,12 +221,12 @@ export function EspnConnect({
 
   const copyConnector = async () => {
     try {
-      await navigator.clipboard.writeText(connectorHref);
+      await navigator.clipboard.writeText(launchCode);
       setCopiedConnector(true);
       void trackEspnConnectEvent('connector_copy', {});
     } catch {
       setCopiedConnector(false);
-      setError('Could not copy the connector. Drag the Connect Odds Gods button to your bookmarks bar instead.');
+      setError('Could not copy the launch code. Select the code box below, copy it, then paste it into ESPN.');
     }
   };
 
@@ -245,7 +245,7 @@ export function EspnConnect({
     setShowFallback(true);
     setError(espnSessionPasteError(parsed.missing));
     // doConnect is intentionally not a dependency; this effect is a one-shot
-    // handoff from the ESPN bookmarklet back into the connector.
+    // handoff from the ESPN launch code back into the connector.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPaste]);
 
@@ -351,29 +351,24 @@ export function EspnConnect({
                   <span className="espn-connect__capture-arrow">→</span>
                   <span className="espn-connect__capture-ticket">Odds Gods</span>
                 </div>
-                <div className="espn-connect__method-grid">
-                  <div className="espn-connect__method">
-                    <p className="espn-connect__method-title">Desktop</p>
-                    <ol className="espn-connect__steps">
-                      <li>Drag this button to your bookmarks bar.</li>
-                      <li>Open your ESPN league in this browser.</li>
-                      <li>Click the bookmark. Odds Gods fills the box below.</li>
-                    </ol>
-                    <a className="espn-connect__bookmarklet" href={connectorHref}>
-                      Connect Odds Gods
-                    </a>
-                  </div>
-                  <div className="espn-connect__method">
-                    <p className="espn-connect__method-title">iPhone</p>
-                    <ol className="espn-connect__steps">
-                      <li>Tap Copy connector.</li>
-                      <li>In Safari, save a bookmark named Connect Odds Gods and paste the copied address.</li>
-                      <li>Open your ESPN league, then tap that bookmark.</li>
-                    </ol>
-                    <button className="espn-connect__linkbtn" onClick={copyConnector} type="button">
-                      {copiedConnector ? 'Connector copied' : 'Copy connector'}
-                    </button>
-                  </div>
+                <div className="espn-connect__method">
+                  <p className="espn-connect__method-title">One-time ESPN capture</p>
+                  <ol className="espn-connect__steps">
+                    <li>Tap Copy launch code.</li>
+                    <li>Open your ESPN league in this browser.</li>
+                    <li>Paste the code into the address bar and hit Enter. Odds Gods fills the box below.</li>
+                  </ol>
+                  <button className="espn-connect__submit" onClick={copyConnector} type="button">
+                    {copiedConnector ? 'Launch code copied' : 'Copy launch code'}
+                  </button>
+                  <textarea
+                    aria-label="Odds Gods ESPN launch code"
+                    className="espn-connect__input espn-connect__code"
+                    onChange={() => undefined}
+                    readOnly
+                    rows={2}
+                    value={launchCode}
+                  />
                 </div>
                 <button className="espn-connect__linkbtn" onClick={openEspnLeague} type="button">
                   Open ESPN league ↗

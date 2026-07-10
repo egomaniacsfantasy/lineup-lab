@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import {
-  buildEspnConnectorBookmarklet,
+  buildEspnLaunchCode,
   espnSessionPasteError,
   parseEspnLeagueInput,
   parseEspnSessionPaste,
@@ -90,14 +90,19 @@ test('paste state: neither ESPN session value present', () => {
   );
 });
 
-test('builds an ESPN-page connector bookmarklet that returns to Odds Gods', () => {
-  const href = buildEspnConnectorBookmarklet('https://oddsgods.net/connect');
-  assert.equal(href.startsWith('javascript:'), true);
-  const decoded = decodeURIComponent(href.slice('javascript:'.length));
-  assert.match(decoded, /fantasy\\.espn\\.com/);
-  assert.match(decoded, /espnCapture/);
-  assert.match(decoded, /espnLeagueId/);
-  assert.match(decoded, /https:\/\/oddsgods\.net\/connect/);
+test('builds runnable ESPN launch code that captures readable ESPN values', () => {
+  const code = buildEspnLaunchCode('https://oddsgods.net/connect');
+  assert.equal(code.startsWith('javascript:'), true);
+  assert.match(code, /fantasy\\.espn\\.com/);
+  assert.match(code, /document\.cookie/);
+  assert.match(code, /espn_s2=/);
+  assert.match(code, /SWID=/);
+  assert.match(code, /espnCapture/);
+  assert.match(code, /espnLeagueId/);
+  assert.match(code, /location\.href = url\.toString\(\)/);
+  assert.match(code, /https:\/\/oddsgods\.net\/connect/);
+  assert.equal(code.includes('React has ' + 'blocked'), false);
+  assert.equal(code.includes('throw new ' + 'Error'), false);
 });
 
 test('ESPN connect flow does not mention invisible login artifacts', () => {
@@ -107,9 +112,11 @@ test('ESPN connect flow does not mention invisible login artifacts', () => {
   ];
   const badText = 'session' + ' text';
   const badLine = 'session' + ' line';
+  const badBookmark = 'book' + 'mark';
   for (const file of files) {
     const text = fs.readFileSync(file, 'utf8').toLowerCase();
     assert.equal(text.includes(badText), false, file);
     assert.equal(text.includes(badLine), false, file);
+    assert.equal(text.includes(badBookmark), false, file);
   }
 });

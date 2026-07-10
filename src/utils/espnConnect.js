@@ -94,13 +94,13 @@ export function espnSessionPasteError(missing = []) {
   return null;
 }
 
-export function buildEspnConnectorBookmarklet(returnUrl) {
-  const target = String(returnUrl || '').replace(/'/g, '%27');
+export function buildEspnLaunchCode(returnUrl) {
+  const target = JSON.stringify(String(returnUrl || ''));
   const script = `(() => {
-    const send = '${target}';
+    const send = ${target};
     const onEspn = /(^|\\.)fantasy\\.espn\\.com$/i.test(location.hostname);
     if (!onEspn) {
-      alert('Open your ESPN fantasy league first, then tap Connect Odds Gods again.');
+      alert('Open your ESPN fantasy league first, then run the Odds Gods code again.');
       return;
     }
     const blob = document.cookie || '';
@@ -120,7 +120,7 @@ export function buildEspnConnectorBookmarklet(returnUrl) {
       location.href = url.toString();
     });
   })()`;
-  return `javascript:${encodeURIComponent(script)}`;
+  return `javascript:${script.replace(/\s+/g, ' ')}`;
 }
 
 export const espnLoginEnabled = import.meta.env?.VITE_ESPN_LOGIN_ENABLED === 'true';

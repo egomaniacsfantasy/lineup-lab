@@ -129,12 +129,6 @@
   letter-spacing: 0.02em;
 }
 
-.espn-connect__method-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
 .espn-connect__method {
   display: grid;
   align-content: start;
@@ -309,19 +303,11 @@
   line-height: 1.55;
 }
 
-.espn-connect__bookmarklet {
-  display: inline-block;
-  padding: 3px 10px;
-  border: 1px solid var(--amber);
-  border-radius: 8px;
-  background: rgba(232, 84, 29, 0.14);
-  color: var(--amber-bright);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 700;
-  text-decoration: none;
-  cursor: grab;
-  white-space: nowrap;
+.espn-connect__code {
+  min-height: 54px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .espn-connect__linkbtn {
@@ -351,11 +337,5 @@
 @media (prefers-reduced-motion: reduce) {
   .espn-connect__capture-phone span {
     animation: none;
-  }
-}
-
-@media (max-width: 520px) {
-  .espn-connect__method-grid {
-    grid-template-columns: 1fr;
   }
 }
