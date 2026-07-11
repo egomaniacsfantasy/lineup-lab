@@ -1,22 +1,21 @@
-import { useEffect, useState } from 'react';
 import { type TradeAnalysis, type TradeSideDelta } from '../../services/leagueApi';
 
 /**
  * Season-simulation impact for the trade being built in the Deals "Build a
  * trade" panel. Everything DISPLAYED (Δ championship %, playoff %, exp wins,
  * seed, and the Overpay/Fair/Steal verdict) comes purely from the sim + the
- * players in the trade — independent of the sliders. The two per-manager
- * sliders (Trade-friendliness, Relationship) feed ONLY the "Will they accept?"
- * logistic; they never touch the championship numbers.
+ * players in the trade — independent of the sliders. The per-manager
+ * friendliness/relationship read (set on the manager card) feeds ONLY the
+ * "Will they accept?" logistic; it never touches the championship numbers.
  */
 
 // ---- Acceptance + verdict math (all in championship percentage points) -----
-const BAR0 = 0.6;      // loss-aversion baseline: Δc=0, neutral sliders -> ~40%
+const BAR0 = 0.6;      // loss-aversion baseline: Δc=0, neutral read -> ~40%
 const K_FRIEND = 0.10; // championship-pts per friendliness notch
 const K_REL = 0.05;    // championship-pts per relationship notch
 const SPREAD = 1.5;    // logistic slope
 
-function acceptanceProbability(theirDeltaTitle: number, friendliness: number, relationship: number) {
+export function acceptanceProbability(theirDeltaTitle: number, friendliness: number, relationship: number) {
   const threshold = BAR0 - K_FRIEND * (friendliness - 5) - K_REL * (relationship - 5);
   const z = (theirDeltaTitle - threshold) / SPREAD;
   const p = 1 / (1 + Math.exp(-z));
@@ -41,26 +40,6 @@ function verdict(youDeltaTitle: number) {
 // 0 = full overpay, 0.5 = fair, 1 = full steal.
 const railPosition = (youDeltaTitle: number) => 0.5 + 0.5 * Math.tanh(youDeltaTitle / 6);
 
-// ---- Per-manager slider persistence (user's private subjective read) --------
-interface Traits { friendliness: number; relationship: number }
-const traitKey = (leagueId: string, rosterId: number) => `og.trade.traits.${leagueId}.${rosterId}`;
-function loadTraits(leagueId: string, rosterId: number | null): Traits {
-  if (rosterId == null) return { friendliness: 5, relationship: 5 };
-  try {
-    const raw = localStorage.getItem(traitKey(leagueId, rosterId));
-    if (raw) {
-      const t = JSON.parse(raw);
-      return { friendliness: clamp10(t.friendliness), relationship: clamp10(t.relationship) };
-    }
-  } catch { /* ignore */ }
-  return { friendliness: 5, relationship: 5 };
-}
-function saveTraits(leagueId: string, rosterId: number | null, t: Traits) {
-  if (rosterId == null) return;
-  try { localStorage.setItem(traitKey(leagueId, rosterId), JSON.stringify(t)); } catch { /* ignore */ }
-}
-const clamp10 = (n: unknown) => Math.max(0, Math.min(10, Math.round(Number(n) || 0)));
-
 export function TradeAnalyzerPanel({
   analysis,
   analyzing,
@@ -70,8 +49,8 @@ export function TradeAnalyzerPanel({
   userPlayers,
   nameOf,
   posOf,
-  leagueId,
-  partnerRosterId,
+  friendliness,
+  relationship,
 }: {
   analysis: TradeAnalysis | null;
   analyzing: boolean;
@@ -81,26 +60,9 @@ export function TradeAnalyzerPanel({
   userPlayers: string[];
   nameOf: (id: string) => string;
   posOf: (id: string) => string;
-  leagueId: string;
-  partnerRosterId: number | null;
+  friendliness: number;
+  relationship: number;
 }) {
-  const [friendliness, setFriendliness] = useState(5);
-  const [relationship, setRelationship] = useState(5);
-
-  // Load this manager's saved sliders whenever the partner changes.
-  useEffect(() => {
-    const t = loadTraits(leagueId, partnerRosterId);
-    setFriendliness(t.friendliness);
-    setRelationship(t.relationship);
-  }, [leagueId, partnerRosterId]);
-
-  const update = (next: Partial<Traits>) => {
-    const t = { friendliness, relationship, ...next };
-    setFriendliness(t.friendliness);
-    setRelationship(t.relationship);
-    saveTraits(leagueId, partnerRosterId, t);
-  };
-
   if (!analyzing && !error && !(analysis?.available && analysis.you && analysis.partner)) {
     return null;
   }
@@ -142,7 +104,7 @@ export function TradeAnalyzerPanel({
             </div>
           </div>
 
-          {/* Acceptance — their championship change + your subjective sliders. */}
+          {/* Acceptance — their championship change + your manager read. */}
           <div className="trade-analyzer-panel__accept">
             <div className="trade-analyzer-panel__accept-top">
               <span className="trade-analyzer-panel__accept-label">Will {partnerName} accept?</span>
@@ -150,21 +112,10 @@ export function TradeAnalyzerPanel({
               <span className="trade-analyzer-panel__accept-band">{acceptanceBand(acceptPct)}</span>
             </div>
             <p className="trade-analyzer-panel__accept-note">
-              Driven by their championship change (<Delta v={theirDelta} pct />). The sliders below are
-              your read on this manager and only nudge the odds — they don&apos;t change the numbers above.
+              Driven by their championship change (<Delta v={theirDelta} pct />), nudged by your read on{' '}
+              {partnerName} (friendliness {friendliness}, relationship {relationship}) — set that on their
+              card above. It never changes the championship numbers.
             </p>
-            <TraitSlider
-              label="Trade-friendliness"
-              hint="0 = stubborn hoarder · 10 = wheeler-dealer"
-              value={friendliness}
-              onChange={(n) => update({ friendliness: n })}
-            />
-            <TraitSlider
-              label="Relationship"
-              hint="0 = despises you · 10 = great terms"
-              value={relationship}
-              onChange={(n) => update({ relationship: n })}
-            />
           </div>
 
           <Results
@@ -177,36 +128,6 @@ export function TradeAnalyzerPanel({
           />
         </>
       ) : null}
-    </div>
-  );
-}
-
-function TraitSlider({
-  label,
-  hint,
-  value,
-  onChange,
-}: {
-  label: string;
-  hint: string;
-  value: number;
-  onChange: (n: number) => void;
-}) {
-  return (
-    <div className="trade-analyzer-panel__slider">
-      <div className="trade-analyzer-panel__slider-head">
-        <span className="trade-analyzer-panel__slider-label">{label}</span>
-        <span className="trade-analyzer-panel__slider-value">{value}</span>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={10}
-        step={1}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-      />
-      <span className="trade-analyzer-panel__slider-hint">{hint}</span>
     </div>
   );
 }

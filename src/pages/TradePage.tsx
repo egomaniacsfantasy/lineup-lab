@@ -6,7 +6,6 @@ import { TradeTargetsList } from '../components/trade/TradeTargetsList';
 import { ScoutingView } from './market/ScoutingView';
 import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
 import '../components/trade/TradeAnalyzerPanel.css';
-import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { toPlayer } from '../adapters/connectedLeague';
 import {
@@ -19,20 +18,12 @@ import {
   type TradeTraits,
 } from '../services/leagueApi';
 import type { LeagueBootstrap, MarketMover } from '../services/leagueApi';
-import { formatAmericanOdds } from '../utils/formatOdds';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
+import { loadTradeTraits, saveTradeTraits } from '../utils/tradeTraits';
 import './TradePage.css';
 
 function signedDelta(value = 0) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
-}
-
-function impliedTitleProbability(odds: number) {
-  return odds <= -100 ? -odds / (-odds + 100) : 100 / (odds + 100);
-}
-
-function titleOddsImproved(before: number, after: number) {
-  return impliedTitleProbability(after) > impliedTitleProbability(before);
 }
 
 function laneIds(primary?: string[], fallback?: string) {
@@ -219,9 +210,66 @@ function laneBelongsToLeague(
   );
 }
 
+/** Your private read on a manager: two subjective sliders that feed the trade
+ *  acceptance model. Saved per manager and loaded into every trade with them. */
+function ManagerReadCard({
+  name,
+  friendliness,
+  relationship,
+  onChange,
+}: {
+  name: string;
+  friendliness: number;
+  relationship: number;
+  onChange: (next: { friendliness?: number; relationship?: number }) => void;
+}) {
+  return (
+    <div className="trade-cc__read-card">
+      <p className="trade-cc__read-title">Your read on {name}</p>
+      <ReadSlider
+        label="Trade-friendliness"
+        hint="0 = stubborn hoarder · 10 = wheeler-dealer"
+        value={friendliness}
+        onChange={(n) => onChange({ friendliness: n })}
+      />
+      <ReadSlider
+        label="Relationship"
+        hint="0 = despises you · 10 = great terms"
+        value={relationship}
+        onChange={(n) => onChange({ relationship: n })}
+      />
+      <p className="trade-cc__read-note">
+        Only nudges the acceptance odds — never the championship numbers. Saved for this manager.
+      </p>
+    </div>
+  );
+}
+
+function ReadSlider({
+  label,
+  hint,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="trade-cc__read-slider">
+      <div className="trade-cc__read-slider-head">
+        <span>{label}</span>
+        <span className="trade-cc__read-slider-value">{value}</span>
+      </div>
+      <input type="range" min={0} max={10} step={1} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <span className="trade-cc__read-slider-hint">{hint}</span>
+    </div>
+  );
+}
+
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error, refresh } = useLeagueConnection();
-  const { openScoutingCard } = useScoutingCard();
   const [params, setParams] = useSearchParams();
   const builderRef = useRef<HTMLElement | null>(null);
 
@@ -244,14 +292,10 @@ function TradeDealsView() {
   const [getSearch, setGetSearch] = useState('');
   const [openLaneWhy, setOpenLaneWhy] = useState<string | null>(null);
   const [rationaleByKey, setRationaleByKey] = useState<Record<string, RationaleState>>({});
-  const [liveRead, setLiveRead] = useState<{
-    loading: boolean;
-    result: TradeResult | null;
-    error: string | null;
-  }>({ loading: false, result: null, error: null });
+  const [friendliness, setFriendliness] = useState(5);
+  const [relationship, setRelationship] = useState(5);
+  const [showRead, setShowRead] = useState(false);
   const refreshKeyRef = useRef<string | null>(null);
-  const giveSignature = give.join(',');
-  const getSignature = getIds.join(',');
 
   useEffect(() => {
     if (!stored || isLoading) return;
@@ -307,37 +351,21 @@ function TradeDealsView() {
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   }, [bootstrap, lanes, params, stored]);
 
+  // Load your saved read (friendliness/relationship) for the selected manager.
   useEffect(() => {
-    if (!stored || partnerRosterId == null || give.length === 0 || getIds.length === 0) {
-      setLiveRead({ loading: false, result: null, error: null });
-      return undefined;
-    }
+    if (!stored) return;
+    const t = loadTradeTraits(stored.leagueId, partnerRosterId);
+    setFriendliness(t.friendliness);
+    setRelationship(t.relationship);
+    setShowRead(false);
+  }, [partnerRosterId, stored]);
 
-    let active = true;
-    setLiveRead((current) => ({ ...current, loading: true, error: null }));
-    const timer = window.setTimeout(() => {
-      void priceTrade(stored.leagueId, {
-        userId: stored.userId,
-        partnerRosterId,
-        give,
-        get: getIds,
-        traits: NEUTRAL_TRADE_TRAITS,
-      })
-        .then((priced) => {
-          if (!active) return;
-          setLiveRead({ loading: false, result: priced, error: priced.available ? null : priced.reason ?? 'unpriced' });
-        })
-        .catch(() => {
-          if (!active) return;
-          setLiveRead({ loading: false, result: null, error: 'Could not price the live read.' });
-        });
-    }, 350);
-
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [getSignature, giveSignature, getIds, give, partnerRosterId, stored]);
+  const updateRead = (next: { friendliness?: number; relationship?: number }) => {
+    const t = { friendliness, relationship, ...next };
+    setFriendliness(t.friendliness);
+    setRelationship(t.relationship);
+    if (stored) saveTradeTraits(stored.leagueId, partnerRosterId, t);
+  };
 
   // Connected leagues get Market deals; the mock targets are
   // demo-only and never render next to a real roster.
@@ -480,10 +508,7 @@ function TradeDealsView() {
       get: getIds,
       traits: NEUTRAL_TRADE_TRAITS,
     })
-      .then((priced) => {
-        setResult(priced);
-        setLiveRead({ loading: false, result: priced, error: priced.available ? null : priced.reason ?? 'unpriced' });
-      })
+      .then(setResult)
       .catch(() => {});
     const analysisPromise = runAnalysis(give, getIds, null);
     try {
@@ -509,10 +534,7 @@ function TradeDealsView() {
       get: nextGet,
       traits: NEUTRAL_TRADE_TRAITS,
     })
-      .then((priced) => {
-        setResult(priced);
-        setLiveRead({ loading: false, result: priced, error: priced.available ? null : priced.reason ?? 'unpriced' });
-      })
+      .then(setResult)
       .catch(() => {});
     const analysisPromise = runAnalysis(nextGive, nextGet, null);
     try {
@@ -579,19 +601,6 @@ function TradeDealsView() {
     const depthText = depth == null || !player?.position ? '' : ` · ${player.position}${depth}`;
     return `${role} · ${projection}${depthText}`;
   };
-
-  const selectedTotal = (ids: string[]) =>
-    ids.reduce((sum, id) => sum + (pricing?.playerMeans?.[id]?.mean ?? 0), 0);
-
-  const liveResult = liveRead.result?.available ? liveRead.result : null;
-  const liveTitleMoved =
-    liveResult?.you?.titleAfter != null &&
-    liveResult?.you?.titleBefore != null &&
-    liveResult.you.titleAfter !== liveResult.you.titleBefore;
-  const liveTitleUp = liveTitleMoved
-    ? titleOddsImproved(liveResult!.you!.titleBefore, liveResult!.you!.titleAfter)
-    : false;
-  const assetDelta = selectedTotal(getIds) - selectedTotal(give);
 
   const renderSelectedCards = (
     rosterId: number,
@@ -821,47 +830,6 @@ function TradeDealsView() {
             <p className="trade-cc__kicker">Build a trade</p>
             <h2 className="trade-cc__title">Who is moving?</h2>
           </div>
-          <div className="trade-cc__live-read" aria-live="polite">
-            <span className="trade-cc__live-label">Live balance</span>
-            {!canPrice ? (
-              <span className="trade-cc__live-main">Add one player each side</span>
-            ) : liveRead.loading ? (
-              <span className="trade-cc__live-main">Pricing this package...</span>
-            ) : liveResult && liveResult.you && liveResult.them ? (
-              <>
-                <span
-                  className={[
-                    'trade-cc__live-main',
-                    liveResult.you.valueDelta > 0
-                      ? 'trade-cc__live-main--up'
-                      : liveResult.you.valueDelta < 0
-                        ? 'trade-cc__live-main--down'
-                        : '',
-                  ].filter(Boolean).join(' ')}
-                >
-                  {liveResult.verdict ?? 'Fair'} · you {signedDelta(liveResult.you.valueDelta)}
-                </span>
-                <span className="trade-cc__live-sub">
-                  them {signedDelta(liveResult.them.valueDelta)} pts/wk
-                  {liveTitleMoved
-                    ? ` · title ${formatAmericanOdds(liveResult.you.titleBefore)} to ${formatAmericanOdds(liveResult.you.titleAfter)} ${liveTitleUp ? '▲' : '▼'}`
-                    : ' · title unchanged'}
-                  {liveResult.acceptance?.probability != null
-                    ? ` · ${liveResult.acceptance.probability}% to accept`
-                    : ''}
-                </span>
-              </>
-            ) : liveRead.error ? (
-              <span className="trade-cc__live-main trade-cc__live-main--down">{liveRead.error}</span>
-            ) : (
-              <>
-                <span className="trade-cc__live-main">
-                  Assets {assetDelta >= 0 ? '+' : ''}{assetDelta.toFixed(1)} wk
-                </span>
-                <span className="trade-cc__live-sub">Starter and title read appears when both sides are set.</span>
-              </>
-            )}
-          </div>
         </div>
 
         <div className="trade-cc__columns">
@@ -903,17 +871,23 @@ function TradeDealsView() {
                 {partnerRosterId != null ? (
                   <button
                     className="trade-cc__partner-read"
-                    onClick={() => {
-                      const owner = bootstrap.teams.find((team) => team.rosterId === partnerRosterId);
-                      if (owner?.ownerId) openScoutingCard(owner.ownerId);
-                    }}
+                    aria-expanded={showRead}
+                    onClick={() => setShowRead((v) => !v)}
                     type="button"
                   >
-                    Open card
+                    {showRead ? 'Hide read' : 'Your read'}
                   </button>
                 ) : null}
               </div>
             </div>
+            {partnerRosterId != null && showRead ? (
+              <ManagerReadCard
+                name={partners.find((t) => t.rosterId === partnerRosterId)?.teamName ?? 'this manager'}
+                friendliness={friendliness}
+                relationship={relationship}
+                onChange={updateRead}
+              />
+            ) : null}
             {partnerRosterId != null ? (
               <>
                 {renderSelectedCards(partnerRosterId, getIds, setGetIds, 'No return selected yet.', 'get')}
@@ -943,8 +917,8 @@ function TradeDealsView() {
           userPlayers={userTeam.players}
           nameOf={(id) => playerName(bootstrap, id)}
           posOf={(id) => bootstrap.players[id]?.position ?? ''}
-          leagueId={stored.leagueId}
-          partnerRosterId={partnerRosterId}
+          friendliness={friendliness}
+          relationship={relationship}
         />
       </section>
 

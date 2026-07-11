@@ -1620,3 +1620,57 @@
   font-family: var(--font-ui);
   font-size: 13px;
 }
+
+/* ── Manager read card (your subjective friendliness/relationship) ── */
+.trade-cc__read-card {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-inset, rgba(255, 255, 255, 0.03));
+}
+
+.trade-cc__read-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.trade-cc__read-note {
+  margin: 0;
+  font-size: 0.72rem;
+  opacity: 0.6;
+  line-height: 1.35;
+}
+
+.trade-cc__read-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trade-cc__read-slider-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.trade-cc__read-slider-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.trade-cc__read-slider input[type='range'] {
+  width: 100%;
+  accent-color: #f59e0b;
+}
+
+.trade-cc__read-slider-hint {
+  font-size: 0.7rem;
+  opacity: 0.55;
+}
