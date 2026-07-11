@@ -582,28 +582,8 @@ function TradeDealsView() {
     );
   };
 
-  const rosterRole = (rosterId: number, id: string) => {
-    const team = bootstrap.teams.find((candidate) => candidate.rosterId === rosterId);
-    if (!team) return 'Roster';
-    return (team.starters ?? []).includes(id) ? 'Starter' : 'Bench';
-  };
-
-  const playerContextValue = (rosterId: number, id: string) => {
-    const mean = pricing?.playerMeans?.[id]?.mean;
-    const role = rosterRole(rosterId, id);
-    const player = bootstrap.players[id];
-    const depth = player?.position
-      ? bootstrap.teams.find((team) => team.rosterId === rosterId)?.players.filter((playerId) =>
-          bootstrap.players[playerId]?.position === player.position,
-        ).length
-      : null;
-    const projection = typeof mean === 'number' && Number.isFinite(mean) ? `${mean.toFixed(1)} wk` : 'unpriced';
-    const depthText = depth == null || !player?.position ? '' : ` · ${player.position}${depth}`;
-    return `${role} · ${projection}${depthText}`;
-  };
-
   const renderSelectedCards = (
-    rosterId: number,
+    _rosterId: number,
     ids: string[],
     set: (v: string[]) => void,
     empty: string,
@@ -627,9 +607,6 @@ function TradeDealsView() {
               <span className="trade-cc__asset-pos">{player.position}</span>
               <span className="trade-cc__asset-copy">
                 <span className="trade-cc__asset-name">{player.name}</span>
-                <span className="trade-cc__asset-meta">
-                  {player.team} · {playerContextValue(rosterId, id)}
-                </span>
               </span>
               <button
                 aria-label={`Remove ${player.name}`}
@@ -689,7 +666,6 @@ function TradeDealsView() {
               />
               <span className="trade-cc__pill-pos">{row.player.position}</span>
               <span className="trade-cc__pill-name">{row.player.name}</span>
-              <span className="trade-cc__pill-value">{playerContextValue(rosterId, row.id)}</span>
               <span className="trade-cc__pill-add">{list.includes(row.id) ? 'Added' : 'Add'}</span>
             </button>
           </div>
