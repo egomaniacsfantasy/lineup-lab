@@ -901,8 +901,6 @@ function TradeDealsView() {
       {/* ── Verdict ── */}
       {result && result.available && result.you && result.them ? (
         (() => {
-          const verdictKey = `verdict:${partnerRosterId}-${give.join(',')}-${getIds.join(',')}-${analysisDrops?.join(',') ?? ''}`;
-          const verdictWhyOpen = openLaneWhy === verdictKey;
           const renderFaces = (ids: string[], tone: 'get' | 'give') => (
             <div className={`trade-cc__verdict-face-group trade-cc__verdict-face-group--${tone}`}>
               {ids.map((id) => (
@@ -937,34 +935,8 @@ function TradeDealsView() {
                 </div>
               </div>
 
-              {partnerRosterId != null ? (
-                <div className="trade-cc__why-block">
-                  <button
-                    aria-expanded={verdictWhyOpen}
-                    className="trade-cc__lane-why trade-cc__verdict-why"
-                    onClick={() => toggleRationale(verdictKey, {
-                      userId: stored.userId,
-                      partnerRosterId,
-                      give,
-                      get: getIds,
-                      traits: NEUTRAL_TRADE_TRAITS,
-                      userDrops: analysisDrops,
-                    })}
-                    type="button"
-                  >
-                    Why this trade?
-                  </button>
-                  {verdictWhyOpen ? <TradeRationalePanel state={rationaleByKey[verdictKey]} /> : null}
-                </div>
-              ) : null}
-
               {result.fairCounter ? (
                 <div className="trade-cc__counter">
-                  <p className="trade-cc__counter-title">
-                    {result.fairCounter.whoAdds === 'them'
-                      ? `You're overpaying by ${result.fairCounter.gapBefore} pts of value`
-                      : `You're winning this by ${result.fairCounter.gapBefore} pts of value`}
-                  </p>
                   <p className="trade-cc__counter-body">
                     {result.fairCounter.whoAdds === 'them'
                       ? `Even it out: ask ${result.fairCounter.teamName} to add ${result.fairCounter.add
