@@ -970,15 +970,13 @@ function TradeDealsView() {
                   ) : !counter.available ? (
                     <p className="trade-cc__counter-body">Couldn&apos;t compute a fair counter.</p>
                   ) : counter.needed === false ? (
-                    <p className="trade-cc__counter-body">
-                      Already balanced — the championship swing between you two is ≈ {counter.imbalance}%.
-                    </p>
+                    <p className="trade-cc__counter-body">This trade is already balanced.</p>
                   ) : counter.add && counter.add.length > 0 ? (
                     <>
                       <p className="trade-cc__counter-body">
                         {counter.whoAdds === 'you'
                           ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out.`
-                          : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')}.`}
+                          : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')} to even it out.`}
                         {counter.before && counter.after
                           ? ` Your championship ${counter.before.youDelta > 0 ? '+' : ''}${counter.before.youDelta}% to ${counter.after.youDelta > 0 ? '+' : ''}${counter.after.youDelta}%, ${analysis.partner.teamName} ${counter.before.partnerDelta > 0 ? '+' : ''}${counter.before.partnerDelta}% to ${counter.after.partnerDelta > 0 ? '+' : ''}${counter.after.partnerDelta}%.`
                           : ''}

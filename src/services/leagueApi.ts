@@ -641,7 +641,6 @@ export interface TradeCounter {
   needed?: boolean;
   whoAdds?: 'you' | 'them';
   add?: { id: string; name: string }[];
-  imbalance?: number;
   before?: { youDelta: number; partnerDelta: number };
   after?: { youDelta: number; partnerDelta: number };
 }

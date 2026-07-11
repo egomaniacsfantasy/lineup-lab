@@ -302,6 +302,29 @@ function optimalAssign(playerIds, slotLabels, projectionMap, catalog, week) {
   return assign;
 }
 
+// Freely-available waiver "replacement" levels — what a manager streams when a
+// required single-slot position (usually K/DEF) is on a bye and has no backup.
+// Modeling this keeps the season sim consistent with the roster-drop logic,
+// which already treats a backup K/DEF as streamable (zero hold value). Without
+// it, dropping a backup K and then hitting the starter's bye would score that
+// slot 0, understating the team by ~one week of kicker points.
+const REPLACEMENT_MEAN = { QB: 12, RB: 6, WR: 6, TE: 5, K: 7, DEF: 6, DST: 6 };
+
+/** Optimal-lineup starter params, but any UNFILLABLE required (non-FLEX) slot is
+ *  filled with a waiver-replacement player instead of being scored 0. */
+function streamedLineupParams(playerIds, slotLabels, projectionMap, catalog, week) {
+  const assign = optimalAssign(playerIds, slotLabels, projectionMap, catalog, week);
+  const ids = assign.map((a) => a.playerId).filter(Boolean);
+  const params = starterParams(ids, projectionMap, catalog, week);
+  for (const a of assign) {
+    if (a.playerId || FLEX_ELIGIBILITY[a.slot]) continue;
+    const mean = REPLACEMENT_MEAN[a.slot] ?? 5;
+    const sd = mean * 0.4;
+    params.players.push({ mean, sigmaDown: sd, sigmaUp: sd });
+  }
+  return params;
+}
+
 /** Actual starter assignment from a provider starters array (aligned to slots). */
 function actualAssign(starterIds, slotLabels) {
   return slotLabels.map((slot, i) => {
@@ -1481,10 +1504,7 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   for (const t of teams) {
     const m = new Map();
     for (const wk of weeksNeeded) {
-      const ids = optimalAssign(t.players, slotLabels, projectionMap, catalog, wk)
-        .map((a) => a.playerId)
-        .filter(Boolean);
-      m.set(wk, starterParams(ids, projectionMap, catalog, wk));
+      m.set(wk, streamedLineupParams(t.players, slotLabels, projectionMap, catalog, wk));
     }
     paramsBy.set(t.rosterId, m);
   }
@@ -1843,53 +1863,42 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
     return { youDelta: au.titleProb - bu.titleProb, partnerDelta: ap.titleProb - bp.titleProb };
   };
 
-  const SEARCH_SIMS = 4000;
+  const SEARCH_SIMS = 3000;
   const FAIR_TOL = 2;      // within ±2 championship pts of target = already fair
-  const MAX_CAND = 6;
 
-  const baseSearch = simulateSeason({ ...base, sims: SEARCH_SIMS });
-  const b0 = evalTrade(give, get, SEARCH_SIMS, baseSearch);
+  const baseline = simulateSeason({ ...base, sims: SEARCH_SIMS });
+  const b0 = evalTrade(give, get, SEARCH_SIMS, baseline);
   const imbalance0 = b0.youDelta - b0.partnerDelta;
   if (Math.abs(imbalance0 - target) <= FAIR_TOL) {
-    return { available: true, needed: false, imbalance: Number(imbalance0.toFixed(1)) };
+    return { available: true, needed: false };
   }
 
-  // Winning side adds a throw-in to hand the other side value back.
+  // Winning side adds a throw-in to hand the other side value back. Search the
+  // ENTIRE remaining roster (every player not already in the deal) and pick the
+  // one the sim says lands the imbalance closest to the target.
   const whoAdds = imbalance0 > target ? 'you' : 'them';
   const addTeam = whoAdds === 'you' ? userTeam : partnerTeam;
   const dealSet = new Set([...give.map(String), ...get.map(String)]);
-  const projMean = (id) => projectionMap.get(id)?.mean ?? 0;
-  let cands = addTeam.players
-    .filter((id) => !dealSet.has(String(id)))
-    .map((id) => ({ id, mean: projMean(id) }))
-    .sort((a, b) => a.mean - b.mean);
-  // Sample a spread (small -> large throw-ins) to bound the search.
-  if (cands.length > MAX_CAND) {
-    const stepSize = (cands.length - 1) / (MAX_CAND - 1);
-    const picked = [];
-    for (let i = 0; i < MAX_CAND; i += 1) picked.push(cands[Math.round(i * stepSize)]);
-    cands = [...new Map(picked.map((c) => [c.id, c])).values()];
-  }
-
+  const cands = addTeam.players.filter((id) => !dealSet.has(String(id)));
   const withAdd = (id) => (whoAdds === 'you'
     ? { g: [...give, id], t: get }
     : { g: give, t: [...get, id] });
 
   let best = null;
-  for (const c of cands) {
-    const { g, t } = withAdd(c.id);
-    const r = evalTrade(g, t, SEARCH_SIMS, baseSearch);
-    const imb = r.youDelta - r.partnerDelta;
-    const score = Math.abs(imb - target);
-    if (!best || score < best.score) best = { id: c.id, score };
+  for (const id of cands) {
+    const { g, t } = withAdd(id);
+    const r = evalTrade(g, t, SEARCH_SIMS, baseline);
+    const score = Math.abs((r.youDelta - r.partnerDelta) - target);
+    if (!best || score < best.score) best = { id, score };
   }
 
+  // Only suggest if a single add actually improves the balance.
   if (!best || best.score >= Math.abs(imbalance0 - target)) {
-    return { available: true, needed: true, whoAdds, add: [], imbalance: Number(imbalance0.toFixed(1)) };
+    return { available: true, needed: true, whoAdds, add: [] };
   }
 
-  // Confirm at full resolution — BOTH the base trade and the with-throw-in
-  // trade, so before/after are apples-to-apples and match the reprice exactly.
+  // Confirm the winner at full resolution — base trade AND with-throw-in both at
+  // 10k, so the displayed before/after are apples-to-apples and match the reprice.
   const baseFull = simulateSeason({ ...base, sims: SEASON_SIMS });
   const beforeFull = evalTrade(give, get, SEASON_SIMS, baseFull);
   const { g, t } = withAdd(best.id);
