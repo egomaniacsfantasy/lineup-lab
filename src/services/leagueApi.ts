@@ -635,6 +635,27 @@ export function analyzeTradeApi(
   });
 }
 
+export interface TradeCounter {
+  available: boolean;
+  reason?: string;
+  needed?: boolean;
+  whoAdds?: 'you' | 'them';
+  add?: { id: string; name: string }[];
+  imbalance?: number;
+  before?: { imbalance: number };
+  after?: { imbalance: number; youDelta: number; partnerDelta: number };
+}
+export function fetchTradeCounter(
+  leagueId: string,
+  body: { userId: string; partnerRosterId: number; give: string[]; get: string[]; userDrops?: string[] | null; target?: number },
+): Promise<TradeCounter> {
+  return get<TradeCounter>(`/api/league/${leagueId}/trade-counter`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export function fetchTradeRationale(
   leagueId: string,
   body: {

@@ -11,9 +11,11 @@ import { toPlayer } from '../adapters/connectedLeague';
 import {
   priceTrade,
   analyzeTradeApi,
+  fetchTradeCounter,
   fetchTradeRationale,
   type TradeResult,
   type TradeAnalysis,
+  type TradeCounter,
   type TradeRationaleResponse,
   type TradeTraits,
 } from '../services/leagueApi';
@@ -288,6 +290,8 @@ function TradeDealsView() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisDrops, setAnalysisDrops] = useState<string[] | null>(null);
+  const [counter, setCounter] = useState<TradeCounter | null>(null);
+  const [counterLoading, setCounterLoading] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
   const [openLaneWhy, setOpenLaneWhy] = useState<string | null>(null);
@@ -412,6 +416,48 @@ function TradeDealsView() {
     setAnalysis(null);
     setAnalysisError(null);
     setAnalysisDrops(null);
+    setCounter(null);
+    setCounterLoading(false);
+  };
+
+  const fetchCounter = async () => {
+    if (!stored || partnerRosterId == null || give.length === 0 || getIds.length === 0) return;
+    setCounterLoading(true);
+    setCounter(null);
+    try {
+      const c = await fetchTradeCounter(stored.leagueId, {
+        userId: stored.userId,
+        partnerRosterId,
+        give,
+        get: getIds,
+        userDrops: analysisDrops,
+      });
+      setCounter(c);
+    } catch {
+      setCounter({ available: false, reason: 'error' });
+    } finally {
+      setCounterLoading(false);
+    }
+  };
+
+  // Inject the counter's throw-in onto the right side and re-price + re-analyze.
+  const applyCounterAdd = (c: TradeCounter) => {
+    const ids = (c.add ?? []).map((a) => a.id);
+    if (ids.length === 0) return;
+    const nextGive = c.whoAdds === 'you' ? [...new Set([...give, ...ids])] : give;
+    const nextGet = c.whoAdds === 'them' ? [...new Set([...getIds, ...ids])] : getIds;
+    setGive(nextGive);
+    setGetIds(nextGet);
+    setResult(null);
+    setCounter(null);
+    void priceTrade(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId: partnerRosterId!,
+      give: nextGive,
+      get: nextGet,
+      traits: NEUTRAL_TRADE_TRAITS,
+    }).then(setResult).catch(() => {});
+    void runAnalysis(nextGive, nextGet, null);
   };
 
   const runAnalysis = async (giveIds: string[], getIds2: string[], userDrops: string[] | null = null) => {
@@ -519,31 +565,6 @@ function TradeDealsView() {
   };
 
   // One-tap fair counter: add the suggested throw-in(s) to the right side and reprice.
-  const applyCounter = async (counter: NonNullable<TradeResult['fairCounter']>) => {
-    if (!stored || partnerRosterId == null) return;
-    const ids = counter.add.map((a) => a.id);
-    const nextGive = counter.whoAdds === 'you' ? [...new Set([...give, ...ids])] : give;
-    const nextGet = counter.whoAdds === 'them' ? [...new Set([...getIds, ...ids])] : getIds;
-    setGive(nextGive);
-    setGetIds(nextGet);
-    setIsPricing(true);
-    const pricePromise = priceTrade(stored.leagueId, {
-      userId: stored.userId,
-      partnerRosterId,
-      give: nextGive,
-      get: nextGet,
-      traits: NEUTRAL_TRADE_TRAITS,
-    })
-      .then(setResult)
-      .catch(() => {});
-    const analysisPromise = runAnalysis(nextGive, nextGet, null);
-    try {
-      await Promise.allSettled([pricePromise, analysisPromise]);
-    } finally {
-      setIsPricing(false);
-    }
-  };
-
   const canPrice = partnerRosterId != null && give.length > 0 && getIds.length > 0;
   const renderLaneHeadshots = (
     getPlayerIds: string[],
@@ -935,27 +956,44 @@ function TradeDealsView() {
                 </div>
               </div>
 
-              {result.fairCounter ? (
+              {analysis?.available && analysis.you && analysis.partner ? (
                 <div className="trade-cc__counter">
-                  <p className="trade-cc__counter-body">
-                    {result.fairCounter.whoAdds === 'them'
-                      ? `Even it out: ask ${result.fairCounter.teamName} to add ${result.fairCounter.add
-                          .map((a) => a.name)
-                          .join(' + ')}`
-                      : `Make it fair: add ${result.fairCounter.add
-                          .map((a) => a.name)
-                          .join(' + ')}`}
-                    {result.fairCounter.allDepth ? '. Bench depth, not starters.' : '.'}
-                  </p>
-                  <button
-                    className="trade-cc__counter-btn"
-                    onClick={() => applyCounter(result.fairCounter!)}
-                    type="button"
-                  >
-                    {result.fairCounter.whoAdds === 'them'
-                      ? 'Add it to what you get'
-                      : 'Add it to what you give'}
-                  </button>
+                  {counter == null ? (
+                    <button
+                      className="trade-cc__counter-btn"
+                      onClick={() => void fetchCounter()}
+                      disabled={counterLoading}
+                      type="button"
+                    >
+                      {counterLoading ? 'Simulating fair adds…' : 'Even out this trade →'}
+                    </button>
+                  ) : !counter.available ? (
+                    <p className="trade-cc__counter-body">Couldn&apos;t compute a fair counter.</p>
+                  ) : counter.needed === false ? (
+                    <p className="trade-cc__counter-body">
+                      Already balanced — the championship swing between you two is ≈ {counter.imbalance}%.
+                    </p>
+                  ) : counter.add && counter.add.length > 0 ? (
+                    <>
+                      <p className="trade-cc__counter-body">
+                        {counter.whoAdds === 'you'
+                          ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out`
+                          : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')}`}
+                        {counter.before && counter.after
+                          ? `. Championship swing ${counter.before.imbalance}% to ${counter.after.imbalance}%.`
+                          : '.'}
+                      </p>
+                      <button
+                        className="trade-cc__counter-btn"
+                        onClick={() => applyCounterAdd(counter)}
+                        type="button"
+                      >
+                        {counter.whoAdds === 'you' ? 'Add it to what you give' : 'Add it to what you get'}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="trade-cc__counter-body">No single add balances this trade well.</p>
+                  )}
                 </div>
               ) : null}
 

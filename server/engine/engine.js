@@ -1451,7 +1451,7 @@ function standardBracketSeeds(size) {
  * normal CI sim as the matchup. Returns per-team playoff %, championship %,
  * average final seed, and projected record.
  */
-export function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed = 1 }) {
+export function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed = 1, sims = SEASON_SIMS }) {
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
@@ -1495,7 +1495,7 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   const winSums = new Map(rosterIds.map((id) => [id, 0]));
   const seedSums = new Map(rosterIds.map((id) => [id, 0]));
 
-  for (let sim = 0; sim < SEASON_SIMS; sim += 1) {
+  for (let sim = 0; sim < sims; sim += 1) {
     const wins = new Map(teams.map((t) => [t.rosterId, t.record?.wins ?? 0]));
     const pf = new Map(teams.map((t) => [t.rosterId, t.pointsFor ?? 0]));
 
@@ -1560,9 +1560,9 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
 
   const totalGames = regularWeeks;
   return teams.map((t) => {
-    const playoffProb = playoffCounts.get(t.rosterId) / SEASON_SIMS;
-    const titleProb = titleCounts.get(t.rosterId) / SEASON_SIMS;
-    const projWins = Math.round(winSums.get(t.rosterId) / SEASON_SIMS);
+    const playoffProb = playoffCounts.get(t.rosterId) / sims;
+    const titleProb = titleCounts.get(t.rosterId) / sims;
+    const projWins = Math.round(winSums.get(t.rosterId) / sims);
     const projLosses = Math.max(0, totalGames - projWins);
     return {
       rosterId: t.rosterId,
@@ -1572,13 +1572,13 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
       projWins,
       projLosses,
       projRecord: `${projWins}-${projLosses}`,
-      expWins: Number((winSums.get(t.rosterId) / SEASON_SIMS).toFixed(2)),
+      expWins: Number((winSums.get(t.rosterId) / sims).toFixed(2)),
       playoffProb: Number((playoffProb * 100).toFixed(1)),
       playoffClinched: playoffProb >= 0.999,
       playoffOdds: probToAmerican(playoffProb),
       titleProb: Number((titleProb * 100).toFixed(1)),
       championOdds: probToAmerican(titleProb),
-      avgSeed: Number((seedSums.get(t.rosterId) / SEASON_SIMS).toFixed(1)),
+      avgSeed: Number((seedSums.get(t.rosterId) / sims).toFixed(1)),
     };
   });
 }
@@ -1778,6 +1778,132 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
     warnings,
     you: sideDelta(userTeam),
     partner: sideDelta(partnerTeam),
+  };
+}
+
+/**
+ * Fair-counter on the sim: the trade is "fair" when both sides' championship-%
+ * change is balanced (imbalance = yourΔc − theirΔc ≈ target, default 0). If one
+ * side is winning, find the single throw-in from THAT side whose addition brings
+ * the imbalance closest to the target — scored by the actual season sim, not by
+ * points. Searches candidates at a cheap sim count, confirms the winner at full.
+ */
+export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], userDrops = null, target = 0 }) {
+  const active = ctx.projections ?? getActiveProjections();
+  if (!active) return { available: false, reason: 'no_projections' };
+  const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
+  const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
+  applyOverlay(projectionMap, overlay);
+
+  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+  const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
+  const userTeam = teams.find((t) => t.isUser);
+  const partnerTeam = teams.find((t) => t.rosterId === Number(partnerRosterId));
+  if (!userTeam || !partnerTeam) return { available: false, reason: 'team_not_found' };
+
+  const regularWeeks = league.regularSeasonWeeks ?? 14;
+  const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
+  const bracketSize = nextPow2(Math.max(1, Math.min(league.playoffTeams ?? 6, teams.length)));
+  const rounds = Math.max(1, Math.round(Math.log2(bracketSize)));
+  const dropWeeks = [];
+  for (let w = week; w <= regularWeeks; w += 1) dropWeeks.push(w);
+  for (let r = 0; r < rounds; r += 1) dropWeeks.push(playoffWeekStart + r);
+
+  const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
+  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
+
+  // Evaluate a give/get trade at a sim count vs a matching baseline; return each
+  // side's championship-% change (same seed => CRN cancels sim noise).
+  const evalTrade = (giveList, getList, sims, baseline) => {
+    const giveSet = new Set(giveList.map(String));
+    const getSet = new Set(getList.map(String));
+    const userAfter = [...userTeam.players.filter((id) => !giveSet.has(String(id))), ...getList];
+    const partnerAfter = [...partnerTeam.players.filter((id) => !getSet.has(String(id))), ...giveList];
+    const userNeed = Math.max(0, userAfter.length - maxRoster);
+    const partnerNeed = Math.max(0, partnerAfter.length - maxRoster);
+    const userDroppable = userTeam.players.filter((id) => !giveSet.has(String(id)));
+    const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)));
+    const uDrops = userDrops && userDrops.length >= userNeed
+      ? userDrops.slice(0, userNeed)
+      : chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks);
+    const pDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks);
+    const uSet = new Set(uDrops.map(String));
+    const pSet = new Set(pDrops.map(String));
+    const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
+    const partnerFinal = partnerAfter.filter((id) => !pSet.has(String(id)));
+    const tradedTeams = teams.map((t) =>
+      t.rosterId === userTeam.rosterId ? { ...t, players: userFinal }
+        : t.rosterId === partnerTeam.rosterId ? { ...t, players: partnerFinal } : t);
+    const after = simulateSeason({ ...base, teams: tradedTeams, sims });
+    const bu = baseline.find((f) => f.rosterId === userTeam.rosterId);
+    const bp = baseline.find((f) => f.rosterId === partnerTeam.rosterId);
+    const au = after.find((f) => f.rosterId === userTeam.rosterId);
+    const ap = after.find((f) => f.rosterId === partnerTeam.rosterId);
+    return { youDelta: au.titleProb - bu.titleProb, partnerDelta: ap.titleProb - bp.titleProb };
+  };
+
+  const SEARCH_SIMS = 4000;
+  const FAIR_TOL = 2;      // within ±2 championship pts of target = already fair
+  const MAX_CAND = 6;
+
+  const baseSearch = simulateSeason({ ...base, sims: SEARCH_SIMS });
+  const b0 = evalTrade(give, get, SEARCH_SIMS, baseSearch);
+  const imbalance0 = b0.youDelta - b0.partnerDelta;
+  if (Math.abs(imbalance0 - target) <= FAIR_TOL) {
+    return { available: true, needed: false, imbalance: Number(imbalance0.toFixed(1)) };
+  }
+
+  // Winning side adds a throw-in to hand the other side value back.
+  const whoAdds = imbalance0 > target ? 'you' : 'them';
+  const addTeam = whoAdds === 'you' ? userTeam : partnerTeam;
+  const dealSet = new Set([...give.map(String), ...get.map(String)]);
+  const projMean = (id) => projectionMap.get(id)?.mean ?? 0;
+  let cands = addTeam.players
+    .filter((id) => !dealSet.has(String(id)))
+    .map((id) => ({ id, mean: projMean(id) }))
+    .sort((a, b) => a.mean - b.mean);
+  // Sample a spread (small -> large throw-ins) to bound the search.
+  if (cands.length > MAX_CAND) {
+    const stepSize = (cands.length - 1) / (MAX_CAND - 1);
+    const picked = [];
+    for (let i = 0; i < MAX_CAND; i += 1) picked.push(cands[Math.round(i * stepSize)]);
+    cands = [...new Map(picked.map((c) => [c.id, c])).values()];
+  }
+
+  const withAdd = (id) => (whoAdds === 'you'
+    ? { g: [...give, id], t: get }
+    : { g: give, t: [...get, id] });
+
+  let best = null;
+  for (const c of cands) {
+    const { g, t } = withAdd(c.id);
+    const r = evalTrade(g, t, SEARCH_SIMS, baseSearch);
+    const imb = r.youDelta - r.partnerDelta;
+    const score = Math.abs(imb - target);
+    if (!best || score < best.score) best = { id: c.id, score };
+  }
+
+  if (!best || best.score >= Math.abs(imbalance0 - target)) {
+    return { available: true, needed: true, whoAdds, add: [], imbalance: Number(imbalance0.toFixed(1)) };
+  }
+
+  // Confirm the winner at full resolution for the displayed numbers.
+  const baseFull = simulateSeason({ ...base, sims: SEASON_SIMS });
+  const { g, t } = withAdd(best.id);
+  const confirm = evalTrade(g, t, SEASON_SIMS, baseFull);
+  const imbAfter = confirm.youDelta - confirm.partnerDelta;
+  return {
+    available: true,
+    needed: true,
+    whoAdds,
+    add: [{ id: best.id, name: catalog[best.id]?.name ?? String(best.id) }],
+    before: { imbalance: Number(imbalance0.toFixed(1)) },
+    after: {
+      imbalance: Number(imbAfter.toFixed(1)),
+      youDelta: Number(confirm.youDelta.toFixed(1)),
+      partnerDelta: Number(confirm.partnerDelta.toFixed(1)),
+    },
   };
 }
 
