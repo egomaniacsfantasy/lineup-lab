@@ -302,24 +302,42 @@ function optimalAssign(playerIds, slotLabels, projectionMap, catalog, week) {
   return assign;
 }
 
-// Freely-available waiver "replacement" levels — what a manager streams when a
-// required single-slot position (usually K/DEF) is on a bye and has no backup.
-// Modeling this keeps the season sim consistent with the roster-drop logic,
-// which already treats a backup K/DEF as streamable (zero hold value). Without
-// it, dropping a backup K and then hitting the starter's bye would score that
-// slot 0, understating the team by ~one week of kicker points.
-const REPLACEMENT_MEAN = { QB: 12, RB: 6, WR: 6, TE: 5, K: 7, DEF: 6, DST: 6 };
+// Fallback replacement floor when the projection universe has no free agent at a
+// position (e.g. synthetic tests). Real leagues override this per-position with
+// the best available free agent (see replacementLevels).
+const REPLACEMENT_FALLBACK = { QB: 12, RB: 6, WR: 6, TE: 5, K: 7, DEF: 6, DST: 6 };
+
+/**
+ * Per-position waiver "replacement" value = the projection of the BEST free agent
+ * at that position (highest-projected player not on any team's roster). This is
+ * what a manager would stream when a required slot can't be filled, and it is
+ * automatically league-size-aware: fewer teams => fewer players rostered => the
+ * best available free agent is a better player => a higher replacement level.
+ */
+function replacementLevels(teams, projectionMap, catalog) {
+  const rostered = new Set((teams ?? []).flatMap((t) => (t.players ?? []).map(String)));
+  const byPos = new Map();
+  for (const [id, proj] of projectionMap) {
+    if (rostered.has(String(id))) continue;
+    const pos = catalog[id]?.position;
+    if (!pos) continue;
+    const mean = Number(proj?.mean);
+    if (!Number.isFinite(mean)) continue;
+    if (!byPos.has(pos) || mean > byPos.get(pos)) byPos.set(pos, mean);
+  }
+  return (pos) => byPos.get(pos) ?? REPLACEMENT_FALLBACK[pos] ?? 5;
+}
 
 /** Optimal-lineup starter params, but any UNFILLABLE required (non-FLEX) slot is
- *  filled with a waiver-replacement player instead of being scored 0. */
-function streamedLineupParams(playerIds, slotLabels, projectionMap, catalog, week) {
+ *  filled with a waiver-replacement player (best free agent) instead of scoring 0. */
+function streamedLineupParams(playerIds, slotLabels, projectionMap, catalog, week, replacementFor) {
   const assign = optimalAssign(playerIds, slotLabels, projectionMap, catalog, week);
   const ids = assign.map((a) => a.playerId).filter(Boolean);
   const params = starterParams(ids, projectionMap, catalog, week);
   for (const a of assign) {
     if (a.playerId || FLEX_ELIGIBILITY[a.slot]) continue;
-    const mean = REPLACEMENT_MEAN[a.slot] ?? 5;
-    const sd = mean * 0.4;
+    const mean = replacementFor(a.slot);
+    const sd = Math.max(1, mean * 0.4);
     params.players.push({ mean, sigmaDown: sd, sigmaUp: sd });
   }
   return params;
@@ -1499,12 +1517,15 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   for (let r = 0; r < rounds; r += 1) playoffWeeks.push(playoffWeekStart + r);
 
   // Precompute each team's optimal-lineup params for every needed week (once).
+  // Waiver-replacement level per position = best available free agent (league
+  // -size-aware), used to fill any unfillable required slot instead of scoring 0.
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
   const weeksNeeded = new Set([...remaining.map((w) => w.week), ...playoffWeeks]);
   const paramsBy = new Map();
   for (const t of teams) {
     const m = new Map();
     for (const wk of weeksNeeded) {
-      m.set(wk, streamedLineupParams(t.players, slotLabels, projectionMap, catalog, wk));
+      m.set(wk, streamedLineupParams(t.players, slotLabels, projectionMap, catalog, wk, replacementFor));
     }
     paramsBy.set(t.rosterId, m);
   }
