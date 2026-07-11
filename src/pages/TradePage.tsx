@@ -977,11 +977,11 @@ function TradeDealsView() {
                     <>
                       <p className="trade-cc__counter-body">
                         {counter.whoAdds === 'you'
-                          ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out`
-                          : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')}`}
+                          ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out.`
+                          : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')}.`}
                         {counter.before && counter.after
-                          ? `. Championship swing ${counter.before.imbalance}% to ${counter.after.imbalance}%.`
-                          : '.'}
+                          ? ` Your championship ${counter.before.youDelta > 0 ? '+' : ''}${counter.before.youDelta}% to ${counter.after.youDelta > 0 ? '+' : ''}${counter.after.youDelta}%, ${analysis.partner.teamName} ${counter.before.partnerDelta > 0 ? '+' : ''}${counter.before.partnerDelta}% to ${counter.after.partnerDelta > 0 ? '+' : ''}${counter.after.partnerDelta}%.`
+                          : ''}
                       </p>
                       <button
                         className="trade-cc__counter-btn"

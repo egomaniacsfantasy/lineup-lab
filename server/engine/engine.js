@@ -1888,19 +1888,22 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
     return { available: true, needed: true, whoAdds, add: [], imbalance: Number(imbalance0.toFixed(1)) };
   }
 
-  // Confirm the winner at full resolution for the displayed numbers.
+  // Confirm at full resolution — BOTH the base trade and the with-throw-in
+  // trade, so before/after are apples-to-apples and match the reprice exactly.
   const baseFull = simulateSeason({ ...base, sims: SEASON_SIMS });
+  const beforeFull = evalTrade(give, get, SEASON_SIMS, baseFull);
   const { g, t } = withAdd(best.id);
   const confirm = evalTrade(g, t, SEASON_SIMS, baseFull);
-  const imbAfter = confirm.youDelta - confirm.partnerDelta;
   return {
     available: true,
     needed: true,
     whoAdds,
     add: [{ id: best.id, name: catalog[best.id]?.name ?? String(best.id) }],
-    before: { imbalance: Number(imbalance0.toFixed(1)) },
+    before: {
+      youDelta: Number(beforeFull.youDelta.toFixed(1)),
+      partnerDelta: Number(beforeFull.partnerDelta.toFixed(1)),
+    },
     after: {
-      imbalance: Number(imbAfter.toFixed(1)),
       youDelta: Number(confirm.youDelta.toFixed(1)),
       partnerDelta: Number(confirm.partnerDelta.toFixed(1)),
     },

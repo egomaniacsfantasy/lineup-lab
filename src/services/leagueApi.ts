@@ -642,8 +642,8 @@ export interface TradeCounter {
   whoAdds?: 'you' | 'them';
   add?: { id: string; name: string }[];
   imbalance?: number;
-  before?: { imbalance: number };
-  after?: { imbalance: number; youDelta: number; partnerDelta: number };
+  before?: { youDelta: number; partnerDelta: number };
+  after?: { youDelta: number; partnerDelta: number };
 }
 export function fetchTradeCounter(
   leagueId: string,
