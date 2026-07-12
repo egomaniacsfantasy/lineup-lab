@@ -1680,3 +1680,9 @@
   font-size: 0.8rem;
   color: var(--text-muted, rgba(255, 255, 255, 0.6));
 }
+
+.trade-cc__finder-note {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  color: var(--warning, #f0b429);
+}

@@ -249,7 +249,7 @@ function TradeDealsView() {
   const [counter, setCounter] = useState<TradeCounter | null>(null);
   const [counterLoading, setCounterLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<TradeSuggestion[] | null>(null);
-  const [suggDebug, setSuggDebug] = useState<{ simmed: number; positive: number } | null>(null);
+  const [suggDebug, setSuggDebug] = useState<{ enumerated: number; positive: number } | null>(null);
   const [suggLoading, setSuggLoading] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
@@ -337,7 +337,7 @@ function TradeDealsView() {
       .then((r) => {
         if (!active) return;
         setSuggestions(r.available ? r.suggestions ?? [] : []);
-        setSuggDebug(r.debug ? { simmed: r.debug.simmed, positive: r.debug.positive } : null);
+        setSuggDebug(r.debug ? { enumerated: r.debug.enumerated, positive: r.debug.positive } : null);
       })
       .catch(() => { if (active) setSuggestions([]); })
       .finally(() => { if (active) setSuggLoading(false); });
@@ -355,9 +355,19 @@ function TradeDealsView() {
       return { ...s, accept, score: (s.youDelta * accept) / 100 };
     });
   }, [suggestions, stored?.leagueId, friendliness, relationship]);
-  // Rank by expected gain and show the top 3 with their real numbers (your title
-  // Δ, the partner's title Δ, and accept %) so nothing is hidden.
-  const rankedSuggestions = [...scoredSuggestions].sort((a, b) => b.score - a.score).slice(0, 3);
+  // Gate on a minimum acceptance so lopsided fleeces (huge yourΔc, ~3% accept)
+  // never win on score alone, THEN rank the survivors by expected gain. If
+  // nothing clears the bar, fall back to the most-acceptable trades (never an
+  // empty panel) and flag it so the copy can say so.
+  const ACCEPT_FLOOR = 20;
+  const { rankedSuggestions, belowFloor } = useMemo(() => {
+    const eligible = scoredSuggestions.filter((s) => s.accept >= ACCEPT_FLOOR);
+    if (eligible.length > 0) {
+      return { rankedSuggestions: [...eligible].sort((a, b) => b.score - a.score).slice(0, 3), belowFloor: false };
+    }
+    const fallback = [...scoredSuggestions].sort((a, b) => b.accept - a.accept).slice(0, 3);
+    return { rankedSuggestions: fallback, belowFloor: true };
+  }, [scoredSuggestions]);
 
   // Connected leagues get Market deals; the mock targets are
   // demo-only and never render next to a real roster.
@@ -653,12 +663,22 @@ function TradeDealsView() {
       <section className="trade-cc__finder">
         <h2 className="trade-cc__section-label">Managers you match with</h2>
         <p className="trade-cc__finder-sub">Trades that raise your title odds, ranked by title gain × chance they accept.</p>
+        {belowFloor && rankedSuggestions.length > 0 ? (
+          <p className="trade-cc__finder-note">
+            Nothing clears the {ACCEPT_FLOOR}% acceptance bar right now. Showing the trades most likely to be accepted.
+          </p>
+        ) : null}
         {suggLoading && suggestions == null ? (
-          <div className="trade-cc__lane-skeleton" aria-label="Simulating trades">
-            <span />
-            <span />
-            <span />
-          </div>
+          <>
+            <div className="trade-cc__lane-skeleton" aria-label="Simulating trades">
+              <span />
+              <span />
+              <span />
+            </div>
+            <p className="trade-cc__finder-note">
+              Simulating every possible trade across the league. This runs a full search and can take a minute.
+            </p>
+          </>
         ) : rankedSuggestions.length > 0 ? (
           <>
           {rankedSuggestions.map((s, index) => {
@@ -718,7 +738,7 @@ function TradeDealsView() {
         ) : (
           <p className="trade-cc__empty-lane">
             No trade raises your title odds right now
-            {suggDebug ? ` (simmed ${suggDebug.simmed}, ${suggDebug.positive} raised your title).` : '.'}
+            {suggDebug ? ` (searched ${suggDebug.enumerated}, ${suggDebug.positive} raised your title).` : '.'}
           </p>
         )}
       </section>

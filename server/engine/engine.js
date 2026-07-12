@@ -2017,27 +2017,13 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
     return { youDelta: au.titleProb - bu.titleProb, partnerDelta: ap.titleProb - bp.titleProb };
   };
 
-  // ── Cheap candidate generation + pre-filter (starter points) ──
+  // ── EXHAUSTIVE enumeration: every 1-for-1, 2-for-1, and 1-for-2 with every
+  // opponent. No sampling, no value pre-filter — every combination is simmed.
   const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
   const projected = (id) => projectionMap.get(id)?.mean ?? 0;
   const tradeable = (team) => team.players
     .filter((id) => TRADEABLE.includes(catalog[id]?.position))
     .sort((a, b) => projected(b) - projected(a));
-  const benchPairs = (team) => {
-    const starters = new Set(team.starters ?? []);
-    const ids = tradeable(team).filter((id) => !starters.has(id)).slice(0, 8);
-    const pairs = [];
-    for (let i = 0; i < ids.length; i += 1) for (let j = i + 1; j < ids.length; j += 1) pairs.push([ids[i], ids[j]]);
-    return pairs.slice(0, 16);
-  };
-
-  const shortlist = [];
-  const val = (ids) => ids.reduce((s, id) => s + projected(id), 0);
-  // WIDE net: fair-value trades of many SHAPES with each opponent — 1-1, 2-1,
-  // 1-2, 2-2, 3-2, 2-3, 3-3. Balanced multi-player swaps are where the acceptable
-  // trades live: they shuffle value without fleecing anyone, so the partner is
-  // roughly indifferent. Fair value (not "the partner also gains title") is the
-  // gate; the season sim + acceptance model rank what actually surfaces.
   const combos = (arr, k) => {
     if (k <= 0) return [[]];
     if (k > arr.length) return [];
@@ -2047,62 +2033,51 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
     }
     return out;
   };
-  const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 2], [2, 3], [3, 3]];
+  const nameOf = (id) => catalog[id]?.name ?? String(id);
+  // Neutral-slider acceptance (friendliness = relationship = 5 -> threshold 0.6),
+  // matching the client's logistic. Used only to PICK the re-sim set; the client
+  // recomputes with the real per-manager sliders for the final gate + ranking.
+  const acceptN = (pd) => 1 / (1 + Math.exp(-((pd - 0.6) / 1.5)));
+
+  const candidates = [];
   for (const opp of opponents) {
-    const mine = tradeable(userTeam).slice(0, 9);
-    const theirs = tradeable(opp).slice(0, 9);
-    for (const [k, j] of SIZES) {
-      const gives = combos(mine, k);
-      const gets = combos(theirs, j);
-      for (const give of gives) {
-        const gv = val(give);
-        for (const get of gets) {
-          const tv = val(get);
-          const r = tv > 0 ? gv / tv : 1;
-          if (r < 0.75 || r > 1.35) continue; // fair value only
-          const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
-          const youGain = computeStarterImpact(userTeam.players, userAfter, slotLabels, projectionMap, catalog).delta;
-          if (youGain > 0) shortlist.push({ partner: opp, give, get, youGain });
-        }
-      }
-    }
-  }
-  // Dedupe, then pick a LARGE, DIVERSE batch to sim. Fair value already keeps
-  // the partner from being fleeced, so we don't want only the biggest lineup
-  // upgrades (those skew to lopsided value-takes) — we want breadth. Half the
-  // budget goes to the strongest improvements, half is strided across the rest
-  // so balanced, near-even swaps (the acceptable trades) get simmed too. The
-  // season sim gives real Δ championship %; the client ranks by yourΔc × P(accept).
-  const seen = new Set();
-  const positive = shortlist
-    .filter((c) => {
-      const key = `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => b.youGain - a.youGain);
-  const topN = Math.min(Math.floor(maxSim / 2), positive.length);
-  const promising = positive.slice(0, topN);
-  const rest = positive.slice(topN);
-  const strideN = Math.min(maxSim - topN, rest.length);
-  if (strideN > 0) {
-    const step = rest.length / strideN;
-    for (let i = 0; i < strideN; i += 1) promising.push(rest[Math.floor(i * step)]);
+    const mine = tradeable(userTeam);
+    const theirs = tradeable(opp);
+    for (const gi of mine) for (const ti of theirs) candidates.push({ partner: opp, give: [gi], get: [ti] });
+    for (const pair of combos(mine, 2)) for (const ti of theirs) candidates.push({ partner: opp, give: pair, get: [ti] });
+    for (const gi of mine) for (const pair of combos(theirs, 2)) candidates.push({ partner: opp, give: [gi], get: pair });
   }
 
-  // ── Season-sim the shortlist for real Δ championship % ──
-  // Lower per-trade sim count buys a much wider scan; CRN (shared seed vs the
-  // baseline) cancels common variance, so youDelta stays stable even at 1500.
-  const SEARCH_SIMS = 1500;
-  const baseline = simulateSeason({ ...base, sims: SEARCH_SIMS });
-  const nameOf = (id) => catalog[id]?.name ?? String(id);
+  // ── Pass 1: low-sim scan of the ENTIRE set. CRN (shared seed vs the baseline)
+  // cancels common variance, so youDelta is stable enough to rank/filter cheaply.
+  // Keep only trades that raise YOUR title.
+  const t0 = Date.now();
+  const SCAN_SIMS = 250;
+  const scanBaseline = simulateSeason({ ...base, sims: SCAN_SIMS });
+  const scanned = [];
+  for (const c of candidates) {
+    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline);
+    if (youDelta > 0) scanned.push({ ...c, youDelta, partnerDelta, accN: acceptN(partnerDelta) });
+  }
+
+  // Pick the re-sim set: acceptable-and-helpful trades (neutral accept >= 15%) by
+  // prelim expected gain, PLUS the most-acceptable trades regardless — so the
+  // client always has fallback options even if its sliders push things below the
+  // floor. This is what surfaces near-even swaps (small yourΔc, decent accept)
+  // rather than only fleeces.
+  const eligible = scanned.filter((s) => s.accN >= 0.15);
+  const byScore = [...eligible].sort((a, b) => b.youDelta * b.accN - a.youDelta * a.accN).slice(0, maxSim);
+  const byAccept = [...scanned].sort((a, b) => b.accN - a.accN).slice(0, 20);
+  const reKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
+  const reSimSet = [...new Map([...byScore, ...byAccept].map((c) => [reKey(c), c])).values()];
+
+  // ── Pass 2: re-sim the survivors at high resolution for accurate displayed %.
+  const FINAL_SIMS = 4000;
+  const finalBaseline = simulateSeason({ ...base, sims: FINAL_SIMS });
   const suggestions = [];
-  let candidatesConsidered = 0;
-  for (const c of promising) {
-    candidatesConsidered += 1;
-    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SEARCH_SIMS, baseline);
-    if (youDelta <= 0) continue; // only trades that help you
+  for (const c of reSimSet) {
+    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, FINAL_SIMS, finalBaseline);
+    if (youDelta <= 0) continue;
     suggestions.push({
       partnerRosterId: c.partner.rosterId,
       partnerName: c.partner.teamName,
@@ -2112,13 +2087,19 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
       partnerDelta: Number(partnerDelta.toFixed(1)),
     });
   }
-  // Return the full simmed set (both sides' Δc); the client gates on acceptance
-  // and ranks by expected gain. Sorted by your gain only for stable ordering.
+  // Client gates on acceptance and ranks by expected gain. Sort by your gain for
+  // stable ordering.
   suggestions.sort((a, b) => b.youDelta - a.youDelta);
   return {
     available: true,
     suggestions: suggestions.slice(0, 40),
-    debug: { generated: shortlist.length, deduped: promising.length, simmed: candidatesConsidered, positive: suggestions.length },
+    debug: {
+      enumerated: candidates.length,
+      scanned: scanned.length,
+      resimmed: reSimSet.length,
+      positive: suggestions.length,
+      ms: Date.now() - t0,
+    },
   };
 }
 
