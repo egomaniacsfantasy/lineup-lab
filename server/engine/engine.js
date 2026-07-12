@@ -2032,29 +2032,36 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
   };
 
   const shortlist = [];
+  const val = (ids) => ids.reduce((s, id) => s + projected(id), 0);
   for (const opp of opponents) {
     const mine = tradeable(userTeam).slice(0, 10);
     const theirs = tradeable(opp).slice(0, 10);
     const cands = [];
+    // FAIR-value combos only (roughly even points exchanged) — a positional-fit
+    // swap that upgrades your lineup without fleecing the partner is what they'd
+    // actually consider. We do NOT require the partner's title to rise.
     for (const giveId of mine) {
       for (const getId of theirs) {
         const r = projected(getId) > 0 ? projected(giveId) / projected(getId) : 1;
-        if (r >= 0.5 && r <= 2.0) cands.push({ give: [giveId], get: [getId] });
+        if (r >= 0.75 && r <= 1.35) cands.push({ give: [giveId], get: [getId] });
       }
     }
     for (const give of benchPairs(userTeam)) {
-      for (const getId of theirs.slice(0, 6)) cands.push({ give, get: [getId] });
+      for (const getId of theirs.slice(0, 6)) {
+        const r = projected(getId) > 0 ? val(give) / projected(getId) : 1;
+        if (r >= 0.8 && r <= 1.5) cands.push({ give, get: [getId] });
+      }
     }
     for (const c of cands) {
       const userAfter = userTeam.players.filter((id) => !c.give.includes(id)).concat(c.get);
-      const oppAfter = opp.players.filter((id) => !c.get.includes(id)).concat(c.give);
+      // Keep trades that improve YOUR starting lineup. The partner's willingness
+      // is decided later by the acceptance model (their title Δ + your sliders).
       const youGain = computeStarterImpact(userTeam.players, userAfter, slotLabels, projectionMap, catalog).delta;
-      const themGain = computeStarterImpact(opp.players, oppAfter, slotLabels, projectionMap, catalog).delta;
-      // Keep trades that plausibly help you and don't gut the partner (they'd never take it).
-      if (youGain > 0 && themGain > -2) shortlist.push({ partner: opp, give: c.give, get: c.get, proxy: youGain });
+      if (youGain > 0) shortlist.push({ partner: opp, give: c.give, get: c.get, youGain });
     }
   }
-  // Dedupe and keep the most promising by the cheap proxy.
+  // Dedupe and keep the trades that most improve your lineup (fair value already
+  // ensures the partner isn't being fleeced, so acceptance stays plausible).
   const seen = new Set();
   const promising = shortlist
     .filter((c) => {
@@ -2063,7 +2070,7 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
       seen.add(key);
       return true;
     })
-    .sort((a, b) => b.proxy - a.proxy)
+    .sort((a, b) => b.youGain - a.youGain)
     .slice(0, maxSim);
 
   // ── Season-sim the shortlist for real Δ championship % ──
@@ -2083,9 +2090,10 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
       partnerDelta: Number(partnerDelta.toFixed(1)),
     });
   }
-  // Return the best by your own gain; the client re-ranks by yourΔc × P(accept).
+  // Return the full simmed set (both sides' Δc); the client gates on acceptance
+  // and ranks by expected gain. Sorted by your gain only for stable ordering.
   suggestions.sort((a, b) => b.youDelta - a.youDelta);
-  return { available: true, suggestions: suggestions.slice(0, 10) };
+  return { available: true, suggestions: suggestions.slice(0, 12) };
 }
 
 /**

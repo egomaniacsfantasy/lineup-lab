@@ -341,6 +341,7 @@ function TradeDealsView() {
 
   // Rank suggestions by expected championship gain = yourΔc × P(partner accepts),
   // where acceptance uses YOUR saved friendliness/relationship read per manager.
+  const ACCEPT_FLOOR = 25; // don't suggest a trade the partner would almost never take
   const rankedSuggestions = useMemo(() => {
     if (!suggestions) return [];
     return suggestions
@@ -349,6 +350,7 @@ function TradeDealsView() {
         const accept = acceptanceProbability(s.partnerDelta, t.friendliness, t.relationship);
         return { ...s, accept, score: (s.youDelta * accept) / 100 };
       })
+      .filter((s) => s.accept >= ACCEPT_FLOOR) // realistic trades only
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
   }, [suggestions, stored?.leagueId, friendliness, relationship]);
