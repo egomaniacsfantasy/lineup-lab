@@ -2033,55 +2033,68 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
 
   const shortlist = [];
   const val = (ids) => ids.reduce((s, id) => s + projected(id), 0);
+  // WIDE net: fair-value trades of many SHAPES with each opponent — 1-1, 2-1,
+  // 1-2, 2-2, 3-2, 2-3, 3-3. Balanced multi-player swaps are where the acceptable
+  // trades live: they shuffle value without fleecing anyone, so the partner is
+  // roughly indifferent. Fair value (not "the partner also gains title") is the
+  // gate; the season sim + acceptance model rank what actually surfaces.
+  const combos = (arr, k) => {
+    if (k <= 0) return [[]];
+    if (k > arr.length) return [];
+    const out = [];
+    for (let i = 0; i <= arr.length - k; i += 1) {
+      for (const rest of combos(arr.slice(i + 1), k - 1)) out.push([arr[i], ...rest]);
+    }
+    return out;
+  };
+  const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 2], [2, 3], [3, 3]];
   for (const opp of opponents) {
-    const mine = tradeable(userTeam).slice(0, 10);
-    const theirs = tradeable(opp).slice(0, 10);
-    const cands = [];
-    // Roughly fair-value combos (no fleeces on either side). We do NOT require
-    // the partner's title to rise; the acceptance model handles their willingness.
-    for (const giveId of mine) {
-      for (const getId of theirs) {
-        const r = projected(getId) > 0 ? projected(giveId) / projected(getId) : 1;
-        if (r >= 0.5 && r <= 2.0) cands.push({ give: [giveId], get: [getId] });
+    const mine = tradeable(userTeam).slice(0, 9);
+    const theirs = tradeable(opp).slice(0, 9);
+    for (const [k, j] of SIZES) {
+      const gives = combos(mine, k);
+      const gets = combos(theirs, j);
+      for (const give of gives) {
+        const gv = val(give);
+        for (const get of gets) {
+          const tv = val(get);
+          const r = tv > 0 ? gv / tv : 1;
+          if (r < 0.75 || r > 1.35) continue; // fair value only
+          const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
+          const youGain = computeStarterImpact(userTeam.players, userAfter, slotLabels, projectionMap, catalog).delta;
+          if (youGain > 0) shortlist.push({ partner: opp, give, get, youGain });
+        }
       }
-    }
-    for (const give of benchPairs(userTeam)) {
-      for (const getId of theirs.slice(0, 8)) {
-        const r = projected(getId) > 0 ? val(give) / projected(getId) : 1;
-        if (r >= 0.6 && r <= 2.2) cands.push({ give, get: [getId] });
-      }
-    }
-    for (const c of cands) {
-      const userAfter = userTeam.players.filter((id) => !c.give.includes(id)).concat(c.get);
-      const oppAfter = opp.players.filter((id) => !c.get.includes(id)).concat(c.give);
-      // Keep trades that don't downgrade your lineup much (roughly lateral or
-      // better). Also measure the partner's lineup change as a cheap acceptance
-      // proxy for picking WHICH trades to sim.
-      const youGain = computeStarterImpact(userTeam.players, userAfter, slotLabels, projectionMap, catalog).delta;
-      const themGain = computeStarterImpact(opp.players, oppAfter, slotLabels, projectionMap, catalog).delta;
-      if (youGain > -1) shortlist.push({ partner: opp, give: c.give, get: c.get, youGain, themGain });
     }
   }
-  // Dedupe, then build a DIVERSE sim shortlist: the union of the trades that
-  // most improve YOUR lineup and the trades that most likely get accepted (your
-  // upgrade weighted by how much the partner's roster survives). This guarantees
-  // both aggressive and fair deals get simmed, so the client always has real
-  // options to rank — not just one bucket.
-  const acceptProxy = (g) => 1 / (1 + Math.exp(-g / 2));
+  // Dedupe, then pick a LARGE, DIVERSE batch to sim. Fair value already keeps
+  // the partner from being fleeced, so we don't want only the biggest lineup
+  // upgrades (those skew to lopsided value-takes) — we want breadth. Half the
+  // budget goes to the strongest improvements, half is strided across the rest
+  // so balanced, near-even swaps (the acceptable trades) get simmed too. The
+  // season sim gives real Δ championship %; the client ranks by yourΔc × P(accept).
   const seen = new Set();
-  const deduped = shortlist.filter((c) => {
-    const key = `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const half = Math.ceil(maxSim / 2);
-  const byYou = [...deduped].sort((a, b) => b.youGain - a.youGain).slice(0, half);
-  const byAccept = [...deduped].sort((a, b) => (b.youGain * acceptProxy(b.themGain)) - (a.youGain * acceptProxy(a.themGain))).slice(0, half);
-  const promising = [...new Map([...byYou, ...byAccept].map((c) => [`${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`, c])).values()];
+  const positive = shortlist
+    .filter((c) => {
+      const key = `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => b.youGain - a.youGain);
+  const topN = Math.min(Math.floor(maxSim / 2), positive.length);
+  const promising = positive.slice(0, topN);
+  const rest = positive.slice(topN);
+  const strideN = Math.min(maxSim - topN, rest.length);
+  if (strideN > 0) {
+    const step = rest.length / strideN;
+    for (let i = 0; i < strideN; i += 1) promising.push(rest[Math.floor(i * step)]);
+  }
 
   // ── Season-sim the shortlist for real Δ championship % ──
-  const SEARCH_SIMS = 3000;
+  // Lower per-trade sim count buys a much wider scan; CRN (shared seed vs the
+  // baseline) cancels common variance, so youDelta stays stable even at 1500.
+  const SEARCH_SIMS = 1500;
   const baseline = simulateSeason({ ...base, sims: SEARCH_SIMS });
   const nameOf = (id) => catalog[id]?.name ?? String(id);
   const suggestions = [];
@@ -2104,8 +2117,8 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
   suggestions.sort((a, b) => b.youDelta - a.youDelta);
   return {
     available: true,
-    suggestions: suggestions.slice(0, 12),
-    debug: { generated: shortlist.length, deduped: deduped.length, simmed: candidatesConsidered, positive: suggestions.length },
+    suggestions: suggestions.slice(0, 40),
+    debug: { generated: shortlist.length, deduped: promising.length, simmed: candidatesConsidered, positive: suggestions.length },
   };
 }
 

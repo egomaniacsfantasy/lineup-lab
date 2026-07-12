@@ -355,12 +355,9 @@ function TradeDealsView() {
       return { ...s, accept, score: (s.youDelta * accept) / 100 };
     });
   }, [suggestions, stored?.leagueId, friendliness, relationship]);
-  // Keep only those clearing the acceptance floor (kills fleeces), rank by expected gain.
-  const ACCEPT_FLOOR = 10;
-  const rankedSuggestions = scoredSuggestions
-    .filter((s) => s.accept >= ACCEPT_FLOOR)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3);
+  // Rank by expected gain and show the top 3 with their real numbers (your title
+  // Δ, the partner's title Δ, and accept %) so nothing is hidden.
+  const rankedSuggestions = [...scoredSuggestions].sort((a, b) => b.score - a.score).slice(0, 3);
 
   // Connected leagues get Market deals; the mock targets are
   // demo-only and never render next to a real roster.
@@ -698,6 +695,7 @@ function TradeDealsView() {
                     <span className="trade-cc__lane-manager">{s.partnerName}</span>
                     <span className="trade-cc__lane-numbers">
                       <span className="trade-cc__lane-you">your title {s.youDelta > 0 ? '+' : ''}{s.youDelta}%</span>
+                      <span> · them {s.partnerDelta > 0 ? '+' : ''}{s.partnerDelta}%</span>
                     </span>
                   </span>
                   <span className="trade-cc__lane-acceptance" style={acceptanceStyle(s.accept)}>
@@ -717,11 +715,6 @@ function TradeDealsView() {
             );
           })}
           </>
-        ) : scoredSuggestions.length > 0 ? (
-          <p className="trade-cc__empty-lane">
-            Found {scoredSuggestions.length} trade{scoredSuggestions.length === 1 ? '' : 's'} that raise your title,
-            but the best is only {Math.max(...scoredSuggestions.map((s) => s.accept))}% to accept (below the {ACCEPT_FLOOR}% bar).
-          </p>
         ) : (
           <p className="trade-cc__empty-lane">
             No trade raises your title odds right now
