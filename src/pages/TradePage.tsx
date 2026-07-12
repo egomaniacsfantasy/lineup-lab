@@ -226,6 +226,11 @@ function ReadSlider({
   );
 }
 
+// "Managers you match with" runs an exhaustive full-league trade search that
+// currently takes ~80s and gets cut off before it returns. Hidden until the
+// search is moved to a background job. Flip to true to re-enable.
+const SHOW_MATCH_FINDER = false;
+
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error, refresh } = useLeagueConnection();
   const [params, setParams] = useSearchParams();
@@ -329,7 +334,11 @@ function TradeDealsView() {
 
   // Sim-scored trade suggestions (server returns Δ championship % for both sides;
   // we rank client-side by expected gain using our per-manager sliders).
+  // TEMPORARILY DISABLED: the exhaustive full-league search takes ~80s and the
+  // request gets cut off before it returns. Flip SHOW_MATCH_FINDER back to true
+  // (and move the search to a background job) to bring it back.
   useEffect(() => {
+    if (!SHOW_MATCH_FINDER) return;
     if (!stored || !bootstrap) return;
     let active = true;
     setSuggLoading(true);
@@ -660,6 +669,7 @@ function TradeDealsView() {
     <div className="trade-page">
       <h1 className="visually-hidden">Market</h1>
 
+      {SHOW_MATCH_FINDER ? (
       <section className="trade-cc__finder">
         <h2 className="trade-cc__section-label">Managers you match with</h2>
         <p className="trade-cc__finder-sub">Trades that raise your title odds, ranked by title gain × chance they accept.</p>
@@ -742,6 +752,7 @@ function TradeDealsView() {
           </p>
         )}
       </section>
+      ) : null}
 
       {/* ── Builder ── */}
       <section className="trade-cc__builder" ref={builderRef}>
