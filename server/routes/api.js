@@ -108,7 +108,12 @@ function scoutingError(res, error) {
 }
 
 apiRouter.get('/health', (_req, res) => {
-  res.json({ ok: true, gameWindow: isGameWindow() });
+  res.json({
+    ok: true,
+    gameWindow: isGameWindow(),
+    // Deployed commit (Render sets RENDER_GIT_COMMIT) so we can confirm what's live.
+    commit: process.env.RENDER_GIT_COMMIT ?? 'local',
+  });
 });
 
 apiRouter.get('/metrics', (_req, res) => {
