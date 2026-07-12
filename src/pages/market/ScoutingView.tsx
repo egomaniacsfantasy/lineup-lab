@@ -138,8 +138,7 @@ export function ScoutingView() {
       ) : null}
 
       <div className={styles.grid}>
-        {sortedReads.map((read) => {
-          const isUser = read.manager_key === stored.userId;
+        {sortedReads.filter((read) => read.manager_key !== stored.userId).map((read) => {
           const isVacant = isVacantRead(read);
           const tags = scoutingTagCandidates(read)
             .filter((tag) => {
@@ -153,10 +152,9 @@ export function ScoutingView() {
             .map((tag) => tag.label);
           return (
             <button
-              className={[styles.card, isUser ? styles.self : '', isVacant ? styles.vacant : '']
+              className={[styles.card, isVacant ? styles.vacant : '']
                 .filter(Boolean)
                 .join(' ')}
-              disabled={isVacant}
               key={read.manager_key}
               onClick={() => openScoutingCard(read.manager_key)}
               type="button"
