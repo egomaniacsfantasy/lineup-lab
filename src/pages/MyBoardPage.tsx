@@ -94,17 +94,46 @@ function computeReplacement(
     const idx = Math.min(list.length - 1, started - 1); // last starter = replacement (VOR 0)
     repl[pos] = list[idx]?.seasonTotal ?? 0;
   }
+
+  // K/DEF get a DIFFERENT (global) baseline. They're streamed, single-slot,
+  // tiny-spread positions, so their own positional replacement (the 4th DEF)
+  // wildly overstates their edge and floats them up the board. Instead, baseline
+  // them against a mid-lineup startable level — the total of the ~(teams ×
+  // KDEF_BASELINE_DEPTH)-th player overall — so a kicker is worth only what it
+  // adds over a replaceable roster spot. This lands them near where they're
+  // actually drafted; raise KDEF_BASELINE_DEPTH to sink them further.
+  const allTotals = board
+    .map((r) => r.seasonTotal ?? 0)
+    .filter((t) => t > 0)
+    .sort((a, b) => b - a);
+  const kdefRank = Math.max(1, Math.round(T * KDEF_BASELINE_DEPTH));
+  const kdefBase = allTotals[Math.min(kdefRank, allTotals.length - 1)] ?? 0;
+  repl.K = kdefBase;
+  repl.DEF = kdefBase;
+
   return repl;
 }
 
-// Adjusted value = VOR + TOTAL_WEIGHT × projected season points. VOR alone
-// subtracts out absolute scoring, so a +13 kicker looked like a +13 back and
-// floated up the board; adding raw points back (which live at ~120-160 for K/DEF
-// vs ~250-500 for skill starters) sinks K/DEF on their own low totals — while VOR
-// keeps the RB/WR scarcity premium. The influence split is 1 : TOTAL_WEIGHT, so
-// 1/3 weights VOR 75% / points 25% (keeps QBs from over-ranking on raw points).
-// Lower = more scarcity-driven; higher = flatter / more raw points.
-const TOTAL_WEIGHT = 1 / 3;
+// Adjusted value = VOR + α[pos] × projected season points, with a PER-POSITION
+// α. VOR alone subtracts out absolute scoring (a +13 kicker looks like a +13
+// back); adding points back lifts high-scoring positions. A single α couldn't
+// both temper QBs (which ride raw points) and keep the RB/WR premium, so α is
+// per-position: QB gets a small α (its high raw total shouldn't float it over
+// scarcer RB/WR), RB/WR/TE moderate. K/DEF are handled by their global baseline
+// in computeReplacement (their VOR goes negative), so their α barely matters.
+const POS_ALPHA: Record<string, number> = {
+  QB: 0.22,
+  RB: 0.34,
+  WR: 0.34,
+  TE: 0.30,
+  K: 0.34,
+  DEF: 0.34,
+};
+
+// K/DEF baseline = the (teams × this)-th best total overall. LOWER sinks them
+// further (shallower rank = higher baseline = more negative K/DEF VOR). 3 lands
+// the top DEF/K near consensus draft position (~#140-150).
+const KDEF_BASELINE_DEPTH = 3;
 
 function baselineDate(version: string | null) {
   if (!version) return '—';
@@ -173,8 +202,8 @@ export function MyBoardPage() {
     [board, numTeams, bootstrap?.league.rosterPositions],
   );
   const vorOf = (row: BoardRow) => (row.seasonTotal ?? 0) - (repl[row.position] ?? 0);
-  // Adjusted value = value over replacement + weighted projected points.
-  const adjOf = (row: BoardRow) => vorOf(row) + TOTAL_WEIGHT * (row.seasonTotal ?? 0);
+  // Adjusted value = VOR + per-position α × projected points.
+  const adjOf = (row: BoardRow) => vorOf(row) + (POS_ALPHA[row.position] ?? 0.34) * (row.seasonTotal ?? 0);
 
   const ordered = useMemo(() => {
     if (!board) return [];
@@ -232,10 +261,12 @@ export function MyBoardPage() {
               Adjusted value
               <i className="myboard__info" aria-hidden="true">i</i>
               <span className="myboard__tip" role="tooltip">
-                Adjusted value = value over replacement + projected season points. VOR is a player&apos;s points above
-                the last startable player at his position (flex filled from the best remaining RB/WR/TE), which keeps
-                the RB/WR scarcity premium; adding raw points sinks low-scoring K/DEF and lifts high-scoring QBs.
-                Agreement-weighted for {scoringLabel(scoring)}, your roster, {numTeams} teams.
+                Adjusted value = value over replacement + a per-position share of projected points. VOR is a
+                player&apos;s points above the last startable player at his position (flex filled from the best
+                remaining RB/WR/TE), keeping the RB/WR scarcity premium; the points share is small for QB (so its
+                high raw total doesn&apos;t float it over scarcer backs/receivers). K/DEF are measured against a
+                mid-lineup baseline, so they sit near where they&apos;re actually drafted. Agreement-weighted for
+                {' '}{scoringLabel(scoring)}, your roster, {numTeams} teams.
               </span>
             </span>
           </div>

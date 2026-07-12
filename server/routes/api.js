@@ -224,6 +224,9 @@ apiRouter.get('/rankings', async (req, res, next) => {
         derived: p.derived,
       }));
 
+    // Never let a browser serve a stale board (e.g. a raw-projection response
+    // cached before the agreement-weighted set was live).
+    res.set('Cache-Control', 'no-store');
     res.json({ available: true, source, version: active.version, rankings });
   } catch (error) {
     next(error);
