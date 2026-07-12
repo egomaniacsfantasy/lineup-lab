@@ -4,7 +4,6 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
 import { ScoutingView } from './market/ScoutingView';
-import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
 import '../components/trade/TradeAnalyzerPanel.css';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { toPlayer } from '../adapters/connectedLeague';
@@ -12,21 +11,18 @@ import {
   priceTrade,
   analyzeTradeApi,
   fetchTradeCounter,
-  fetchTradeRationale,
+  fetchTradeSuggestions,
   type TradeResult,
   type TradeAnalysis,
   type TradeCounter,
-  type TradeRationaleResponse,
+  type TradeSuggestion,
   type TradeTraits,
 } from '../services/leagueApi';
+import { TradeAnalyzerPanel, acceptanceProbability } from '../components/trade/TradeAnalyzerPanel';
 import type { LeagueBootstrap, MarketMover } from '../services/leagueApi';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
 import { loadTradeTraits, saveTradeTraits } from '../utils/tradeTraits';
 import './TradePage.css';
-
-function signedDelta(value = 0) {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
-}
 
 function laneIds(primary?: string[], fallback?: string) {
   return primary?.length ? primary : fallback ? [fallback] : [];
@@ -117,46 +113,6 @@ function DealLaneTitle({
   );
 }
 
-type RationaleState = {
-  loading: boolean;
-  error?: string | null;
-  data?: TradeRationaleResponse | null;
-};
-
-function TradeRationalePanel({ state }: { state?: RationaleState }) {
-  if (!state || state.loading) {
-    return <span className="trade-cc__rationale-panel">Pricing the explanation...</span>;
-  }
-
-  if (state.error) {
-    return <span className="trade-cc__rationale-panel trade-cc__rationale-panel--error">{state.error}</span>;
-  }
-
-  const data = state.data;
-  if (!data) return null;
-
-  return (
-    <span className="trade-cc__rationale-panel">
-      {data.narration ? <span className="trade-cc__rationale-summary">{data.narration}</span> : null}
-      <span className="trade-cc__rationale-summary">{data.structured.summary}</span>
-      <span className="trade-cc__rationale-sections">
-        {data.structured.sections.map((section) => (
-          <span className="trade-cc__rationale-section" key={section.label}>
-            <span className="trade-cc__rationale-label">{section.label}</span>
-            {section.facts.map((fact) => (
-              <span key={fact}>{fact}</span>
-            ))}
-          </span>
-        ))}
-      </span>
-    </span>
-  );
-}
-
-function generatedAt(timestamp?: number) {
-  if (!timestamp) return null;
-  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
 
 function acceptanceStyle(probability = 50): CSSProperties {
   const pct = Math.min(100, Math.max(0, probability));
@@ -292,10 +248,10 @@ function TradeDealsView() {
   const [analysisDrops, setAnalysisDrops] = useState<string[] | null>(null);
   const [counter, setCounter] = useState<TradeCounter | null>(null);
   const [counterLoading, setCounterLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<TradeSuggestion[] | null>(null);
+  const [suggLoading, setSuggLoading] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
-  const [openLaneWhy, setOpenLaneWhy] = useState<string | null>(null);
-  const [rationaleByKey, setRationaleByKey] = useState<Record<string, RationaleState>>({});
   const [friendliness, setFriendliness] = useState(5);
   const [relationship, setRelationship] = useState(5);
   const [showRead, setShowRead] = useState(false);
@@ -320,7 +276,6 @@ function TradeDealsView() {
     },
     [bootstrap, pricing, stored],
   );
-  const lanesResolved = pricing != null && (!pricing.available || Array.isArray(pricing.movers));
 
   useEffect(() => {
     if (!bootstrap || !stored) return;
@@ -370,6 +325,33 @@ function TradeDealsView() {
     setRelationship(t.relationship);
     if (stored) saveTradeTraits(stored.leagueId, partnerRosterId, t);
   };
+
+  // Sim-scored trade suggestions (server returns Δ championship % for both sides;
+  // we rank client-side by expected gain using our per-manager sliders).
+  useEffect(() => {
+    if (!stored || !bootstrap) return;
+    let active = true;
+    setSuggLoading(true);
+    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId })
+      .then((r) => { if (active) setSuggestions(r.available ? r.suggestions ?? [] : []); })
+      .catch(() => { if (active) setSuggestions([]); })
+      .finally(() => { if (active) setSuggLoading(false); });
+    return () => { active = false; };
+  }, [stored, bootstrap?.league.id]);
+
+  // Rank suggestions by expected championship gain = yourΔc × P(partner accepts),
+  // where acceptance uses YOUR saved friendliness/relationship read per manager.
+  const rankedSuggestions = useMemo(() => {
+    if (!suggestions) return [];
+    return suggestions
+      .map((s) => {
+        const t = loadTradeTraits(stored?.leagueId ?? '', s.partnerRosterId);
+        const accept = acceptanceProbability(s.partnerDelta, t.friendliness, t.relationship);
+        return { ...s, accept, score: (s.youDelta * accept) / 100 };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+  }, [suggestions, stored?.leagueId, friendliness, relationship]);
 
   // Connected leagues get Market deals; the mock targets are
   // demo-only and never render next to a real roster.
@@ -488,59 +470,21 @@ function TradeDealsView() {
     resetOutputs();
   };
 
-  const loadLane = (lane: (typeof lanes)[number]) => {
-    const getPlayerIds = lane.getPlayerIds ?? (lane.getPlayerId ? [lane.getPlayerId] : []);
-    const givePlayerIds = lane.givePlayerIds ?? (lane.givePlayerId ? [lane.givePlayerId] : []);
-    const ownerRosterId = lane.partnerRosterId ?? bootstrap.teams.find((t) =>
-      getPlayerIds.some((id) => t.players.includes(id)),
-    )?.rosterId;
-    if (ownerRosterId == null) return;
-    setPartnerRosterId(ownerRosterId);
+  const loadSuggestion = (s: TradeSuggestion) => {
+    const givePlayerIds = s.give.map((g) => g.id);
+    const getPlayerIds = s.get.map((g) => g.id);
+    setPartnerRosterId(s.partnerRosterId);
     setGive(givePlayerIds);
     setGetIds(getPlayerIds);
     resetOutputs();
     setParams({
       view: 'deals',
       leagueId: stored.leagueId,
-      managerRosterId: String(ownerRosterId),
+      managerRosterId: String(s.partnerRosterId),
       give: givePlayerIds.join(','),
       get: getPlayerIds.join(','),
     }, { replace: true });
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
-  };
-
-  const toggleRationale = (
-    key: string,
-    body: Parameters<typeof fetchTradeRationale>[1],
-  ) => {
-    if (openLaneWhy === key) {
-      setOpenLaneWhy(null);
-      return;
-    }
-
-    setOpenLaneWhy(key);
-    if (rationaleByKey[key]?.data || rationaleByKey[key]?.loading) return;
-
-    setRationaleByKey((current) => ({
-      ...current,
-      [key]: { loading: true },
-    }));
-    void fetchTradeRationale(stored.leagueId, body)
-      .then((data) => {
-        setRationaleByKey((current) => ({
-          ...current,
-          [key]: { loading: false, data },
-        }));
-      })
-      .catch(() => {
-        setRationaleByKey((current) => ({
-          ...current,
-          [key]: {
-            loading: false,
-            error: 'Could not price this explanation. Try again.',
-          },
-        }));
-      });
   };
 
   const runPricing = async () => {
@@ -702,46 +646,29 @@ function TradeDealsView() {
 
       <section className="trade-cc__finder">
         <h2 className="trade-cc__section-label">Managers you match with</h2>
-        {!lanesResolved ? (
-          <div className="trade-cc__lane-skeleton" aria-label="Pricing trade lanes">
+        <p className="trade-cc__finder-sub">Best trades for your title odds that the other manager would likely accept.</p>
+        {suggLoading && suggestions == null ? (
+          <div className="trade-cc__lane-skeleton" aria-label="Simulating trades">
             <span />
             <span />
             <span />
           </div>
-        ) : lanes.length > 0 ? (
+        ) : rankedSuggestions.length > 0 ? (
           <>
-          {lanes.map((lane, index) => {
-            const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
-            const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
-            const fullIncoming = laneSideLabel(bootstrap, getPlayerIds, false);
-            const fullOutgoing = laneSideLabel(bootstrap, givePlayerIds, false);
-            const compressedIncoming = laneSideLabel(bootstrap, getPlayerIds, true);
-            const compressedOutgoing = laneSideLabel(bootstrap, givePlayerIds, true);
-            const acceptanceProbability = lane.acceptanceProbability ?? 50;
-            const time = generatedAt(lane.pricedAt);
+          {rankedSuggestions.map((s, index) => {
+            const getPlayerIds = s.get.map((g) => g.id);
+            const givePlayerIds = s.give.map((g) => g.id);
             const compact = index > 0;
-            const laneKey = `lane:${lane.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
-            const whyOpen = openLaneWhy === laneKey;
-            const rationaleBody = {
-              userId: stored.userId,
-              partnerRosterId: Number(lane.partnerRosterId),
-              give: givePlayerIds,
-              get: getPlayerIds,
-              traits: NEUTRAL_TRADE_TRAITS,
-            };
-
+            const key = `sugg-${s.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
             return (
               <article
-                className={[
-                  'trade-cc__lane',
-                  compact ? 'trade-cc__lane--compact' : '',
-                ].filter(Boolean).join(' ')}
-                key={laneKey}
-                onClick={() => loadLane(lane)}
+                className={['trade-cc__lane', compact ? 'trade-cc__lane--compact' : ''].filter(Boolean).join(' ')}
+                key={key}
+                onClick={() => loadSuggestion(s)}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter' && event.key !== ' ') return;
                   event.preventDefault();
-                  loadLane(lane);
+                  loadSuggestion(s);
                 }}
                 role="button"
                 tabIndex={0}
@@ -749,74 +676,40 @@ function TradeDealsView() {
                 <span className="trade-cc__lane-top">
                   {renderLaneHeadshots(getPlayerIds, givePlayerIds, compact)}
                   <DealLaneTitle
-                    compressedIncoming={compressedIncoming}
-                    compressedOutgoing={compressedOutgoing}
-                    fullIncoming={fullIncoming}
-                    fullOutgoing={fullOutgoing}
-                    key={`${fullIncoming}|${fullOutgoing}`}
+                    compressedIncoming={laneSideLabel(bootstrap, getPlayerIds, true)}
+                    compressedOutgoing={laneSideLabel(bootstrap, givePlayerIds, true)}
+                    fullIncoming={laneSideLabel(bootstrap, getPlayerIds, false)}
+                    fullOutgoing={laneSideLabel(bootstrap, givePlayerIds, false)}
+                    key={`${getPlayerIds.join(',')}|${givePlayerIds.join(',')}`}
                   />
                 </span>
 
                 <span className="trade-cc__lane-mid">
                   <span className="trade-cc__lane-copy">
-                    <span className="trade-cc__lane-manager">
-                      {bootstrap.teams.find((team) => team.rosterId === lane.partnerRosterId)?.teamName ?? 'Manager'}
-                    </span>
+                    <span className="trade-cc__lane-manager">{s.partnerName}</span>
                     <span className="trade-cc__lane-numbers">
-                      <span className="trade-cc__lane-you">you {signedDelta(lane.valueGain)}</span>
-                      <span> · them {signedDelta(lane.partnerGain ?? 0)}</span>
+                      <span className="trade-cc__lane-you">your title {s.youDelta > 0 ? '+' : ''}{s.youDelta}%</span>
                     </span>
                   </span>
-                  <span className="trade-cc__lane-acceptance" style={acceptanceStyle(acceptanceProbability)}>
+                  <span className="trade-cc__lane-acceptance" style={acceptanceStyle(s.accept)}>
                     <span className="trade-cc__lane-acceptance-label">
-                      <span>{acceptanceProbability}% to accept</span>
+                      <span>{s.accept}% to accept</span>
                     </span>
                     <span className="trade-cc__lane-acceptance-track">
                       <span
-                        className={[
-                          'trade-cc__lane-acceptance-fill',
-                          acceptanceTone(acceptanceProbability),
-                        ].join(' ')}
+                        className={['trade-cc__lane-acceptance-fill', acceptanceTone(s.accept)].join(' ')}
                       />
                       <span className="trade-cc__lane-acceptance-notch" />
                       <span className="trade-cc__lane-acceptance-marker" />
                     </span>
                   </span>
                 </span>
-
-                <span className="trade-cc__lane-bottom">
-                  <button
-                    aria-expanded={whyOpen}
-                    className="trade-cc__lane-why"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggleRationale(laneKey, rationaleBody);
-                    }}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    type="button"
-                  >
-                    Why this trade?
-                  </button>
-                  {time ? (
-                    <span className="trade-cc__lane-generated">generated at {time}</span>
-                  ) : null}
-                </span>
-                {whyOpen ? (
-                  <span
-                    className="trade-cc__lane-rationale"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <TradeRationalePanel state={rationaleByKey[laneKey]} />
-                  </span>
-                ) : null}
               </article>
             );
           })}
           </>
-        ) : pricing?.available ? (
-          <p className="trade-cc__empty-lane">No deal on this board improves both sides this week.</p>
         ) : (
-          <p className="trade-cc__empty-lane">Trade lanes need a priced league.</p>
+          <p className="trade-cc__empty-lane">No trade meaningfully improves your title odds right now.</p>
         )}
       </section>
 

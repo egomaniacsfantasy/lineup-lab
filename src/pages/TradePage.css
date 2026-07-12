@@ -1674,3 +1674,9 @@
   font-size: 0.7rem;
   opacity: 0.55;
 }
+
+.trade-cc__finder-sub {
+  margin: 2px 0 10px;
+  font-size: 0.8rem;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+}

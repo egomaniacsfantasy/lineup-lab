@@ -9,7 +9,7 @@ import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
 import { saveEspnCreds } from '../providers/espnCredStore.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
-import { getLeaguePricing, priceTrade, analyzeTrade, suggestCounter } from '../engine/engine.js';
+import { getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades } from '../engine/engine.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
@@ -766,6 +766,46 @@ apiRouter.post('/league/:leagueId/trade-counter', async (req, res, next) => {
 
     const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
     res.json(suggestCounter(ctx, { partnerRosterId: Number(partnerRosterId), give, get, userDrops, target }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** "Managers you match with": sim-scored trade suggestions (Δ championship % for
+ *  both sides). The client applies acceptance + ranks by yourΔc × P(accept). */
+apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const { userId } = req.body ?? {};
+    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
+
+    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
+    if (!ctxBase) throw new Error('league_not_found');
+
+    const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
+    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
+      const all = [];
+      for (let week = 1; week <= lastWeek; week += 1) {
+        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
+      }
+      return all;
+    });
+
+    let liveProjections;
+    try {
+      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
+      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+    } catch (err) {
+      console.error('[trade-suggestions] adjusted projections failed; using snapshot', err);
+    }
+
+    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    // The sim is expensive but input-stable; cache per league+user+overlay for 2 min.
+    const version = liveProjections?.version ?? 'snapshot';
+    const key = `agg:trade-suggestions:${leagueId}:${userId}:${version}:${overlay ? 'ov' : 'base'}`;
+    const result = await cached(key, 2 * 60_000, async () => suggestTrades(ctx, { maxSim: 15 }));
+    res.json(result);
   } catch (error) {
     next(error);
   }

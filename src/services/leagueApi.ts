@@ -655,6 +655,27 @@ export function fetchTradeCounter(
   });
 }
 
+export interface TradeSuggestion {
+  partnerRosterId: number;
+  partnerName: string;
+  give: { id: string; name: string }[];
+  get: { id: string; name: string }[];
+  youDelta: number;
+  partnerDelta: number;
+}
+export interface TradeSuggestions {
+  available: boolean;
+  reason?: string;
+  suggestions?: TradeSuggestion[];
+}
+export function fetchTradeSuggestions(leagueId: string, body: { userId: string }): Promise<TradeSuggestions> {
+  return get<TradeSuggestions>(`/api/league/${leagueId}/trade-suggestions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export function fetchTradeRationale(
   leagueId: string,
   body: {

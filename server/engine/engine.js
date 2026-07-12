@@ -1960,6 +1960,135 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
 }
 
 /**
+ * Suggest the best trades across the league, scored by our season sim. Scours
+ * plausible give/get combos with every opponent, cheaply pre-filters by starter
+ * points, then runs the season sim on the most promising to return each side's
+ * Δ championship %. The client applies the acceptance model (its per-manager
+ * friendliness/relationship sliders) and ranks by expected gain = yourΔc × P(accept).
+ */
+export function suggestTrades(ctx, { maxSim = 15 } = {}) {
+  const active = ctx.projections ?? getActiveProjections();
+  if (!active) return { available: false, reason: 'no_projections' };
+  const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
+  const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
+  applyOverlay(projectionMap, overlay);
+
+  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+  const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
+  const userTeam = teams.find((t) => t.isUser);
+  if (!userTeam) return { available: false, reason: 'team_not_found' };
+  const opponents = teams.filter((t) => !t.isUser);
+
+  const regularWeeks = league.regularSeasonWeeks ?? 14;
+  const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
+  const bracketSize = nextPow2(Math.max(1, Math.min(league.playoffTeams ?? 6, teams.length)));
+  const rounds = Math.max(1, Math.round(Math.log2(bracketSize)));
+  const dropWeeks = [];
+  for (let w = week; w <= regularWeeks; w += 1) dropWeeks.push(w);
+  for (let r = 0; r < rounds; r += 1) dropWeeks.push(playoffWeekStart + r);
+
+  const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
+  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
+
+  // Season-sim a give/get trade with a specific partner vs a shared baseline.
+  const evalTrade = (giveList, getList, partnerTeam, sims, baseline) => {
+    const giveSet = new Set(giveList.map(String));
+    const getSet = new Set(getList.map(String));
+    const userAfter = [...userTeam.players.filter((id) => !giveSet.has(String(id))), ...getList];
+    const partnerAfter = [...partnerTeam.players.filter((id) => !getSet.has(String(id))), ...giveList];
+    const userNeed = Math.max(0, userAfter.length - maxRoster);
+    const partnerNeed = Math.max(0, partnerAfter.length - maxRoster);
+    const uDrops = chooseDrops(userAfter, userTeam.players.filter((id) => !giveSet.has(String(id))), userNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
+    const pDrops = chooseDrops(partnerAfter, partnerTeam.players.filter((id) => !getSet.has(String(id))), partnerNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
+    const uSet = new Set(uDrops.map(String));
+    const pSet = new Set(pDrops.map(String));
+    const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
+    const partnerFinal = partnerAfter.filter((id) => !pSet.has(String(id)));
+    const tradedTeams = teams.map((t) =>
+      t.rosterId === userTeam.rosterId ? { ...t, players: userFinal }
+        : t.rosterId === partnerTeam.rosterId ? { ...t, players: partnerFinal } : t);
+    const after = simulateSeason({ ...base, teams: tradedTeams, sims });
+    const bu = baseline.find((f) => f.rosterId === userTeam.rosterId);
+    const bp = baseline.find((f) => f.rosterId === partnerTeam.rosterId);
+    const au = after.find((f) => f.rosterId === userTeam.rosterId);
+    const ap = after.find((f) => f.rosterId === partnerTeam.rosterId);
+    return { youDelta: au.titleProb - bu.titleProb, partnerDelta: ap.titleProb - bp.titleProb };
+  };
+
+  // ── Cheap candidate generation + pre-filter (starter points) ──
+  const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
+  const projected = (id) => projectionMap.get(id)?.mean ?? 0;
+  const tradeable = (team) => team.players
+    .filter((id) => TRADEABLE.includes(catalog[id]?.position))
+    .sort((a, b) => projected(b) - projected(a));
+  const benchPairs = (team) => {
+    const starters = new Set(team.starters ?? []);
+    const ids = tradeable(team).filter((id) => !starters.has(id)).slice(0, 8);
+    const pairs = [];
+    for (let i = 0; i < ids.length; i += 1) for (let j = i + 1; j < ids.length; j += 1) pairs.push([ids[i], ids[j]]);
+    return pairs.slice(0, 16);
+  };
+
+  const shortlist = [];
+  for (const opp of opponents) {
+    const mine = tradeable(userTeam).slice(0, 10);
+    const theirs = tradeable(opp).slice(0, 10);
+    const cands = [];
+    for (const giveId of mine) {
+      for (const getId of theirs) {
+        const r = projected(getId) > 0 ? projected(giveId) / projected(getId) : 1;
+        if (r >= 0.5 && r <= 2.0) cands.push({ give: [giveId], get: [getId] });
+      }
+    }
+    for (const give of benchPairs(userTeam)) {
+      for (const getId of theirs.slice(0, 6)) cands.push({ give, get: [getId] });
+    }
+    for (const c of cands) {
+      const userAfter = userTeam.players.filter((id) => !c.give.includes(id)).concat(c.get);
+      const oppAfter = opp.players.filter((id) => !c.get.includes(id)).concat(c.give);
+      const youGain = computeStarterImpact(userTeam.players, userAfter, slotLabels, projectionMap, catalog).delta;
+      const themGain = computeStarterImpact(opp.players, oppAfter, slotLabels, projectionMap, catalog).delta;
+      // Keep trades that plausibly help you and don't gut the partner (they'd never take it).
+      if (youGain > 0 && themGain > -2) shortlist.push({ partner: opp, give: c.give, get: c.get, proxy: youGain });
+    }
+  }
+  // Dedupe and keep the most promising by the cheap proxy.
+  const seen = new Set();
+  const promising = shortlist
+    .filter((c) => {
+      const key = `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => b.proxy - a.proxy)
+    .slice(0, maxSim);
+
+  // ── Season-sim the shortlist for real Δ championship % ──
+  const SEARCH_SIMS = 4000;
+  const baseline = simulateSeason({ ...base, sims: SEARCH_SIMS });
+  const nameOf = (id) => catalog[id]?.name ?? String(id);
+  const suggestions = [];
+  for (const c of promising) {
+    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SEARCH_SIMS, baseline);
+    if (youDelta <= 0) continue; // only trades that help you
+    suggestions.push({
+      partnerRosterId: c.partner.rosterId,
+      partnerName: c.partner.teamName,
+      give: c.give.map((id) => ({ id, name: nameOf(id) })),
+      get: c.get.map((id) => ({ id, name: nameOf(id) })),
+      youDelta: Number(youDelta.toFixed(1)),
+      partnerDelta: Number(partnerDelta.toFixed(1)),
+    });
+  }
+  // Return the best by your own gain; the client re-ranks by yourΔc × P(accept).
+  suggestions.sort((a, b) => b.youDelta - a.youDelta);
+  return { available: true, suggestions: suggestions.slice(0, 10) };
+}
+
+/**
  * Best legal starting lineup from a pool of players: greedily fill each
  * starting slot with the highest-projection eligible player left. Used to
  * value a roster before and after a trade — a trade is only worth what it
