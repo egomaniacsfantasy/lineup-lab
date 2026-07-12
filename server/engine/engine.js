@@ -314,7 +314,7 @@ const REPLACEMENT_FALLBACK = { QB: 12, RB: 6, WR: 6, TE: 5, K: 7, DEF: 6, DST: 6
  * automatically league-size-aware: fewer teams => fewer players rostered => the
  * best available free agent is a better player => a higher replacement level.
  */
-function replacementLevels(teams, projectionMap, catalog) {
+export function replacementLevels(teams, projectionMap, catalog) {
   const rostered = new Set((teams ?? []).flatMap((t) => (t.players ?? []).map(String)));
   const byPos = new Map();
   for (const [id] of projectionMap) {
@@ -1650,7 +1650,12 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
  * protected); a bye week just contributes 0 that week. This is the coherent drop
  * metric — it drops your least-used bench player, NOT a redundant star.
  */
-function starterValues(teamPlayers, slotLabels, projectionMap, catalog, weeks) {
+/**
+ * Starter value-over-replacement: for each week, build the optimal lineup and
+ * credit each starter max(0, week mean − positional replacement). A slot filled
+ * below replacement is worth 0 (you'd stream the replacement instead).
+ */
+function starterVOR(teamPlayers, slotLabels, projectionMap, catalog, weeks, replacementFor) {
   const orderedSlots = flexLastSlots(slotLabels);
   const val = new Map(teamPlayers.map((id) => [id, 0]));
   for (const w of weeks) {
@@ -1667,74 +1672,66 @@ function starterValues(teamPlayers, slotLabels, projectionMap, catalog, weeks) {
       }
       if (best) {
         used.add(best.id);
-        val.set(best.id, (val.get(best.id) ?? 0) + best.mean);
+        const vor = Math.max(0, best.mean - replacementFor(best.position));
+        val.set(best.id, (val.get(best.id) ?? 0) + vor);
       }
     }
   }
   return val;
 }
 
-/** A player's total projected points over the weeks (regardless of starting). */
-function rawSeasonValue(playerId, projectionMap, catalog, weeks) {
-  let raw = 0;
-  for (const w of weeks) raw += playerDistribution(playerId, projectionMap, catalog[playerId], w).mean;
-  return raw;
+/** A player's total value over replacement across the weeks (regardless of
+ *  starting) — their worth as a depth/hold asset. */
+function standaloneVOR(playerId, projectionMap, catalog, weeks, replacementFor) {
+  const pos = catalog[playerId]?.position;
+  let v = 0;
+  for (const w of weeks) {
+    const mean = playerDistribution(playerId, projectionMap, catalog[playerId], w).mean;
+    v += Math.max(0, mean - replacementFor(pos));
+  }
+  return v;
 }
 
-// Bench weight: a benched player is worth ~half a starter (only helps on an
-// injury/bye/matchup). Blends starter usage with raw quality so two never-start
-// skill players are separated by projected points (keep the WR, drop the scrub).
+// A benched player is worth ~half their standalone value-over-replacement (only
+// helps on a bye/injury/matchup).
 const BENCH_WEIGHT = 0.5;
 
-// K and DEF have exactly one starting slot each and no FLEX, so a SECOND kicker
-// or defense can never enter your lineup: pure redundancy with zero hold value,
-// always dropped before any skill player. (The last/only K or DEF is separately
-// protected by the feasibility check below.)
-const isKickerOrDefense = (pos) => pos === 'K' || pos === 'DEF' || pos === 'DST';
-
 /**
- * Iteratively drop the lowest keep-score player (recompute after each drop).
- * HARD CONSTRAINT: never drop a player whose removal breaks the lineup (leaves a
- * required slot unfillable) — that protects your sole K/DEF absolutely. Only if
- * no feasible drop exists (roster already short) do we fall back to least-harm.
+ * Iteratively drop the lowest keep-score player, where keep-score = points OVER
+ * REPLACEMENT while starting + half the standalone value-over-replacement as
+ * depth. Because a player near the streamable replacement (a kicker, a defense,
+ * a waiver-level skill player) has little value over replacement, backups and
+ * even a sole K/DEF fall out naturally when a higher-VOR player needs the roster
+ * spot — no special-case rules and no feasibility protection needed: the season
+ * sim streams a replacement for any emptied required slot, so dropping your last
+ * kicker is honestly priced, not blocked.
  */
-export function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projectionMap, catalog, weeks) {
+export function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projectionMap, catalog, weeks, replacementFor) {
   const drops = [];
   let pool = [...teamPlayers];
   const droppable = new Set(droppableIds.map(String));
   for (let k = 0; k < n; k += 1) {
-    const starter = starterValues(pool, slotLabels, projectionMap, catalog, weeks);
-    const canField = canFieldLineup(pool, slotLabels, catalog);
+    const starter = starterVOR(pool, slotLabels, projectionMap, catalog, weeks, replacementFor);
+    // Full credit for value while STARTING, plus half credit for value in the
+    // weeks the player would only be depth (standalone − starter). This avoids
+    // double-counting a starter's own weeks, so a low-VOR sole kicker doesn't
+    // out-score a higher-VOR bench skill player.
     const keepScore = (id) => {
-      const pos = catalog[id]?.position;
-      // A backup at a single-slot, no-FLEX position (2nd+ K/DEF) can never enter
-      // the lineup -> no bench value; drop it before any skill player. Everyone
-      // else keeps full projected points as depth value (the tiebreaker).
-      const redundant = isKickerOrDefense(pos) && pool.some((o) => o !== id && catalog[o]?.position === pos);
-      const benchVal = redundant ? 0 : rawSeasonValue(id, projectionMap, catalog, weeks);
-      return (starter.get(id) ?? 0) + BENCH_WEIGHT * benchVal;
+      const sv = starter.get(id) ?? 0;
+      const total = standaloneVOR(id, projectionMap, catalog, weeks, replacementFor);
+      return sv + BENCH_WEIGHT * Math.max(0, total - sv);
     };
-    // Prefer drops that KEEP a legal lineup; only widen to lineup-breaking drops
-    // when no roster-preserving option exists.
     let worst = null;
     let worstScore = Infinity;
-    let worstUnsafe = null;
-    let worstUnsafeScore = Infinity;
     for (const id of pool) {
       if (!droppable.has(String(id))) continue;
       const score = keepScore(id);
-      const safe = !canField || canFieldLineup(pool.filter((p) => p !== id), slotLabels, catalog);
-      if (safe) {
-        if (score < worstScore) { worstScore = score; worst = id; }
-      } else if (score < worstUnsafeScore) {
-        worstUnsafeScore = score; worstUnsafe = id;
-      }
+      if (score < worstScore) { worstScore = score; worst = id; }
     }
-    const pick = worst ?? worstUnsafe;
-    if (pick == null) break;
-    drops.push(pick);
-    pool = pool.filter((id) => id !== pick);
-    droppable.delete(String(pick));
+    if (worst == null) break;
+    drops.push(worst);
+    pool = pool.filter((id) => id !== worst);
+    droppable.delete(String(worst));
   }
   return drops;
 }
@@ -1774,15 +1771,17 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   const userAfter = [...userTeam.players.filter((id) => !giveSet.has(String(id))), ...get];
   const partnerAfter = [...partnerTeam.players.filter((id) => !getSet.has(String(id))), ...give];
 
-  // Roster-limit drops (marginal value; user's is a suggestion they can override).
+  // Roster-limit drops, valued by points over replacement (user's is a
+  // suggestion they can override).
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
   const userNeed = Math.max(0, userAfter.length - maxRoster);
   const partnerNeed = Math.max(0, partnerAfter.length - maxRoster);
   const userDroppable = userTeam.players.filter((id) => !giveSet.has(String(id)));
   const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)));
   const finalUserDrops = userDrops && userDrops.length >= userNeed
     ? userDrops.slice(0, userNeed)
-    : chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks);
-  const finalPartnerDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks);
+    : chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
+  const finalPartnerDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
 
   const userDropSet = new Set(finalUserDrops.map(String));
   const partnerDropSet = new Set(finalPartnerDrops.map(String));
@@ -1872,6 +1871,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
   const seed = parseInt(inputsHash.slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
 
   // Evaluate a give/get trade at a sim count vs a matching baseline; return each
   // side's championship-% change (same seed => CRN cancels sim noise).
@@ -1886,8 +1886,8 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
     const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)));
     const uDrops = userDrops && userDrops.length >= userNeed
       ? userDrops.slice(0, userNeed)
-      : chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks);
-    const pDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks);
+      : chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
+    const pDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
     const uSet = new Set(uDrops.map(String));
     const pSet = new Set(pDrops.map(String));
     const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
