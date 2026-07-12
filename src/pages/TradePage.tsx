@@ -227,8 +227,11 @@ function ReadSlider({
 }
 
 // "Managers you match with" runs an exhaustive full-league trade search that
-// takes ~80s. It's slow but does return; set to false to hide it again.
-const SHOW_MATCH_FINDER = true;
+// takes ~80s. Because Node is single-threaded, that synchronous loop BLOCKS the
+// event loop and stalls every other request (including the trade analyzer's own
+// season sim). Hidden until the search runs off the main thread / as a
+// background job. Flip to true to re-enable.
+const SHOW_MATCH_FINDER = false;
 
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error, refresh } = useLeagueConnection();
