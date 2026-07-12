@@ -285,10 +285,12 @@ function TradeDealsView() {
     [bootstrap, pricing, stored],
   );
 
-  // Apply a deep-link / clicked-suggestion (give/get/manager in the URL) to the
-  // builder ONCE per unique param set. Without this guard, any later re-render
-  // that changes `lanes` (e.g. the slow suggestions fetch resolving) re-runs the
-  // effect and clobbers whatever the user has since built back to the URL's trade.
+  // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
+  // pre-selects that partner in the builder. We intentionally do NOT pre-fill
+  // give/get from the URL, so a stale suggestion URL can never "default" the
+  // analyzer to some trade — the builder always starts with an empty trade.
+  // Applied once per partner so later re-renders (pricing/lanes refetch) can't
+  // overwrite manual edits.
   const appliedDeepLink = useRef<string | null>(null);
   useEffect(() => {
     if (!bootstrap || !stored) return;
@@ -296,32 +298,18 @@ function TradeDealsView() {
     if (leagueParam && leagueParam !== stored.leagueId) return;
     const rosterParam = Number(params.get('managerRosterId'));
     const managerParam = params.get('manager');
-    const giveParam = params.get('give');
-    const getParam = params.get('get');
-    const sig = `${rosterParam}|${managerParam}|${giveParam}|${getParam}`;
-    if (appliedDeepLink.current === sig) return; // already applied; don't overwrite manual edits
     const partner = Number.isFinite(rosterParam) && rosterParam > 0
       ? bootstrap.teams.find((team) => team.rosterId === rosterParam)
       : managerParam
         ? bootstrap.teams.find((team) => team.ownerId === managerParam)
         : null;
     if (!partner || partner.isUser) return;
-
-    const matchingLane = lanes.find((lane) =>
-      lane.partnerRosterId === partner.rosterId ||
-      (lane.getPlayerId && partner.players.includes(lane.getPlayerId)),
-    );
-    const nextGive = giveParam
-      ? giveParam.split(',').filter(Boolean)
-      : matchingLane?.givePlayerIds ?? (matchingLane?.givePlayerId ? [matchingLane.givePlayerId] : []);
-    const nextGet = getParam
-      ? getParam.split(',').filter(Boolean)
-      : matchingLane?.getPlayerIds ?? (matchingLane?.getPlayerId ? [matchingLane.getPlayerId] : []);
-
+    const sig = String(partner.rosterId);
+    if (appliedDeepLink.current === sig) return; // already applied; don't overwrite manual edits
     appliedDeepLink.current = sig;
     setPartnerRosterId(partner.rosterId);
-    setGive(nextGive);
-    setGetIds(nextGet);
+    setGive([]);
+    setGetIds([]);
     resetOutputs();
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   }, [bootstrap, lanes, params, stored]);
