@@ -100,10 +100,11 @@ function computeReplacement(
 // Adjusted value = VOR + TOTAL_WEIGHT × projected season points. VOR alone
 // subtracts out absolute scoring, so a +13 kicker looked like a +13 back and
 // floated up the board; adding raw points back (which live at ~120-160 for K/DEF
-// vs ~250-500 for skill starters) sinks K/DEF on their own low totals and lifts
-// QBs on their high totals — while VOR keeps the RB/WR scarcity premium. Lower
-// TOTAL_WEIGHT = more scarcity-driven; higher = flatter / more raw points.
-const TOTAL_WEIGHT = 1;
+// vs ~250-500 for skill starters) sinks K/DEF on their own low totals — while VOR
+// keeps the RB/WR scarcity premium. The influence split is 1 : TOTAL_WEIGHT, so
+// 1/3 weights VOR 75% / points 25% (keeps QBs from over-ranking on raw points).
+// Lower = more scarcity-driven; higher = flatter / more raw points.
+const TOTAL_WEIGHT = 1 / 3;
 
 function baselineDate(version: string | null) {
   if (!version) return '—';
