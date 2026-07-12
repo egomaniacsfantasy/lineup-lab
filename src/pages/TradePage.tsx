@@ -249,6 +249,7 @@ function TradeDealsView() {
   const [counter, setCounter] = useState<TradeCounter | null>(null);
   const [counterLoading, setCounterLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<TradeSuggestion[] | null>(null);
+  const [suggDebug, setSuggDebug] = useState<{ simmed: number; positive: number } | null>(null);
   const [suggLoading, setSuggLoading] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
@@ -333,7 +334,11 @@ function TradeDealsView() {
     let active = true;
     setSuggLoading(true);
     fetchTradeSuggestions(stored.leagueId, { userId: stored.userId })
-      .then((r) => { if (active) setSuggestions(r.available ? r.suggestions ?? [] : []); })
+      .then((r) => {
+        if (!active) return;
+        setSuggestions(r.available ? r.suggestions ?? [] : []);
+        setSuggDebug(r.debug ? { simmed: r.debug.simmed, positive: r.debug.positive } : null);
+      })
       .catch(() => { if (active) setSuggestions([]); })
       .finally(() => { if (active) setSuggLoading(false); });
     return () => { active = false; };
@@ -341,22 +346,21 @@ function TradeDealsView() {
 
   // Rank suggestions by expected championship gain = yourΔc × P(partner accepts),
   // where acceptance uses YOUR saved friendliness/relationship read per manager.
-  // Only suggest trades that raise YOUR title odds (server guarantees youDelta>0)
-  // AND clear a minimum acceptance — that kills the fleeces (a +6%/3%-accept
-  // steal never surfaces). Rank the survivors by expected gain (yourΔc × accept).
-  const ACCEPT_FLOOR = 20;
-  const rankedSuggestions = useMemo(() => {
+  // All server suggestions (raise YOUR title) scored with acceptance.
+  const scoredSuggestions = useMemo(() => {
     if (!suggestions) return [];
-    return suggestions
-      .map((s) => {
-        const t = loadTradeTraits(stored?.leagueId ?? '', s.partnerRosterId);
-        const accept = acceptanceProbability(s.partnerDelta, t.friendliness, t.relationship);
-        return { ...s, accept, score: (s.youDelta * accept) / 100 };
-      })
-      .filter((s) => s.accept >= ACCEPT_FLOOR)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+    return suggestions.map((s) => {
+      const t = loadTradeTraits(stored?.leagueId ?? '', s.partnerRosterId);
+      const accept = acceptanceProbability(s.partnerDelta, t.friendliness, t.relationship);
+      return { ...s, accept, score: (s.youDelta * accept) / 100 };
+    });
   }, [suggestions, stored?.leagueId, friendliness, relationship]);
+  // Keep only those clearing the acceptance floor (kills fleeces), rank by expected gain.
+  const ACCEPT_FLOOR = 10;
+  const rankedSuggestions = scoredSuggestions
+    .filter((s) => s.accept >= ACCEPT_FLOOR)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 
   // Connected leagues get Market deals; the mock targets are
   // demo-only and never render next to a real roster.
@@ -713,8 +717,16 @@ function TradeDealsView() {
             );
           })}
           </>
+        ) : scoredSuggestions.length > 0 ? (
+          <p className="trade-cc__empty-lane">
+            Found {scoredSuggestions.length} trade{scoredSuggestions.length === 1 ? '' : 's'} that raise your title,
+            but the best is only {Math.max(...scoredSuggestions.map((s) => s.accept))}% to accept (below the {ACCEPT_FLOOR}% bar).
+          </p>
         ) : (
-          <p className="trade-cc__empty-lane">No trade meaningfully improves your title odds right now.</p>
+          <p className="trade-cc__empty-lane">
+            No trade raises your title odds right now
+            {suggDebug ? ` (simmed ${suggDebug.simmed}, ${suggDebug.positive} raised your title).` : '.'}
+          </p>
         )}
       </section>
 

@@ -2042,13 +2042,13 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
     for (const giveId of mine) {
       for (const getId of theirs) {
         const r = projected(getId) > 0 ? projected(giveId) / projected(getId) : 1;
-        if (r >= 0.6 && r <= 1.6) cands.push({ give: [giveId], get: [getId] });
+        if (r >= 0.5 && r <= 2.0) cands.push({ give: [giveId], get: [getId] });
       }
     }
     for (const give of benchPairs(userTeam)) {
-      for (const getId of theirs.slice(0, 6)) {
+      for (const getId of theirs.slice(0, 8)) {
         const r = projected(getId) > 0 ? val(give) / projected(getId) : 1;
-        if (r >= 0.7 && r <= 1.8) cands.push({ give, get: [getId] });
+        if (r >= 0.6 && r <= 2.2) cands.push({ give, get: [getId] });
       }
     }
     for (const c of cands) {
@@ -2062,29 +2062,32 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
       if (youGain > -1) shortlist.push({ partner: opp, give: c.give, get: c.get, youGain, themGain });
     }
   }
-  // Dedupe, then pick the sim shortlist by an EXPECTED-GAIN proxy: your lineup
-  // upgrade weighted by how much the partner's roster survives (a trade that
-  // guts their lineup won't be accepted, so it's a poor use of a sim slot). This
-  // is a cheap acceptance estimate for SELECTION — not a requirement that their
-  // title rise; the season sim + acceptance model do the real ranking.
+  // Dedupe, then build a DIVERSE sim shortlist: the union of the trades that
+  // most improve YOUR lineup and the trades that most likely get accepted (your
+  // upgrade weighted by how much the partner's roster survives). This guarantees
+  // both aggressive and fair deals get simmed, so the client always has real
+  // options to rank — not just one bucket.
   const acceptProxy = (g) => 1 / (1 + Math.exp(-g / 2));
   const seen = new Set();
-  const promising = shortlist
-    .filter((c) => {
-      const key = `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => (b.youGain * acceptProxy(b.themGain)) - (a.youGain * acceptProxy(a.themGain)))
-    .slice(0, maxSim);
+  const deduped = shortlist.filter((c) => {
+    const key = `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const half = Math.ceil(maxSim / 2);
+  const byYou = [...deduped].sort((a, b) => b.youGain - a.youGain).slice(0, half);
+  const byAccept = [...deduped].sort((a, b) => (b.youGain * acceptProxy(b.themGain)) - (a.youGain * acceptProxy(a.themGain))).slice(0, half);
+  const promising = [...new Map([...byYou, ...byAccept].map((c) => [`${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`, c])).values()];
 
   // ── Season-sim the shortlist for real Δ championship % ──
-  const SEARCH_SIMS = 4000;
+  const SEARCH_SIMS = 3000;
   const baseline = simulateSeason({ ...base, sims: SEARCH_SIMS });
   const nameOf = (id) => catalog[id]?.name ?? String(id);
   const suggestions = [];
+  let candidatesConsidered = 0;
   for (const c of promising) {
+    candidatesConsidered += 1;
     const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SEARCH_SIMS, baseline);
     if (youDelta <= 0) continue; // only trades that help you
     suggestions.push({
@@ -2099,7 +2102,11 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
   // Return the full simmed set (both sides' Δc); the client gates on acceptance
   // and ranks by expected gain. Sorted by your gain only for stable ordering.
   suggestions.sort((a, b) => b.youDelta - a.youDelta);
-  return { available: true, suggestions: suggestions.slice(0, 12) };
+  return {
+    available: true,
+    suggestions: suggestions.slice(0, 12),
+    debug: { generated: shortlist.length, deduped: deduped.length, simmed: candidatesConsidered, positive: suggestions.length },
+  };
 }
 
 /**

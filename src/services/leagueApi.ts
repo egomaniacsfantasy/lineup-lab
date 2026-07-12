@@ -667,6 +667,7 @@ export interface TradeSuggestions {
   available: boolean;
   reason?: string;
   suggestions?: TradeSuggestion[];
+  debug?: { generated: number; deduped: number; simmed: number; positive: number };
 }
 export function fetchTradeSuggestions(leagueId: string, body: { userId: string }): Promise<TradeSuggestions> {
   return get<TradeSuggestions>(`/api/league/${leagueId}/trade-suggestions`, {
