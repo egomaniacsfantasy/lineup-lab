@@ -227,9 +227,8 @@ function ReadSlider({
 }
 
 // "Managers you match with" runs an exhaustive full-league trade search that
-// currently takes ~80s and gets cut off before it returns. Hidden until the
-// search is moved to a background job. Flip to true to re-enable.
-const SHOW_MATCH_FINDER = false;
+// takes ~80s. It's slow but does return; set to false to hide it again.
+const SHOW_MATCH_FINDER = true;
 
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error, refresh } = useLeagueConnection();
@@ -283,6 +282,11 @@ function TradeDealsView() {
     [bootstrap, pricing, stored],
   );
 
+  // Apply a deep-link / clicked-suggestion (give/get/manager in the URL) to the
+  // builder ONCE per unique param set. Without this guard, any later re-render
+  // that changes `lanes` (e.g. the slow suggestions fetch resolving) re-runs the
+  // effect and clobbers whatever the user has since built back to the URL's trade.
+  const appliedDeepLink = useRef<string | null>(null);
   useEffect(() => {
     if (!bootstrap || !stored) return;
     const leagueParam = params.get('leagueId');
@@ -291,6 +295,8 @@ function TradeDealsView() {
     const managerParam = params.get('manager');
     const giveParam = params.get('give');
     const getParam = params.get('get');
+    const sig = `${rosterParam}|${managerParam}|${giveParam}|${getParam}`;
+    if (appliedDeepLink.current === sig) return; // already applied; don't overwrite manual edits
     const partner = Number.isFinite(rosterParam) && rosterParam > 0
       ? bootstrap.teams.find((team) => team.rosterId === rosterParam)
       : managerParam
@@ -309,6 +315,7 @@ function TradeDealsView() {
       ? getParam.split(',').filter(Boolean)
       : matchingLane?.getPlayerIds ?? (matchingLane?.getPlayerId ? [matchingLane.getPlayerId] : []);
 
+    appliedDeepLink.current = sig;
     setPartnerRosterId(partner.rosterId);
     setGive(nextGive);
     setGetIds(nextGet);
