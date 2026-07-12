@@ -2037,31 +2037,37 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
     const mine = tradeable(userTeam).slice(0, 10);
     const theirs = tradeable(opp).slice(0, 10);
     const cands = [];
-    // FAIR-value combos only (roughly even points exchanged) — a positional-fit
-    // swap that upgrades your lineup without fleecing the partner is what they'd
-    // actually consider. We do NOT require the partner's title to rise.
+    // Roughly fair-value combos (no fleeces on either side). We do NOT require
+    // the partner's title to rise; the acceptance model handles their willingness.
     for (const giveId of mine) {
       for (const getId of theirs) {
         const r = projected(getId) > 0 ? projected(giveId) / projected(getId) : 1;
-        if (r >= 0.75 && r <= 1.35) cands.push({ give: [giveId], get: [getId] });
+        if (r >= 0.6 && r <= 1.6) cands.push({ give: [giveId], get: [getId] });
       }
     }
     for (const give of benchPairs(userTeam)) {
       for (const getId of theirs.slice(0, 6)) {
         const r = projected(getId) > 0 ? val(give) / projected(getId) : 1;
-        if (r >= 0.8 && r <= 1.5) cands.push({ give, get: [getId] });
+        if (r >= 0.7 && r <= 1.8) cands.push({ give, get: [getId] });
       }
     }
     for (const c of cands) {
       const userAfter = userTeam.players.filter((id) => !c.give.includes(id)).concat(c.get);
-      // Keep trades that improve YOUR starting lineup. The partner's willingness
-      // is decided later by the acceptance model (their title Δ + your sliders).
+      const oppAfter = opp.players.filter((id) => !c.get.includes(id)).concat(c.give);
+      // Keep trades that don't downgrade your lineup much (roughly lateral or
+      // better). Also measure the partner's lineup change as a cheap acceptance
+      // proxy for picking WHICH trades to sim.
       const youGain = computeStarterImpact(userTeam.players, userAfter, slotLabels, projectionMap, catalog).delta;
-      if (youGain > 0) shortlist.push({ partner: opp, give: c.give, get: c.get, youGain });
+      const themGain = computeStarterImpact(opp.players, oppAfter, slotLabels, projectionMap, catalog).delta;
+      if (youGain > -1) shortlist.push({ partner: opp, give: c.give, get: c.get, youGain, themGain });
     }
   }
-  // Dedupe and keep the trades that most improve your lineup (fair value already
-  // ensures the partner isn't being fleeced, so acceptance stays plausible).
+  // Dedupe, then pick the sim shortlist by an EXPECTED-GAIN proxy: your lineup
+  // upgrade weighted by how much the partner's roster survives (a trade that
+  // guts their lineup won't be accepted, so it's a poor use of a sim slot). This
+  // is a cheap acceptance estimate for SELECTION — not a requirement that their
+  // title rise; the season sim + acceptance model do the real ranking.
+  const acceptProxy = (g) => 1 / (1 + Math.exp(-g / 2));
   const seen = new Set();
   const promising = shortlist
     .filter((c) => {
@@ -2070,7 +2076,7 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
       seen.add(key);
       return true;
     })
-    .sort((a, b) => b.youGain - a.youGain)
+    .sort((a, b) => (b.youGain * acceptProxy(b.themGain)) - (a.youGain * acceptProxy(a.themGain)))
     .slice(0, maxSim);
 
   // ── Season-sim the shortlist for real Δ championship % ──

@@ -341,7 +341,10 @@ function TradeDealsView() {
 
   // Rank suggestions by expected championship gain = yourΔc × P(partner accepts),
   // where acceptance uses YOUR saved friendliness/relationship read per manager.
-  const ACCEPT_FLOOR = 25; // don't suggest a trade the partner would almost never take
+  // Only suggest trades that raise YOUR title odds (server guarantees youDelta>0)
+  // AND clear a minimum acceptance — that kills the fleeces (a +6%/3%-accept
+  // steal never surfaces). Rank the survivors by expected gain (yourΔc × accept).
+  const ACCEPT_FLOOR = 20;
   const rankedSuggestions = useMemo(() => {
     if (!suggestions) return [];
     return suggestions
@@ -350,7 +353,7 @@ function TradeDealsView() {
         const accept = acceptanceProbability(s.partnerDelta, t.friendliness, t.relationship);
         return { ...s, accept, score: (s.youDelta * accept) / 100 };
       })
-      .filter((s) => s.accept >= ACCEPT_FLOOR) // realistic trades only
+      .filter((s) => s.accept >= ACCEPT_FLOOR)
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
   }, [suggestions, stored?.leagueId, friendliness, relationship]);
@@ -648,7 +651,7 @@ function TradeDealsView() {
 
       <section className="trade-cc__finder">
         <h2 className="trade-cc__section-label">Managers you match with</h2>
-        <p className="trade-cc__finder-sub">Best trades for your title odds that the other manager would likely accept.</p>
+        <p className="trade-cc__finder-sub">Trades that raise your title odds, ranked by title gain × chance they accept.</p>
         {suggLoading && suggestions == null ? (
           <div className="trade-cc__lane-skeleton" aria-label="Simulating trades">
             <span />
