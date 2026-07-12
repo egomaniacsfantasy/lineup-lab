@@ -317,30 +317,45 @@ const REPLACEMENT_FALLBACK = { QB: 12, RB: 6, WR: 6, TE: 5, K: 7, DEF: 6, DST: 6
 function replacementLevels(teams, projectionMap, catalog) {
   const rostered = new Set((teams ?? []).flatMap((t) => (t.players ?? []).map(String)));
   const byPos = new Map();
-  for (const [id, proj] of projectionMap) {
+  for (const [id] of projectionMap) {
     if (rostered.has(String(id))) continue;
     const pos = catalog[id]?.position;
     if (!pos) continue;
-    const mean = Number(proj?.mean);
-    if (!Number.isFinite(mean)) continue;
+    // Injury-aware season mean: playerDistribution zeroes OUT/IR players, so an
+    // injured free agent can't set an inflated replacement level.
+    const mean = playerDistribution(id, projectionMap, catalog[id], null).mean;
+    if (!Number.isFinite(mean) || mean <= 0) continue;
     if (!byPos.has(pos) || mean > byPos.get(pos)) byPos.set(pos, mean);
   }
   return (pos) => byPos.get(pos) ?? REPLACEMENT_FALLBACK[pos] ?? 5;
 }
 
-/** Optimal-lineup starter params, but any UNFILLABLE required (non-FLEX) slot is
- *  filled with a waiver-replacement player (best free agent) instead of scoring 0. */
+/**
+ * Optimal-lineup starter params with a WAIVER FLOOR: every starting slot scores
+ * at least its positional replacement level (the best available free agent). A
+ * manager would never start a bye/injured/below-replacement player in a required
+ * slot when a free agent is available — they stream one. This covers three cases
+ * the raw optimal lineup gets wrong by scoring 0: an unfilled slot (no player at
+ * that position), a bye player (projection 0 that week), and a starter projected
+ * below the streamable replacement.
+ */
 function streamedLineupParams(playerIds, slotLabels, projectionMap, catalog, week, replacementFor) {
   const assign = optimalAssign(playerIds, slotLabels, projectionMap, catalog, week);
-  const ids = assign.map((a) => a.playerId).filter(Boolean);
-  const params = starterParams(ids, projectionMap, catalog, week);
+  const players = [];
   for (const a of assign) {
-    if (a.playerId || FLEX_ELIGIBILITY[a.slot]) continue;
-    const mean = replacementFor(a.slot);
-    const sd = Math.max(1, mean * 0.4);
-    params.players.push({ mean, sigmaDown: sd, sigmaUp: sd });
+    // Replacement level for this slot (FLEX = best streamable among its positions).
+    const repl = FLEX_ELIGIBILITY[a.slot]
+      ? Math.max(...FLEX_ELIGIBILITY[a.slot].map((p) => replacementFor(p)))
+      : replacementFor(a.slot);
+    const own = a.playerId ? playerSimParams(a.playerId, projectionMap, catalog[a.playerId], week) : null;
+    if (own && own.mean >= repl) {
+      players.push(own);
+    } else {
+      const sd = Math.max(1, repl * 0.4);
+      players.push({ mean: repl, sigmaDown: sd, sigmaUp: sd });
+    }
   }
-  return params;
+  return { players };
 }
 
 /** Actual starter assignment from a provider starters array (aligned to slots). */
@@ -1320,8 +1335,12 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   // Can't seat more playoff teams than exist — a small league clinches everyone.
   const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
+  // Start at the first UNPLAYED week (record already holds weeks 1..lastScoredWeek),
+  // not the displayWeek — same current-week double-count fix as simulateSeason.
+  const lastScored = Number.isFinite(league.lastScoredWeek) ? league.lastScoredWeek : (week - 1);
+  const startWeek = Math.max(1, (lastScored ?? (week - 1)) + 1);
   const remaining = (scheduleWeeks ?? []).filter(
-    (w) => w.week >= week && w.week <= regularWeeks,
+    (w) => w.week >= startWeek && w.week <= regularWeeks,
   );
 
   const rosterIds = teams.map((t) => t.rosterId);
