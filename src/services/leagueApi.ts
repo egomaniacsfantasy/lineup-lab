@@ -347,10 +347,13 @@ export interface BoardRow {
   derived: boolean;
 }
 
-/** Franco's projection board (the house line), the base for Build Your Own Rankings. */
-export function fetchBoard(limit = 800) {
+/** The projection board: agreement-weighted, scoring-specific season totals for
+ *  the value-over-replacement board. Pass the league's scoring so PPR / half /
+ *  standard return the right numbers. */
+export function fetchBoard(limit = 800, scoring?: string) {
+  const scoringQ = scoring ? `&scoring=${encodeURIComponent(scoring)}` : '';
   return get<{ available: boolean; version: string; source: string; rankings: BoardRow[] }>(
-    `/api/rankings?limit=${limit}`,
+    `/api/rankings?limit=${limit}${scoringQ}`,
   );
 }
 

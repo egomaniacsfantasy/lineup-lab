@@ -724,6 +724,15 @@
   background: var(--bg-inset, #0b0d0f);
 }
 
+/* Read-only rows: no pointer/hover affordance. */
+.myboard__rowbtn--static {
+  cursor: default;
+}
+
+.myboard__rowbtn--static:hover {
+  background: none;
+}
+
 .myboard__caret {
   width: 16px;
   height: 16px;
@@ -815,6 +824,10 @@
   font-family: var(--font-num, monospace);
   font-size: 15px;
   font-weight: 600;
+}
+
+.myboard__yours--neg {
+  color: var(--ink-3, #787c75);
 }
 
 .myboard__drift {

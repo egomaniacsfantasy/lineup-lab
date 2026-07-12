@@ -172,43 +172,62 @@ apiRouter.get('/nfl/schedule', async (req, res) => {
 });
 
 /** Active projection model served as a ranking board ("Odds Gods model"). */
-apiRouter.get('/rankings', (req, res) => {
-  const active = getActiveProjections();
+apiRouter.get('/rankings', async (req, res, next) => {
+  try {
+    // Prefer the SAME set pricing/trades use: agreement-weighted (90/10) and
+    // scoring-specific (PPR / half / standard, from ?scoring=). Falls back to the
+    // raw snapshot only if the adjusted set is unavailable.
+    const suf = scoringSuffix(String(req.query.scoring ?? ''));
+    let active = null;
+    let source = 'Odds Gods model';
+    try {
+      const adjusted = await getAdjustedProjections(suf);
+      if (adjusted && adjusted.matched > 0) {
+        active = adjusted;
+        source = 'Odds Gods model (agreement-weighted)';
+      }
+    } catch (err) {
+      console.error('[rankings] adjusted projections failed; using snapshot', err);
+    }
+    if (!active) active = getActiveProjections();
 
-  if (!active) {
-    res.json({ available: false, rankings: [] });
-    return;
+    if (!active) {
+      res.json({ available: false, rankings: [] });
+      return;
+    }
+
+    // Dedupe by playerId — a player can land in the sheet twice (depth-chart
+    // quirks); the rankings board must show each exactly once or React key
+    // collisions glitch the list.
+    const byId = new Map();
+    for (const p of active.projections) {
+      if (!byId.has(p.playerId)) byId.set(p.playerId, p);
+    }
+
+    const limit = Math.min(Number(req.query.limit ?? 100), 800);
+    const rankings = [...byId.values()]
+      .sort((a, b) => b.mean - a.mean)
+      .slice(0, limit)
+      .map((p, index) => ({
+        rank: index + 1,
+        playerId: p.playerId,
+        name: p.name,
+        position: p.position,
+        team: p.team,
+        mean: p.mean,
+        stdev: p.stdev ?? null,
+        floor: p.floor ?? null,
+        ceiling: p.ceiling ?? null,
+        seasonTotal: p.seasonTotal ?? null,
+        weekly: p.weekly ?? {},
+        tier: p.tier,
+        derived: p.derived,
+      }));
+
+    res.json({ available: true, source, version: active.version, rankings });
+  } catch (error) {
+    next(error);
   }
-
-  // Dedupe by playerId — a player can land in the sheet twice (depth-chart
-  // quirks); the rankings board must show each exactly once or React key
-  // collisions glitch the list.
-  const byId = new Map();
-  for (const p of active.projections) {
-    if (!byId.has(p.playerId)) byId.set(p.playerId, p);
-  }
-
-  const limit = Math.min(Number(req.query.limit ?? 100), 800);
-  const rankings = [...byId.values()]
-    .sort((a, b) => b.mean - a.mean)
-    .slice(0, limit)
-    .map((p, index) => ({
-      rank: index + 1,
-      playerId: p.playerId,
-      name: p.name,
-      position: p.position,
-      team: p.team,
-      mean: p.mean,
-      stdev: p.stdev ?? null,
-      floor: p.floor ?? null,
-      ceiling: p.ceiling ?? null,
-      seasonTotal: p.seasonTotal ?? null,
-      weekly: p.weekly ?? {},
-      tier: p.tier,
-      derived: p.derived,
-    }));
-
-  res.json({ available: true, source: 'Odds Gods model', version: active.version, rankings });
 });
 
 /**
