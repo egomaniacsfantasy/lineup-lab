@@ -97,6 +97,53 @@ function computeReplacement(
   return repl;
 }
 
+/**
+ * Positional weight = how much of a starting lineup's scoring the position
+ * carries = (dedicated starting slots) × (average season points of a starter at
+ * that position), normalized so the heaviest position = 1.0. VOR alone subtracts
+ * out absolute scoring (a +13 kicker looks like a +13 back), so this multiplier
+ * puts position scoring back in: RB/WR (2 slots × high points) dominate, QB is
+ * tempered by its single slot, and K/DEF (1 slot × low points) collapse toward
+ * the bottom. Returns weight per position.
+ */
+function computePositionWeights(
+  board: BoardRow[],
+  numTeams: number,
+  slots: string[] | undefined,
+): Record<string, number> {
+  const T = Math.max(1, numTeams || 12);
+  const c = slotCounts(slots);
+  const dedicated: Record<string, number> = {
+    QB: c.QB, RB: c.RB, WR: c.WR, TE: c.TE, K: c.K, DEF: c.DEF,
+  };
+  const flexEligible = new Set<string>();
+  if (c.FLEX) ['RB', 'WR', 'TE'].forEach((p) => flexEligible.add(p));
+  if (c.REC) ['WR', 'TE'].forEach((p) => flexEligible.add(p));
+  if (c.SF) ['QB', 'RB', 'WR', 'TE'].forEach((p) => flexEligible.add(p));
+  const hasFlex = c.FLEX + c.REC + c.SF > 0;
+
+  const raw: Record<string, number> = {};
+  for (const pos of VOR_POS) {
+    const list = board
+      .filter((r) => r.position === pos && (r.seasonTotal ?? 0) > 0)
+      .sort((a, b) => (b.seasonTotal ?? 0) - (a.seasonTotal ?? 0));
+    // A flex-eligible position with no dedicated slot still starts sometimes.
+    const posSlots = dedicated[pos] > 0 ? dedicated[pos] : (flexEligible.has(pos) && hasFlex ? 0.5 : 0);
+    if (!list.length || posSlots <= 0) {
+      raw[pos] = 0;
+      continue;
+    }
+    const sampleN = Math.max(1, Math.round(T * Math.max(posSlots, 1)));
+    const top = list.slice(0, sampleN);
+    const avg = top.reduce((s, r) => s + (r.seasonTotal ?? 0), 0) / top.length;
+    raw[pos] = posSlots * avg;
+  }
+  const max = Math.max(...Object.values(raw), 1);
+  const weight: Record<string, number> = {};
+  for (const pos of VOR_POS) weight[pos] = raw[pos] / max;
+  return weight;
+}
+
 function baselineDate(version: string | null) {
   if (!version) return '—';
   return version.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? version;
@@ -163,15 +210,21 @@ export function MyBoardPage() {
     () => (board ? computeReplacement(board, numTeams, bootstrap?.league.rosterPositions) : {}),
     [board, numTeams, bootstrap?.league.rosterPositions],
   );
+  const weights = useMemo(
+    () => (board ? computePositionWeights(board, numTeams, bootstrap?.league.rosterPositions) : {}),
+    [board, numTeams, bootstrap?.league.rosterPositions],
+  );
   const vorOf = (row: BoardRow) => (row.seasonTotal ?? 0) - (repl[row.position] ?? 0);
+  // Adjusted value = value over replacement × positional weight.
+  const adjOf = (row: BoardRow) => vorOf(row) * (weights[row.position] ?? 0);
 
   const ordered = useMemo(() => {
     if (!board) return [];
     const pool = position === 'ALL' ? board : board.filter((r) => r.position === position);
-    const sorted = pool.slice().sort((a, b) => vorOf(b) - vorOf(a));
+    const sorted = pool.slice().sort((a, b) => adjOf(b) - adjOf(a));
     return position === 'ALL' ? sorted.slice(0, 300) : sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, position, repl]);
+  }, [board, position, repl, weights]);
 
   const statusSegments = [
     `Agreement-weighted · ${scoringLabel(scoring)}`,
@@ -191,7 +244,7 @@ export function MyBoardPage() {
         <div>
           <p className="myboard__kicker">Board</p>
           <div className="myboard__title-line">
-            <h2 className="myboard__title">Value over replacement</h2>
+            <h2 className="myboard__title">Adjusted value</h2>
           </div>
         </div>
       </header>
@@ -216,21 +269,23 @@ export function MyBoardPage() {
           </div>
 
           <div className="myboard__legend">
-            <span>{position === 'ALL' ? 'Overall · by value over replacement' : 'By value over replacement'}</span>
-            <span className="myboard__legend-god" tabIndex={0} role="button" aria-label="What is value over replacement?">
-              VOR
+            <span>{position === 'ALL' ? 'Overall · by adjusted value' : 'By adjusted value'}</span>
+            <span className="myboard__legend-god" tabIndex={0} role="button" aria-label="What is adjusted value?">
+              Adjusted value
               <i className="myboard__info" aria-hidden="true">i</i>
               <span className="myboard__tip" role="tooltip">
-                Value over replacement: a player&apos;s projected season points above the last startable player at his
-                position in your league. Uses the agreement-weighted projection for your scoring ({scoringLabel(scoring)}),
-                your roster, and {numTeams} teams. Flex is filled from the best remaining RB/WR/TE by points, so +0 is
-                replacement level and negatives sit below a startable spot.
+                Adjusted value = value over replacement × positional weight. VOR is a player&apos;s projected season
+                points above the last startable player at his position (flex filled from the best remaining RB/WR/TE).
+                Positional weight = starting slots × average starter points, so positions that carry more of your
+                lineup&apos;s scoring (RB/WR) rank above low-scoring ones (K/DEF). Agreement-weighted for {scoringLabel(scoring)},
+                your roster, {numTeams} teams.
               </span>
             </span>
           </div>
 
           <div className="myboard__list">
             {ordered.map((row, index) => {
+              const adj = adjOf(row);
               const vor = vorOf(row);
               const total = row.seasonTotal ?? 0;
               return (
@@ -250,10 +305,12 @@ export function MyBoardPage() {
                       </span>
                     </span>
                     <span className="myboard__nums">
-                      <span className={vor >= 0 ? 'myboard__yours' : 'myboard__yours myboard__yours--neg'}>
-                        {vor >= 0 ? '+' : ''}{vor.toFixed(1)}
+                      <span className={adj >= 0 ? 'myboard__yours' : 'myboard__yours myboard__yours--neg'}>
+                        {adj >= 0 ? '+' : ''}{adj.toFixed(1)}
                       </span>
-                      <span className="myboard__drift">{Math.round(total)} proj pts</span>
+                      <span className="myboard__drift">
+                        VOR {vor >= 0 ? '+' : ''}{vor.toFixed(0)} · {Math.round(total)} pts
+                      </span>
                     </span>
                   </div>
                 </div>
