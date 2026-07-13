@@ -105,6 +105,31 @@
   border-color: color-mix(in srgb, var(--amber) 40%, var(--glass-border));
 }
 
+/* Static (non-clickable) chart card: no pointer/hover affordance. */
+.league-futures__chart-card--static {
+  cursor: default;
+}
+
+.league-futures__chart-card--static:hover {
+  border-color: var(--glass-border);
+}
+
+.league-futures__ytick {
+  position: absolute;
+  left: 2px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.league-futures__ytick--top {
+  top: 14px;
+}
+
+.league-futures__ytick--bottom {
+  top: 220px;
+}
+
 .league-futures__chart-card:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;

@@ -19,7 +19,6 @@ interface LeagueFuturesProps {
 }
 
 type ChartMarket = 'title' | 'playoff';
-type ExpandedFuturesChart = 'title' | null;
 
 const CHART_OPTIONS: { label: string; value: ChartMarket }[] = [
   { label: 'Title odds', value: 'title' },
@@ -50,43 +49,14 @@ function seriesFor(
   const rosterId = String(team.rosterId);
   return history
     .map((entry) => {
-      // Prefer the raw probability (American odds clamp at 98.5%, so a 100%
-      // playoff team would otherwise read 98.5%); fall back to odds for old
-      // history entries recorded before raw probs were stored.
+      // Use ONLY the raw probability the sim produced. We intentionally do NOT
+      // convert from the stored American odds (those clamp at 98.5%, so a true
+      // 100% would read low). Old entries without a raw prob are simply skipped.
       const rawProb = (chartMarket === 'playoff' ? entry.playoffProb : entry.titleProb)?.[rosterId];
-      const odds = (chartMarket === 'playoff' ? entry.playoffOdds : entry.titleOdds)?.[rosterId];
-      const prob = rawProb != null ? rawProb : odds != null ? impliedProbability(odds) * 100 : null;
-      if (prob == null) return null;
-      return { at: entry.computedAt, probability: Math.max(0, Math.min(100, prob)) };
+      if (rawProb == null) return null;
+      return { at: entry.computedAt, probability: Math.max(0, Math.min(100, rawProb)) };
     })
     .filter((entry): entry is { at: number; probability: number } => entry !== null);
-}
-
-function historyTimeLabel(timestamp: number) {
-  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
-
-function historyWindow(points: { at: number }[]) {
-  const first = points[0]?.at;
-  if (!first || !points.at(-1)?.at) return '';
-  return `since ${historyTimeLabel(first)}`;
-}
-
-function sparkline(points: { at: number; probability: number }[], width = 130, height = 44) {
-  if (points.length === 0) return '';
-  const min = Math.min(...points.map((point) => point.probability));
-  const max = Math.max(...points.map((point) => point.probability));
-  const minAt = Math.min(...points.map((point) => point.at));
-  const maxAt = Math.max(...points.map((point) => point.at));
-  const span = Math.max(1, max - min);
-  const timeSpan = Math.max(1, maxAt - minAt);
-  return points
-    .map((point) => {
-      const x = ((point.at - minAt) / timeSpan) * width;
-      const y = height - ((point.probability - min) / span) * height;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
 }
 
 function chartLine(points: { at: number; probability: number }[], bounds: { minAt: number; maxAt: number; minValue: number; maxValue: number }) {
@@ -130,7 +100,6 @@ export function LeagueFutures({
   // One futures view (championship). The chart selector just picks which sim
   // line to draw over time — title odds or playoff odds.
   const [chartMarket, setChartMarket] = useState<ChartMarket>('title');
-  const [expandedChart, setExpandedChart] = useState<ExpandedFuturesChart>(null);
   const sortedFutures = useMemo(
     () =>
       [...futures].sort(
@@ -209,45 +178,60 @@ export function LeagueFutures({
         ))}
       </div>
 
-      {titleHistoryTeams.length > 0 ? (
-        <button
-          className="league-futures__chart-card"
-          onClick={() => setExpandedChart('title')}
-          type="button"
-        >
-          <span className="league-futures__chart-head">
-            <span>
-              <span className="league-futures__chart-title">{chartTitle}</span>
-              <span className="league-futures__chart-subtitle">{chartSubtitle}</span>
-            </span>
-            <span className="league-futures__inspect">Inspect</span>
+      <div className="league-futures__chart-card league-futures__chart-card--static">
+        <span className="league-futures__chart-head">
+          <span>
+            <span className="league-futures__chart-title">{chartTitle}</span>
+            <span className="league-futures__chart-subtitle">{chartSubtitle}</span>
           </span>
-          <div className="league-futures__history-grid">
-            {titleHistoryTeams.map(({ team, series }) => (
-              <div className="league-futures__history-row" key={`history-${team.teamName}`}>
-                <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
-                <span className="league-futures__history-name">{team.teamName}</span>
-                <svg viewBox="0 0 130 44" preserveAspectRatio="none">
+        </span>
+        {titleHistoryTeams.length > 0 && titleHistoryBounds ? (
+          <>
+            <div className="league-futures__detail-chart">
+              <span className="league-futures__detail-axis league-futures__detail-axis--y">
+                {isPlayoffMarket ? 'Playoff probability' : 'Championship probability'}
+              </span>
+              <span className="league-futures__ytick league-futures__ytick--top">
+                {titleHistoryBounds.maxValue.toFixed(0)}%
+              </span>
+              <span className="league-futures__ytick league-futures__ytick--bottom">
+                {titleHistoryBounds.minValue.toFixed(0)}%
+              </span>
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                {[0, 25, 50, 75, 100].map((tick) => (
+                  <line className="league-futures__detail-grid" key={`grid-${tick}`} x1="0" x2="100" y1={tick} y2={tick} />
+                ))}
+                {titleHistoryTeams.map(({ team, series }) => (
                   <polyline
                     className={[
-                      'league-futures__history-line',
-                      team.isUser ? 'league-futures__history-line--user' : '',
+                      'league-futures__detail-line',
+                      team.isUser ? 'league-futures__detail-line--user' : '',
                     ]
                       .filter(Boolean)
                       .join(' ')}
-                    points={sparkline(series)}
+                    key={`line-${team.teamName}`}
+                    points={chartLine(series, titleHistoryBounds)}
                   />
-                </svg>
-                <span className="league-futures__history-value">
-                  {series.at(-1)?.probability.toFixed(1)}%
+                ))}
+              </svg>
+              <span className="league-futures__detail-axis league-futures__detail-axis--x">Time</span>
+            </div>
+            <div className="league-futures__legend">
+              {titleHistoryTeams.map(({ team, series }) => (
+                <span key={`legend-${team.teamName}`}>
+                  <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
+                  {team.teamName} {series.at(-1)?.probability.toFixed(1)}%
                 </span>
-                <span className="league-futures__history-window">{historyWindow(series)}</span>
-              </div>
-            ))}
-          </div>
-          <span className="league-futures__takeaway">{titleTakeaway}</span>
-        </button>
-      ) : null}
+              ))}
+            </div>
+            <span className="league-futures__takeaway">{titleTakeaway}</span>
+          </>
+        ) : (
+          <p className="league-futures__chart-subtitle">
+            This chart builds as the league reprices. Check back after a few updates.
+          </p>
+        )}
+      </div>
 
       <div className="league-futures__board">
         {sortedFutures.map((team, index) => (
@@ -299,56 +283,6 @@ export function LeagueFutures({
           </div>
         ))}
       </div>
-      {expandedChart ? (
-        <div
-          aria-modal="true"
-          className="league-futures__modal"
-          onClick={() => setExpandedChart(null)}
-          role="dialog"
-        >
-          <div className="league-futures__modal-card" onClick={(event) => event.stopPropagation()}>
-            <button className="league-futures__modal-close" onClick={() => setExpandedChart(null)} type="button">
-              Close
-            </button>
-            <h3 className="league-futures__modal-title">{chartTitle}</h3>
-            <p className="league-futures__chart-subtitle">
-              X-axis is reprice time. Y-axis is {isPlayoffMarket ? 'playoff probability' : 'championship probability'}.
-            </p>
-            {titleHistoryBounds ? (
-              <div className="league-futures__detail-chart">
-                <span className="league-futures__detail-axis league-futures__detail-axis--y">
-                  {isPlayoffMarket ? 'Playoff probability' : 'Championship probability'}
-                </span>
-                <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                  {[0, 25, 50, 75, 100].map((tick) => (
-                    <line className="league-futures__detail-grid" key={`grid-${tick}`} x1="0" x2="100" y1={tick} y2={tick} />
-                  ))}
-                  {titleHistoryTeams.map(({ team, series }) => (
-                    <polyline
-                      className={[
-                        'league-futures__detail-line',
-                        team.isUser ? 'league-futures__detail-line--user' : '',
-                      ].filter(Boolean).join(' ')}
-                      key={`detail-title-${team.teamName}`}
-                      points={chartLine(series, titleHistoryBounds)}
-                    />
-                  ))}
-                </svg>
-                <span className="league-futures__detail-axis league-futures__detail-axis--x">Reprice time</span>
-              </div>
-            ) : null}
-            <div className="league-futures__legend">
-              {titleHistoryTeams.map(({ team, series }) => (
-                <span key={`legend-${team.teamName}`}>
-                  <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
-                  {team.teamName} {series.at(-1)?.probability.toFixed(1)}%
-                </span>
-              ))}
-            </div>
-            <p className="league-futures__takeaway">{titleTakeaway}</p>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
