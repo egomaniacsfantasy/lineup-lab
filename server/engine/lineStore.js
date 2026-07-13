@@ -81,6 +81,14 @@ export function recordPricing(leagueId, pricing) {
     playoffOdds: Object.fromEntries(
       (pricing.futures ?? []).map((f) => [f.rosterId, f.playoffOdds]),
     ),
+    // Raw probabilities too — American odds clamp at 98.5%, so a 100% playoff
+    // team would round-trip to 98.5% in the charts. Charts prefer these.
+    titleProb: Object.fromEntries(
+      (pricing.futures ?? []).map((f) => [f.rosterId, f.titleProb]),
+    ),
+    playoffProb: Object.fromEntries(
+      (pricing.futures ?? []).map((f) => [f.rosterId, f.playoffProb]),
+    ),
     teamSnapshots: [...futuresByRoster.entries()].map(([rosterId, future]) => ({
       rosterId: Number(rosterId),
       teamName: future.teamName,

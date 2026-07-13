@@ -18,13 +18,12 @@ interface LeagueFuturesProps {
   history?: LineHistoryEntry[] | null;
 }
 
-type LeagueMarket = 'champion' | 'finals' | 'playoffs';
+type ChartMarket = 'title' | 'playoff';
 type ExpandedFuturesChart = 'title' | null;
 
-const MARKET_OPTIONS: { label: string; value: LeagueMarket }[] = [
-  { label: 'Champion', value: 'champion' },
-  { label: 'Finals', value: 'finals' },
-  { label: 'Playoffs', value: 'playoffs' },
+const CHART_OPTIONS: { label: string; value: ChartMarket }[] = [
+  { label: 'Title odds', value: 'title' },
+  { label: 'Playoff odds', value: 'playoff' },
 ];
 
 function formatScoring(scoringFormat: ScoringFormat) {
@@ -40,21 +39,25 @@ function impliedProbability(odds: number) {
   return 100 / (odds + 100);
 }
 
-// Odds-over-time series for the selected market: champion/finals use the stored
-// title odds, playoffs use the stored playoff odds. All history is a reprice of
-// the season sim, so this is the sim's odds moving over time.
+// Odds-over-time series for the selected chart line (title or playoff). All
+// history is a reprice of the season sim, so this is the sim's odds over time.
 function seriesFor(
   team: LeagueFutureRow,
   history: LineHistoryEntry[] | null | undefined,
-  market: LeagueMarket,
+  chartMarket: ChartMarket,
 ) {
   if (!team.rosterId || !history?.length) return [];
   const rosterId = String(team.rosterId);
   return history
     .map((entry) => {
-      const odds = (market === 'playoffs' ? entry.playoffOdds : entry.titleOdds)?.[rosterId];
-      if (odds == null) return null;
-      return { at: entry.computedAt, probability: Math.max(0, Math.min(100, impliedProbability(odds) * 100)) };
+      // Prefer the raw probability (American odds clamp at 98.5%, so a 100%
+      // playoff team would otherwise read 98.5%); fall back to odds for old
+      // history entries recorded before raw probs were stored.
+      const rawProb = (chartMarket === 'playoff' ? entry.playoffProb : entry.titleProb)?.[rosterId];
+      const odds = (chartMarket === 'playoff' ? entry.playoffOdds : entry.titleOdds)?.[rosterId];
+      const prob = rawProb != null ? rawProb : odds != null ? impliedProbability(odds) * 100 : null;
+      if (prob == null) return null;
+      return { at: entry.computedAt, probability: Math.max(0, Math.min(100, prob)) };
     })
     .filter((entry): entry is { at: number; probability: number } => entry !== null);
 }
@@ -114,18 +117,6 @@ function historyTakeaway(rows: { team: LeagueFutureRow; series: { probability: n
   return `${biggest.team.teamName} moved ${biggest.move >= 0 ? 'up' : 'down'} ${Math.abs(biggest.move).toFixed(1)} pts.`;
 }
 
-function getMarketOdds(team: LeagueFutureRow, market: LeagueMarket) {
-  switch (market) {
-    case 'playoffs':
-      return team.playoffOdds;
-    case 'finals':
-      return team.finalsOdds ?? team.championOdds;
-    case 'champion':
-    default:
-      return team.championOdds;
-  }
-}
-
 export function LeagueFutures({
   futures,
   leagueName,
@@ -136,29 +127,20 @@ export function LeagueFutures({
   playoffTeams = 6,
   history = null,
 }: LeagueFuturesProps) {
-  const [market, setMarket] = useState<LeagueMarket>('champion');
+  // One futures view (championship). The chart selector just picks which sim
+  // line to draw over time — title odds or playoff odds.
+  const [chartMarket, setChartMarket] = useState<ChartMarket>('title');
   const [expandedChart, setExpandedChart] = useState<ExpandedFuturesChart>(null);
-  const marketOptions = useMemo(
-    () => {
-      const hasFinals = totalTeams > playoffTeams && futures.some((team) => team.finalsOdds != null);
-      return MARKET_OPTIONS.filter((option) => option.value !== 'finals' || hasFinals);
-    },
-    [futures, playoffTeams, totalTeams],
-  );
   const sortedFutures = useMemo(
     () =>
-      [...futures].sort((teamA, teamB) => {
-        const teamAProbability = impliedProbability(getMarketOdds(teamA, market));
-        const teamBProbability = impliedProbability(getMarketOdds(teamB, market));
-        return teamBProbability - teamAProbability;
-      }),
-    [futures, market],
+      [...futures].sort(
+        (teamA, teamB) => impliedProbability(teamB.championOdds) - impliedProbability(teamA.championOdds),
+      ),
+    [futures],
   );
   const cutoffLabel = 'Playoff line';
-  const allTeamsReachPlayoffs = market === 'playoffs' && playoffTeams >= totalTeams;
-  // Time-series follows the selected market: Champion → title odds over time,
-  // Playoffs → playoff odds over time.
-  const isPlayoffMarket = market === 'playoffs';
+  const allTeamsReachPlayoffs = playoffTeams >= totalTeams;
+  const isPlayoffMarket = chartMarket === 'playoff';
   const chartTitle = isPlayoffMarket ? 'Playoff odds over time' : 'Title odds over time';
   const chartSubtitle = isPlayoffMarket
     ? 'Each line is a team’s chance to make the playoffs across reprices.'
@@ -167,10 +149,10 @@ export function LeagueFutures({
     () =>
       leagueChartFlags.titleOddsOverTime
         ? futures
-            .map((team) => ({ team, series: seriesFor(team, history, market) }))
+            .map((team) => ({ team, series: seriesFor(team, history, chartMarket) }))
             .filter((row) => row.series.length > 1)
         : [],
-    [futures, history, market],
+    [futures, history, chartMarket],
   );
   const titleHistoryBounds = useMemo(() => {
     const points = titleHistoryTeams.flatMap((row) => row.series);
@@ -197,35 +179,35 @@ export function LeagueFutures({
         </p>
       </div>
 
+      {allTeamsReachPlayoffs ? (
+        <p className="league-futures__format-note">
+          All {totalTeams} teams reach the playoffs in this format.
+        </p>
+      ) : null}
+
       <div
-        aria-label="League futures market"
+        aria-label="Chart line"
         className="league-futures__markets"
         role="group"
-        style={{ '--market-count': marketOptions.length } as CSSProperties}
+        style={{ '--market-count': CHART_OPTIONS.length } as CSSProperties}
       >
-        {marketOptions.map((option) => (
+        {CHART_OPTIONS.map((option) => (
           <button
-            aria-pressed={market === option.value}
+            aria-pressed={chartMarket === option.value}
             className={[
               'league-futures__market-option',
-              market === option.value ? 'league-futures__market-option--active' : '',
+              chartMarket === option.value ? 'league-futures__market-option--active' : '',
             ]
               .filter(Boolean)
               .join(' ')}
             key={option.value}
-            onClick={() => setMarket(option.value)}
+            onClick={() => setChartMarket(option.value)}
             type="button"
           >
             {option.label}
           </button>
         ))}
       </div>
-
-      {allTeamsReachPlayoffs ? (
-        <p className="league-futures__format-note">
-          All {totalTeams} teams reach the playoffs in this format.
-        </p>
-      ) : null}
 
       {titleHistoryTeams.length > 0 ? (
         <button
@@ -298,6 +280,7 @@ export function LeagueFutures({
                   <span className="league-futures__record">
                     {team.projWins != null ? `Proj ${team.projWins.toFixed(1)} wins` : team.record}
                     {team.avgSeed != null ? ` · Avg seed ${team.avgSeed.toFixed(1)}` : ''}
+                    {team.playoffProb != null ? ` · ${team.playoffProb.toFixed(0)}% playoff` : ''}
                   </span>
                 </div>
               </div>
@@ -310,11 +293,7 @@ export function LeagueFutures({
                   .filter(Boolean)
                   .join(' ')}
               >
-                {allTeamsReachPlayoffs
-                  ? `${team.playoffProb.toFixed(0)}%`
-                  : market === 'playoffs' && team.playoffClinched
-                  ? 'Clinched'
-                  : formatAmericanOdds(getMarketOdds(team, market))}
+                {formatAmericanOdds(team.championOdds)}
               </span>
             </article>
           </div>

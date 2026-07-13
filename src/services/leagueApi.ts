@@ -256,6 +256,8 @@ export interface LineHistoryEntry {
   }[];
   titleOdds?: Record<string, number>;
   playoffOdds?: Record<string, number>;
+  titleProb?: Record<string, number>;
+  playoffProb?: Record<string, number>;
   teamSnapshots?: {
     rosterId: number;
     teamName?: string;
