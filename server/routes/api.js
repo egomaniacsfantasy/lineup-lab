@@ -11,6 +11,7 @@ import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import { getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades } from '../engine/engine.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
+import { registerLeague } from '../engine/leagueRegistry.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 import { getAdjustedProjections } from '../projections/adjusted.js';
@@ -463,6 +464,47 @@ async function loadLeagueContext(provider, leagueId, userId) {
   };
 }
 
+// A provider built WITHOUT a request, for the scheduled repricer. ESPN uses the
+// creds saved on connect (espnProvider falls back to the cred store when the
+// header creds are null); Sleeper needs none.
+export function buildHeadlessProvider(providerKind, season) {
+  if (providerKind === 'espn') {
+    return createEspnProvider({
+      season: season ?? String(new Date().getUTCFullYear()),
+      espnS2: null,
+      swid: null,
+    });
+  }
+  return sleeperProvider;
+}
+
+// Build + price a league's lines (shared by the /lines route and the 6h
+// scheduler). getLeaguePricing caches 60s, so the scheduler always recomputes.
+export async function computeLeaguePricing(provider, leagueId, userId, overlay = null) {
+  return getLeaguePricing(async () => {
+    const ctx = await loadLeagueContext(provider, leagueId, userId);
+    if (!ctx) throw new Error('league_not_found');
+
+    const lastWeek = Math.min((ctx.league.playoffWeekStart ?? 15) + 2, 18);
+    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
+      const all = [];
+      for (let week = 1; week <= lastWeek; week += 1) {
+        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
+      }
+      return all;
+    });
+
+    let liveProjections;
+    try {
+      const adjusted = await getAdjustedProjections(scoringSuffix(ctx.league?.scoringFamily));
+      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+    } catch (err) {
+      console.error('[pricing] adjusted projections failed; using snapshot', err);
+    }
+    return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections };
+  }, `${leagueId}:${userId}:${overlayHash(overlay)}`);
+}
+
 /** Everything one league needs to render: league, teams, week matchups, players. */
 apiRouter.get('/league/:leagueId/bootstrap', async (req, res, next) => {
   try {
@@ -639,33 +681,16 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
     const userId = req.query.userId ?? null;
     const overlay = parseOverlayHeader(req);
 
-    const pricing = await getLeaguePricing(async () => {
-      const ctx = await loadLeagueContext(provider, leagueId, userId);
-      if (!ctx) throw new Error('league_not_found');
-
-      const lastWeek = Math.min((ctx.league.playoffWeekStart ?? 15) + 2, 18);
-      const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
-        const all = [];
-        for (let week = 1; week <= lastWeek; week += 1) {
-          all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
-        }
-        return all;
-      });
-
-      // Phase 0: live model-adjusted projections (warm + cached; never blocks).
-      // Any failure -> undefined -> engine falls back to the snapshot.
-      let liveProjections;
-      try {
-        const adjusted = await getAdjustedProjections(scoringSuffix(ctx.league?.scoringFamily));
-        if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-      } catch (err) {
-        console.error('[pricing] adjusted projections failed; using snapshot', err);
-      }
-      return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections };
-    }, `${leagueId}:${userId}:${overlayHash(overlay)}`);
+    const pricing = await computeLeaguePricing(provider, leagueId, userId, overlay);
 
     if (pricing.available) {
       recordPricing(leagueId, pricing);
+      // Remember this league so the 6h scheduler keeps its charts fed.
+      registerLeague(leagueId, {
+        userId,
+        provider: req.query.provider === 'espn' ? 'espn' : 'sleeper',
+        season: req.query.season ?? null,
+      });
     }
 
     res.json(

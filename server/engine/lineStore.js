@@ -40,15 +40,17 @@ function inferTrigger(latest, pricing) {
  * Append a pricing snapshot if its inputsHash differs from the latest
  * entry. Returns true when a new entry was recorded (the line moved).
  */
-export function recordPricing(leagueId, pricing) {
+export function recordPricing(leagueId, pricing, { force = false } = {}) {
   if (!pricing.available) return false;
 
   const history = readHistory(leagueId);
   const latest = history.at(-1);
-  const trigger = inferTrigger(latest, pricing);
+  const trigger = force ? 'scheduled' : inferTrigger(latest, pricing);
 
+  // Skip duplicate views (same inputsHash) — UNLESS force, which the 6h
+  // scheduler uses to lay down a timestamped point even when nothing moved.
   // (entries from before titleOdds existed get superseded once)
-  if (latest && latest.inputsHash === pricing.inputsHash && latest.titleOdds) {
+  if (!force && latest && latest.inputsHash === pricing.inputsHash && latest.titleOdds) {
     return false;
   }
 

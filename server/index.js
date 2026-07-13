@@ -11,6 +11,7 @@ import { assetsRouter } from './routes/assets.js';
 import { projectionsRouter } from './routes/projections.js';
 import { loadProjections } from './projections/loadFromRepo.js';
 import { warmAdjustedProjections } from './projections/adjusted.js';
+import { startRepriceScheduler } from './scheduler.js';
 import { callLog, callsInLastMinute } from './cache.js';
 import { isGameWindow } from './gameWindows.js';
 
@@ -48,6 +49,8 @@ app.listen(PORT, () => {
     console.error('[projections] boot load failed', error);
   }
   warmAdjustedProjections();
+  // Keep league futures charts fed with a 6-hourly reprice snapshot.
+  startRepriceScheduler();
 });
 
 // Call-volume heartbeat: Sleeper asks < 1000 calls/min per IP — ours
