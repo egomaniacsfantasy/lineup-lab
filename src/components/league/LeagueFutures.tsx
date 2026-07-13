@@ -19,7 +19,7 @@ interface LeagueFuturesProps {
 }
 
 type LeagueMarket = 'champion' | 'finals' | 'playoffs';
-type ExpandedFuturesChart = 'title' | 'contender' | null;
+type ExpandedFuturesChart = 'title' | null;
 
 const MARKET_OPTIONS: { label: string; value: LeagueMarket }[] = [
   { label: 'Champion', value: 'champion' },
@@ -32,6 +32,7 @@ function formatScoring(scoringFormat: ScoringFormat) {
 }
 
 function impliedProbability(odds: number) {
+  if (!Number.isFinite(odds)) return 1; // clinched / degenerate line
   if (odds < 0) {
     return Math.abs(odds) / (Math.abs(odds) + 100);
   }
@@ -39,14 +40,21 @@ function impliedProbability(odds: number) {
   return 100 / (odds + 100);
 }
 
-function titleSeriesFor(team: LeagueFutureRow, history: LineHistoryEntry[] | null | undefined) {
+// Odds-over-time series for the selected market: champion/finals use the stored
+// title odds, playoffs use the stored playoff odds. All history is a reprice of
+// the season sim, so this is the sim's odds moving over time.
+function seriesFor(
+  team: LeagueFutureRow,
+  history: LineHistoryEntry[] | null | undefined,
+  market: LeagueMarket,
+) {
   if (!team.rosterId || !history?.length) return [];
   const rosterId = String(team.rosterId);
   return history
     .map((entry) => {
-      const odds = entry.titleOdds?.[rosterId];
+      const odds = (market === 'playoffs' ? entry.playoffOdds : entry.titleOdds)?.[rosterId];
       if (odds == null) return null;
-      return { at: entry.computedAt, probability: impliedProbability(odds) * 100 };
+      return { at: entry.computedAt, probability: Math.max(0, Math.min(100, impliedProbability(odds) * 100)) };
     })
     .filter((entry): entry is { at: number; probability: number } => entry !== null);
 }
@@ -101,16 +109,9 @@ function historyTakeaway(rows: { team: LeagueFutureRow; series: { probability: n
   const biggest = [...moves]
     .sort((a, b) => Math.abs(b.move) - Math.abs(a.move))
     .find((move) => Math.abs(move.move) >= 0.05);
-  if (!leader) return 'No title move yet.';
-  if (!biggest) return `${leader.team.teamName} holds the top title price at ${leader.last.toFixed(1)}%.`;
+  if (!leader) return 'No line move yet.';
+  if (!biggest) return `${leader.team.teamName} holds the top line at ${leader.last.toFixed(1)}%.`;
   return `${biggest.team.teamName} moved ${biggest.move >= 0 ? 'up' : 'down'} ${Math.abs(biggest.move).toFixed(1)} pts.`;
-}
-
-function contenderTakeaway(rows: { team: LeagueFutureRow; playoffProb: number; titleIfIn: number }[]) {
-  if (rows.length < 2) return 'Reads deepen as the season plays out.';
-  const dangerous = [...rows].sort((a, b) => b.titleIfIn - a.titleIfIn)[0];
-  const safest = [...rows].sort((a, b) => b.playoffProb - a.playoffProb)[0];
-  return `${safest.team.teamName} is safest in; ${dangerous.team.teamName} has the most title bite if they get there.`;
 }
 
 function getMarketOdds(team: LeagueFutureRow, market: LeagueMarket) {
@@ -155,14 +156,21 @@ export function LeagueFutures({
   );
   const cutoffLabel = 'Playoff line';
   const allTeamsReachPlayoffs = market === 'playoffs' && playoffTeams >= totalTeams;
+  // Time-series follows the selected market: Champion → title odds over time,
+  // Playoffs → playoff odds over time.
+  const isPlayoffMarket = market === 'playoffs';
+  const chartTitle = isPlayoffMarket ? 'Playoff odds over time' : 'Title odds over time';
+  const chartSubtitle = isPlayoffMarket
+    ? 'Each line is a team’s chance to make the playoffs across reprices.'
+    : 'Each line is a team’s championship price across reprices.';
   const titleHistoryTeams = useMemo(
     () =>
       leagueChartFlags.titleOddsOverTime
         ? futures
-            .map((team) => ({ team, series: titleSeriesFor(team, history) }))
+            .map((team) => ({ team, series: seriesFor(team, history, market) }))
             .filter((row) => row.series.length > 1)
         : [],
-    [futures, history],
+    [futures, history, market],
   );
   const titleHistoryBounds = useMemo(() => {
     const points = titleHistoryTeams.flatMap((row) => row.series);
@@ -171,43 +179,10 @@ export function LeagueFutures({
       minAt: Math.min(...points.map((point) => point.at)),
       maxAt: Math.max(...points.map((point) => point.at)),
       minValue: Math.max(0, Math.min(...points.map((point) => point.probability)) - 1),
-      maxValue: Math.max(...points.map((point) => point.probability)) + 1,
+      maxValue: Math.min(100, Math.max(...points.map((point) => point.probability)) + 1),
     };
   }, [titleHistoryTeams]);
   const titleTakeaway = historyTakeaway(titleHistoryTeams);
-  const contenderRows = useMemo(
-    () => {
-      if (!leagueChartFlags.contenderShape) return [];
-      const rows = futures
-        .filter((team) => team.playoffProb > 0)
-        .map((team) => {
-          const titleProb = impliedProbability(team.championOdds) * 100;
-          return {
-            team,
-            playoffProb: team.playoffProb,
-            titleIfIn: titleProb / Math.max(0.01, team.playoffProb / 100),
-          };
-        });
-      if (rows.length === 0) return [];
-      const minY = Math.min(...rows.map((row) => row.titleIfIn));
-      const maxY = Math.max(...rows.map((row) => row.titleIfIn));
-      const spanY = Math.max(1, maxY - minY);
-      return rows.map((row, index) => {
-        const neighbors = rows
-          .slice(0, index)
-          .filter((other) => Math.abs(other.playoffProb - row.playoffProb) < 4 && Math.abs(other.titleIfIn - row.titleIfIn) < spanY * 0.12)
-          .length;
-        const offset = neighbors === 0 ? 0 : neighbors % 2 === 0 ? -neighbors * 6 : neighbors * 6;
-        return {
-          ...row,
-          yPlot: ((row.titleIfIn - minY) / spanY) * 84 + 8,
-          xPlot: Math.max(4, Math.min(96, row.playoffProb + offset * 0.08)),
-        };
-      });
-    },
-    [futures],
-  );
-  const contenderSummary = contenderTakeaway(contenderRows);
 
   return (
     <section aria-labelledby="league-futures-title" className="league-futures">
@@ -260,8 +235,8 @@ export function LeagueFutures({
         >
           <span className="league-futures__chart-head">
             <span>
-              <span className="league-futures__chart-title">Title odds over time</span>
-              <span className="league-futures__chart-subtitle">Each line is a team’s championship price across reprices.</span>
+              <span className="league-futures__chart-title">{chartTitle}</span>
+              <span className="league-futures__chart-subtitle">{chartSubtitle}</span>
             </span>
             <span className="league-futures__inspect">Inspect</span>
           </span>
@@ -289,49 +264,6 @@ export function LeagueFutures({
             ))}
           </div>
           <span className="league-futures__takeaway">{titleTakeaway}</span>
-        </button>
-      ) : null}
-
-      {leagueChartFlags.contenderShape ? (
-        <button
-          className="league-futures__chart-card"
-          onClick={() => setExpandedChart('contender')}
-          type="button"
-        >
-          <span className="league-futures__chart-head">
-            <span>
-              <span className="league-futures__chart-title">Contender shape</span>
-              <span className="league-futures__chart-subtitle">Floor vs. ceiling: playoff odds against title odds if they make it.</span>
-            </span>
-            <span className="league-futures__inspect">Inspect</span>
-          </span>
-          <div className="league-futures__scatter">
-            {contenderRows.length > 1 ? contenderRows.map(({ team, playoffProb, titleIfIn, xPlot, yPlot }) => (
-              <span
-                className={[
-                  'league-futures__scatter-point',
-                  team.isUser ? 'league-futures__scatter-point--user' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                key={`scatter-${team.teamName}`}
-                style={{
-                  left: `${xPlot}%`,
-                  bottom: `${yPlot}%`,
-                }}
-                title={`${team.teamName}: ${playoffProb.toFixed(1)}% playoff · ${titleIfIn.toFixed(1)} title if in`}
-              >
-                <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
-              </span>
-            )) : (
-              <span className="league-futures__scatter-empty">Reads deepen as the season plays out.</span>
-            )}
-            <span className="league-futures__quadrant league-futures__quadrant--safe">Safe but capped</span>
-            <span className="league-futures__quadrant league-futures__quadrant--danger">Long shot but dangerous</span>
-            <span className="league-futures__scatter-x">Chance of making playoffs</span>
-            <span className="league-futures__scatter-y">Title odds if they make it</span>
-          </div>
-          <span className="league-futures__takeaway">{contenderSummary}</span>
         </button>
       ) : null}
 
@@ -364,7 +296,7 @@ export function LeagueFutures({
                 </div>
                 <div className="league-futures__context">
                   <span className="league-futures__record">
-                    {team.projRecord ? `Proj ${team.projRecord}` : team.record}
+                    {team.projWins != null ? `Proj ${team.projWins.toFixed(1)} wins` : team.record}
                     {team.avgSeed != null ? ` · Avg seed ${team.avgSeed.toFixed(1)}` : ''}
                   </span>
                 </div>
@@ -379,7 +311,7 @@ export function LeagueFutures({
                   .join(' ')}
               >
                 {allTeamsReachPlayoffs
-                  ? 'In'
+                  ? `${team.playoffProb.toFixed(0)}%`
                   : market === 'playoffs' && team.playoffClinched
                   ? 'Clinched'
                   : formatAmericanOdds(getMarketOdds(team, market))}
@@ -399,77 +331,42 @@ export function LeagueFutures({
             <button className="league-futures__modal-close" onClick={() => setExpandedChart(null)} type="button">
               Close
             </button>
-            {expandedChart === 'title' ? (
-              <>
-                <h3 className="league-futures__modal-title">Title odds over time</h3>
-                <p className="league-futures__chart-subtitle">X-axis is reprice time. Y-axis is championship probability.</p>
-                {titleHistoryBounds ? (
-                  <div className="league-futures__detail-chart">
-                    <span className="league-futures__detail-axis league-futures__detail-axis--y">Championship probability</span>
-                    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                      {[0, 25, 50, 75, 100].map((tick) => (
-                        <line className="league-futures__detail-grid" key={`grid-${tick}`} x1="0" x2="100" y1={tick} y2={tick} />
-                      ))}
-                      {titleHistoryTeams.map(({ team, series }) => (
-                        <polyline
-                          className={[
-                            'league-futures__detail-line',
-                            team.isUser ? 'league-futures__detail-line--user' : '',
-                          ].filter(Boolean).join(' ')}
-                          key={`detail-title-${team.teamName}`}
-                          points={chartLine(series, titleHistoryBounds)}
-                        />
-                      ))}
-                    </svg>
-                    <span className="league-futures__detail-axis league-futures__detail-axis--x">Reprice time</span>
-                  </div>
-                ) : null}
-                <div className="league-futures__legend">
+            <h3 className="league-futures__modal-title">{chartTitle}</h3>
+            <p className="league-futures__chart-subtitle">
+              X-axis is reprice time. Y-axis is {isPlayoffMarket ? 'playoff probability' : 'championship probability'}.
+            </p>
+            {titleHistoryBounds ? (
+              <div className="league-futures__detail-chart">
+                <span className="league-futures__detail-axis league-futures__detail-axis--y">
+                  {isPlayoffMarket ? 'Playoff probability' : 'Championship probability'}
+                </span>
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+                  {[0, 25, 50, 75, 100].map((tick) => (
+                    <line className="league-futures__detail-grid" key={`grid-${tick}`} x1="0" x2="100" y1={tick} y2={tick} />
+                  ))}
                   {titleHistoryTeams.map(({ team, series }) => (
-                    <span key={`legend-${team.teamName}`}>
-                      <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
-                      {team.teamName} {series.at(-1)?.probability.toFixed(1)}%
-                    </span>
-                  ))}
-                </div>
-                <p className="league-futures__takeaway">{titleTakeaway}</p>
-              </>
-            ) : (
-              <>
-                <h3 className="league-futures__modal-title">Contender shape</h3>
-                <p className="league-futures__chart-subtitle">X-axis: chance of making playoffs. Y-axis: title odds if they make it.</p>
-                <div className="league-futures__scatter league-futures__scatter--detail">
-                  {contenderRows.length > 1 ? contenderRows.map(({ team, playoffProb, titleIfIn, xPlot, yPlot }) => (
-                    <span
+                    <polyline
                       className={[
-                        'league-futures__scatter-point',
-                        team.isUser ? 'league-futures__scatter-point--user' : '',
+                        'league-futures__detail-line',
+                        team.isUser ? 'league-futures__detail-line--user' : '',
                       ].filter(Boolean).join(' ')}
-                      key={`detail-scatter-${team.teamName}`}
-                      style={{ left: `${xPlot}%`, bottom: `${yPlot}%` }}
-                      title={`${team.teamName}: ${playoffProb.toFixed(1)}% playoff · ${titleIfIn.toFixed(1)} title if in`}
-                    >
-                      <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
-                    </span>
-                  )) : (
-                    <span className="league-futures__scatter-empty">Reads deepen as the season plays out.</span>
-                  )}
-                  <span className="league-futures__quadrant league-futures__quadrant--safe">Safe but capped</span>
-                  <span className="league-futures__quadrant league-futures__quadrant--danger">Long shot but dangerous</span>
-                  <span className="league-futures__scatter-x">Chance of making playoffs</span>
-                  <span className="league-futures__scatter-y">Title odds if they make it</span>
-                </div>
-                <div className="league-futures__legend">
-                  {contenderRows.map(({ team, playoffProb, titleIfIn }) => (
-                    <span key={`contender-legend-${team.teamName}`}>
-                      <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
-                      {team.teamName} {playoffProb.toFixed(1)}% in · {titleIfIn.toFixed(1)}% if in
-                    </span>
+                      key={`detail-title-${team.teamName}`}
+                      points={chartLine(series, titleHistoryBounds)}
+                    />
                   ))}
-                </div>
-                <p className="league-futures__takeaway">{contenderSummary}</p>
-              </>
-            )}
+                </svg>
+                <span className="league-futures__detail-axis league-futures__detail-axis--x">Reprice time</span>
+              </div>
+            ) : null}
+            <div className="league-futures__legend">
+              {titleHistoryTeams.map(({ team, series }) => (
+                <span key={`legend-${team.teamName}`}>
+                  <TeamAvatar avatarUrl={team.avatarUrl} name={team.teamName} />
+                  {team.teamName} {series.at(-1)?.probability.toFixed(1)}%
+                </span>
+              ))}
+            </div>
+            <p className="league-futures__takeaway">{titleTakeaway}</p>
           </div>
         </div>
       ) : null}

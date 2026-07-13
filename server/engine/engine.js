@@ -1428,14 +1428,15 @@ function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, dis
     const playoffProb = playoffCounts.get(t.rosterId) / FUTURES_SIMS;
     const finalsProb = finalsCounts.get(t.rosterId) / FUTURES_SIMS;
     const titleProb = titleCounts.get(t.rosterId) / FUTURES_SIMS;
-    const projWins = Math.round(winSums.get(t.rosterId) / FUTURES_SIMS);
-    const projLosses = Math.max(0, totalGames - projWins);
+    const projWinsExact = winSums.get(t.rosterId) / FUTURES_SIMS;
+    const projWins = Number(projWinsExact.toFixed(1)); // 1 decimal (avg, not rounded)
+    const projLosses = Number(Math.max(0, totalGames - projWinsExact).toFixed(1));
 
     return {
       rosterId: t.rosterId,
       projWins,
       projLosses,
-      projRecord: `${projWins}-${projLosses}`,
+      projRecord: `${Math.round(projWinsExact)}-${Math.max(0, totalGames - Math.round(projWinsExact))}`,
       teamName: t.teamName,
       record: t.record,
       playoffProb: Number((playoffProb * 100).toFixed(1)),
@@ -1622,8 +1623,9 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   return teams.map((t) => {
     const playoffProb = playoffCounts.get(t.rosterId) / sims;
     const titleProb = titleCounts.get(t.rosterId) / sims;
-    const projWins = Math.round(winSums.get(t.rosterId) / sims);
-    const projLosses = Math.max(0, totalGames - projWins);
+    const projWinsExact = winSums.get(t.rosterId) / sims;
+    const projWins = Number(projWinsExact.toFixed(1)); // 1 decimal (avg, not rounded)
+    const projLosses = Number(Math.max(0, totalGames - projWinsExact).toFixed(1));
     return {
       rosterId: t.rosterId,
       teamName: t.teamName,
@@ -1631,7 +1633,7 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
       isUser: t.isUser,
       projWins,
       projLosses,
-      projRecord: `${projWins}-${projLosses}`,
+      projRecord: `${Math.round(projWinsExact)}-${Math.max(0, totalGames - Math.round(projWinsExact))}`,
       expWins: Number((winSums.get(t.rosterId) / sims).toFixed(2)),
       playoffProb: Number((playoffProb * 100).toFixed(1)),
       playoffClinched: playoffProb >= 0.999,
