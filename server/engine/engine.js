@@ -2084,24 +2084,38 @@ export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
     }
   }
 
-  // Pick a small, diverse "competent" set to actually sim: the trades that most
-  // help YOU, the ones that also help the PARTNER (win-win), and the most
-  // partner-friendly ones (they'd accept). The sim + client acceptance model
-  // then rank what really surfaces.
+  // Pick the "competent" set to sim, giving EVERY opponent representation. If we
+  // picked the best trades globally, the one opponent with the most complementary
+  // roster would monopolize the shortlist and the client's per-manager acceptance
+  // (friendliness/relationship) would have nothing to choose from for the others.
+  // So we rank each opponent's candidates by a help-you-plus-help-them blend and
+  // take them round-robin (best of each, then 2nd-best of each, ...).
   const dedupeKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
-  const n = Math.ceil(maxSim / 3);
-  const pooled = [
-    ...[...scored].sort((a, b) => b.youGain - a.youGain).slice(0, n),
-    ...[...scored].sort((a, b) => (b.youGain + b.themGain) - (a.youGain + a.themGain)).slice(0, n),
-    ...[...scored].sort((a, b) => b.themGain - a.themGain).slice(0, n),
-  ];
+  const numOpp = Math.max(1, opponents.length);
+  const perOpp = Math.max(3, Math.ceil(maxSim / numOpp));
+  const SIM_CAP = 24; // hard bound so many-team leagues don't sim too many
+  const byOpp = new Map();
+  for (const c of scored) {
+    const list = byOpp.get(c.partner.rosterId) ?? [];
+    list.push(c);
+    byOpp.set(c.partner.rosterId, list);
+  }
+  const oppLists = [...byOpp.values()].map((list) =>
+    list.sort((a, b) => (b.youGain + 0.5 * b.themGain) - (a.youGain + 0.5 * a.themGain)),
+  );
   const seen = new Set();
-  const promising = pooled.filter((c) => {
-    const key = dedupeKey(c);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, maxSim);
+  const promising = [];
+  for (let rank = 0; rank < perOpp && promising.length < SIM_CAP; rank += 1) {
+    for (const list of oppLists) {
+      if (promising.length >= SIM_CAP) break;
+      const c = list[rank];
+      if (!c) continue;
+      const key = dedupeKey(c);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      promising.push(c);
+    }
+  }
 
   // ── Sim only the promising set for real Δ championship %, yielding between
   // small batches so we never block other requests for long. Use the SAME sim
