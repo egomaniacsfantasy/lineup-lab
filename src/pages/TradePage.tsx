@@ -226,12 +226,10 @@ function ReadSlider({
   );
 }
 
-// "Managers you match with" runs an exhaustive full-league trade search that
-// takes ~80s. Because Node is single-threaded, that synchronous loop BLOCKS the
-// event loop and stalls every other request (including the trade analyzer's own
-// season sim). Hidden until the search runs off the main thread / as a
-// background job. Flip to true to re-enable.
-const SHOW_MATCH_FINDER = false;
+// "Managers you match with" — sim-scored trade suggestions. The server now uses
+// a cheap starter-points proxy to pick ~30 competent candidates and sims only
+// those (yielding between sims so it can't stall the analyzer), so it's fast.
+const SHOW_MATCH_FINDER = true;
 
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error, refresh } = useLeagueConnection();
@@ -256,7 +254,7 @@ function TradeDealsView() {
   const [counter, setCounter] = useState<TradeCounter | null>(null);
   const [counterLoading, setCounterLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<TradeSuggestion[] | null>(null);
-  const [suggDebug, setSuggDebug] = useState<{ enumerated: number; positive: number } | null>(null);
+  const [suggDebug, setSuggDebug] = useState<{ generated: number; positive: number } | null>(null);
   const [suggLoading, setSuggLoading] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
@@ -344,7 +342,7 @@ function TradeDealsView() {
       .then((r) => {
         if (!active) return;
         setSuggestions(r.available ? r.suggestions ?? [] : []);
-        setSuggDebug(r.debug ? { enumerated: r.debug.enumerated, positive: r.debug.positive } : null);
+        setSuggDebug(r.debug ? { generated: r.debug.generated, positive: r.debug.positive } : null);
       })
       .catch(() => { if (active) setSuggestions([]); })
       .finally(() => { if (active) setSuggLoading(false); });
@@ -684,7 +682,7 @@ function TradeDealsView() {
               <span />
             </div>
             <p className="trade-cc__finder-note">
-              Simulating every possible trade across the league. This runs a full search and can take a minute.
+              Scanning trades across the league and simulating the best candidates.
             </p>
           </>
         ) : rankedSuggestions.length > 0 ? (
@@ -746,7 +744,7 @@ function TradeDealsView() {
         ) : (
           <p className="trade-cc__empty-lane">
             No trade raises your title odds right now
-            {suggDebug ? ` (searched ${suggDebug.enumerated}, ${suggDebug.positive} raised your title).` : '.'}
+            {suggDebug ? ` (searched ${suggDebug.generated}, ${suggDebug.positive} raised your title).` : '.'}
           </p>
         )}
       </section>
