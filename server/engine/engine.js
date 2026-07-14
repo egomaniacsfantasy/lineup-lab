@@ -19,8 +19,9 @@ import { getActiveProjections } from '../projections/store.js';
 import { cached } from '../cache.js';
 
 const SIMS = 10_000;
-const FUTURES_SIMS = 2_000; // team-level sims for movers/trade title-odds deltas
+const FUTURES_SIMS = 2_000; // team-level sims for the off-season FA-claim mover only
 const SEASON_SIMS = 10_000; // player-level season Monte Carlo for the Futures tab
+const TRADE_LANE_SIMS = 1_000; // player-level post-trade sims for the always-on market lane previews (baseline reused from Futures, so 1 sim/lane keeps this at parity with the old 2 team-level sims/lane)
 const MATCHUP_SIMS = 5_000; // seeded player-level sims for the headline matchup win%
 const Z80 = 1.2815515594; // 80% CI half-width in sigmas (matches our weekly CI)
 const INV_SQRT_2PI = 0.3989422804014327;
@@ -831,6 +832,10 @@ export function priceLeague(ctx) {
     week,
     catalog,
     seed,
+    overlay,
+    // Reuse the per-player season baseline the Futures tab already ran, so trade
+    // lanes price their title-odds on the same sim (and don't re-sim it per lane).
+    seasonBaseline: futures,
   });
 
   // ── scoring honesty ──
@@ -1068,7 +1073,7 @@ export function laneAcceptReasons({ opp, give, get, priced, catalog, framing = '
  *  2. best mutually-positive 1-for-1 trade lane against a real roster
  */
 function computeMovers(ctx) {
-  const { league, teams, matchups, projections, projectionMap, distByRoster, scheduleWeeks, week, catalog, seed } = ctx;
+  const { league, teams, matchups, projections, projectionMap, distByRoster, scheduleWeeks, week, catalog, seed, seasonBaseline = null } = ctx;
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return [];
   // Redraft-value movers are misleading in dynasty/keeper, where youth and
@@ -1284,6 +1289,12 @@ function computeMovers(ctx) {
         give: candidate.give,
         get: candidate.get,
         traits: { toughness: 5, dealAppetite: 5, fandomTeam: null, fandomLevel: 5 },
+        // Share the Futures-tab season baseline (so titleOddsBefore matches it
+        // exactly) and price the post-trade side on a lighter per-player pass —
+        // 12 lanes at full season sims would stall the always-on market view.
+        baseline: seasonBaseline,
+        sims: TRADE_LANE_SIMS,
+        seed,
       });
       if (!priced.available || !priced.you || !priced.them) continue;
 
@@ -2262,7 +2273,7 @@ function depthByPosition(playerIds, catalog) {
  * user (the one person who actually knows their league), so the
  * acceptance read is parameterized truth, never fabricated psychology.
  */
-export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get = [], traits = {} }) {
+export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get = [], traits = {}, baseline = null, sims = SEASON_SIMS, seed: seedOverride = null }) {
   const active = Array.isArray(ctx.projections)
     ? { version: 'ctx-projections', projections: ctx.projections }
     : ctx.projections ?? getActiveProjections();
@@ -2282,7 +2293,9 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     return { available: false, reason: 'empty_side' };
   }
 
-  const seed = parseInt(
+  // One seed per inputs state (shared with priceLeague's futures sim when the
+  // caller passes it), so before/after cancel common variance (CRN).
+  const seed = seedOverride ?? parseInt(
     computeInputsHash({
       projectionVersion: active.version,
       teams,
@@ -2291,31 +2304,6 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     }).slice(0, 8),
     16,
   );
-
-  // Trades are rest-of-season decisions, so value players by their season
-  // mean (null week), NOT this week's projection. A guy projected a point
-  // higher in Week 1 shouldn't sway a trade — that was the right call.
-  const baseDist = new Map(
-    teams.map((t) => [t.rosterId, bestLineupDistribution(t.players, slotLabels, projectionMap, catalog, null)]),
-  );
-  const currentStarterDist = new Map(
-    teams.map((t) => [t.rosterId, teamDistribution(t.starters, projectionMap, catalog, week)]),
-  );
-  const weekDistCache = new Map();
-  const distForWeek = (rosterId, w) => {
-    const key = `${rosterId}|${w}`;
-    let dist = weekDistCache.get(key);
-    if (!dist) {
-      dist = teamDistribution(
-        teams.find((t) => t.rosterId === rosterId)?.starters ?? [],
-        projectionMap,
-        catalog,
-        w,
-      );
-      weekDistCache.set(key, dist);
-    }
-    return dist;
-  };
 
   const userPoolAfter = user.players.filter((id) => !give.includes(id)).concat(get);
   const partnerPoolAfter = partner.players.filter((id) => !get.includes(id)).concat(give);
@@ -2333,47 +2321,21 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     projectionMap,
     catalog,
   );
-  const userAfter = userImpact.after;
-  const partnerAfter = partnerImpact.after;
-
-  const futuresBefore = simulateFutures({
-    league,
-    teams,
-    distByRoster: currentStarterDist,
-    scheduleWeeks,
-    week,
-    distForWeek,
-    seed,
-  });
-  const afterDist = new Map(currentStarterDist);
-  afterDist.set(userRosterId, userAfter);
-  afterDist.set(partnerRosterId, partnerAfter);
-  const afterWeekDistCache = new Map();
-  const distForWeekAfter = (rosterId, w) => {
-    if (rosterId !== userRosterId && rosterId !== partnerRosterId) return distForWeek(rosterId, w);
-    const key = `${rosterId}|${w}`;
-    let dist = afterWeekDistCache.get(key);
-    if (!dist) {
-      dist = bestLineupDistribution(
-        rosterId === userRosterId ? userPoolAfter : partnerPoolAfter,
-        slotLabels,
-        projectionMap,
-        catalog,
-        w,
-      );
-      afterWeekDistCache.set(key, dist);
-    }
-    return dist;
-  };
-  const futuresAfter = simulateFutures({
-    league,
-    teams,
-    distByRoster: afterDist,
-    scheduleWeeks,
-    week,
-    distForWeek: distForWeekAfter,
-    seed,
-  });
+  // Title odds move on the SAME per-player season Monte Carlo as the Futures tab
+  // and the Build-a-trade analyzer — every starter drawn from its own asymmetric
+  // CI, summed, compared — so a trade reads identically on every surface. The
+  // market-lane pass (computeMovers) shares its season baseline via `baseline`
+  // so the always-on lanes don't re-sim the pre-trade league once per lane.
+  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
+  const futuresBefore = baseline ?? simulateSeason({ ...base, sims });
+  const tradedTeams = teams.map((t) =>
+    t.rosterId === userRosterId
+      ? { ...t, players: userPoolAfter }
+      : t.rosterId === partnerRosterId
+        ? { ...t, players: partnerPoolAfter }
+        : t,
+  );
+  const futuresAfter = simulateSeason({ ...base, teams: tradedTeams, sims });
 
   const find = (futures, rosterId) => futures.find((f) => f.rosterId === rosterId);
   const yourBefore = find(futuresBefore, userRosterId);

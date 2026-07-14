@@ -456,6 +456,10 @@ export function ProjectionsPage() {
         } catch {
           /* channel not ready — polling will catch it */
         }
+        // Force the server to re-read consensus and recompute the agreement-weighted
+        // projections now, so the board / pricing reflect this edit in seconds
+        // instead of on the next ~60s lazy background refresh.
+        void fetch('/api/projections/refresh-adjusted', { method: 'POST' }).catch(() => {});
       }
     } catch (e) {
       console.error('[agreement] save threw:', e);
