@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+
+npm run brand-check
+npm run test
+npm run build

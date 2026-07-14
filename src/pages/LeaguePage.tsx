@@ -350,7 +350,6 @@ export function LeaguePage() {
 
       {activeView === 'futures' ? (
         <>
-          <p className="league-page__section-label">Your futures</p>
           {connectedSeason ? (
             <SeasonHeadline
               championshipOdds={
@@ -389,7 +388,6 @@ export function LeaguePage() {
             </>
           )}
 
-          <p className="league-page__section-label">League futures</p>
           <LeagueFutures
             currentWeek={connection.currentWeek}
             futures={futures}

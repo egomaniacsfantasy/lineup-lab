@@ -165,7 +165,6 @@
 
 .matchup-slate__prob-track {
   position: relative;
-  display: flex;
   height: 11px;
   overflow: hidden;
   border-radius: var(--radius-pill);
@@ -178,11 +177,9 @@
 }
 
 .matchup-slate__prob-fill--left {
-  background: var(--green);
-}
-
-.matchup-slate__prob-fill--right {
-  background: color-mix(in srgb, var(--red) 76%, var(--bg-inset));
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--amber), var(--amber-bright));
+  box-shadow: 0 0 12px rgba(232, 84, 29, 0.45);
 }
 
 .matchup-slate__extras {

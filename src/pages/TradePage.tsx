@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
+import { TradeCard, TradeSide } from '../components/trade-display/TradeDisplay';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
 import { ScoutingView } from './market/ScoutingView.tsx';
 import '../components/trade/TradeAnalyzerPanel.css';
+import '../components/trade-display/TradeDisplay.css';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
 import { toPlayer } from '../adapters/connectedLeague';
@@ -13,25 +15,30 @@ import {
   priceTrade,
   analyzeTradeApi,
   fetchTradeCounter,
+  fetchTradeSuggestions,
   type TradeResult,
   type TradeAnalysis,
   type TradeCounter,
+  type TradeSuggestion,
   type TradeTraits,
 } from '../services/leagueApi';
 import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
 import type { LeagueBootstrap, MarketMover } from '../services/leagueApi';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
-import { getAcceptanceLingo } from '../utils/acceptanceLingo';
+import { formatAcceptanceRead } from '../utils/acceptanceLingo';
 import {
   marketMoverPlayerIds,
   marketMoverSignature,
   samePositionOneForOneTrade,
+  tradeSignature,
 } from '../utils/tradeMarket';
 import {
   acceptanceGaugeLabel,
   applyTradeDisplayPolicy,
   lowAcceptanceTag,
 } from '../utils/tradeSuggestionDisplay';
+import { acceptanceProbability } from '../utils/tradeAcceptance';
+import { signedDeltaClass } from '../utils/deltaTone';
 import {
   useDynastyTradesExperimental,
   useScoutingAffectsAcceptance,
@@ -45,108 +52,23 @@ import {
   saveTradeTraits,
   NEUTRAL_READ,
 } from '../utils/tradeTraits';
+import {
+  primaryTradePosition,
+  tradeSideFromIds,
+} from '../utils/tradeDisplay';
+import { impliedProbability } from '../utils/formatOdds';
 import './TradePage.css';
 
 function laneIds(primary?: string[], fallback?: string) {
   return primary?.length ? primary : fallback ? [fallback] : [];
 }
 
-function playerName(bootstrap: LeagueBootstrap, id: string) {
-  return bootstrap.players[id]?.name ?? `Player ${id}`;
-}
+type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
-function lastName(name: string) {
-  const pieces = name.trim().split(/\s+/);
-  return pieces.at(-1) ?? name;
-}
-
-function initialLast(name: string) {
-  const pieces = name.trim().split(/\s+/);
-  if (pieces.length <= 1) return name;
-  return `${pieces[0][0]}. ${lastName(name)}`;
-}
-
-function laneSideLabel(bootstrap: LeagueBootstrap, ids: string[], compressed: boolean) {
-  if (ids.length === 0) return 'PLAYER';
-  return ids
-    .map((id) => {
-      const name = playerName(bootstrap, id);
-      return compressed ? initialLast(name) : name;
-    })
-    .join(' + ')
-    .toUpperCase();
-}
-
-function DealLaneTitle({
-  fullIncoming,
-  fullOutgoing,
-  compressedIncoming,
-  compressedOutgoing,
-}: {
-  fullIncoming: string;
-  fullOutgoing: string;
-  compressedIncoming: string;
-  compressedOutgoing: string;
-}) {
-  const ref = useRef<HTMLSpanElement | null>(null);
-  const [fit, setFit] = useState<'full' | 'snug' | 'compressed'>('full');
-  const incoming = fit === 'compressed' ? compressedIncoming : fullIncoming;
-  const outgoing = fit === 'compressed' ? compressedOutgoing : fullOutgoing;
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return undefined;
-
-    let frame = 0;
-    const measure = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const overflows = el.scrollWidth > el.clientWidth + 1;
-        if (!overflows) return;
-        setFit((current) => {
-          if (current === 'full') return 'snug';
-          if (current === 'snug') return 'compressed';
-          return current;
-        });
-      });
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [fit, fullIncoming, fullOutgoing, compressedIncoming, compressedOutgoing]);
-
-  return (
-    <span
-      className={[
-        'trade-cc__lane-title',
-        fit === 'snug' ? 'trade-cc__lane-title--snug' : '',
-        fit === 'compressed' ? 'trade-cc__lane-title--compressed' : '',
-      ].filter(Boolean).join(' ')}
-      ref={ref}
-    >
-      <span>{incoming}</span>
-      <span className="trade-cc__lane-for">for</span>
-      <span>{outgoing}</span>
-    </span>
-  );
-}
-
-
-function acceptanceStyle(probability = 50): CSSProperties {
-  const pct = Math.min(100, Math.max(0, probability));
-  return { '--lane-acceptance-pct': `${pct}%` } as CSSProperties;
-}
-
-function acceptanceTone(probability = 50) {
-  const tone = getAcceptanceLingo(probability)?.tone ?? 'neutral';
-  if (tone === 'good') return 'trade-cc__lane-acceptance-fill--good';
-  if (tone === 'bad') return 'trade-cc__lane-acceptance-fill--muted';
-  return 'trade-cc__lane-acceptance-fill--neutral';
+function normalizeMarketPosition(value: string | null | undefined): Exclude<MarketPositionFilter, 'all'> | null {
+  const upper = value?.toUpperCase();
+  if (upper === 'QB' || upper === 'RB' || upper === 'WR' || upper === 'TE') return upper;
+  return null;
 }
 
 function analysisVerdict(youDeltaTitle: number) {
@@ -172,6 +94,10 @@ function priceRailStyle(position: number): CSSProperties {
 
 function signedPct(value: number) {
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
+
+function titleDeltaFromOdds(before: number, after: number) {
+  return impliedProbability(after) - impliedProbability(before);
 }
 
 function formatGeneratedAt(value?: number) {
@@ -435,6 +361,12 @@ function TradeDealsView() {
   const [readSourceLabel, setReadSourceLabel] = useState('neutral file');
   const [scoutingFile, setScoutingFile] = useState<ManagerFile | null>(null);
   const [showRead, setShowRead] = useState(false);
+  const [marketManagerFilter, setMarketManagerFilter] = useState<number | 'all'>('all');
+  const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
+  const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
+  const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
+  const [managerSuggestionsError, setManagerSuggestionsError] = useState<string | null>(null);
+  const [managerSuggestionsUpdatedAt, setManagerSuggestionsUpdatedAt] = useState<number | null>(null);
   const [partnerMenuOpen, setPartnerMenuOpen] = useState(false);
   const [isEditingTrade, setIsEditingTrade] = useState(true);
   const [openLaneWhy, setOpenLaneWhy] = useState<string | null>(null);
@@ -459,6 +391,79 @@ function TradeDealsView() {
     () => laneEntries.filter((entry) => !dismissedSignatures.has(entry.signature)),
     [dismissedSignatures, laneEntries],
   );
+  const filteredLanes = useMemo(
+    () => {
+      if (!bootstrap) return [];
+      return lanes.filter((entry) => {
+        if (marketPositionFilter === 'all') return true;
+        return normalizeMarketPosition(primaryTradePosition(entry.lane, bootstrap.players)) === marketPositionFilter;
+      });
+    },
+    [bootstrap, lanes, marketPositionFilter],
+  );
+  const managerSuggestionEntries = useMemo(() => {
+    if (!stored || !bootstrap || marketManagerFilter === 'all') return [];
+
+    const targeted = managerSuggestions
+      .filter((suggestion) => suggestion.partnerRosterId === marketManagerFilter)
+      .map((suggestion) => ({
+        suggestion,
+        signature: tradeSignature({
+          leagueId: stored.leagueId,
+          partnerRosterId: suggestion.partnerRosterId,
+          givePlayerIds: suggestion.give.map((asset) => asset.id),
+          getPlayerIds: suggestion.get.map((asset) => asset.id),
+        }),
+        acceptanceProbability: acceptanceProbability(
+          suggestion.partnerDelta,
+          friendliness,
+          relationship,
+        ),
+        valueGain: suggestion.youDelta,
+        position: normalizeMarketPosition(
+          suggestion.get
+            .map((asset) => bootstrap.players[asset.id]?.position)
+            .find(Boolean),
+        ),
+      }))
+      .filter(
+        (entry) =>
+          !samePositionOneForOneTrade(
+            {
+              givePlayerIds: entry.suggestion.give.map((asset) => asset.id),
+              getPlayerIds: entry.suggestion.get.map((asset) => asset.id),
+            },
+            bootstrap.players,
+          ),
+      );
+
+    const positionFiltered = targeted.filter(
+      (entry) => marketPositionFilter === 'all' || entry.position === marketPositionFilter,
+    );
+    const { visible, longShotFallback } = applyTradeDisplayPolicy(positionFiltered);
+    return visible
+      .filter((entry) => !dismissedSignatures.has(entry.signature))
+      .map((entry) => ({
+        ...entry,
+        lowAcceptanceTag: lowAcceptanceTag(
+          entry.acceptanceProbability,
+          longShotFallback === entry,
+        ),
+      }));
+  }, [
+    bootstrap,
+    dismissedSignatures,
+    friendliness,
+    managerSuggestions,
+    marketManagerFilter,
+    marketPositionFilter,
+    relationship,
+    stored,
+  ]);
+  const showingManagerMarket = marketManagerFilter !== 'all';
+  const visibleMarketCount = showingManagerMarket
+    ? managerSuggestionEntries.length
+    : filteredLanes.length;
 
   useEffect(() => {
     if (
@@ -477,6 +482,39 @@ function TradeDealsView() {
   const scanButtonLabel = scanCoolingDown && marketScan.lastScannedAt
     ? `Scanned at ${formatClockTime(marketScan.lastScannedAt)}`
     : 'Scan the market';
+
+  useEffect(() => {
+    if (!stored || marketManagerFilter === 'all') {
+      setManagerSuggestionsError(null);
+      setManagerSuggestionsLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setManagerSuggestionsLoading(true);
+    setManagerSuggestionsError(null);
+    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId })
+      .then((response) => {
+        if (cancelled) return;
+        if (!response.available) {
+          setManagerSuggestionsError(response.reason ?? 'Could not price manager trades right now.');
+          return;
+        }
+        setManagerSuggestions(response.suggestions ?? []);
+        setManagerSuggestionsUpdatedAt(Date.now());
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setManagerSuggestionsError('Could not price manager trades right now.');
+      })
+      .finally(() => {
+        if (!cancelled) setManagerSuggestionsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [marketManagerFilter, stored]);
 
   // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
   // pre-selects that partner in the builder. We intentionally do NOT pre-fill
@@ -505,6 +543,7 @@ function TradeDealsView() {
     if (appliedDeepLink.current === sig) return; // already applied; don't overwrite manual edits
     appliedDeepLink.current = sig;
     setPartnerRosterId(partner.rosterId);
+    setMarketManagerFilter(partner.rosterId);
     setGive(nextGive);
     setGetIds(nextGet);
     resetOutputs();
@@ -765,6 +804,23 @@ function TradeDealsView() {
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   };
 
+  const loadSuggestedTrade = (suggestion: TradeSuggestion) => {
+    const givePlayerIds = suggestion.give.map((asset) => asset.id);
+    const getPlayerIds = suggestion.get.map((asset) => asset.id);
+    setPartnerRosterId(suggestion.partnerRosterId);
+    setGive(givePlayerIds);
+    setGetIds(getPlayerIds);
+    resetOutputs();
+    setParams({
+      view: 'deals',
+      leagueId: stored.leagueId,
+      managerRosterId: String(suggestion.partnerRosterId),
+      give: givePlayerIds.join(','),
+      get: getPlayerIds.join(','),
+    }, { replace: true });
+    window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
+  };
+
   const laneWhy = (lane: MarketMover) => {
     const parts = [];
     if (lane.valueGain != null) {
@@ -775,7 +831,10 @@ function TradeDealsView() {
     }
     if (lane.acceptanceProbability != null) {
       const partnerName = partners.find((team) => team.rosterId === lane.partnerRosterId)?.teamName;
-      parts.push(`${partnerName ?? `Roster ${lane.partnerRosterId ?? '?'}`} accepts this ${lane.acceptanceProbability}% of the time.`);
+      const acceptanceRead = formatAcceptanceRead(lane.acceptanceProbability);
+      if (acceptanceRead) {
+        parts.push(`${partnerName ?? `Roster ${lane.partnerRosterId ?? '?'}`} acceptance read: ${acceptanceRead}.`);
+      }
     }
     if (lane.acceptanceReason) {
       parts.push(lane.acceptanceReason);
@@ -825,73 +884,10 @@ function TradeDealsView() {
     );
   };
 
-  // One-tap fair counter: add the suggested throw-in(s) to the right side and reprice.
-  const renderLaneHeadshots = (
-    getPlayerIds: string[],
-    givePlayerIds: string[],
-    compact: boolean,
-  ) => {
-    const allChips = [
-      ...getPlayerIds.map((id) => ({ id, side: 'get' })),
-      ...givePlayerIds.map((id) => ({ id, side: 'send' })),
-    ];
-    const visibleChips = allChips.slice(0, 4);
-    const hiddenCount = allChips.length - visibleChips.length;
-
-    return (
-      <span className={['trade-cc__lane-headshots', compact ? 'trade-cc__lane-headshots--compact' : ''].filter(Boolean).join(' ')}>
-        {visibleChips.map((chip) => (
-          <PlayerHeadshot
-            className={[
-              'trade-cc__lane-headshot',
-              chip.side === 'get'
-                ? 'trade-cc__lane-headshot--get'
-                : 'trade-cc__lane-headshot--send',
-            ].filter(Boolean).join(' ')}
-            fallbackClassName="trade-cc__lane-headshot-fallback"
-            imageClassName="trade-cc__lane-headshot-image"
-            key={`${chip.side}-${chip.id}`}
-            player={toPlayer(chip.id, bootstrap.players)}
-          />
-        ))}
-        {hiddenCount > 0 ? (
-          <span className="trade-cc__lane-headshot trade-cc__lane-headshot--more">
-            +{hiddenCount}
-          </span>
-        ) : null}
-      </span>
-    );
-  };
-
-  const renderDealPlayer = (id: string, tone: 'send' | 'get') => {
-    const player = bootstrap.players[id];
-    if (!player) return null;
-    return (
-      <span className={`trade-cc__deal-player trade-cc__deal-player--${tone}`} key={`${tone}-${id}`}>
-        <PlayerHeadshot
-          className="trade-cc__deal-player-headshot"
-          fallbackClassName="trade-cc__deal-player-headshot-fallback"
-          imageClassName="trade-cc__deal-player-headshot-image"
-          player={toPlayer(id, bootstrap.players)}
-        />
-        <span className="trade-cc__deal-player-copy">
-          <span className="trade-cc__deal-player-name">{player.name}</span>
-        </span>
-        <span className="trade-cc__deal-player-pos">{player.position}</span>
-      </span>
-    );
-  };
-
-  const renderDealSide = (ids: string[], label: string, tone: 'send' | 'get') => (
-    <div className={`trade-cc__deal-side trade-cc__deal-side--${tone}`}>
-      <span className="trade-cc__deal-side-label">{label}</span>
-      <div className="trade-cc__deal-side-players">
-        {ids.length > 0 ? ids.map((id) => renderDealPlayer(id, tone)) : (
-          <span className="trade-cc__deal-side-empty">No players selected.</span>
-        )}
-      </div>
-    </div>
-  );
+  const tradeSideOrEmpty = (label: string, ids: string[]) =>
+    ids.length > 0
+      ? tradeSideFromIds(label, ids, bootstrap.players)
+      : { label, assets: [{ id: `${label}-empty`, name: 'No players selected.', kind: 'text' as const }] };
 
   const renderSelectedCards = (
     _rosterId: number,
@@ -997,6 +993,21 @@ function TradeDealsView() {
     resetOutputs();
   };
 
+  const applyMarketManagerFilter = (rosterId: number | 'all') => {
+    if (isPricing || counterLoading) return;
+    setMarketManagerFilter(rosterId);
+    setOpenLaneWhy(null);
+    if (rosterId === 'all') {
+      setShowRead(false);
+      return;
+    }
+    choosePartner(rosterId);
+  };
+
+  const marketLoaderLabel = showingManagerMarket
+    ? `Simulating trades with ${partners.find((team) => team.rosterId === marketManagerFilter)?.teamName ?? 'this manager'}`
+    : 'Scanning the market';
+
   const renderTeamAvatar = (team: NonNullable<typeof selectedPartner>) => (
     <span className="trade-cc__team-avatar" aria-hidden="true">
       {team.avatarUrl ? (
@@ -1057,8 +1068,15 @@ function TradeDealsView() {
       <section className="trade-cc__finder">
         <div className="trade-cc__finder-head">
           <div>
-            <h2 className="trade-cc__section-label">Managers you match with</h2>
-            {scanNotice ? <p className="trade-cc__finder-sub">{scanNotice}</p> : null}
+            <p className="trade-cc__kicker">The market</p>
+            <h2 className="trade-cc__section-label trade-cc__section-label--market">THE MARKET</h2>
+            <p className="trade-cc__finder-sub">
+              Pick a manager. The book simulates trades with them and ranks by title gain times chance they accept.
+            </p>
+            {scanNotice ? <p className="trade-cc__finder-note">{scanNotice}</p> : null}
+            {showingManagerMarket && managerSuggestionsError ? (
+              <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
+            ) : null}
           </div>
           {marketScan.isScanning ? (
             <SimulationLoader label="Scanning the market" size="compact" variant="scan" />
@@ -1073,119 +1091,238 @@ function TradeDealsView() {
             </button>
           )}
         </div>
-        {lanes.length > 0 ? (
-          <>
-          {lanes.map(({ lane, signature, lowAcceptanceTag: laneTag }, index) => {
-            const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
-            const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
-            const compact = index > 0;
-            const partner = partners.find((team) => team.rosterId === lane.partnerRosterId);
-            const acceptance = lane.acceptanceProbability ?? 50;
-            const acceptanceRead = acceptanceGaugeLabel(acceptance);
-            const laneKey = `lane-${lane.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
-            const whyOpen = openLaneWhy === laneKey;
-            const generated = formatGeneratedAt(lane.pricedAt ?? pricing?.computedAt);
-            return (
-              <article
-                className={['trade-cc__lane', compact ? 'trade-cc__lane--compact' : ''].filter(Boolean).join(' ')}
-                key={laneKey}
-                onClick={() => loadLane(lane)}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') return;
-                  event.preventDefault();
-                  loadLane(lane);
-                }}
-                role="button"
-                tabIndex={0}
+        <div className="trade-cc__filter-stack">
+          <div className="trade-cc__filter-row">
+            <span className="trade-cc__filter-label">Managers</span>
+            <div className="trade-cc__filter-chips">
+              <button
+                aria-pressed={marketManagerFilter === 'all'}
+                className={[
+                  'trade-cc__filter-chip',
+                  marketManagerFilter === 'all' ? 'trade-cc__filter-chip--active' : '',
+                ].filter(Boolean).join(' ')}
+                onClick={() => applyMarketManagerFilter('all')}
+                type="button"
               >
+                All
+              </button>
+              {partners.map((team) => (
                 <button
-                  aria-label="Dismiss this suggested trade"
-                  className="trade-cc__lane-dismiss"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    dismissLane(signature);
-                  }}
+                  aria-pressed={marketManagerFilter === team.rosterId}
+                  className={[
+                    'trade-cc__filter-chip',
+                    'trade-cc__filter-chip--manager',
+                    marketManagerFilter === team.rosterId ? 'trade-cc__filter-chip--active' : '',
+                  ].filter(Boolean).join(' ')}
+                  key={`market-manager-${team.rosterId}`}
+                  onClick={() => applyMarketManagerFilter(team.rosterId)}
                   type="button"
                 >
-                  Not interested
+                  {renderTeamAvatar(team)}
+                  <span>{team.teamName}</span>
                 </button>
-                <span className="trade-cc__lane-top">
-                  {renderLaneHeadshots(getPlayerIds, givePlayerIds, compact)}
-                  <span className="trade-cc__lane-title-wrap">
-                    <DealLaneTitle
-                      compressedIncoming={laneSideLabel(bootstrap, getPlayerIds, true)}
-                      compressedOutgoing={laneSideLabel(bootstrap, givePlayerIds, true)}
-                      fullIncoming={laneSideLabel(bootstrap, getPlayerIds, false)}
-                      fullOutgoing={laneSideLabel(bootstrap, givePlayerIds, false)}
-                      key={`${getPlayerIds.join(',')}|${givePlayerIds.join(',')}`}
-                    />
-                    {laneTag ? <span className="trade-cc__lane-tag">{laneTag}</span> : null}
-                  </span>
-                  <span className="trade-cc__lane-chevron" aria-hidden="true">{'>'}</span>
-                </span>
+              ))}
+            </div>
+            <button
+              aria-expanded={showRead}
+              className="trade-cc__partner-read trade-cc__partner-read--inline"
+              disabled={marketManagerFilter === 'all' || isPricing || counterLoading}
+              onClick={() => setShowRead((current) => !current)}
+              type="button"
+            >
+              {showRead ? 'Hide read' : 'Your read'}
+            </button>
+          </div>
 
-                <span className="trade-cc__lane-mid">
-                  <span className="trade-cc__lane-copy">
-                    <span className="trade-cc__lane-manager">{partner?.teamName ?? 'Manager'}</span>
-                    <span className="trade-cc__lane-numbers">
-                      <span className="trade-cc__lane-you">you {lane.valueGain != null ? signedPct(lane.valueGain).replace('%', '') : '+0.0'} pts/wk</span>
-                      <span> · them {lane.partnerGain != null ? signedPct(lane.partnerGain).replace('%', '') : '+0.0'} pts/wk</span>
-                    </span>
-                  </span>
-                  <span className="trade-cc__lane-acceptance" style={acceptanceStyle(acceptance)}>
-                    <span className="trade-cc__lane-acceptance-label">
-                      <span>{acceptanceRead ?? `${acceptance}%`}</span>
-                    </span>
-                    <span className="trade-cc__lane-acceptance-track">
-                      <span
-                        className={['trade-cc__lane-acceptance-fill', acceptanceTone(acceptance)].join(' ')}
-                      />
-                      <span className="trade-cc__lane-acceptance-notch" />
-                      <span className="trade-cc__lane-acceptance-marker" />
-                    </span>
-                  </span>
-                </span>
-                <span className="trade-cc__lane-bottom">
-                  <button
-                    aria-expanded={whyOpen}
-                    className="trade-cc__lane-why"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setOpenLaneWhy((current) => (current === laneKey ? null : laneKey));
-                    }}
-                    type="button"
-                  >
-                    Why this trade?
-                  </button>
-                  {generated ? (
-                    <span className="trade-cc__lane-generated">generated at {generated}</span>
-                  ) : null}
-                </span>
-                {whyOpen ? (
-                  <div className="trade-cc__lane-rationale" onClick={(event) => event.stopPropagation()}>
-                    <p>{laneWhy(lane)}</p>
-                    <button
-                      className="trade-cc__lane-open"
-                      onClick={(event) => {
+          <div className="trade-cc__filter-row">
+            <span className="trade-cc__filter-label">Position</span>
+            <div className="trade-cc__filter-chips">
+              {(['all', 'QB', 'RB', 'WR', 'TE'] as const).map((position) => (
+                <button
+                  aria-pressed={marketPositionFilter === position}
+                  className={[
+                    'trade-cc__filter-chip',
+                    marketPositionFilter === position ? 'trade-cc__filter-chip--active' : '',
+                  ].filter(Boolean).join(' ')}
+                  key={`market-position-${position}`}
+                  onClick={() => setMarketPositionFilter(position)}
+                  type="button"
+                >
+                  {position === 'all' ? 'All' : position}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {showRead && selectedPartner && marketManagerFilter !== 'all' ? (
+          <ManagerReadCard
+            friendliness={friendliness}
+            leagueId={stored.leagueId}
+            name={selectedPartner.teamName}
+            onChange={updateRead}
+            onReset={resetRead}
+            relationship={relationship}
+            scoutingOn={scoutingAffectsAcceptance}
+            source={readSource}
+            sourceLabel={readSourceLabel}
+            suggestedRead={suggestedRead}
+            suggestedReason={suggestedReadReason}
+            suggestedReceipt={{
+              friendliness: scoutingFile?.readDefaults.friendlinessReceipt ?? `data suggests ${suggestedRead.friendliness}`,
+              relationship: scoutingFile?.readDefaults.relationshipReceipt ?? `data suggests ${suggestedRead.relationship}`,
+            }}
+          />
+        ) : null}
+
+        {managerSuggestionsLoading && visibleMarketCount > 0 ? (
+          <div className="trade-cc__finder-loader-inline">
+            <SimulationLoader label={marketLoaderLabel} size="compact" variant="trade" />
+          </div>
+        ) : null}
+
+        {visibleMarketCount > 0 ? (
+          <div
+            className={[
+              'trade-cc__market-grid',
+              managerSuggestionsLoading && showingManagerMarket ? 'trade-cc__market-grid--stale' : '',
+            ].filter(Boolean).join(' ')}
+          >
+            {showingManagerMarket
+              ? managerSuggestionEntries.map((entry) => {
+                  const getPlayerIds = entry.suggestion.get.map((asset) => asset.id);
+                  const givePlayerIds = entry.suggestion.give.map((asset) => asset.id);
+                  const partner = partners.find((team) => team.rosterId === entry.suggestion.partnerRosterId);
+                  const acceptanceRead = acceptanceGaugeLabel(entry.acceptanceProbability);
+                  const laneKey = `finder-${entry.suggestion.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
+                  const whyOpen = openLaneWhy === laneKey;
+                  return (
+                    <TradeCard
+                      acceptanceLabel={acceptanceRead}
+                      acceptanceProbability={entry.acceptanceProbability}
+                      dismissLabel="Dismiss this suggested trade"
+                      footer={whyOpen ? (
+                        <div className="trade-cc__lane-rationale" onClick={(event) => event.stopPropagation()}>
+                          <p>
+                            {partner?.teamName ?? entry.suggestion.partnerName} gains {signedPct(entry.suggestion.partnerDelta)} title equity
+                            if this hits. Acceptance read: {acceptanceRead}.
+                          </p>
+                          <button
+                            className="trade-cc__lane-open"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              loadSuggestedTrade(entry.suggestion);
+                            }}
+                            type="button"
+                          >
+                            Open in Market →
+                          </button>
+                        </div>
+                      ) : null}
+                      generatedAt={formatGeneratedAt(managerSuggestionsUpdatedAt ?? undefined)}
+                      getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
+                      impactLine={[
+                        `your title ${signedPct(entry.suggestion.youDelta)}`,
+                        `them ${signedPct(entry.suggestion.partnerDelta)}`,
+                      ].join(' · ')}
+                      key={entry.signature}
+                      onClick={() => loadSuggestedTrade(entry.suggestion)}
+                      onDismiss={(event) => {
+                        event.preventDefault();
                         event.stopPropagation();
-                        loadLane(lane);
+                        dismissLane(entry.signature);
                       }}
-                      type="button"
-                    >
-                      Open in Market →
-                    </button>
-                  </div>
-                ) : null}
-              </article>
-            );
-          })}
-          </>
+                      partnerLine={entry.lowAcceptanceTag ? `${partner?.teamName ?? entry.suggestion.partnerName} · ${entry.lowAcceptanceTag}` : partner?.teamName ?? entry.suggestion.partnerName}
+                      sendSide={tradeSideFromIds('You send', givePlayerIds, bootstrap.players)}
+                      valueLabel={`${signedPct(entry.suggestion.youDelta)} title`}
+                      whyOpen={whyOpen}
+                      whyTrigger={
+                        <button
+                          aria-expanded={whyOpen}
+                          className="trade-cc__lane-why"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenLaneWhy((current) => (current === laneKey ? null : laneKey));
+                          }}
+                          type="button"
+                        >
+                          Why this trade?
+                        </button>
+                      }
+                    />
+                  );
+                })
+              : filteredLanes.map(({ lane, signature, lowAcceptanceTag: laneTag }) => {
+                  const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
+                  const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
+                  const partner = partners.find((team) => team.rosterId === lane.partnerRosterId);
+                  const acceptance = lane.acceptanceProbability ?? 50;
+                  const acceptanceRead = acceptanceGaugeLabel(acceptance);
+                  const laneKey = `lane-${lane.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
+                  const whyOpen = openLaneWhy === laneKey;
+                  const generated = formatGeneratedAt(lane.pricedAt ?? pricing?.computedAt);
+                  return (
+                    <TradeCard
+                      acceptanceLabel={acceptanceRead}
+                      acceptanceProbability={acceptance}
+                      dismissLabel="Dismiss this suggested trade"
+                      footer={whyOpen ? (
+                        <div className="trade-cc__lane-rationale" onClick={(event) => event.stopPropagation()}>
+                          <p>{laneWhy(lane)}</p>
+                          <button
+                            className="trade-cc__lane-open"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              loadLane(lane);
+                            }}
+                            type="button"
+                          >
+                            Open in Market →
+                          </button>
+                        </div>
+                      ) : null}
+                      generatedAt={generated}
+                      getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
+                      impactLine={[
+                        `title ${signedPct(titleDeltaFromOdds(lane.titleOddsBefore, lane.titleOddsAfter))}`,
+                        lane.valueGain != null ? `lineup ${signedPct(lane.valueGain).replace('%', ' pts/wk')}` : null,
+                      ].filter(Boolean).join(' · ')}
+                      key={laneKey}
+                      onClick={() => loadLane(lane)}
+                      onDismiss={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        dismissLane(signature);
+                      }}
+                      partnerLine={laneTag ? `${partner?.teamName ?? 'Manager'} · ${laneTag}` : partner?.teamName ?? 'Manager'}
+                      sendSide={tradeSideFromIds('You send', givePlayerIds, bootstrap.players)}
+                      whyOpen={whyOpen}
+                      whyTrigger={
+                        <button
+                          aria-expanded={whyOpen}
+                          className="trade-cc__lane-why"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenLaneWhy((current) => (current === laneKey ? null : laneKey));
+                          }}
+                          type="button"
+                        >
+                          Why this trade?
+                        </button>
+                      }
+                    />
+                  );
+                })}
+          </div>
+        ) : managerSuggestionsLoading && showingManagerMarket ? (
+          <SimulationLoader label={marketLoaderLabel} variant="trade" />
         ) : (
           <p className="trade-cc__empty-lane">
-            {laneEntries.length > 0
-              ? 'All current deals are dismissed. Restore them below or scan again.'
-              : 'No suggested deals priced yet. Build your own below.'}
+            {showingManagerMarket
+              ? 'No priced deals cleared the board for this manager yet. Try another manager or widen the position filter.'
+              : laneEntries.length > 0
+                ? 'All current deals are dismissed or filtered out. Restore them below or widen the filters.'
+                : 'No suggested deals priced yet. Build your own below.'}
           </p>
         )}
         {dismissedSignatures.size > 0 ? (
@@ -1225,9 +1362,9 @@ function TradeDealsView() {
               )}
             </div>
             <div className="trade-cc__deal-strip-grid">
-              {renderDealSide(give, 'You send', 'send')}
+              <TradeSide dense side={tradeSideOrEmpty('You send', give)} tone="send" />
               <span className="trade-cc__deal-strip-arrow" aria-hidden="true">⇄</span>
-              {renderDealSide(getIds, 'You get', 'get')}
+              <TradeSide dense side={tradeSideOrEmpty('You get', getIds)} tone="get" />
             </div>
           </div>
         ) : (
@@ -1260,7 +1397,7 @@ function TradeDealsView() {
               </div>
               <div className="trade-cc__partner-tools">
                 {renderPartnerSelector()}
-                {partnerRosterId != null ? (
+                {partnerRosterId != null && !showingManagerMarket ? (
                   <button
                     className="trade-cc__partner-read"
                     aria-expanded={showRead}
@@ -1273,7 +1410,7 @@ function TradeDealsView() {
                 ) : null}
               </div>
             </div>
-            {partnerRosterId != null && showRead ? (
+            {partnerRosterId != null && showRead && !showingManagerMarket ? (
               <ManagerReadCard
                 leagueId={stored.leagueId}
                 name={partners.find((t) => t.rosterId === partnerRosterId)?.teamName ?? 'this manager'}
@@ -1327,7 +1464,7 @@ function TradeDealsView() {
                 {verdictMeta.verdict.stamp}
               </p>
               <p className="trade-cc__verdict-subhead">
-                your championship <span>{signedPct(analysis.you.delta.titleProb)}</span>
+                your championship <span className={signedDeltaClass(analysis.you.delta.titleProb)}>{signedPct(analysis.you.delta.titleProb)}</span>
               </p>
             </div>
             <div
@@ -1365,11 +1502,11 @@ function TradeDealsView() {
                   <p className="trade-cc__counter-body">This trade is already balanced.</p>
                 ) : counter.add && counter.add.length > 0 ? (
                   <div className="trade-cc__counter-card">
-                    {renderDealSide(
-                      counter.add.map((add) => add.id),
-                      'Add',
-                      counter.whoAdds === 'you' ? 'send' : 'get',
-                    )}
+                    <TradeSide
+                      dense
+                      side={tradeSideOrEmpty('Add', counter.add.map((add) => add.id))}
+                      tone={counter.whoAdds === 'you' ? 'send' : 'get'}
+                    />
                     <p className="trade-cc__counter-body">
                       {counter.whoAdds === 'you'
                         ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out.`
@@ -1378,10 +1515,12 @@ function TradeDealsView() {
                     {counter.before && counter.after ? (
                       <div className="trade-cc__counter-deltas">
                         <span>
-                          You <b>{signedPct(counter.before.youDelta)}</b> to <b>{signedPct(counter.after.youDelta)}</b>
+                          You <b className={signedDeltaClass(counter.before.youDelta)}>{signedPct(counter.before.youDelta)}</b>{' '}
+                          to <b className={signedDeltaClass(counter.after.youDelta)}>{signedPct(counter.after.youDelta)}</b>
                         </span>
                         <span>
-                          Them <b>{signedPct(counter.before.partnerDelta)}</b> to <b>{signedPct(counter.after.partnerDelta)}</b>
+                          Them <b className={signedDeltaClass(counter.before.partnerDelta)}>{signedPct(counter.before.partnerDelta)}</b>{' '}
+                          to <b className={signedDeltaClass(counter.after.partnerDelta)}>{signedPct(counter.after.partnerDelta)}</b>
                         </span>
                       </div>
                     ) : null}

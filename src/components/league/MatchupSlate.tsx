@@ -245,7 +245,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                   <span className="matchup-slate__prob-number">{left.winProb.toFixed(1)}%</span>
                   <span className="matchup-slate__prob-track" aria-hidden="true">
                     <span className="matchup-slate__prob-fill matchup-slate__prob-fill--left" style={{ width: `${left.winProb}%` }} />
-                    <span className="matchup-slate__prob-fill matchup-slate__prob-fill--right" style={{ width: `${right.winProb}%` }} />
                   </span>
                   <span className="matchup-slate__prob-number">{right.winProb.toFixed(1)}%</span>
                 </span>

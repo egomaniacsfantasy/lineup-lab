@@ -51,10 +51,9 @@ export function SuggestedPackage({
   isExpanded,
   showLaunchNote,
 }: SuggestedPackageProps) {
-  const weeklyTone = pkg.weeklyImpact.delta < 0 ? 'positive' : 'negative';
+  const weeklyTone = pkg.weeklyWinProbDelta >= 0 ? 'positive' : 'negative';
   const playoffTone = pkg.playoffProbDelta >= 0 ? 'positive' : 'negative';
-  const titleTone =
-    pkg.championshipOddsAfter < pkg.championshipOddsBefore ? 'positive' : 'negative';
+  const titleTone = pkg.championshipOddsAfter <= pkg.championshipOddsBefore ? 'positive' : 'negative';
 
   return (
     <div

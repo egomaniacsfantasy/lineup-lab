@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerChip } from '../components/player/PlayerChip';
+import { TradeRow } from '../components/trade-display/TradeDisplay';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useModelOverlay } from '../contexts/ModelOverlayContext';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
-import { fetchLines } from '../services/leagueApi';
+import { fetchLines, type ApiCatalogPlayer } from '../services/leagueApi';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import { useNflSchedule } from '../hooks/useNflSchedule';
 import {
@@ -24,6 +25,8 @@ import {
   formatDisplayedWinProbabilityDelta,
   getDisplayedWinProbabilityDelta,
 } from '../utils/matchupDelta';
+import { formatAcceptancePercent, formatAcceptanceRead } from '../utils/acceptanceLingo';
+import { resolveWaiverClaimPlayer } from '../utils/marketMoverClaim';
 import { PROVIDER_LABEL } from '../utils/provider';
 import { shareText, type ShareResult } from '../utils/share';
 import {
@@ -40,6 +43,7 @@ import {
   applyTradeDisplayPolicy,
   lowAcceptanceTag,
 } from '../utils/tradeSuggestionDisplay';
+import { tradeSideFromPlayers } from '../utils/tradeDisplay';
 import {
   createVolatilityResolver,
   type VolatilityProfile,
@@ -50,6 +54,7 @@ import {
   getGameContextSource,
   getPlayerContext,
 } from '../utils/playerGameContext';
+import { showLineupPlayerPosition } from '../utils/lineupRow';
 import type {
   BenchPlayer,
   MatchupData,
@@ -57,6 +62,7 @@ import type {
   Player,
   RosterSlot,
 } from '../types';
+import '../components/trade-display/TradeDisplay.css';
 import './MatchupPage.css';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
@@ -232,7 +238,7 @@ function buildBenchImpactRows(
 }
 
 function formatRangeValue(value: number | null) {
-  return value == null ? '—' : value.toFixed(1);
+  return value == null ? 'N/A' : value.toFixed(1);
 }
 
 function formatProfileLabel(profile: VolatilityProfile['profile']) {
@@ -380,7 +386,7 @@ function TeamCrest({
           {glyphs[teamName]}
         </svg>
       ) : (
-        <span className="olympus-crest__initials">{initials || '—'}</span>
+        <span className="olympus-crest__initials">{initials || '?'}</span>
       )}
     </span>
   );
@@ -404,7 +410,10 @@ function marketMoverWhy({
     parts.push(`Moves your starters by ${gain >= 0 ? '+' : ''}${gain.toFixed(1)} pts/wk.`);
   }
   if (acceptanceProbability != null) {
-    parts.push(`${partnerLabel ?? 'Your trade partner'} accepts this ${acceptanceProbability}% of the time.`);
+    const acceptanceRead = formatAcceptanceRead(acceptanceProbability);
+    if (acceptanceRead) {
+      parts.push(`${partnerLabel ?? 'Your trade partner'} acceptance read: ${acceptanceRead}.`);
+    }
   }
   if (Number.isFinite(from) && Number.isFinite(to) && from !== to) {
     parts.push(`Title price ${formatAmericanOdds(from)} to ${formatAmericanOdds(to)}.`);
@@ -476,6 +485,20 @@ function displayPlayerFromMock(player: {
   };
 }
 
+function displayCatalogPlayer(id: string, catalog: Record<string, ApiCatalogPlayer>) {
+  if (!catalog[id]) {
+    return {
+      ...toPlayer(id, catalog),
+      headshotUrl: '',
+      name: 'Unknown player',
+      shortName: 'Unknown player',
+      team: 'FA',
+      teamLogoUrl: '',
+    };
+  }
+  return toPlayer(id, catalog);
+}
+
 function MarketMoverRow({
   label,
   sublabel,
@@ -513,22 +536,65 @@ function MarketMoverRow({
   const valueLabel = gain != null ? `${gain >= 0 ? '+' : ''}${gain.toFixed(1)}` : null;
   const acceptanceRead =
     acceptanceProbability != null ? acceptanceGaugeLabel(acceptanceProbability) : null;
+  const acceptancePercent = formatAcceptancePercent(acceptanceProbability);
+
+  if (isTrade && getPlayers?.length && givePlayers?.length) {
+    return (
+      <div className="matchup-page__mover-card matchup-page__mover-card--trade">
+        <TradeRow
+          acceptanceLabel={acceptanceRead ?? acceptancePercent ?? null}
+          acceptanceProbability={acceptanceProbability}
+          dismissLabel="Dismiss this suggested trade"
+          footer={whyOpen ? (
+            <div className="matchup-page__mover-rationale">
+              <p>{why}</p>
+              {href ? (
+                <a className="matchup-page__mover-open-link" href={href}>
+                  Open in Market →
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+          getSide={tradeSideFromPlayers('You get', getPlayers)}
+          onClick={href ? () => { window.location.href = href; } : null}
+          onDismiss={onDismiss
+            ? (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDismiss();
+              }
+            : null}
+          sendSide={tradeSideFromPlayers('You send', givePlayers)}
+          valueLabel={valueLabel ? `${valueLabel} pts/wk` : null}
+          whyOpen={whyOpen}
+          whyTrigger={why ? (
+            <button
+              aria-expanded={whyOpen}
+              className="matchup-page__mover-why"
+              onClick={(event) => {
+                event.stopPropagation();
+                setWhyOpen((current) => !current);
+              }}
+              type="button"
+            >
+              Why this trade?
+            </button>
+          ) : null}
+        />
+      </div>
+    );
+  }
+
   const content = (
     <>
       <div className="matchup-page__mover-identity">
-        {isTrade ? (
-          <span className="matchup-page__market-trade">
-            <MarketPlayerUnit label="You send" players={givePlayers ?? []} />
-            <span className="matchup-page__market-arrow" aria-hidden="true">→</span>
-            <MarketPlayerUnit label="You get" players={getPlayers ?? []} tone="accent" />
-          </span>
-        ) : claimPlayer ? (
+        {claimPlayer ? (
           <MarketPlayerUnit label="Claim" players={[claimPlayer]} tone="accent" />
         ) : crestTeam ? (
           <TeamCrest teamName={crestTeam} />
         ) : null}
         <div className="matchup-page__mover-copy">
-          {!isTrade && !claimPlayer ? (
+          {!claimPlayer ? (
             <>
               <p className="matchup-page__mover-label">{label}</p>
               {sublabel ? <p className="matchup-page__mover-meta">{sublabel}</p> : null}
@@ -558,9 +624,10 @@ function MarketMoverRow({
           >
             <span className="matchup-page__mover-accept">
               <span className="matchup-page__mover-accept-fill" style={{ width: `${clamp(acceptanceProbability, 0, 100)}%` }} />
-              <span className="matchup-page__mover-accept-label">{acceptanceProbability}%</span>
             </span>
-            {acceptanceRead ? <span className="matchup-page__mover-accept-band">{acceptanceRead}</span> : null}
+            {acceptanceRead ?? acceptancePercent ? (
+              <span className="matchup-page__mover-accept-band">{acceptanceRead ?? acceptancePercent}</span>
+            ) : null}
           </span>
         ) : null}
         {href ? <span className="matchup-page__mover-chevron" aria-hidden="true">{'>'}</span> : null}
@@ -1511,7 +1578,7 @@ function MatchupLive({
             </span>
           ) : null}
           <span className="matchup-page__lineup-player">
-            <PlayerChip player={player} showPosition={tone === 'bench'} />
+            <PlayerChip player={player} showPosition={showLineupPlayerPosition(slotLabel, tone)} />
             <span className="matchup-page__lineup-copy">
               <span className="matchup-page__row-name">{player.shortName}</span>
               <span className="matchup-page__row-secondary">{meta}</span>
@@ -1587,43 +1654,45 @@ function MatchupLive({
             </span>
             {isPreview ? (
               <span className="matchup-page__preview-chip">Preview lineup</span>
-            ) : overrideCount > 0 ? (
-              <div className="matchup-page__model-menu">
-                <button
-                  aria-expanded={isBoardPopoverOpen}
-                  className="matchup-page__model-chip"
-                  onClick={() => setIsBoardPopoverOpen((current) => !current)}
-                  type="button"
-                >
-                  PRICED ON YOUR BOARD
-                </button>
-                {isBoardPopoverOpen ? (
-                  <div className="matchup-page__model-popover" role="dialog">
-                    <p>
-                      These lines are priced on your board, the rankings you set.{' '}
-                      {overrideCount} {overrideCount === 1 ? 'move' : 'moves'} from Franco.
-                    </p>
-                    <div className="matchup-page__model-popover-actions">
-                      <a className="matchup-page__text-link" href="/rankings">
-                        View board
-                      </a>
-                      <button
-                        className="matchup-page__text-link"
-                        onClick={handleResetBoardToFranco}
-                        type="button"
-                      >
-                        Reset to Franco
-                      </button>
+            ) : null}
+            <div className="matchup-page__hero-chips">
+              {overrideCount > 0 ? (
+                <div className="matchup-page__model-menu">
+                  <button
+                    aria-expanded={isBoardPopoverOpen}
+                    className="matchup-page__model-chip"
+                    onClick={() => setIsBoardPopoverOpen((current) => !current)}
+                    type="button"
+                  >
+                    PRICED ON YOUR BOARD
+                  </button>
+                  {isBoardPopoverOpen ? (
+                    <div className="matchup-page__model-popover" role="dialog">
+                      <p>
+                        These lines are priced on your board, the rankings you set.{' '}
+                        {overrideCount} {overrideCount === 1 ? 'move' : 'moves'} from Franco.
+                      </p>
+                      <div className="matchup-page__model-popover-actions">
+                        <a className="matchup-page__text-link" href="/rankings">
+                          View board
+                        </a>
+                        <button
+                          className="matchup-page__text-link"
+                          onClick={handleResetBoardToFranco}
+                          type="button"
+                        >
+                          Reset to Franco
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
+                  ) : null}
+                </div>
+              ) : null}
               <span className="matchup-page__live-chip">
                 <span className="matchup-page__live-dot" aria-hidden="true" />
                 Live line
               </span>
-            )}
+            </div>
           </div>
 
           <div className="matchup-page__faceoff">
@@ -1647,9 +1716,7 @@ function MatchupLive({
                   engine.activeLine.yours.winProbability,
                 )}
               </span>
-              {overrideCount > 0 &&
-              houseYours &&
-              houseYours.moneyline !== engine.activeLine.yours.moneyline ? (
+              {overrideCount > 0 && houseYours ? (
                 <p className="matchup-page__house-line">
                   Franco{' '}
                   {formatDisplayedOdds(houseYours.moneyline, houseYours.winProbability)}
@@ -2531,8 +2598,8 @@ export function MatchupPage() {
             ? marketMoverSignature(stored.leagueId, mover)
             : null;
           if (signature && dismissedSignatures.has(signature)) return nextMovers;
-          const getPlayers = getIds.map((id) => toPlayer(id, bootstrap.players));
-          const givePlayers = giveIds.map((id) => toPlayer(id, bootstrap.players));
+          const getPlayers = getIds.map((id) => displayCatalogPlayer(id, bootstrap.players));
+          const givePlayers = giveIds.map((id) => displayCatalogPlayer(id, bootstrap.players));
           const partnerTeam = mover.partnerRosterId == null
             ? null
             : bootstrap.teams.find((team) => team.rosterId === mover.partnerRosterId);
@@ -2542,9 +2609,10 @@ export function MatchupPage() {
             headline: mover.headline,
             detail: mover.detail,
             playerId: mover.playerId,
-            claimPlayer: mover.kind !== 'trade' && mover.playerId
-              ? toPlayer(mover.playerId, bootstrap.players)
-              : undefined,
+            claimPlayer:
+              mover.kind !== 'trade'
+                ? resolveWaiverClaimPlayer(mover, bootstrap.players)
+                : undefined,
             givePlayerIds: giveIds,
             getPlayerIds: getIds,
             givePlayers,

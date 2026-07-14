@@ -246,6 +246,13 @@
   background: color-mix(in srgb, var(--amber) 14%, transparent);
 }
 
+.matchup-page__hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .matchup-page__model-menu {
   position: relative;
   z-index: 2;
@@ -864,7 +871,7 @@
   position: relative;
   display: block;
   width: 112px;
-  height: 20px;
+  height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--bg-inset);
@@ -875,18 +882,6 @@
   inset: 0 auto 0 0;
   border-radius: inherit;
   background: rgba(58, 210, 159, 0.28);
-}
-
-.matchup-page__mover-accept-label {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  height: 100%;
-  place-items: center;
-  color: var(--text-primary);
-  font-family: var(--font-num);
-  font-size: 12px;
-  font-weight: 800;
 }
 
 .matchup-page__mover-accept-band {

@@ -219,7 +219,6 @@ export function LeagueFutures({
   return (
     <section aria-labelledby="league-futures-title" className="league-futures">
       <div className="league-futures__header">
-        <p className="league-futures__kicker">League futures</p>
         <h2 className="league-futures__title" id="league-futures-title">
           {leagueName}
         </h2>
@@ -337,10 +336,10 @@ export function LeagueFutures({
         </span>
         {titleHistoryTeams.length > 0 && titleHistoryBounds && userHistory ? (
           <>
+            <span className="league-futures__detail-axis-title">
+              {isPlayoffMarket ? 'Playoff probability' : 'Championship probability'}
+            </span>
             <div className="league-futures__detail-chart">
-              <span className="league-futures__detail-axis league-futures__detail-axis--y">
-                {isPlayoffMarket ? 'Playoff probability' : 'Championship probability'}
-              </span>
               <div className="league-futures__yticks">
                 {yTicks.map((tick) => (
                   <span key={`tick-${tick.toFixed(2)}`}>{tick.toFixed(0)}%</span>

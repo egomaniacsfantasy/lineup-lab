@@ -49,10 +49,14 @@ export function SimulationLoader({
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    const timer = window.setInterval(
-      () => setIndex((current) => (current + 1) % messages.length),
-      3400,
-    );
+    setIndex(0);
+  }, [messages]);
+
+  useEffect(() => {
+    if (messages.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setIndex((current) => (current + 1) % messages.length);
+    }, 3400);
     return () => window.clearInterval(timer);
   }, [messages.length]);
 

@@ -31,8 +31,12 @@ type ExpandedScheduleChart = 'heat' | 'worm' | null;
 function heatColor(winProb: number) {
   const t = Math.max(0, Math.min(1, winProb / 100));
   const red = [168, 70, 70];
+  const neutral = [43, 46, 53];
   const green = [58, 150, 115];
-  const mixed = red.map((channel, index) => Math.round(channel + (green[index] - channel) * t));
+  const start = t <= 0.5 ? red : neutral;
+  const end = t <= 0.5 ? neutral : green;
+  const mix = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
+  const mixed = start.map((channel, index) => Math.round(channel + (end[index] - channel) * mix));
   return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
 }
 
@@ -178,7 +182,7 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
             <span className="schedule-grid__inspect">Inspect</span>
           </span>
           <span className="schedule-grid__worm schedule-grid__worm--spark" aria-label="Expected wins pace delta">
-            <span className="schedule-grid__axis-label schedule-grid__axis-label--y">Wins vs .500</span>
+            <span className="schedule-grid__axis-title">Wins vs .500</span>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none">
               <line className="schedule-grid__worm-baseline" x1="0" x2="100" y1="50" y2="50" />
               <polyline className="schedule-grid__worm-line" points={deltaPoints} />
@@ -327,7 +331,7 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
                 <h3 className="schedule-grid__modal-title">Expected wins pace</h3>
                 <p className="schedule-grid__chart-subtitle">X-axis is week. Y-axis is wins above or below .500 pace.</p>
                 <div className="schedule-grid__worm schedule-grid__worm--detail">
-                  <span className="schedule-grid__axis-label schedule-grid__axis-label--y">Wins vs .500</span>
+                  <span className="schedule-grid__axis-title">Wins vs .500</span>
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none">
                     <line className="schedule-grid__worm-baseline" x1="0" x2="100" y1="50" y2="50" />
                     <polyline className="schedule-grid__worm-line" points={deltaPoints} />

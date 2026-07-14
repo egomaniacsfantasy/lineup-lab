@@ -152,9 +152,8 @@ export function TradeAnalyzerPanel({
   );
 }
 
-function Delta({ v, goodUp = true, pct = false }: { v: number; goodUp?: boolean; pct?: boolean }) {
-  const good = goodUp ? v > 0 : v < 0;
-  const color = v === 0 ? 'var(--text-muted, #8a8f98)' : good ? '#22c55e' : '#ff6b6b';
+function Delta({ v, pct = false }: { v: number; pct?: boolean }) {
+  const color = v === 0 ? 'var(--text-muted, #8a8f98)' : v > 0 ? '#22c55e' : '#ff6b6b';
   return (
     <span style={{ color, fontWeight: 700 }}>
       {v > 0 ? '+' : ''}{v.toFixed(1)}{pct ? '%' : ''}
@@ -168,10 +167,10 @@ function displayedMetric(value: number) {
 
 function SideCard({ side }: { side: TradeSideDelta }) {
   const rows = [
-    { label: 'Championship', b: side.before.titleProb, a: side.after.titleProb, d: side.delta.titleProb, goodUp: true, pct: true },
-    { label: 'Make playoffs', b: side.before.playoffProb, a: side.after.playoffProb, d: side.delta.playoffProb, goodUp: true, pct: true },
-    { label: 'Expected wins', b: side.before.expWins, a: side.after.expWins, d: side.delta.expWins, goodUp: true, pct: false },
-    { label: 'Avg seed', b: side.before.avgSeed, a: side.after.avgSeed, d: side.delta.avgSeed, goodUp: false, pct: false },
+    { label: 'Championship', b: side.before.titleProb, a: side.after.titleProb, d: side.delta.titleProb, pct: true },
+    { label: 'Make playoffs', b: side.before.playoffProb, a: side.after.playoffProb, d: side.delta.playoffProb, pct: true },
+    { label: 'Expected wins', b: side.before.expWins, a: side.after.expWins, d: side.delta.expWins, pct: false },
+    { label: 'Avg seed', b: side.before.avgSeed, a: side.after.avgSeed, d: side.delta.avgSeed, pct: false },
   ];
   return (
     <div className="trade-analyzer-panel__card">
@@ -197,7 +196,7 @@ function SideCard({ side }: { side: TradeSideDelta }) {
                 <span aria-hidden="true">→</span>
                 <span>{after.toFixed(1)}{r.pct ? '%' : ''}</span>
                 <span className="trade-analyzer-panel__delta-chip">
-                  <Delta v={displayedDelta} goodUp={r.goodUp} pct={r.pct} />
+                  <Delta v={displayedDelta} pct={r.pct} />
                 </span>
               </span>
             </div>

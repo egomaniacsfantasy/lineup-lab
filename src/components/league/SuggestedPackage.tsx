@@ -27,9 +27,9 @@ export function SuggestedPackage({
   onToggle,
   showLaunchNote,
 }: SuggestedPackageProps) {
-  const weeklyIsPositive = pkg.weeklyImpact.delta < 0;
+  const weeklyIsPositive = pkg.weeklyWinProbDelta >= 0;
   const playoffIsPositive = pkg.playoffProbDelta > 0;
-  const titleIsPositive = pkg.championshipOddsAfter < pkg.championshipOddsBefore;
+  const titleIsPositive = pkg.championshipOddsAfter <= pkg.championshipOddsBefore;
 
   return (
     <div

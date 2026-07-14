@@ -82,6 +82,16 @@
   letter-spacing: 0.02em;
 }
 
+.schedule-grid__axis-title {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .schedule-grid__inspect {
   color: var(--amber);
   white-space: nowrap;
@@ -190,13 +200,6 @@
   font-family: var(--font-mono);
   font-size: 9px;
   text-align: center;
-}
-
-.schedule-grid__axis-label--y {
-  position: absolute;
-  top: 48%;
-  left: -44px;
-  transform: rotate(-90deg);
 }
 
 .schedule-grid__axis-label--x {
