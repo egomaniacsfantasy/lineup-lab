@@ -4,6 +4,7 @@ import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueWeekMatchup } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
+import { OddsChart } from '../charts/OddsChart';
 import { LeagueMovementChip } from './LeagueMovementChip';
 import { TeamAvatar } from './TeamAvatar';
 import './MatchupSlate.css';
@@ -109,20 +110,6 @@ function hasMaterialHistory(points: RawMovement[] | null, side: 'a' | 'b') {
   return isMaterialMove(Math.max(...values) - Math.min(...values));
 }
 
-function movementLine(points: RawMovement[], side: 'a' | 'b') {
-  if (points.length === 0) return '';
-  const minAt = Math.min(...points.map((point) => point.at));
-  const maxAt = Math.max(...points.map((point) => point.at));
-  const timeSpan = Math.max(1, maxAt - minAt);
-  return points
-    .map((point) => {
-      const x = ((point.at - minAt) / timeSpan) * 100;
-      const y = 100 - valueForSide(point, side);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
-
 function materialEvents(points: RawMovement[], side: 'a' | 'b') {
   const events: { point: RawMovement; move: number }[] = [];
   points.forEach((point, index) => {
@@ -207,6 +194,11 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
           const detailClosings = movement ? closingByDay(movement) : [];
           const eventRows = movement ? materialEvents(movement, left.side) : [];
           const showMovementDetail = hasMaterialHistory(movement, left.side) && detailClosings.length > 1;
+          const chartPoints = detailClosings.map((point) => ({
+            x: point.at,
+            y: valueForSide(point, left.side),
+            title: `${dayLabel(point.at)} close: ${left.name} ${valueForSide(point, left.side).toFixed(1)}%`,
+          }));
 
           return (
             <article
@@ -290,35 +282,22 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                         <span className="matchup-slate__detail-axis matchup-slate__detail-axis--top">100%</span>
                         <span className="matchup-slate__detail-axis matchup-slate__detail-axis--mid">50%</span>
                         <span className="matchup-slate__detail-axis matchup-slate__detail-axis--bottom">0%</span>
-                        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                          {[0, 50, 100].map((tick) => (
-                            <line
-                              className="matchup-slate__movement-grid"
-                              key={`grid-${rowKey}-${tick}`}
-                              x1="0"
-                              x2="100"
-                              y1={100 - tick}
-                              y2={100 - tick}
-                            />
-                          ))}
-                          <polyline
-                            className="matchup-slate__movement-line"
-                            points={movementLine(detailClosings, left.side)}
-                          />
-                          {detailClosings.map((point) => (
-                            <circle
-                              className="matchup-slate__movement-dot"
-                              cx={detailClosings.length <= 1 ? 0 : ((point.at - detailClosings[0].at) / Math.max(1, detailClosings.at(-1)!.at - detailClosings[0].at)) * 100}
-                              cy={100 - valueForSide(point, left.side)}
-                              key={`dot-${rowKey}-${point.at}`}
-                              r="1.8"
-                            >
-                              <title>
-                                {dayLabel(point.at)} close: {left.name} {valueForSide(point, left.side).toFixed(1)}%
-                              </title>
-                            </circle>
-                          ))}
-                        </svg>
+                        <OddsChart
+                          ariaLabel={`${left.name} closing win probability`}
+                          gridLineClassName="matchup-slate__movement-grid"
+                          maxY={100}
+                          minY={0}
+                          series={[
+                            {
+                              id: `movement-${rowKey}`,
+                              className: 'matchup-slate__movement-line',
+                              dotClassName: 'matchup-slate__movement-dot',
+                              points: chartPoints,
+                            },
+                          ]}
+                          svgClassName="matchup-slate__detail-chart-svg"
+                          yTicks={[0, 50, 100]}
+                        />
                         <span className="matchup-slate__x-labels">
                           {detailClosings.map((point) => (
                             <span key={`label-${rowKey}-${point.at}`}>{dayLabel(point.at)}</span>

@@ -1,6 +1,6 @@
 .league-page {
   width: 100%;
-  max-width: 1180px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: clamp(16px, 3vw, 28px);
   display: grid;
@@ -16,6 +16,8 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
+  width: fit-content;
+  max-width: 100%;
   padding: 4px;
   border-radius: 999px;
   background: var(--bg-inset, #0b0d0f);

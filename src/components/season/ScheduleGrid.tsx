@@ -1,6 +1,7 @@
 import { useRef, useState, type CSSProperties } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
+import { OddsChart } from '../charts/OddsChart';
 import { TeamAvatar } from '../league/TeamAvatar';
 import './ScheduleGrid.css';
 
@@ -106,13 +107,10 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
     delta: item.expectedWins - item.baseline,
   }));
   const maxDelta = Math.max(0.5, ...deltaRows.map((item) => Math.abs(item.delta)));
-  const deltaPoints = deltaRows
-    .map((item, index) => {
-      const x = deltaRows.length <= 1 ? 0 : (index / (deltaRows.length - 1)) * 100;
-      const y = 50 - (item.delta / maxDelta) * 42;
-      return `${x},${y}`;
-    })
-    .join(' ');
+  const deltaPoints = deltaRows.map((item, index) => ({
+    x: index,
+    y: item.delta,
+  }));
   const wormTakeaway = expectedWinsTakeaway(cumulativeWins);
   const heatSummary = heatTakeaway(items);
   const yTicks = [maxDelta, 0, -maxDelta];
@@ -183,10 +181,16 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
           </span>
           <span className="schedule-grid__worm schedule-grid__worm--spark" aria-label="Expected wins pace delta">
             <span className="schedule-grid__axis-title">Wins vs .500</span>
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-              <line className="schedule-grid__worm-baseline" x1="0" x2="100" y1="50" y2="50" />
-              <polyline className="schedule-grid__worm-line" points={deltaPoints} />
-            </svg>
+            <OddsChart
+              ariaLabel="Expected wins pace delta"
+              maxX={Math.max(0, deltaPoints.length - 1)}
+              maxY={maxDelta}
+              minX={0}
+              minY={-maxDelta}
+              referenceLines={[{ id: 'pace-baseline', className: 'schedule-grid__worm-baseline', value: 0 }]}
+              series={[{ id: 'pace-line', className: 'schedule-grid__worm-line', points: deltaPoints }]}
+              svgClassName="schedule-grid__worm-chart"
+            />
             <span className="schedule-grid__worm-y-ticks">
               {yTicks.map((tick) => <span key={`tick-${tick.toFixed(2)}`}>{tick > 0 ? '+' : ''}{tick.toFixed(1)}</span>)}
             </span>
@@ -332,10 +336,16 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
                 <p className="schedule-grid__chart-subtitle">X-axis is week. Y-axis is wins above or below .500 pace.</p>
                 <div className="schedule-grid__worm schedule-grid__worm--detail">
                   <span className="schedule-grid__axis-title">Wins vs .500</span>
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <line className="schedule-grid__worm-baseline" x1="0" x2="100" y1="50" y2="50" />
-                    <polyline className="schedule-grid__worm-line" points={deltaPoints} />
-                  </svg>
+                  <OddsChart
+                    ariaLabel="Expected wins pace detail"
+                    maxX={Math.max(0, deltaPoints.length - 1)}
+                    maxY={maxDelta}
+                    minX={0}
+                    minY={-maxDelta}
+                    referenceLines={[{ id: 'pace-baseline-detail', className: 'schedule-grid__worm-baseline', value: 0 }]}
+                    series={[{ id: 'pace-line-detail', className: 'schedule-grid__worm-line', points: deltaPoints }]}
+                    svgClassName="schedule-grid__worm-chart"
+                  />
                   <span className="schedule-grid__worm-y-ticks">
                     {yTicks.map((tick) => <span key={`modal-tick-${tick.toFixed(2)}`}>{tick > 0 ? '+' : ''}{tick.toFixed(1)}</span>)}
                   </span>

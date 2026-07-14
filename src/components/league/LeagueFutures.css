@@ -109,10 +109,10 @@
   display: grid;
   grid-template-columns: minmax(190px, 1.8fr) minmax(72px, 0.65fr) minmax(72px, 0.65fr) minmax(76px, 0.7fr) minmax(112px, 0.8fr);
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  min-height: 58px;
-  padding: 12px 16px;
+  min-height: 64px;
+  padding: 10px 16px;
   color: inherit;
   text-align: left;
 }

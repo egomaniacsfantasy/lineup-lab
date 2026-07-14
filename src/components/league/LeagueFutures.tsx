@@ -5,6 +5,7 @@ import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueFutureRow } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
+import { OddsChart } from '../charts/OddsChart';
 import { LeagueMovementChip } from './LeagueMovementChip';
 import { TeamAvatar } from './TeamAvatar';
 import './LeagueFutures.css';
@@ -82,32 +83,7 @@ function closingSeriesFor(
   return [...byDay.values()].sort((left, right) => left.at - right.at);
 }
 
-function chartLine(points: { at: number; probability: number }[], bounds: { minAt: number; maxAt: number; minValue: number; maxValue: number }) {
-  const timeSpan = Math.max(1, bounds.maxAt - bounds.minAt);
-  const valueSpan = Math.max(1, bounds.maxValue - bounds.minValue);
-  return points
-    .map((point) => {
-      const x = ((point.at - bounds.minAt) / timeSpan) * 100;
-      const y = 100 - ((point.probability - bounds.minValue) / valueSpan) * 100;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
-
-function yFor(value: number, bounds: { minValue: number; maxValue: number }) {
-  const valueSpan = Math.max(1, bounds.maxValue - bounds.minValue);
-  return 100 - ((value - bounds.minValue) / valueSpan) * 100;
-}
-
-function xFor(timestamp: number, bounds: { minAt: number; maxAt: number }) {
-  const timeSpan = Math.max(1, bounds.maxAt - bounds.minAt);
-  return ((timestamp - bounds.minAt) / timeSpan) * 100;
-}
-
-function envelopePath(
-  rows: { team: LeagueFutureRow; series: { at: number; probability: number }[] }[],
-  bounds: { minAt: number; maxAt: number; minValue: number; maxValue: number },
-) {
+function envelopePoints(rows: { team: LeagueFutureRow; series: { at: number; probability: number }[] }[]) {
   const days = new Map<string, { at: number; values: number[] }>();
   rows.forEach(({ series }) => {
     series.forEach((point) => {
@@ -119,13 +95,13 @@ function envelopePath(
     });
   });
   const ordered = [...days.values()].sort((left, right) => left.at - right.at);
-  if (ordered.length < 2) return '';
-  const top = ordered.map((day) => `${xFor(day.at, bounds).toFixed(1)},${yFor(Math.max(...day.values), bounds).toFixed(1)}`);
+  if (ordered.length < 2) return [];
+  const top = ordered.map((day) => ({ x: day.at, y: Math.max(...day.values) }));
   const bottom = ordered
     .slice()
     .reverse()
-    .map((day) => `${xFor(day.at, bounds).toFixed(1)},${yFor(Math.min(...day.values), bounds).toFixed(1)}`);
-  return [...top, ...bottom].join(' ');
+    .map((day) => ({ x: day.at, y: Math.min(...day.values) }));
+  return [...top, ...bottom];
 }
 
 function movementFor(series: { probability: number }[]) {
@@ -203,7 +179,7 @@ export function LeagueFutures({
   }, [titleHistoryTeams]);
   const userHistory = userTeam ? titleHistoryTeams.find((row) => row.team.rosterId === userTeam.rosterId) : null;
   const comparisonHistory = comparisonTeam ? titleHistoryTeams.find((row) => row.team.rosterId === comparisonTeam.rosterId) : null;
-  const envelope = titleHistoryBounds ? envelopePath(titleHistoryTeams, titleHistoryBounds) : '';
+  const envelope = titleHistoryTeams.length > 0 ? envelopePoints(titleHistoryTeams) : [];
   const titleTakeaway = historyTakeaway(titleHistoryTeams, userTeam);
   const yTicks = titleHistoryBounds
     ? [titleHistoryBounds.maxValue, (titleHistoryBounds.maxValue + titleHistoryBounds.minValue) / 2, titleHistoryBounds.minValue]
@@ -345,29 +321,31 @@ export function LeagueFutures({
                   <span key={`tick-${tick.toFixed(2)}`}>{tick.toFixed(0)}%</span>
                 ))}
               </div>
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                {yTicks.map((tick) => (
-                  <line
-                    className="league-futures__detail-grid"
-                    key={`grid-${tick.toFixed(2)}`}
-                    x1="0"
-                    x2="100"
-                    y1={yFor(tick, titleHistoryBounds)}
-                    y2={yFor(tick, titleHistoryBounds)}
-                  />
-                ))}
-                {envelope ? <polygon className="league-futures__envelope" points={envelope} /> : null}
-                <polyline
-                  className="league-futures__detail-line league-futures__detail-line--user"
-                  points={chartLine(userHistory.series, titleHistoryBounds)}
-                />
-                {comparisonHistory ? (
-                  <polyline
-                    className="league-futures__detail-line league-futures__detail-line--compare"
-                    points={chartLine(comparisonHistory.series, titleHistoryBounds)}
-                  />
-                ) : null}
-              </svg>
+              <OddsChart
+                ariaLabel={chartTitle}
+                bands={envelope.length > 0 ? [{ id: 'league-envelope', className: 'league-futures__envelope', points: envelope }] : []}
+                gridLineClassName="league-futures__detail-grid"
+                maxX={titleHistoryBounds.maxAt}
+                maxY={titleHistoryBounds.maxValue}
+                minX={titleHistoryBounds.minAt}
+                minY={titleHistoryBounds.minValue}
+                series={[
+                  {
+                    id: 'user-history',
+                    className: 'league-futures__detail-line league-futures__detail-line--user',
+                    points: userHistory.series.map((point) => ({ x: point.at, y: point.probability })),
+                  },
+                  ...(comparisonHistory
+                    ? [{
+                        id: 'comparison-history',
+                        className: 'league-futures__detail-line league-futures__detail-line--compare',
+                        points: comparisonHistory.series.map((point) => ({ x: point.at, y: point.probability })),
+                      }]
+                    : []),
+                ]}
+                svgClassName="league-futures__detail-chart-svg"
+                yTicks={yTicks}
+              />
               <span className="league-futures__detail-axis league-futures__detail-axis--x">Date</span>
             </div>
             <div className="league-futures__xlabels">

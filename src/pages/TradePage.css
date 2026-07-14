@@ -330,6 +330,20 @@
   margin: 0 0 12px;
 }
 
+.trade-cc__show-more {
+  justify-self: start;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .trade-cc__builder--collapsed {
   position: sticky;
   top: 12px;

@@ -19,6 +19,7 @@ const TARGETS = [
   'src/components/ui/SimulationLoader.css',
   'src/utils/acceptanceLingo.ts',
   'src/utils/tradeDisplay.ts',
+  'src/utils/noTradeMath.ts',
   'src/utils/tradeSuggestionDisplay.ts',
   'src/utils/deltaTone.ts',
   'src/utils/lineupRow.ts',

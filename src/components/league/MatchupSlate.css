@@ -66,10 +66,10 @@
   display: grid;
   grid-template-columns: minmax(150px, 1.15fr) auto minmax(190px, 1fr) auto minmax(150px, 1.15fr) auto;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  min-height: 76px;
-  padding: 12px 16px;
+  min-height: 64px;
+  padding: 10px 16px;
   color: inherit;
   text-align: left;
   transition: background-color var(--transition-fast);

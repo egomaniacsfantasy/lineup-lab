@@ -178,7 +178,7 @@
 
 .trade-analyzer-panel__slider input[type='range'] {
   width: 100%;
-  accent-color: var(--amber-bright, #ff8049);
+  accent-color: var(--amber);
 }
 
 .trade-analyzer-panel__slider-hint {

@@ -56,7 +56,7 @@ import {
   primaryTradePosition,
   tradeSideFromIds,
 } from '../utils/tradeDisplay';
-import { impliedProbability } from '../utils/formatOdds';
+import { oddsPairDelta } from '../utils/noTradeMath';
 import './TradePage.css';
 
 function laneIds(primary?: string[], fallback?: string) {
@@ -96,10 +96,6 @@ function signedPct(value: number) {
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
 }
 
-function titleDeltaFromOdds(before: number, after: number) {
-  return impliedProbability(after) - impliedProbability(before);
-}
-
 function formatGeneratedAt(value?: number) {
   if (!value) return null;
   return new Intl.DateTimeFormat(undefined, {
@@ -131,6 +127,8 @@ const NEUTRAL_TRADE_TRAITS: TradeTraits = {
   fandomTeam: null,
   fandomLevel: 5,
 };
+
+const MAX_VISIBLE_MARKET_CARDS = 5;
 
 // Starters first, in their lineup order, then the bench, the way a manager
 // reads a roster.
@@ -370,6 +368,7 @@ function TradeDealsView() {
   const [partnerMenuOpen, setPartnerMenuOpen] = useState(false);
   const [isEditingTrade, setIsEditingTrade] = useState(true);
   const [openLaneWhy, setOpenLaneWhy] = useState<string | null>(null);
+  const [showAllMarketCards, setShowAllMarketCards] = useState(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
   const [scanClock, setScanClock] = useState(() => Date.now());
   const verdictRef = useRef<HTMLElement | null>(null);
@@ -461,9 +460,22 @@ function TradeDealsView() {
     stored,
   ]);
   const showingManagerMarket = marketManagerFilter !== 'all';
+  const visibleManagerSuggestions = showAllMarketCards
+    ? managerSuggestionEntries
+    : managerSuggestionEntries.slice(0, MAX_VISIBLE_MARKET_CARDS);
+  const visibleFilteredLanes = showAllMarketCards
+    ? filteredLanes
+    : filteredLanes.slice(0, MAX_VISIBLE_MARKET_CARDS);
   const visibleMarketCount = showingManagerMarket
     ? managerSuggestionEntries.length
     : filteredLanes.length;
+  const hiddenMarketCount = showingManagerMarket
+    ? managerSuggestionEntries.length - visibleManagerSuggestions.length
+    : filteredLanes.length - visibleFilteredLanes.length;
+
+  useEffect(() => {
+    setShowAllMarketCards(false);
+  }, [marketManagerFilter, marketPositionFilter]);
 
   useEffect(() => {
     if (
@@ -1068,7 +1080,6 @@ function TradeDealsView() {
       <section className="trade-cc__finder">
         <div className="trade-cc__finder-head">
           <div>
-            <p className="trade-cc__kicker">The market</p>
             <h2 className="trade-cc__section-label trade-cc__section-label--market">THE MARKET</h2>
             <p className="trade-cc__finder-sub">
               Pick a manager. The book simulates trades with them and ranks by title gain times chance they accept.
@@ -1182,14 +1193,15 @@ function TradeDealsView() {
         ) : null}
 
         {visibleMarketCount > 0 ? (
-          <div
-            className={[
-              'trade-cc__market-grid',
-              managerSuggestionsLoading && showingManagerMarket ? 'trade-cc__market-grid--stale' : '',
-            ].filter(Boolean).join(' ')}
-          >
-            {showingManagerMarket
-              ? managerSuggestionEntries.map((entry) => {
+          <>
+            <div
+              className={[
+                'trade-cc__market-grid',
+                managerSuggestionsLoading && showingManagerMarket ? 'trade-cc__market-grid--stale' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              {showingManagerMarket
+                ? visibleManagerSuggestions.map((entry) => {
                   const getPlayerIds = entry.suggestion.get.map((asset) => asset.id);
                   const givePlayerIds = entry.suggestion.give.map((asset) => asset.id);
                   const partner = partners.find((team) => team.rosterId === entry.suggestion.partnerRosterId);
@@ -1232,7 +1244,7 @@ function TradeDealsView() {
                         event.stopPropagation();
                         dismissLane(entry.signature);
                       }}
-                      partnerLine={entry.lowAcceptanceTag ? `${partner?.teamName ?? entry.suggestion.partnerName} · ${entry.lowAcceptanceTag}` : partner?.teamName ?? entry.suggestion.partnerName}
+                      partnerLine={partner?.teamName ?? entry.suggestion.partnerName}
                       sendSide={tradeSideFromIds('You send', givePlayerIds, bootstrap.players)}
                       valueLabel={`${signedPct(entry.suggestion.youDelta)} title`}
                       whyOpen={whyOpen}
@@ -1251,8 +1263,8 @@ function TradeDealsView() {
                       }
                     />
                   );
-                })
-              : filteredLanes.map(({ lane, signature, lowAcceptanceTag: laneTag }) => {
+                  })
+                : visibleFilteredLanes.map(({ lane, signature, lowAcceptanceTag: laneTag }) => {
                   const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
                   const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
                   const partner = partners.find((team) => team.rosterId === lane.partnerRosterId);
@@ -1284,7 +1296,7 @@ function TradeDealsView() {
                       generatedAt={generated}
                       getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
                       impactLine={[
-                        `title ${signedPct(titleDeltaFromOdds(lane.titleOddsBefore, lane.titleOddsAfter))}`,
+                        `title ${signedPct(oddsPairDelta(lane.titleOddsBefore, lane.titleOddsAfter))}`,
                         lane.valueGain != null ? `lineup ${signedPct(lane.valueGain).replace('%', ' pts/wk')}` : null,
                       ].filter(Boolean).join(' · ')}
                       key={laneKey}
@@ -1312,8 +1324,18 @@ function TradeDealsView() {
                       }
                     />
                   );
-                })}
-          </div>
+                  })}
+            </div>
+            {hiddenMarketCount > 0 ? (
+              <button
+                className="trade-cc__show-more"
+                onClick={() => setShowAllMarketCards(true)}
+                type="button"
+              >
+                Show {hiddenMarketCount} more
+              </button>
+            ) : null}
+          </>
         ) : managerSuggestionsLoading && showingManagerMarket ? (
           <SimulationLoader label={marketLoaderLabel} variant="trade" />
         ) : (

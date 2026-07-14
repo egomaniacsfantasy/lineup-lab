@@ -118,3 +118,30 @@ Prompt: `Codex prompt — Rebuild pass: trade displays, charts, League board, ma
 
 - The full chart-system rebuild (`OddsChart` unification across League board expand, Futures, and Schedule pace) is not complete in this continuation. Existing chart files still compile and the touched trade/matchup surfaces are stabilized, but that shared chart module still needs a dedicated pass.
 - Live screenshots for the rebuilt Market and Matchup states were still not captured here. The local app built and ran on July 14, 2026, but the signed-in league routes needed for truthful before/after captures remained auth-gated in the in-app browser session available to this thread.
+
+---
+
+Prompt: `Codex prompt — Rider v2: finish the rebuild under the methodology constitution (2026-07-14)`
+
+## Rider v2 Findings
+
+| Area | Status | Note |
+| --- | --- | --- |
+| Market finder cleanup | Fixed | `THE MARKET` now renders once, manager suggestion cards no longer duplicate the acceptance band in the partner line, stale manager results stay dimmed during refresh, and the finder now caps visible cards at five with a single `Show N more` reveal. |
+| Shared chart module | Fixed | Added `src/components/charts/OddsChart.tsx` and migrated the League board expand chart, Futures closing-line chart, and Schedule expected-wins pace chart onto the same bounds/grid/series renderer without changing payload order or server math. |
+| League shell tightening | Fixed in display layer | The League page now caps at roughly `1040px`, the sub-tabs size to content width instead of stretching full-row, and the Matchup/Futures board rows were tightened to the requested 64px rhythm. |
+| Matchup hero and biggest-edge contracts | Verified in source, partial live verification | Source still contains `PRICED ON YOUR BOARD` and the Franco baseline row behind board overrides. Public demo browser verification confirmed the hero eyebrow, `Live line` chip, a populated `Biggest edge` card, and a non-empty market digest. The override-only provenance state could not be fully live-verified from an unsigned demo session. |
+| Methodology lock | Fixed | Added `METHODOLOGY_UNTOUCHED.md` to document the constitution for this pass and explicitly record that pricing, acceptance, futures, and matchup math were not changed. |
+| No-trade-math guard | Fixed with test | Added `src/utils/noTradeMath.ts` with a branded display-only odds-pair delta helper and `test/noTradeMath.test.mjs` to keep `TradePage.tsx` from reintroducing inline probability math. |
+
+## Rider v2 Verification
+
+- `npm test`
+- `npm run brand-check`
+- `npm run build`
+- Local in-app browser verification on `http://127.0.0.1:4173/demo`
+
+## Rider v2 Known Notes
+
+- Public browser verification on July 14, 2026 was limited to `/demo`, which truthfully exercises the Matchup surface only. The signed-in League and Market routes remained auth-gated in the in-app browser session, so League board tightening, Dynasty Labs gating, and manager-finder live states were verified through source plus build/test rather than a signed-in browser run.
+- The demo path does not carry a personalized board overlay, so the override-only hero provenance state (`PRICED ON YOUR BOARD` plus Franco baseline row) remains source-verified in this pass rather than fully browser-proven.
