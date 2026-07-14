@@ -2091,6 +2091,10 @@ export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
   // ── Sim only the promising set for real Δ championship %, yielding between
   // small batches so we never block other requests for long.
   const SIMS = 2500;
+  // Only keep REALISTIC trades: they must help you (youDelta > 0) AND not gut the
+  // partner (their title drop within this many points). A trade that swings the
+  // partner far negative is a fleece no one accepts, so we don't surface it.
+  const MAX_PARTNER_DROP = 2;
   const baseline = simulateSeason({ ...base, sims: SIMS });
   const suggestions = [];
   let simmed = 0;
@@ -2099,6 +2103,7 @@ export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
     simmed += 1;
     if (simmed % 3 === 0) await yieldToLoop();
     if (youDelta <= 0) continue;
+    if (partnerDelta < -MAX_PARTNER_DROP) continue; // near-even only — no fleeces
     suggestions.push({
       partnerRosterId: c.partner.rosterId,
       partnerName: c.partner.teamName,
