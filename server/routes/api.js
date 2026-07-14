@@ -826,6 +826,7 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     const { leagueId } = req.params;
     const { userId } = req.body ?? {};
     const partnerRosterId = req.body?.partnerRosterId != null ? Number(req.body.partnerRosterId) : null;
+    const position = ['QB', 'RB', 'WR', 'TE'].includes(req.body?.position) ? req.body.position : null;
     const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
 
     const ctxBase = await loadLeagueContext(provider, leagueId, userId);
@@ -854,8 +855,8 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     // Include the deploy commit so a new deploy never serves finder numbers that
     // disagree with the (live) analyzer running the newer code.
     const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
-    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${version}:${overlay ? 'ov' : 'base'}:${build}`;
-    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId }));
+    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${version}:${overlay ? 'ov' : 'base'}:${build}`;
+    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position }));
     res.json(result);
   } catch (error) {
     next(error);

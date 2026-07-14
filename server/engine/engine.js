@@ -302,6 +302,20 @@ function optimalAssign(playerIds, slotLabels, projectionMap, catalog, week) {
   return assign;
 }
 
+// Projected points contributed by ONE position's STARTERS in the optimal lineup
+// (dedicated slots + any flex slots that position wins). Used only to test
+// whether a trade upgrades a specific position the user asked to improve.
+function positionStarterMean(playerIds, position, slotLabels, projectionMap, catalog) {
+  const assign = optimalAssign(playerIds, slotLabels, projectionMap, catalog, null);
+  let mean = 0;
+  for (const a of assign) {
+    if (a.playerId && catalog[a.playerId]?.position === position) {
+      mean += projectionMap.get(a.playerId)?.mean ?? 0;
+    }
+  }
+  return mean;
+}
+
 // Fallback replacement floor when the projection universe has no free agent at a
 // position (e.g. synthetic tests). Real leagues override this per-position with
 // the best available free agent (see replacementLevels).
@@ -1981,7 +1995,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
  * Δ championship %. The client applies the acceptance model (its per-manager
  * friendliness/relationship sliders) and ranks by expected gain = yourΔc × P(accept).
  */
-export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null } = {}) {
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -2067,6 +2081,13 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null }
   const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]];
 
   const t0 = Date.now();
+  // Optional "upgrade this position" filter: only keep trades that raise the
+  // user's STARTING output at that position (its dedicated + flex starters). It's
+  // a candidate filter — championship % is still the value; this just narrows the
+  // search to trades that improve, say, RB.
+  const targetPos = position && ['QB', 'RB', 'WR', 'TE'].includes(position) ? position : null;
+  const beforePos = targetPos ? positionStarterMean(userTeam.players, targetPos, slotLabels, projectionMap, catalog) : 0;
+
   // Candidate generation uses ONLY projected-value fairness to decide which trades
   // are worth simulating — NO starter-lineup metric. Championship % from the sim
   // is the only thing that determines value; this just picks the near-even trades
@@ -2083,6 +2104,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null }
           const tv = val(get);
           const r = tv > 0 ? gv / tv : 1;
           if (r < 0.75 || r > 1.3) continue; // fair value only — no lopsided fleeces
+          if (targetPos) {
+            const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
+            const afterPos = positionStarterMean(userAfter, targetPos, slotLabels, projectionMap, catalog);
+            if (afterPos <= beforePos + 0.1) continue; // must upgrade that position's starters
+          }
           scored.push({ partner: opp, give, get, gap: Math.abs(gv - tv), edge: tv - gv });
         }
       }

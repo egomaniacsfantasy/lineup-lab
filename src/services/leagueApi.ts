@@ -676,7 +676,7 @@ export interface TradeSuggestions {
 }
 export function fetchTradeSuggestions(
   leagueId: string,
-  body: { userId: string; partnerRosterId?: number },
+  body: { userId: string; partnerRosterId?: number; position?: 'QB' | 'RB' | 'WR' | 'TE' },
 ): Promise<TradeSuggestions> {
   return get<TradeSuggestions>(`/api/league/${leagueId}/trade-suggestions`, {
     method: 'POST',

@@ -258,6 +258,8 @@ function TradeDealsView() {
   const [suggLoading, setSuggLoading] = useState(false);
   // Manager-first finder: nothing is simulated until you pick a manager.
   const [finderPartnerId, setFinderPartnerId] = useState<number | null>(null);
+  // Optional "upgrade this position" filter for the finder.
+  const [finderPosition, setFinderPosition] = useState<'ALL' | 'QB' | 'RB' | 'WR' | 'TE'>('ALL');
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
   const [friendliness, setFriendliness] = useState(5);
@@ -343,7 +345,11 @@ function TradeDealsView() {
     let active = true;
     setSuggLoading(true);
     setSuggestions(null);
-    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId, partnerRosterId: finderPartnerId })
+    fetchTradeSuggestions(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId: finderPartnerId,
+      position: finderPosition !== 'ALL' ? finderPosition : undefined,
+    })
       .then((r) => {
         if (!active) return;
         setSuggestions(r.available ? r.suggestions ?? [] : []);
@@ -352,7 +358,7 @@ function TradeDealsView() {
       .catch(() => { if (active) setSuggestions([]); })
       .finally(() => { if (active) setSuggLoading(false); });
     return () => { active = false; };
-  }, [stored, bootstrap?.league.id, finderPartnerId]);
+  }, [stored, bootstrap?.league.id, finderPartnerId, finderPosition]);
 
   // Picking a finder manager also selects them for the read sliders (so tuning
   // friendliness/relationship re-ranks in real time) and the builder.
@@ -704,6 +710,19 @@ function TradeDealsView() {
             relationship={relationship}
             onChange={updateRead}
           />
+          <p className="trade-cc__finder-sub">Upgrade a specific position (optional):</p>
+          <div className="trade-cc__finder-managers" role="group" aria-label="Upgrade a position">
+            {(['ALL', 'QB', 'RB', 'WR', 'TE'] as const).map((pos) => (
+              <button
+                key={pos}
+                type="button"
+                className={finderPosition === pos ? 'trade-cc__finder-mgr trade-cc__finder-mgr--on' : 'trade-cc__finder-mgr'}
+                onClick={() => setFinderPosition(pos)}
+              >
+                {pos === 'ALL' ? 'All positions' : pos}
+              </button>
+            ))}
+          </div>
         {belowFloor && rankedSuggestions.length > 0 ? (
           <p className="trade-cc__finder-note">
             Nothing clears the {ACCEPT_FLOOR}% acceptance bar right now. Showing the trades most likely to be accepted.
