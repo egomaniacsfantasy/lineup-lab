@@ -379,6 +379,81 @@ function marketMoverWhy({
   return parts.join(' ');
 }
 
+function slotToneClass(slotLabel: string) {
+  const key = slotLabel.toLowerCase();
+  return ['qb', 'rb', 'wr', 'te', 'flx', 'k', 'def'].includes(key)
+    ? `matchup-page__slot-tag--${key}`
+    : '';
+}
+
+function prettyDay(dayLabel: string) {
+  return dayLabel.length <= 3
+    ? dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1).toLowerCase()
+    : dayLabel;
+}
+
+function samePositionOneForOne(
+  getIds: string[] | undefined,
+  giveIds: string[] | undefined,
+  players: LeagueBootstrap['players'],
+) {
+  if ((getIds?.length ?? 0) !== 1 || (giveIds?.length ?? 0) !== 1) return false;
+  const getPosition = players[getIds![0]]?.position;
+  const givePosition = players[giveIds![0]]?.position;
+  return Boolean(getPosition && givePosition && getPosition === givePosition);
+}
+
+function MarketPlayerUnit({
+  label,
+  players,
+  tone = 'default',
+}: {
+  label: string;
+  players: Player[];
+  tone?: 'default' | 'accent';
+}) {
+  if (!players.length) return null;
+  const names = players.map((player) => player.shortName).join(' + ');
+  return (
+    <span className="matchup-page__market-unit">
+      <span className="matchup-page__market-unit-chips" aria-hidden="true">
+        {players.slice(0, 2).map((player) => (
+          <PlayerChip key={player.id} player={player} size="sm" tone={tone} />
+        ))}
+        {players.length > 2 ? <span className="matchup-page__market-unit-more">+{players.length - 2}</span> : null}
+      </span>
+      <span className="matchup-page__market-unit-copy">
+        <span className="matchup-page__market-unit-label">{label}</span>
+        <span className="matchup-page__market-unit-name">{names}</span>
+      </span>
+    </span>
+  );
+}
+
+function displayPlayerFromMock(player: {
+  name: string;
+  position: string;
+  slug?: string;
+  team: string;
+}): Player {
+  const parts = player.name.split(' ');
+  const shortName = parts.length > 1
+    ? `${parts[0]?.charAt(0) ?? ''}. ${parts.slice(1).join(' ')}`
+    : player.name;
+  return {
+    bye: 0,
+    headshotUrl: '',
+    id: player.slug ?? player.name,
+    isActive: true,
+    name: player.name,
+    position: player.position as Player['position'],
+    shortName,
+    slug: player.slug,
+    team: player.team,
+    teamLogoUrl: '',
+  };
+}
+
 function MarketMoverRow({
   label,
   sublabel,
@@ -387,7 +462,9 @@ function MarketMoverRow({
   to,
   gain,
   acceptanceProbability,
-  playerChips,
+  getPlayers,
+  givePlayers,
+  claimPlayer,
   crestTeam,
   href,
 }: {
@@ -399,33 +476,39 @@ function MarketMoverRow({
   /** Projected points the move adds to your starting lineup, if known. */
   gain?: number;
   acceptanceProbability?: number | null;
-  playerChips?: { player: Player; tone?: 'default' | 'accent' }[];
+  getPlayers?: Player[];
+  givePlayers?: Player[];
+  claimPlayer?: Player;
   crestTeam?: string;
   href?: string | null;
 }) {
   const [whyOpen, setWhyOpen] = useState(false);
+  const isTrade = Boolean(getPlayers?.length || givePlayers?.length);
+  const valueLabel = gain != null ? `${gain >= 0 ? '+' : ''}${gain.toFixed(1)}` : null;
   const content = (
     <>
       <div className="matchup-page__mover-identity">
-        {playerChips?.length ? (
-          <span className="matchup-page__mover-chips" aria-hidden="true">
-            {playerChips.map(({ player, tone }) => (
-              <PlayerChip key={player.id} player={player} size="sm" tone={tone} />
-            ))}
+        {isTrade ? (
+          <span className="matchup-page__market-trade">
+            <MarketPlayerUnit label="You send" players={givePlayers ?? []} />
+            <span className="matchup-page__market-arrow" aria-hidden="true">→</span>
+            <MarketPlayerUnit label="You get" players={getPlayers ?? []} tone="accent" />
           </span>
+        ) : claimPlayer ? (
+          <MarketPlayerUnit label="Claim" players={[claimPlayer]} tone="accent" />
         ) : crestTeam ? (
           <TeamCrest teamName={crestTeam} />
         ) : null}
+        {!isTrade && !claimPlayer ? (
         <div>
           <p className="matchup-page__mover-label">{label}</p>
           {sublabel ? <p className="matchup-page__mover-meta">{sublabel}</p> : null}
         </div>
+        ) : null}
       </div>
-      {/* Title odds barely move on a single roster change, so lead with the
-          real number: projected points added to your starting lineup. */}
       <div className="matchup-page__mover-market">
-        {gain != null ? (
-          <p className="matchup-page__mover-gain">+{gain.toFixed(1)}<span> pts/wk</span></p>
+        {valueLabel ? (
+          <p className="matchup-page__mover-gain">{valueLabel}<span> pts/wk</span></p>
         ) : (
           <p className="matchup-page__price-shift">
             <span className="matchup-page__price-old">{formatAmericanOdds(from)}</span>{' '}
@@ -617,7 +700,7 @@ function CompareSheet({
             >
               {winner ? <span className="matchup-page__compare-edge-tag">Edge</span> : null}
               <div className="matchup-page__compare-player">
-                <PlayerChip player={player} size="lg" />
+                <PlayerChip player={player} showPosition={false} size="lg" />
                 <div>
                   <h3 className="matchup-page__row-name">{player.shortName}</h3>
                   <p className="matchup-page__row-secondary">
@@ -713,7 +796,9 @@ interface PricedMover {
   acceptanceProbability?: number | null;
   before: number;
   after: number;
-  playerChips?: { player: Player; tone?: 'default' | 'accent' }[];
+  claimPlayer?: Player;
+  givePlayers?: Player[];
+  getPlayers?: Player[];
 }
 
 interface MatchupLiveProps {
@@ -850,7 +935,7 @@ function MatchupPricingLoading({ matchup }: { matchup: MatchupData }) {
               <div className="matchup-page__lineup-hitbox">
                 <span className="matchup-page__slot-tag">{row.slotLabel}</span>
                 <span className="matchup-page__lineup-player">
-                  <PlayerChip player={row.player} />
+                  <PlayerChip player={row.player} showPosition={false} />
                   <span className="matchup-page__lineup-copy">
                     <span className="matchup-page__row-name">{row.player.shortName}</span>
                     <span className="matchup-page__row-secondary">{row.meta}</span>
@@ -999,6 +1084,7 @@ function MatchupLive({
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
   const [compareSource, setCompareSource] = useState<'slip' | 'edge' | null>(null);
+  const [isLockExpanded, setIsLockExpanded] = useState(false);
   const [volatilityProjectionSet, setVolatilityProjectionSet] =
     useState<VolatilityProjectionSet | null>(null);
   const [isRecapDismissed, setIsRecapDismissed] = useState(
@@ -1077,6 +1163,16 @@ function MatchupLive({
     [engine.roster, gameContextSource],
   );
   const exposureWindows = exposureTiming.windows;
+  const lockSummary = useMemo(() => {
+    const nextWindow = exposureWindows[0];
+    if (!nextWindow) return null;
+    const lockTime = nextWindow.detail.match(/locks\s+(.+)$/i)?.[1] ?? nextWindow.detail;
+    const sundayWindow = exposureWindows.find((window) => window.dayLabel === 'SUN');
+    const endNote = sundayWindow && sundayWindow.key !== nextWindow.key
+      ? 'Sunday decides it'
+      : 'Next window decides it';
+    return `${nextWindow.share}% of your projection locks ${prettyDay(nextWindow.dayLabel)} ${lockTime} · ${endNote}`;
+  }, [exposureWindows]);
   useEffect(() => {
     if (recapShareState === 'idle' || recapShareState === 'working') {
       return undefined;
@@ -1228,6 +1324,38 @@ function MatchupLive({
     openSwapVerdict(biggestSwing.starter, biggestSwing.alternative);
   };
 
+  const biggestEdgeDisplay = biggestSwing
+    ? {
+        beforePrimary: formatDisplayedOdds(
+          biggestSwing.beforeLine.moneyline,
+          biggestSwing.beforeLine.winProbability,
+        ),
+        afterPrimary: formatDisplayedOdds(
+          biggestSwing.afterLine.moneyline,
+          biggestSwing.afterLine.winProbability,
+        ),
+        beforeSecondary:
+          oddsFormat === 'percent'
+            ? formatAmericanOdds(biggestSwing.beforeLine.moneyline)
+            : `${biggestSwing.beforeLine.winProbability.toFixed(1)}%`,
+        afterSecondary:
+          oddsFormat === 'percent'
+            ? formatAmericanOdds(biggestSwing.afterLine.moneyline)
+            : `${biggestSwing.afterLine.winProbability.toFixed(1)}%`,
+        meterStyle: {
+          '--edge-before': `${biggestSwing.beforeLine.winProbability}%`,
+          '--edge-after': `${biggestSwing.afterLine.winProbability}%`,
+          '--edge-range-left': `${Math.min(
+            biggestSwing.beforeLine.winProbability,
+            biggestSwing.afterLine.winProbability,
+          )}%`,
+          '--edge-range-width': `${Math.abs(
+            biggestSwing.afterLine.winProbability - biggestSwing.beforeLine.winProbability,
+          )}%`,
+        } as CSSProperties,
+      }
+    : null;
+
   const removePick = (playerId: string) => {
     setCompareSelection((current) => current.filter((candidate) => candidate.id !== playerId));
   };
@@ -1300,7 +1428,8 @@ function MatchupLive({
     const pickOrder = compareSelection.findIndex(
       (candidate) => candidate.id === player.id,
     );
-    const showSlotLabel = slotLabel.toUpperCase() !== player.position.toUpperCase();
+    const isLineupSlot = tone === 'starter';
+    const showSlotLabel = isLineupSlot;
 
     return (
       <div
@@ -1327,9 +1456,13 @@ function MatchupLive({
           onClick={() => handleComparePick(player)}
           type="button"
         >
-          {showSlotLabel ? <span className="matchup-page__slot-tag">{slotLabel}</span> : null}
+          {showSlotLabel ? (
+            <span className={['matchup-page__slot-tag', slotToneClass(slotLabel)].filter(Boolean).join(' ')}>
+              {slotLabel}
+            </span>
+          ) : null}
           <span className="matchup-page__lineup-player">
-            <PlayerChip player={player} />
+            <PlayerChip player={player} showPosition={tone === 'bench'} />
             <span className="matchup-page__lineup-copy">
               <span className="matchup-page__row-name">{player.shortName}</span>
               <span className="matchup-page__row-secondary">{meta}</span>
@@ -1614,37 +1747,35 @@ function MatchupLive({
               <h2 className="matchup-page__module-title">Biggest edge</h2>
               <span className="matchup-page__signal matchup-page__signal--up">Swap</span>
             </div>
-            <div className="matchup-page__edge-row">
-              <div className="matchup-page__edge-copy">
-                <div className="matchup-page__headshot-stack" aria-hidden="true">
-                  <PlayerChip player={biggestSwing.starter} size="sm" />
-                  <PlayerChip player={biggestSwing.alternative} size="sm" tone="accent" />
-                </div>
-                <div>
-                  <p className="matchup-page__edge-label">
-                    {biggestSwing.starter.shortName} to {biggestSwing.alternative.shortName}
-                  </p>
-                  <p className="matchup-page__meta-copy">
-                    Win prob{' '}
-                    <span className="matchup-page__inline-number">
-                      <span className="matchup-page__price-old">
-                        {biggestSwing.beforeLine.winProbability.toFixed(1)}%
-                      </span>{' '}
-                      <span className="matchup-page__price-new matchup-page__price-new--up">
-                        {biggestSwing.afterLine.winProbability.toFixed(1)}%
-                      </span>
-                    </span>{' '}
-                    · line{' '}
-                    <span className="matchup-page__inline-number">
-                      <span className="matchup-page__price-old">
-                        {formatAmericanOdds(biggestSwing.beforeLine.moneyline)}
-                      </span>{' '}
-                      <span className="matchup-page__price-new matchup-page__price-new--up">
-                        {formatAmericanOdds(biggestSwing.afterLine.moneyline)}
-                      </span>
+            <div className="matchup-page__edge-swap-card">
+              <div className="matchup-page__edge-swap-players">
+                <MarketPlayerUnit label="Out" players={[biggestSwing.starter]} />
+                <span className="matchup-page__edge-swap-arrow" aria-hidden="true">→</span>
+                <MarketPlayerUnit label="In" players={[biggestSwing.alternative]} tone="accent" />
+              </div>
+              <div className="matchup-page__edge-swap-market">
+                <div className="matchup-page__edge-line-copy">
+                  <span className="matchup-page__edge-line-label">Win probability</span>
+                  <span className="matchup-page__edge-line-values">
+                    <span className="matchup-page__price-old">{biggestEdgeDisplay?.beforePrimary}</span>
+                    <span aria-hidden="true">→</span>
+                    <span className="matchup-page__price-new matchup-page__price-new--up">
+                      {biggestEdgeDisplay?.afterPrimary}
                     </span>
-                  </p>
+                  </span>
+                  <span className="matchup-page__edge-line-secondary">
+                    {biggestEdgeDisplay?.beforeSecondary} to {biggestEdgeDisplay?.afterSecondary}
+                  </span>
                 </div>
+                <span
+                  aria-hidden="true"
+                  className="matchup-page__edge-meter"
+                  style={biggestEdgeDisplay?.meterStyle}
+                >
+                  <span className="matchup-page__edge-meter-range" />
+                  <span className="matchup-page__edge-meter-dot matchup-page__edge-meter-dot--before" />
+                  <span className="matchup-page__edge-meter-dot matchup-page__edge-meter-dot--after" />
+                </span>
               </div>
               <span className="matchup-page__edge-delta matchup-page__edge-delta--up">
                 {formatSignedPercent(biggestSwing.delta)}
@@ -1695,10 +1826,12 @@ function MatchupLive({
                   from={mover.before}
                   gain={mover.gain}
                   acceptanceProbability={mover.acceptanceProbability}
+                  claimPlayer={mover.claimPlayer}
+                  getPlayers={mover.getPlayers}
+                  givePlayers={mover.givePlayers}
                   href={marketHrefForMover(mover)}
                   key={mover.headline}
                   label={mover.headline}
-                  playerChips={mover.playerChips}
                   sublabel={mover.kind === 'trade' ? undefined : mover.detail}
                   to={mover.after}
                   why={mover.kind === 'trade'
@@ -1725,16 +1858,15 @@ function MatchupLive({
           <MarketMoverRow
             from={450}
             label={`Claim ${MOCK_WAIVER_SUGGESTION.player.name} off waivers`}
-            playerChips={(playerMap.get('a-st-brown') ?? playerMap.get('a-stbrown'))
-              ? [{ player: (playerMap.get('a-st-brown') ?? playerMap.get('a-stbrown'))!, tone: 'accent' }]
-              : undefined}
+            claimPlayer={playerMap.get('a-st-brown') ?? playerMap.get('a-stbrown')}
             sublabel="Slots WR3, frees your flex"
             to={425}
           />
           {topTradeTarget ? (
             <MarketMoverRow
-              crestTeam={topTradeTarget.teamName}
               from={topTradeTarget.suggestedPackage.championshipOddsBefore}
+              getPlayers={[displayPlayerFromMock(topTradeTarget.player)]}
+              givePlayers={topTradeTarget.suggestedPackage.youSend.map(displayPlayerFromMock)}
               label={`Trade lane: ${topTradeTarget.teamName} want ${topTradeTarget.theirNeed}`}
               to={topTradeTarget.suggestedPackage.championshipOddsAfter}
               why={`${topTradeTarget.suggestedPackage.youSend.map((player) => player.name).join(' + ')} for ${topTradeTarget.player.name}. Title price ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsBefore)} to ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsAfter)}. Opens the deal in Market.`}
@@ -1743,61 +1875,77 @@ function MatchupLive({
         </section>
         ) : null}
 
-        {exposureTiming.contextAvailable && exposureWindows.length > 0 ? (
-        <section className="matchup-page__module">
-          <div className="matchup-page__module-row">
-            <h2 className="matchup-page__module-title">When your week locks</h2>
-            <p className="matchup-page__meta-copy">% of projection</p>
-          </div>
+        {exposureTiming.contextAvailable && exposureWindows.length > 0 && lockSummary ? (
+        <section className="matchup-page__module matchup-page__module--locks">
+          <button
+            aria-expanded={isLockExpanded}
+            className="matchup-page__lock-summary"
+            onClick={() => setIsLockExpanded((current) => !current)}
+            type="button"
+          >
+            <span>{lockSummary}</span>
+            <span className="matchup-page__lock-summary-action">
+              {isLockExpanded ? 'Hide' : 'Details'}
+            </span>
+          </button>
 
-          <div className="matchup-page__lock-bar" aria-hidden="true">
-            {exposureWindows.map((window, index) => (
-              <span
-                className={index === 0 ? 'matchup-page__lock-segment matchup-page__lock-segment--next' : 'matchup-page__lock-segment'}
-                key={window.key}
-                style={{ flexGrow: window.share }}
-              />
-            ))}
-          </div>
-
-          <div className="matchup-page__lock-grid">
-            {exposureWindows.map((window, index) => (
-              <div className="matchup-page__lock-row" key={window.key}>
-                <span className={index === 0 ? 'matchup-page__lock-day matchup-page__lock-day--next' : 'matchup-page__lock-day'}>
-                  {window.dayLabel}
-                </span>
-                <span className="matchup-page__lock-detail">{window.detail}</span>
-                <span className="matchup-page__lock-headshots" aria-hidden="true">
-                  {window.players.slice(0, 4).map((player, playerIndex) => (
-                    <span
-                      className={playerIndex > 0 ? 'matchup-page__mini-wrap matchup-page__mini-wrap--overlap' : 'matchup-page__mini-wrap'}
-                      key={`${window.key}-${player.id}`}
-                    >
-                      <PlayerChip player={player} size="sm" />
-                    </span>
-                  ))}
-                  {window.players.length > 4 ? (
-                    <span className="matchup-page__mini-more">+{window.players.length - 4}</span>
-                  ) : null}
-                </span>
-                <span className={index === 0 ? 'matchup-page__lock-share matchup-page__lock-share--next' : 'matchup-page__lock-share'}>
-                  {window.share}%
-                </span>
+          {isLockExpanded ? (
+            <div className="matchup-page__lock-detail-panel">
+              <div className="matchup-page__module-row">
+                <h2 className="matchup-page__module-title">When your week locks</h2>
+                <p className="matchup-page__meta-copy">% of projection</p>
               </div>
-            ))}
-          </div>
 
-          {downsideLine ? (
-            <p className="matchup-page__meta-copy matchup-page__meta-copy--downside">
-              A bad {exposureWindows[0]?.dayLabel === 'THU' ? 'Thursday' : 'early window'} drops your line to{' '}
-              <span className="matchup-page__inline-number">
-                <span className="matchup-page__price-old">{formatAmericanOdds(downsideLine.from)}</span>{' '}
-                <span className="matchup-page__price-new matchup-page__price-new--down">
-                  {formatAmericanOdds(downsideLine.to)}
-                </span>
-              </span>
-              . Sunday decides it.
-            </p>
+              <div className="matchup-page__lock-bar" aria-hidden="true">
+                {exposureWindows.map((window, index) => (
+                  <span
+                    className={index === 0 ? 'matchup-page__lock-segment matchup-page__lock-segment--next' : 'matchup-page__lock-segment'}
+                    key={window.key}
+                    style={{ flexGrow: window.share }}
+                  />
+                ))}
+              </div>
+
+              <div className="matchup-page__lock-grid">
+                {exposureWindows.map((window, index) => (
+                  <div className="matchup-page__lock-row" key={window.key}>
+                    <span className={index === 0 ? 'matchup-page__lock-day matchup-page__lock-day--next' : 'matchup-page__lock-day'}>
+                      {window.dayLabel}
+                    </span>
+                    <span className="matchup-page__lock-detail">{window.detail}</span>
+                    <span className="matchup-page__lock-headshots" aria-hidden="true">
+                      {window.players.slice(0, 4).map((player, playerIndex) => (
+                        <span
+                          className={playerIndex > 0 ? 'matchup-page__mini-wrap matchup-page__mini-wrap--overlap' : 'matchup-page__mini-wrap'}
+                          key={`${window.key}-${player.id}`}
+                        >
+                          <PlayerChip player={player} showPosition={false} size="sm" />
+                        </span>
+                      ))}
+                      {window.players.length > 4 ? (
+                        <span className="matchup-page__mini-more">+{window.players.length - 4}</span>
+                      ) : null}
+                    </span>
+                    <span className={index === 0 ? 'matchup-page__lock-share matchup-page__lock-share--next' : 'matchup-page__lock-share'}>
+                      {window.share}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {downsideLine ? (
+                <p className="matchup-page__meta-copy matchup-page__meta-copy--downside">
+                  A bad {exposureWindows[0]?.dayLabel === 'THU' ? 'Thursday' : 'early window'} drops your line to{' '}
+                  <span className="matchup-page__inline-number">
+                    <span className="matchup-page__price-old">{formatAmericanOdds(downsideLine.from)}</span>{' '}
+                    <span className="matchup-page__price-new matchup-page__price-new--down">
+                      {formatAmericanOdds(downsideLine.to)}
+                    </span>
+                  </span>
+                  . Sunday decides it.
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </section>
         ) : null}
@@ -1890,6 +2038,7 @@ function MatchupLive({
               activeAlternative && targetLine
                   ? `Restore ${engine.baselineRoster[slotIndex].starter.shortName} · ${formatAmericanOdds(currentLine.moneyline)} to ${formatAmericanOdds(targetLine.moneyline)}`
                   : null;
+            const slotLabel = slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel;
             const meta = lineupMetaFor(slot.starter, edgeMeta);
             const swapDelta =
               actionAlternative && targetLine
@@ -1911,7 +2060,7 @@ function MatchupLive({
               player: slot.starter,
               projection: slot.projection,
               selected: compareSelection.some((candidate) => candidate.id === slot.starter.id),
-              slotLabel: slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel,
+              slotLabel,
               swapChip:
                 actionAlternative && swapDelta !== null && swapDelta > 0 && swapDeltaLabel
                   ? {
@@ -1952,7 +2101,7 @@ function MatchupLive({
           <div className="matchup-page__lineup-list">
             {matchup.opponentTeam.roster.map((slot) => {
               const staticSlotLabel = slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel;
-              const showStaticSlotLabel = staticSlotLabel.toUpperCase() !== slot.starter.position.toUpperCase();
+              const showStaticSlotLabel = true;
               return (
               <div className="matchup-page__lineup-row" key={`opp-${slot.slotLabel}-${slot.starter.id}`}>
                 <div
@@ -1965,15 +2114,17 @@ function MatchupLive({
                     .join(' ')}
                 >
                   {showStaticSlotLabel ? (
-                    <span className="matchup-page__slot-tag">
+                    <span className={['matchup-page__slot-tag', slotToneClass(staticSlotLabel)].filter(Boolean).join(' ')}>
                       {staticSlotLabel}
                     </span>
                   ) : null}
                   <span className="matchup-page__lineup-player">
-                    <PlayerChip player={slot.starter} />
+                    <PlayerChip player={slot.starter} showPosition={false} />
                     <span className="matchup-page__lineup-copy">
                       <span className="matchup-page__row-name">{slot.starter.shortName}</span>
-                      <span className="matchup-page__row-secondary">{lineupMetaFor(slot.starter)}</span>
+                      <span className="matchup-page__row-secondary">
+                        {lineupMetaFor(slot.starter)}
+                      </span>
                     </span>
                   </span>
                   <span className="matchup-page__projection">{formatProjection(slot.projection)}</span>
@@ -2002,7 +2153,7 @@ function MatchupLive({
             <div className="matchup-page__slip-chips">
               {compareSelection.map((pick) => (
                 <span className="matchup-page__slip-chip" key={pick.id}>
-                  <PlayerChip player={pick} size="sm" />
+                  <PlayerChip player={pick} showPosition={false} size="sm" />
                   <span className="matchup-page__slip-name">{pick.shortName}</span>
                   <button
                     aria-label={`Remove ${pick.shortName}`}
@@ -2146,7 +2297,7 @@ function CompareBoard({
               key={entry.player.id}
             >
               <span className="matchup-page__board-rank">{index + 1}</span>
-              <PlayerChip player={entry.player} size="sm" />
+              <PlayerChip player={entry.player} showPosition={false} size="sm" />
               <div className="matchup-page__board-copy">
                 <span className="matchup-page__row-name">
                   {entry.player.shortName}
@@ -2231,35 +2382,49 @@ export function MatchupPage() {
   const connectedMatchup = bootstrap ? toMatchupData(bootstrap, pricing) : null;
   const pricingReady = !bootstrap || hasPricedCurrentMatchupLine(bootstrap, pricing);
 
+  const pricedMovers = pricing?.movers ?? [];
+  const filteredSamePositionMovers =
+    connectedMatchup && bootstrap && pricing?.available
+      ? pricedMovers.filter((mover) => {
+          const getIds = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
+          const giveIds = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
+          return mover.kind === 'trade' && samePositionOneForOne(getIds, giveIds, bootstrap.players);
+        }).length
+      : 0;
+  if (import.meta.env.DEV && filteredSamePositionMovers > 0) {
+    console.info('[matchup] filtered same-position trade suggestions', filteredSamePositionMovers);
+  }
+
   // Real priced movers (waiver claim + trade lane) for connected leagues.
   const movers =
     connectedMatchup && bootstrap && pricing?.available
-      ? (pricing.movers ?? []).map((mover) => {
+      ? pricedMovers.filter((mover) => {
           const getIds = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
           const giveIds = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
-          const playerChips =
-            mover.kind === 'trade'
-              ? [
-                  ...getIds.map((id) => ({ player: toPlayer(id, bootstrap.players), tone: 'accent' as const })),
-                  ...giveIds.map((id) => ({ player: toPlayer(id, bootstrap.players), tone: 'default' as const })),
-                ].slice(0, 4)
-              : mover.playerId
-                ? [{ player: toPlayer(mover.playerId, bootstrap.players), tone: 'accent' as const }]
-                : [];
+          return !(mover.kind === 'trade' && samePositionOneForOne(getIds, giveIds, bootstrap.players));
+        }).map((mover) => {
+          const getIds = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
+          const giveIds = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
+          const getPlayers = getIds.map((id) => toPlayer(id, bootstrap.players));
+          const givePlayers = giveIds.map((id) => toPlayer(id, bootstrap.players));
           return {
             kind: mover.kind,
             leagueId: mover.leagueId,
             headline: mover.headline,
             detail: mover.detail,
             playerId: mover.playerId,
+            claimPlayer: mover.kind !== 'trade' && mover.playerId
+              ? toPlayer(mover.playerId, bootstrap.players)
+              : undefined,
             givePlayerIds: giveIds,
             getPlayerIds: getIds,
+            givePlayers,
+            getPlayers,
             partnerRosterId: mover.partnerRosterId,
             gain: mover.valueGain,
             acceptanceProbability: mover.acceptanceProbability ?? null,
             before: mover.titleOddsBefore,
             after: mover.titleOddsAfter,
-            playerChips,
           };
         })
       : [];

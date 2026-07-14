@@ -1,4 +1,5 @@
 import { type TradeAnalysis, type TradeSideDelta } from '../../services/leagueApi';
+import { acceptanceProbability } from '../../utils/tradeAcceptance';
 
 /**
  * Season-simulation impact for the trade being built in the Deals "Build a
@@ -9,18 +10,6 @@ import { type TradeAnalysis, type TradeSideDelta } from '../../services/leagueAp
  * "Will they accept?" logistic; it never touches the championship numbers.
  */
 
-// ---- Acceptance + verdict math (all in championship percentage points) -----
-const BAR0 = 0.6;      // loss-aversion baseline: Δc=0, neutral read -> ~40%
-const K_FRIEND = 0.10; // championship-pts per friendliness notch
-const K_REL = 0.05;    // championship-pts per relationship notch
-const SPREAD = 1.5;    // logistic slope
-
-export function acceptanceProbability(theirDeltaTitle: number, friendliness: number, relationship: number) {
-  const threshold = BAR0 - K_FRIEND * (friendliness - 5) - K_REL * (relationship - 5);
-  const z = (theirDeltaTitle - threshold) / SPREAD;
-  const p = 1 / (1 + Math.exp(-z));
-  return Math.max(3, Math.min(97, Math.round(p * 100)));
-}
 function acceptanceBand(pct: number) {
   if (pct >= 80) return 'Very likely';
   if (pct >= 60) return 'Likely';

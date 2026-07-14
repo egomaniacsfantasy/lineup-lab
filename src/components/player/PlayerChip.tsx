@@ -8,6 +8,7 @@ interface PlayerChipProps {
   player: Player;
   className?: string;
   size?: PlayerChipSize;
+  showPosition?: boolean;
   tone?: 'default' | 'accent';
 }
 
@@ -20,6 +21,7 @@ function positionClass(position: Position | string | undefined) {
 export function PlayerChip({
   player,
   className = '',
+  showPosition = true,
   size = 'md',
   tone = 'default',
 }: PlayerChipProps) {
@@ -39,7 +41,7 @@ export function PlayerChip({
         .filter(Boolean)
         .join(' ')}
     >
-      <span className="player-chip__position">{position}</span>
+      {showPosition ? <span className="player-chip__position">{position}</span> : null}
       <span className="player-chip__portrait">
         <PlayerHeadshot
           className="player-chip__headshot"

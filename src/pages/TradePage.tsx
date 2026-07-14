@@ -18,10 +18,11 @@ import {
   type TradeSuggestion,
   type TradeTraits,
 } from '../services/leagueApi';
-import { TradeAnalyzerPanel, acceptanceProbability } from '../components/trade/TradeAnalyzerPanel';
+import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
 import type { LeagueBootstrap, MarketMover } from '../services/leagueApi';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
 import { loadTradeTraits, saveTradeTraits } from '../utils/tradeTraits';
+import { acceptanceProbability } from '../utils/tradeAcceptance';
 import './TradePage.css';
 
 function laneIds(primary?: string[], fallback?: string) {
@@ -168,6 +169,15 @@ function laneBelongsToLeague(
   );
 }
 
+function isSamePositionOneForOneLane(lane: MarketMover, bootstrap: LeagueBootstrap) {
+  const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
+  const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
+  if (givePlayerIds.length !== 1 || getPlayerIds.length !== 1) return false;
+  const givePosition = bootstrap.players[givePlayerIds[0]]?.position;
+  const getPosition = bootstrap.players[getPlayerIds[0]]?.position;
+  return Boolean(givePosition && getPosition && givePosition === getPosition);
+}
+
 /** Your private read on a manager: two subjective sliders that feed the trade
  *  acceptance model. Saved per manager and loaded into every trade with them. */
 function ManagerReadCard({
@@ -278,9 +288,14 @@ function TradeDealsView() {
   const lanes = useMemo(
     () => {
       if (!pricing?.available || !bootstrap || !stored) return [];
-      return (pricing.movers ?? []).filter((mover) =>
+      const tradeLanes = (pricing.movers ?? []).filter((mover) =>
         mover.kind === 'trade' && laneBelongsToLeague(mover, bootstrap, stored.leagueId),
       );
+      const filteredCount = tradeLanes.filter((lane) => isSamePositionOneForOneLane(lane, bootstrap)).length;
+      if (import.meta.env.DEV && filteredCount > 0) {
+        console.info('[market] filtered same-position trade suggestions', filteredCount);
+      }
+      return tradeLanes.filter((lane) => !isSamePositionOneForOneLane(lane, bootstrap));
     },
     [bootstrap, pricing, stored],
   );
@@ -349,7 +364,7 @@ function TradeDealsView() {
       .catch(() => { if (active) setSuggestions([]); })
       .finally(() => { if (active) setSuggLoading(false); });
     return () => { active = false; };
-  }, [stored, bootstrap?.league.id]);
+  }, [bootstrap, stored]);
 
   // Rank suggestions by expected championship gain = yourΔc × P(partner accepts),
   // where acceptance uses YOUR saved friendliness/relationship read per manager.
@@ -361,7 +376,7 @@ function TradeDealsView() {
       const accept = acceptanceProbability(s.partnerDelta, t.friendliness, t.relationship);
       return { ...s, accept, score: (s.youDelta * accept) / 100 };
     });
-  }, [suggestions, stored?.leagueId, friendliness, relationship]);
+  }, [suggestions, stored?.leagueId]);
   // Gate on a minimum acceptance so lopsided fleeces (huge yourΔc, ~3% accept)
   // never win on score alone, THEN rank the survivors by expected gain. If
   // nothing clears the bar, fall back to the most-acceptable trades (never an
