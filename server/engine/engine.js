@@ -714,6 +714,10 @@ export function priceLeague(ctx) {
   const futures = simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed });
 
   // ── the user's line for every scheduled week (Season tab schedule) ──
+  // Same replacement levels the futures sim uses, so a future week where a
+  // starter is on bye (or an empty required slot) is priced as if the manager
+  // streams the waiver-level replacement, not a 0.
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
   const weeklyLines = [];
   const userTeamForWeekly = teams.find((t) => t.isUser);
   const weeklyRng = mulberry32((seed ^ 0x85ebca6b) >>> 0);
@@ -756,13 +760,17 @@ export function priceLeague(ctx) {
         opponentProjection = opponentSide.projection;
         note = 'Live line, your current lineup.';
       } else {
-        // Future week: optimal lineup vs optimal lineup, player-level sim.
-        const wp = simulateMatchupWinProb(my.params, opp.params, weeklyRng);
+        // Future week: optimal lineup vs optimal lineup, player-level sim, with
+        // bye/empty required slots filled at the streamable replacement level
+        // (same as the futures sim) so a bye doesn't crater the projection.
+        const myStreamed = streamedLineupParams(userTeamForWeekly.players, slotLabels, projectionMap, catalog, entry.week, replacementFor);
+        const oppStreamed = streamedLineupParams(oppTeam?.players ?? [], slotLabels, projectionMap, catalog, entry.week, replacementFor);
+        const wp = simulateMatchupWinProb(myStreamed, oppStreamed, weeklyRng);
         moneyline = probToAmerican(wp);
         winProb = Number((wp * 100).toFixed(1));
-        projection = Number(sumMeans(my.params).toFixed(1));
-        opponentProjection = Number(sumMeans(opp.params).toFixed(1));
-        note = 'Optimal lineups, simulated player-by-player.';
+        projection = Number(sumMeans(myStreamed).toFixed(1));
+        opponentProjection = Number(sumMeans(oppStreamed).toFixed(1));
+        note = 'Optimal lineups (bye/empty slots filled at replacement), simulated player-by-player.';
       }
 
       weeklyLines.push({
@@ -793,6 +801,8 @@ export function priceLeague(ctx) {
     scheduleWeeks,
     week,
     catalog,
+    slotLabels,
+    replacementFor,
   });
 
   // ── market movers: real FA claim + trade lanes, priced ──
@@ -854,7 +864,7 @@ const GRADE_SCALE = [
  * - boldest pick = the user's biggest reach vs the model's overall rank
  * - roster grade = user's projected starter points vs the league median
  */
-function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByRoster, scheduleWeeks, week, catalog }) {
+function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByRoster, scheduleWeeks, week, catalog, slotLabels, replacementFor }) {
   if (!draftPicks || draftPicks.length === 0) return null;
 
   const userTeam = teams.find((t) => t.isUser);
@@ -907,10 +917,13 @@ function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByR
       (m) => m.matchupId === mine.matchupId && m.rosterId !== mine.rosterId,
     );
     if (!theirs) continue;
-    const opp = distByRoster.get(theirs.rosterId);
-    const me = distByRoster.get(userTeam.rosterId);
-    if (!opp || !me) continue;
-    const winProb = normalCdf((me.mean - opp.mean) / Math.sqrt((me.sigma ** 2 + opp.sigma ** 2) || 1));
+    const oppTeam = teamsByRoster.get(theirs.rosterId);
+    if (!oppTeam) continue;
+    // Full player-level sim (same as the schedule), byes filled at replacement.
+    const dwRng = mulberry32((0x1234567 ^ entry.week) >>> 0);
+    const meParams = streamedLineupParams(userTeam.players, slotLabels, projectionMap, catalog, entry.week, replacementFor);
+    const oppParams = streamedLineupParams(oppTeam.players, slotLabels, projectionMap, catalog, entry.week, replacementFor);
+    const winProb = simulateMatchupWinProb(meParams, oppParams, dwRng);
     const row = {
       week: entry.week,
       opponent: teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`,
@@ -2044,6 +2057,8 @@ export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
     return out;
   };
   const nameOf = (id) => catalog[id]?.name ?? String(id);
+  // 3-for-3 included: it only adds cheap proxy candidates (we still sim just the
+  // top `maxSim`), and balanced 3-for-3 star swaps are common realistic trades.
   const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]];
 
   const t0 = Date.now();
@@ -2089,22 +2104,24 @@ export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
   }).slice(0, maxSim);
 
   // ── Sim only the promising set for real Δ championship %, yielding between
-  // small batches so we never block other requests for long.
-  const SIMS = 2500;
-  // Only keep REALISTIC trades: they must help you (youDelta > 0) AND not gut the
-  // partner (their title drop within this many points). A trade that swings the
-  // partner far negative is a fleece no one accepts, so we don't surface it.
+  // small batches so we never block other requests for long. Use the SAME sim
+  // count + seed as the Build-a-trade analyzer (analyzeTrade), so a suggestion's
+  // numbers here match exactly when you open it in the analyzer.
+  const SIMS = SEASON_SIMS;
+  // Prefer REALISTIC (near-even) trades: they help you AND don't gut the partner
+  // (title drop within this many points — a big partner loss is a fleece no one
+  // accepts). We PREFER these but fall back to any title-raising trade if none
+  // are near-even, so the finder is never empty when a helpful trade exists.
   const MAX_PARTNER_DROP = 2;
   const baseline = simulateSeason({ ...base, sims: SIMS });
-  const suggestions = [];
+  const helpsYou = [];
   let simmed = 0;
   for (const c of promising) {
     const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SIMS, baseline);
     simmed += 1;
     if (simmed % 3 === 0) await yieldToLoop();
-    if (youDelta <= 0) continue;
-    if (partnerDelta < -MAX_PARTNER_DROP) continue; // near-even only — no fleeces
-    suggestions.push({
+    if (youDelta <= 0) continue; // must raise YOUR title
+    helpsYou.push({
       partnerRosterId: c.partner.rosterId,
       partnerName: c.partner.teamName,
       give: c.give.map((id) => ({ id, name: nameOf(id) })),
@@ -2113,6 +2130,8 @@ export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
       partnerDelta: Number(partnerDelta.toFixed(1)),
     });
   }
+  const nearEven = helpsYou.filter((s) => s.partnerDelta >= -MAX_PARTNER_DROP);
+  const suggestions = nearEven.length > 0 ? nearEven : helpsYou;
   // Client gates on acceptance and ranks by expected gain. Sort by your gain for
   // stable ordering.
   suggestions.sort((a, b) => b.youDelta - a.youDelta);

@@ -851,7 +851,7 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     // The sim is expensive but input-stable; cache per league+user+overlay for 2 min.
     const version = liveProjections?.version ?? 'snapshot';
     const key = `agg:trade-suggestions:${leagueId}:${userId}:${version}:${overlay ? 'ov' : 'base'}`;
-    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 30 }));
+    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 18 }));
     res.json(result);
   } catch (error) {
     next(error);
