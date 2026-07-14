@@ -450,6 +450,9 @@ export function ProjectionsPage() {
       } else {
         setSaveError(null);
         setSaving((s) => ({ ...s, [key]: 'ok' }));
+        // Force the server's agreement-weighted projections (board + pricing) to
+        // recompute now, instead of waiting for its lazy background refresh.
+        void fetch('/api/projections/refresh-adjusted', { method: 'POST' }).catch(() => {});
         // Tell every open tab (all users) to re-pull the consensus now.
         try {
           channelRef.current?.send({ type: 'broadcast', event: 'changed', payload: {} });

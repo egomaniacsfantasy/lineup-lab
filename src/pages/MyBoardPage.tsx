@@ -183,16 +183,26 @@ export function MyBoardPage() {
   const scoring = bootstrap?.league.scoringFamily;
   useEffect(() => {
     let cancelled = false;
-    fetchBoard(800, scoring)
-      .then((payload) => {
-        if (!cancelled && payload.available) {
-          setBoard(payload.rankings);
-          setVersion(payload.version);
-        }
-      })
-      .catch(() => null);
+    const load = () => {
+      fetchBoard(800, scoring)
+        .then((payload) => {
+          if (!cancelled && payload.available) {
+            setBoard(payload.rankings);
+            setVersion(payload.version);
+          }
+        })
+        .catch(() => null);
+    };
+    load();
+    // Pick up agreement edits without a hard refresh: reload on focus and on a
+    // slow interval while the board is open.
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    const interval = window.setInterval(load, 60_000);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(interval);
     };
   }, [scoring]);
 
