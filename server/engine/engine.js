@@ -2067,6 +2067,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null }
   const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]];
 
   const t0 = Date.now();
+  // Candidate generation uses ONLY projected-value fairness to decide which trades
+  // are worth simulating — NO starter-lineup metric. Championship % from the sim
+  // is the only thing that determines value; this just picks the near-even trades
+  // to sim (we can't sim every possible combo). gap = how balanced the trade is;
+  // edge = how much MORE projected value YOU get (positive = leans your way).
   const scored = [];
   for (const opp of opponents) {
     const mine = tradeable(userTeam);
@@ -2078,24 +2083,15 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null }
           const tv = val(get);
           const r = tv > 0 ? gv / tv : 1;
           if (r < 0.75 || r > 1.3) continue; // fair value only — no lopsided fleeces
-          const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
-          const youGain = computeStarterImpact(userTeam.players, userAfter, slotLabels, projectionMap, catalog).delta;
-          const oppAfter = opp.players.filter((id) => !get.includes(id)).concat(give);
-          const themGain = computeStarterImpact(opp.players, oppAfter, slotLabels, projectionMap, catalog).delta;
-          if (themGain < -6) continue; // proxy: never even consider gutting the partner
-          // NOTE: we do NOT require youGain > 0 — a near-even star-for-star swap is
-          // roughly lateral on starter points but can still lift your title via
-          // fit/depth/schedule. The sim decides; the proxy just avoids fleeces.
-          scored.push({ partner: opp, give, get, youGain, themGain, gap: Math.abs(gv - tv) });
+          scored.push({ partner: opp, give, get, gap: Math.abs(gv - tv), edge: tv - gv });
         }
       }
     }
   }
 
-  // Build a broad SCAN set per opponent: the most BALANCED fair trades (smallest
-  // value gap — the near-even star-for-star swaps) PLUS the best mutual-benefit
-  // ones (win-wins). This covers the lateral near-even trades the old magnitude
-  // ranking always missed.
+  // Build the SCAN set per opponent: the most BALANCED fair trades, favoring the
+  // ones that lean slightly your way (edge >= 0), since those are the realistic
+  // near-even swaps that raise your title without gutting the partner.
   const dedupeKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
   const numOpp = Math.max(1, opponents.length);
   const SCAN_CAP = 54;
@@ -2121,8 +2117,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null }
   };
   for (const list of byOpp.values()) {
     if (promising.length >= SCAN_CAP) break;
-    takeFrom([...list].sort((a, b) => a.gap - b.gap), Math.ceil(perOpp * 0.6)); // most balanced
-    takeFrom([...list].sort((a, b) => (b.youGain + b.themGain) - (a.youGain + a.themGain)), perOpp); // win-wins
+    // Balanced trades that lean your way first, then any balanced trade.
+    takeFrom(list.filter((c) => c.edge >= 0).sort((a, b) => a.gap - b.gap), Math.ceil(perOpp * 0.7));
+    takeFrom([...list].sort((a, b) => a.gap - b.gap), perOpp);
   }
 
   const MAX_PARTNER_DROP = 2; // realistic: partner's title drop no worse than this

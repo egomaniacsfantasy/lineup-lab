@@ -851,7 +851,10 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
     // The sim is expensive but input-stable; cache per league+user+overlay for 2 min.
     const version = liveProjections?.version ?? 'snapshot';
-    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${version}:${overlay ? 'ov' : 'base'}`;
+    // Include the deploy commit so a new deploy never serves finder numbers that
+    // disagree with the (live) analyzer running the newer code.
+    const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
+    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${version}:${overlay ? 'ov' : 'base'}:${build}`;
     const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId }));
     res.json(result);
   } catch (error) {
