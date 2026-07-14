@@ -11,8 +11,17 @@ import { Router } from 'express';
 import { loadProjections, reloadProjections } from '../projections/loadFromRepo.js';
 import { getAllAgreement, setAgreement, POSITIONS, COLUMNS, COLUMN_KEYS } from '../projections/agreementStore.js';
 import { getSupabaseAdmin, getRequestUserId } from '../services/supabaseAdmin.js';
+import { invalidateAdjusted } from '../projections/adjusted.js';
 
 export const projectionsRouter = Router();
+
+// Client pings this right after it upserts an agreement value to Supabase, so the
+// agreement-weighted projections (board + pricing) recompute in seconds instead
+// of waiting for the lazy ~60s background refresh.
+projectionsRouter.post('/refresh-adjusted', (_req, res) => {
+  invalidateAdjusted();
+  res.json({ ok: true });
+});
 
 function requireAdmin(req, res) {
   const expected = (process.env.ADMIN_PASSWORD ?? 'olympus-admin').trim();

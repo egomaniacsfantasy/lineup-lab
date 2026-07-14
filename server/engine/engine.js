@@ -302,6 +302,20 @@ function optimalAssign(playerIds, slotLabels, projectionMap, catalog, week) {
   return assign;
 }
 
+// Projected points contributed by ONE position's STARTERS in the optimal lineup
+// (dedicated slots + any flex slots that position wins). Used only to test
+// whether a trade upgrades a specific position the user asked to improve.
+function positionStarterMean(playerIds, position, slotLabels, projectionMap, catalog) {
+  const assign = optimalAssign(playerIds, slotLabels, projectionMap, catalog, null);
+  let mean = 0;
+  for (const a of assign) {
+    if (a.playerId && catalog[a.playerId]?.position === position) {
+      mean += projectionMap.get(a.playerId)?.mean ?? 0;
+    }
+  }
+  return mean;
+}
+
 // Fallback replacement floor when the projection universe has no free agent at a
 // position (e.g. synthetic tests). Real leagues override this per-position with
 // the best available free agent (see replacementLevels).
@@ -714,6 +728,10 @@ export function priceLeague(ctx) {
   const futures = simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed });
 
   // ── the user's line for every scheduled week (Season tab schedule) ──
+  // Same replacement levels the futures sim uses, so a future week where a
+  // starter is on bye (or an empty required slot) is priced as if the manager
+  // streams the waiver-level replacement, not a 0.
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
   const weeklyLines = [];
   const userTeamForWeekly = teams.find((t) => t.isUser);
   const weeklyRng = mulberry32((seed ^ 0x85ebca6b) >>> 0);
@@ -756,13 +774,17 @@ export function priceLeague(ctx) {
         opponentProjection = opponentSide.projection;
         note = 'Live line, your current lineup.';
       } else {
-        // Future week: optimal lineup vs optimal lineup, player-level sim.
-        const wp = simulateMatchupWinProb(my.params, opp.params, weeklyRng);
+        // Future week: optimal lineup vs optimal lineup, player-level sim, with
+        // bye/empty required slots filled at the streamable replacement level
+        // (same as the futures sim) so a bye doesn't crater the projection.
+        const myStreamed = streamedLineupParams(userTeamForWeekly.players, slotLabels, projectionMap, catalog, entry.week, replacementFor);
+        const oppStreamed = streamedLineupParams(oppTeam?.players ?? [], slotLabels, projectionMap, catalog, entry.week, replacementFor);
+        const wp = simulateMatchupWinProb(myStreamed, oppStreamed, weeklyRng);
         moneyline = probToAmerican(wp);
         winProb = Number((wp * 100).toFixed(1));
-        projection = Number(sumMeans(my.params).toFixed(1));
-        opponentProjection = Number(sumMeans(opp.params).toFixed(1));
-        note = 'Optimal lineups, simulated player-by-player.';
+        projection = Number(sumMeans(myStreamed).toFixed(1));
+        opponentProjection = Number(sumMeans(oppStreamed).toFixed(1));
+        note = 'Optimal lineups (bye/empty slots filled at replacement), simulated player-by-player.';
       }
 
       weeklyLines.push({
@@ -793,6 +815,8 @@ export function priceLeague(ctx) {
     scheduleWeeks,
     week,
     catalog,
+    slotLabels,
+    replacementFor,
   });
 
   // ── market movers: real FA claim + trade lanes, priced ──
@@ -854,7 +878,7 @@ const GRADE_SCALE = [
  * - boldest pick = the user's biggest reach vs the model's overall rank
  * - roster grade = user's projected starter points vs the league median
  */
-function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByRoster, scheduleWeeks, week, catalog }) {
+function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByRoster, scheduleWeeks, week, catalog, slotLabels, replacementFor }) {
   if (!draftPicks || draftPicks.length === 0) return null;
 
   const userTeam = teams.find((t) => t.isUser);
@@ -907,10 +931,13 @@ function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByR
       (m) => m.matchupId === mine.matchupId && m.rosterId !== mine.rosterId,
     );
     if (!theirs) continue;
-    const opp = distByRoster.get(theirs.rosterId);
-    const me = distByRoster.get(userTeam.rosterId);
-    if (!opp || !me) continue;
-    const winProb = normalCdf((me.mean - opp.mean) / Math.sqrt((me.sigma ** 2 + opp.sigma ** 2) || 1));
+    const oppTeam = teamsByRoster.get(theirs.rosterId);
+    if (!oppTeam) continue;
+    // Full player-level sim (same as the schedule), byes filled at replacement.
+    const dwRng = mulberry32((0x1234567 ^ entry.week) >>> 0);
+    const meParams = streamedLineupParams(userTeam.players, slotLabels, projectionMap, catalog, entry.week, replacementFor);
+    const oppParams = streamedLineupParams(oppTeam.players, slotLabels, projectionMap, catalog, entry.week, replacementFor);
+    const winProb = simulateMatchupWinProb(meParams, oppParams, dwRng);
     const row = {
       week: entry.week,
       opponent: teamsByRoster.get(theirs.rosterId)?.teamName ?? `Roster ${theirs.rosterId}`,
@@ -1968,7 +1995,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
  * Δ championship %. The client applies the acceptance model (its per-manager
  * friendliness/relationship sliders) and ranks by expected gain = yourΔc × P(accept).
  */
-export function suggestTrades(ctx, { maxSim = 15 } = {}) {
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -1979,7 +2006,12 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return { available: false, reason: 'team_not_found' };
-  const opponents = teams.filter((t) => !t.isUser);
+  // Manager-first: when a partner is chosen, search ONLY that manager (a wider,
+  // deeper net for the one team). Otherwise fall back to every opponent.
+  const opponents = partnerRosterId != null
+    ? teams.filter((t) => !t.isUser && t.rosterId === partnerRosterId)
+    : teams.filter((t) => !t.isUser);
+  if (opponents.length === 0) return { available: true, suggestions: [], debug: { generated: 0, simmed: 0, positive: 0, ms: 0 } };
 
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
@@ -2019,13 +2051,21 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
     return { youDelta: au.titleProb - bu.titleProb, partnerDelta: ap.titleProb - bp.titleProb };
   };
 
-  // ── EXHAUSTIVE enumeration: every 1-for-1, 2-for-1, and 1-for-2 with every
-  // opponent. No sampling, no value pre-filter — every combination is simmed.
+  // Yield to the event loop so a concurrent request (e.g. the trade analyzer)
+  // isn't starved while the search runs.
+  const yieldToLoop = () => new Promise((resolve) => setImmediate(resolve));
+
+  // ── Candidate generation is CHEAP: fair-value combos with each opponent
+  // (1-1, 2-1, 1-2, 2-2, 3-3), scored by a starter-points PROXY (no simming).
+  // Only the competent few get the expensive season sim — that's what keeps this
+  // fast instead of simming thousands of trades.
   const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
   const projected = (id) => projectionMap.get(id)?.mean ?? 0;
+  const val = (ids) => ids.reduce((s, id) => s + projected(id), 0);
   const tradeable = (team) => team.players
     .filter((id) => TRADEABLE.includes(catalog[id]?.position))
-    .sort((a, b) => projected(b) - projected(a));
+    .sort((a, b) => projected(b) - projected(a))
+    .slice(0, 9);
   const combos = (arr, k) => {
     if (k <= 0) return [[]];
     if (k > arr.length) return [];
@@ -2036,50 +2076,103 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
     return out;
   };
   const nameOf = (id) => catalog[id]?.name ?? String(id);
-  // Neutral-slider acceptance (friendliness = relationship = 5 -> threshold 0.6),
-  // matching the client's logistic. Used only to PICK the re-sim set; the client
-  // recomputes with the real per-manager sliders for the final gate + ranking.
-  const acceptN = (pd) => 1 / (1 + Math.exp(-((pd - 0.6) / 1.5)));
+  // 3-for-3 included: it only adds cheap proxy candidates (we still sim just the
+  // top `maxSim`), and balanced 3-for-3 star swaps are common realistic trades.
+  const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]];
 
-  const candidates = [];
+  const t0 = Date.now();
+  // Optional "upgrade this position" filter: only keep trades that raise the
+  // user's STARTING output at that position (its dedicated + flex starters). It's
+  // a candidate filter — championship % is still the value; this just narrows the
+  // search to trades that improve, say, RB.
+  const targetPos = position && ['QB', 'RB', 'WR', 'TE'].includes(position) ? position : null;
+  const beforePos = targetPos ? positionStarterMean(userTeam.players, targetPos, slotLabels, projectionMap, catalog) : 0;
+
+  // Candidate generation uses ONLY projected-value fairness to decide which trades
+  // are worth simulating — NO starter-lineup metric. Championship % from the sim
+  // is the only thing that determines value; this just picks the near-even trades
+  // to sim (we can't sim every possible combo). gap = how balanced the trade is;
+  // edge = how much MORE projected value YOU get (positive = leans your way).
+  const scored = [];
   for (const opp of opponents) {
     const mine = tradeable(userTeam);
     const theirs = tradeable(opp);
-    for (const gi of mine) for (const ti of theirs) candidates.push({ partner: opp, give: [gi], get: [ti] });
-    for (const pair of combos(mine, 2)) for (const ti of theirs) candidates.push({ partner: opp, give: pair, get: [ti] });
-    for (const gi of mine) for (const pair of combos(theirs, 2)) candidates.push({ partner: opp, give: [gi], get: pair });
+    for (const [k, j] of SIZES) {
+      for (const give of combos(mine, k)) {
+        const gv = val(give);
+        for (const get of combos(theirs, j)) {
+          const tv = val(get);
+          const r = tv > 0 ? gv / tv : 1;
+          if (r < 0.75 || r > 1.3) continue; // fair value only — no lopsided fleeces
+          if (targetPos) {
+            const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
+            const afterPos = positionStarterMean(userAfter, targetPos, slotLabels, projectionMap, catalog);
+            if (afterPos <= beforePos + 0.1) continue; // must upgrade that position's starters
+          }
+          scored.push({ partner: opp, give, get, gap: Math.abs(gv - tv), edge: tv - gv });
+        }
+      }
+    }
   }
 
-  // ── Pass 1: low-sim scan of the ENTIRE set. CRN (shared seed vs the baseline)
-  // cancels common variance, so youDelta is stable enough to rank/filter cheaply.
-  // Keep only trades that raise YOUR title.
-  const t0 = Date.now();
-  const SCAN_SIMS = 250;
+  // Build the SCAN set per opponent: the most BALANCED fair trades, favoring the
+  // ones that lean slightly your way (edge >= 0), since those are the realistic
+  // near-even swaps that raise your title without gutting the partner.
+  const dedupeKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
+  const numOpp = Math.max(1, opponents.length);
+  const SCAN_CAP = 54;
+  const perOpp = Math.max(12, Math.ceil(SCAN_CAP / numOpp));
+  const byOpp = new Map();
+  for (const c of scored) {
+    const list = byOpp.get(c.partner.rosterId) ?? [];
+    list.push(c);
+    byOpp.set(c.partner.rosterId, list);
+  }
+  const seen = new Set();
+  const promising = [];
+  const takeFrom = (sorted, quota) => {
+    let taken = 0;
+    for (const c of sorted) {
+      if (taken >= quota || promising.length >= SCAN_CAP) break;
+      const key = dedupeKey(c);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      promising.push(c);
+      taken += 1;
+    }
+  };
+  for (const list of byOpp.values()) {
+    if (promising.length >= SCAN_CAP) break;
+    // Balanced trades that lean your way first, then any balanced trade.
+    takeFrom(list.filter((c) => c.edge >= 0).sort((a, b) => a.gap - b.gap), Math.ceil(perOpp * 0.7));
+    takeFrom([...list].sort((a, b) => a.gap - b.gap), perOpp);
+  }
+
+  const MAX_PARTNER_DROP = 2; // realistic: partner's title drop no worse than this
+  // ── Pass 1: cheap scan to find which balanced candidates actually raise your
+  // title without dropping the partner past the near-even gate.
+  const SCAN_SIMS = 1200;
   const scanBaseline = simulateSeason({ ...base, sims: SCAN_SIMS });
   const scanned = [];
-  for (const c of candidates) {
+  let simmed = 0;
+  for (const c of promising) {
     const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline);
-    if (youDelta > 0) scanned.push({ ...c, youDelta, partnerDelta, accN: acceptN(partnerDelta) });
+    simmed += 1;
+    if (simmed % 4 === 0) await yieldToLoop();
+    if (youDelta > 0 && partnerDelta >= -MAX_PARTNER_DROP) scanned.push({ ...c, youDelta });
   }
 
-  // Pick the re-sim set: acceptable-and-helpful trades (neutral accept >= 15%) by
-  // prelim expected gain, PLUS the most-acceptable trades regardless — so the
-  // client always has fallback options even if its sliders push things below the
-  // floor. This is what surfaces near-even swaps (small yourΔc, decent accept)
-  // rather than only fleeces.
-  const eligible = scanned.filter((s) => s.accN >= 0.15);
-  const byScore = [...eligible].sort((a, b) => b.youDelta * b.accN - a.youDelta * a.accN).slice(0, maxSim);
-  const byAccept = [...scanned].sort((a, b) => b.accN - a.accN).slice(0, 20);
-  const reKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
-  const reSimSet = [...new Map([...byScore, ...byAccept].map((c) => [reKey(c), c])).values()];
-
-  // ── Pass 2: re-sim the survivors at high resolution for accurate displayed %.
-  const FINAL_SIMS = 4000;
-  const finalBaseline = simulateSeason({ ...base, sims: FINAL_SIMS });
+  // ── Pass 2: re-sim the best survivors at FULL sims (same seed + count as the
+  // Build-a-trade analyzer) so the shown Δc matches exactly. Re-confirm the gate.
+  const finalists = scanned.sort((a, b) => b.youDelta - a.youDelta).slice(0, 8);
+  const finalBaseline = simulateSeason({ ...base, sims: SEASON_SIMS });
   const suggestions = [];
-  for (const c of reSimSet) {
-    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, FINAL_SIMS, finalBaseline);
-    if (youDelta <= 0) continue;
+  let re = 0;
+  for (const c of finalists) {
+    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline);
+    re += 1;
+    if (re % 3 === 0) await yieldToLoop();
+    if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
     suggestions.push({
       partnerRosterId: c.partner.rosterId,
       partnerName: c.partner.teamName,
@@ -2089,16 +2182,14 @@ export function suggestTrades(ctx, { maxSim = 15 } = {}) {
       partnerDelta: Number(partnerDelta.toFixed(1)),
     });
   }
-  // Client gates on acceptance and ranks by expected gain. Sort by your gain for
-  // stable ordering.
   suggestions.sort((a, b) => b.youDelta - a.youDelta);
   return {
     available: true,
     suggestions: suggestions.slice(0, 40),
     debug: {
-      enumerated: candidates.length,
+      generated: scored.length,
+      simmed: promising.length,
       scanned: scanned.length,
-      resimmed: reSimSet.length,
       positive: suggestions.length,
       ms: Date.now() - t0,
     },

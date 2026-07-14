@@ -145,6 +145,19 @@ export async function warmAdjustedProjections() {
   for (const suf of SCORING_SUFFIXES) _refreshInBackground(suf);
 }
 
+/**
+ * Force a fresh consensus read + recompute of every scoring format. Call this
+ * right after an agreement value is edited so the change is reflected in the
+ * board / pricing within seconds, not on the next ~60s lazy background refresh.
+ */
+export function invalidateAdjusted() {
+  _consensusMemo = { at: 0, data: null }; // drop the 30s consensus memo -> re-read Supabase
+  for (const suf of SCORING_SUFFIXES) {
+    _cacheFor(suf).at = 0; // mark stale so any reader also refreshes
+    _refreshInBackground(suf);
+  }
+}
+
 // Only RB/WR/TE differ by scoring format (receptions). QB/K/DEF are invariant, so
 // they always read the base columns regardless of the requested suffix.
 const RECEIVING = new Set(['RB', 'WR', 'TE']);
