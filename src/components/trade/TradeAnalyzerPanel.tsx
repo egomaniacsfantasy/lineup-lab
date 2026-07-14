@@ -5,7 +5,7 @@ import { acceptanceProbability } from '../../utils/tradeAcceptance';
  * Season-simulation impact for the trade being built in the Deals "Build a
  * trade" panel. Everything DISPLAYED (Δ championship %, playoff %, exp wins,
  * seed, and the Overpay/Fair/Steal verdict) comes purely from the sim + the
- * players in the trade — independent of the sliders. The per-manager
+ * players in the trade, independent of the sliders. The per-manager
  * friendliness/relationship read (set on the manager card) feeds ONLY the
  * "Will they accept?" logistic; it never touches the championship numbers.
  */
@@ -18,7 +18,7 @@ function acceptanceBand(pct: number) {
   return 'Long shot';
 }
 
-// Verdict is purely YOUR championship change — "should I do this?".
+// Verdict is purely YOUR championship change: "should I do this?".
 function verdict(youDeltaTitle: number) {
   if (youDeltaTitle >= 4) return { label: 'Steal', tone: 'steal' };
   if (youDeltaTitle >= 1.5) return { label: 'Good value', tone: 'good' };
@@ -40,6 +40,7 @@ export function TradeAnalyzerPanel({
   posOf,
   friendliness,
   relationship,
+  showVerdict = true,
 }: {
   analysis: TradeAnalysis | null;
   analyzing: boolean;
@@ -51,6 +52,7 @@ export function TradeAnalyzerPanel({
   posOf: (id: string) => string;
   friendliness: number;
   relationship: number;
+  showVerdict?: boolean;
 }) {
   if (!analyzing && !error && !(analysis?.available && analysis.you && analysis.partner)) {
     return null;
@@ -71,7 +73,7 @@ export function TradeAnalyzerPanel({
 
       {ready ? (
         <>
-          {/* Verdict rail — YOUR championship change only. */}
+          {showVerdict ? (
           <div className="trade-analyzer-panel__verdict-block">
             <div className="trade-analyzer-panel__verdict-head">
               <span className={`trade-analyzer-panel__verdict-stamp trade-analyzer-panel__verdict-stamp--${v!.tone}`}>
@@ -92,8 +94,8 @@ export function TradeAnalyzerPanel({
               <span>Overpay</span><span>Fair</span><span>Steal</span>
             </div>
           </div>
+          ) : null}
 
-          {/* Acceptance — their championship change + your manager read. */}
           <div className="trade-analyzer-panel__accept">
             <div className="trade-analyzer-panel__accept-top">
               <span className="trade-analyzer-panel__accept-label">Will {partnerName} accept?</span>
@@ -102,7 +104,7 @@ export function TradeAnalyzerPanel({
             </div>
             <p className="trade-analyzer-panel__accept-note">
               Driven by their championship change (<Delta v={theirDelta} pct />), nudged by your read on{' '}
-              {partnerName} (friendliness {friendliness}, relationship {relationship}) — set that on their
+              {partnerName} (friendliness {friendliness}, relationship {relationship}). Set that on their
               card above. It never changes the championship numbers.
             </p>
           </div>
@@ -144,11 +146,21 @@ function SideCard({ side }: { side: TradeSideDelta }) {
         {side.teamName} {side.isUser ? '(you)' : ''}
       </p>
       {rows.map((r) => (
-        <div key={r.label} className="trade-analyzer-panel__row">
+        <div
+          key={r.label}
+          className={[
+            'trade-analyzer-panel__row',
+            r.label === 'Championship' ? 'trade-analyzer-panel__row--primary' : '',
+          ].filter(Boolean).join(' ')}
+        >
           <span className="trade-analyzer-panel__row-label">{r.label}</span>
           <span className="trade-analyzer-panel__row-val">
-            {r.b.toFixed(1)}{r.pct ? '%' : ''} → {r.a.toFixed(1)}{r.pct ? '%' : ''}
-            &nbsp;<Delta v={r.d} goodUp={r.goodUp} pct={r.pct} />
+            <span>{r.b.toFixed(1)}{r.pct ? '%' : ''}</span>
+            <span aria-hidden="true">→</span>
+            <span>{r.a.toFixed(1)}{r.pct ? '%' : ''}</span>
+            <span className="trade-analyzer-panel__delta-chip">
+              <Delta v={r.d} goodUp={r.goodUp} pct={r.pct} />
+            </span>
           </span>
         </div>
       ))}
@@ -176,10 +188,6 @@ function Results({
 
   return (
     <div className="trade-analyzer-panel__results">
-      {result.warnings?.you ? (
-        <div className="trade-analyzer-panel__warning">⚠ {result.warnings.you}</div>
-      ) : null}
-
       {needYou > 0 ? (
         <div className="trade-analyzer-panel__drops">
           <p className="trade-analyzer-panel__drops-text">

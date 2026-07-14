@@ -1,0 +1,43 @@
+.simulation-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 48px;
+  width: 100%;
+  border: 1px solid rgba(232, 84, 29, 0.28);
+  border-radius: 12px;
+  background:
+    radial-gradient(90% 160% at 50% 0%, rgba(232, 84, 29, 0.12), transparent 64%),
+    var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.simulation-loader__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(244, 245, 242, 0.18);
+  border-top-color: var(--amber-bright);
+  border-radius: 50%;
+  animation: simulation-loader-spin 800ms linear infinite;
+}
+
+.simulation-loader__copy {
+  min-width: 0;
+}
+
+@keyframes simulation-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .simulation-loader__spinner {
+    animation: none;
+  }
+}

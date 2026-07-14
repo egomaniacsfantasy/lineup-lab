@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
+import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
 import { ScoutingView } from './market/ScoutingView';
 import '../components/trade/TradeAnalyzerPanel.css';
@@ -11,18 +12,15 @@ import {
   priceTrade,
   analyzeTradeApi,
   fetchTradeCounter,
-  fetchTradeSuggestions,
   type TradeResult,
   type TradeAnalysis,
   type TradeCounter,
-  type TradeSuggestion,
   type TradeTraits,
 } from '../services/leagueApi';
 import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
 import type { LeagueBootstrap, MarketMover } from '../services/leagueApi';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
 import { loadTradeTraits, saveTradeTraits } from '../utils/tradeTraits';
-import { acceptanceProbability } from '../utils/tradeAcceptance';
 import './TradePage.css';
 
 function laneIds(primary?: string[], fallback?: string) {
@@ -126,6 +124,48 @@ function acceptanceTone(probability = 50) {
   return 'trade-cc__lane-acceptance-fill--neutral';
 }
 
+function analysisVerdict(youDeltaTitle: number) {
+  if (youDeltaTitle >= 4) return { label: 'Steal', stamp: 'STEAL.', tone: 'good' };
+  if (youDeltaTitle >= 1.5) return { label: 'Good value', stamp: 'GOOD VALUE.', tone: 'good' };
+  if (youDeltaTitle > -1.5) return { label: 'Fair', stamp: 'FAIR DEAL.', tone: 'neutral' };
+  if (youDeltaTitle > -4) return { label: 'Overpay', stamp: 'OVERPAY.', tone: 'bad' };
+  return { label: 'Big overpay', stamp: 'BIG OVERPAY.', tone: 'bad' };
+}
+
+function railPosition(youDeltaTitle: number) {
+  return 0.5 + 0.5 * Math.tanh(youDeltaTitle / 6);
+}
+
+function priceRailStyle(position: number): CSSProperties {
+  const pct = Math.max(0, Math.min(1, position)) * 100;
+  return {
+    '--trade-price-position': `${pct}%`,
+    '--trade-price-fill-left': `${Math.min(50, pct)}%`,
+    '--trade-price-fill-width': `${Math.abs(pct - 50)}%`,
+  } as CSSProperties;
+}
+
+function signedPct(value: number) {
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
+
+function formatGeneratedAt(value?: number) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'TM';
+}
+
 const NEUTRAL_TRADE_TRAITS: TradeTraits = {
   toughness: 5,
   dealAppetite: 5,
@@ -207,7 +247,7 @@ function ManagerReadCard({
         onChange={(n) => onChange({ relationship: n })}
       />
       <p className="trade-cc__read-note">
-        Only nudges the acceptance odds — never the championship numbers. Saved for this manager.
+        Only nudges the acceptance odds, never the championship numbers. Saved for this manager.
       </p>
     </div>
   );
@@ -236,13 +276,6 @@ function ReadSlider({
   );
 }
 
-// "Managers you match with" runs an exhaustive full-league trade search that
-// takes ~80s. Because Node is single-threaded, that synchronous loop BLOCKS the
-// event loop and stalls every other request (including the trade analyzer's own
-// season sim). Hidden until the search runs off the main thread / as a
-// background job. Flip to true to re-enable.
-const SHOW_MATCH_FINDER = false;
-
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error, refresh } = useLeagueConnection();
   const [params, setParams] = useSearchParams();
@@ -265,15 +298,20 @@ function TradeDealsView() {
   const [analysisDrops, setAnalysisDrops] = useState<string[] | null>(null);
   const [counter, setCounter] = useState<TradeCounter | null>(null);
   const [counterLoading, setCounterLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState<TradeSuggestion[] | null>(null);
-  const [suggDebug, setSuggDebug] = useState<{ enumerated: number; positive: number } | null>(null);
-  const [suggLoading, setSuggLoading] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
   const [friendliness, setFriendliness] = useState(5);
   const [relationship, setRelationship] = useState(5);
   const [showRead, setShowRead] = useState(false);
+  const [partnerMenuOpen, setPartnerMenuOpen] = useState(false);
+  const [isEditingTrade, setIsEditingTrade] = useState(true);
+  const [openLaneWhy, setOpenLaneWhy] = useState<string | null>(null);
   const refreshKeyRef = useRef<string | null>(null);
+  const verdictRef = useRef<HTMLElement | null>(null);
+  const selectedPartner = useMemo(
+    () => partners.find((team) => team.rosterId === partnerRosterId) ?? null,
+    [partnerRosterId, partners],
+  );
 
   useEffect(() => {
     if (!stored || isLoading) return;
@@ -303,7 +341,7 @@ function TradeDealsView() {
   // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
   // pre-selects that partner in the builder. We intentionally do NOT pre-fill
   // give/get from the URL, so a stale suggestion URL can never "default" the
-  // analyzer to some trade — the builder always starts with an empty trade.
+  // analyzer to some trade. The builder always starts with an empty trade.
   // Applied once per partner so later re-renders (pricing/lanes refetch) can't
   // overwrite manual edits.
   const appliedDeepLink = useRef<string | null>(null);
@@ -313,21 +351,25 @@ function TradeDealsView() {
     if (leagueParam && leagueParam !== stored.leagueId) return;
     const rosterParam = Number(params.get('managerRosterId'));
     const managerParam = params.get('manager');
+    const giveParam = params.get('give');
+    const getParam = params.get('get');
     const partner = Number.isFinite(rosterParam) && rosterParam > 0
       ? bootstrap.teams.find((team) => team.rosterId === rosterParam)
       : managerParam
         ? bootstrap.teams.find((team) => team.ownerId === managerParam)
         : null;
     if (!partner || partner.isUser) return;
-    const sig = String(partner.rosterId);
+    const nextGive = giveParam ? giveParam.split(',').filter(Boolean) : [];
+    const nextGet = getParam ? getParam.split(',').filter(Boolean) : [];
+    const sig = `${partner.rosterId}:${nextGive.join(',')}:${nextGet.join(',')}`;
     if (appliedDeepLink.current === sig) return; // already applied; don't overwrite manual edits
     appliedDeepLink.current = sig;
     setPartnerRosterId(partner.rosterId);
-    setGive([]);
-    setGetIds([]);
+    setGive(nextGive);
+    setGetIds(nextGet);
     resetOutputs();
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
-  }, [bootstrap, lanes, params, stored]);
+  }, [bootstrap, params, stored]);
 
   // Load your saved read (friendliness/relationship) for the selected manager.
   useEffect(() => {
@@ -345,51 +387,28 @@ function TradeDealsView() {
     if (stored) saveTradeTraits(stored.leagueId, partnerRosterId, t);
   };
 
-  // Sim-scored trade suggestions (server returns Δ championship % for both sides;
-  // we rank client-side by expected gain using our per-manager sliders).
-  // TEMPORARILY DISABLED: the exhaustive full-league search takes ~80s and the
-  // request gets cut off before it returns. Flip SHOW_MATCH_FINDER back to true
-  // (and move the search to a background job) to bring it back.
-  useEffect(() => {
-    if (!SHOW_MATCH_FINDER) return;
-    if (!stored || !bootstrap) return;
-    let active = true;
-    setSuggLoading(true);
-    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId })
-      .then((r) => {
-        if (!active) return;
-        setSuggestions(r.available ? r.suggestions ?? [] : []);
-        setSuggDebug(r.debug ? { enumerated: r.debug.enumerated, positive: r.debug.positive } : null);
-      })
-      .catch(() => { if (active) setSuggestions([]); })
-      .finally(() => { if (active) setSuggLoading(false); });
-    return () => { active = false; };
-  }, [bootstrap, stored]);
+  const canPrice = partnerRosterId != null && give.length > 0 && getIds.length > 0;
+  const verdictReady = Boolean(
+    result?.available &&
+    result.you &&
+    result.them &&
+    analysis?.available &&
+    analysis.you &&
+    analysis.partner,
+  );
+  const builderCollapsed = verdictReady && !isEditingTrade;
+  const verdictMeta = verdictReady && analysis?.you && analysis.partner
+    ? {
+        verdict: analysisVerdict(analysis.you.delta.titleProb),
+        priceStyle: priceRailStyle(railPosition(analysis.you.delta.titleProb)),
+        railTone: railPosition(analysis.you.delta.titleProb) >= 0.5 ? 'steal' : 'overpay',
+      }
+    : null;
 
-  // Rank suggestions by expected championship gain = yourΔc × P(partner accepts),
-  // where acceptance uses YOUR saved friendliness/relationship read per manager.
-  // All server suggestions (raise YOUR title) scored with acceptance.
-  const scoredSuggestions = useMemo(() => {
-    if (!suggestions) return [];
-    return suggestions.map((s) => {
-      const t = loadTradeTraits(stored?.leagueId ?? '', s.partnerRosterId);
-      const accept = acceptanceProbability(s.partnerDelta, t.friendliness, t.relationship);
-      return { ...s, accept, score: (s.youDelta * accept) / 100 };
-    });
-  }, [suggestions, stored?.leagueId]);
-  // Gate on a minimum acceptance so lopsided fleeces (huge yourΔc, ~3% accept)
-  // never win on score alone, THEN rank the survivors by expected gain. If
-  // nothing clears the bar, fall back to the most-acceptable trades (never an
-  // empty panel) and flag it so the copy can say so.
-  const ACCEPT_FLOOR = 20;
-  const { rankedSuggestions, belowFloor } = useMemo(() => {
-    const eligible = scoredSuggestions.filter((s) => s.accept >= ACCEPT_FLOOR);
-    if (eligible.length > 0) {
-      return { rankedSuggestions: [...eligible].sort((a, b) => b.score - a.score).slice(0, 3), belowFloor: false };
-    }
-    const fallback = [...scoredSuggestions].sort((a, b) => b.accept - a.accept).slice(0, 3);
-    return { rankedSuggestions: fallback, belowFloor: true };
-  }, [scoredSuggestions]);
+  useEffect(() => {
+    if (!builderCollapsed) return;
+    window.setTimeout(() => verdictRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 80);
+  }, [builderCollapsed]);
 
   // Connected leagues get Market deals; the mock targets are
   // demo-only and never render next to a real roster.
@@ -438,6 +457,7 @@ function TradeDealsView() {
     setAnalysisDrops(null);
     setCounter(null);
     setCounterLoading(false);
+    setIsEditingTrade(true);
   };
 
   const fetchCounter = async () => {
@@ -468,16 +488,21 @@ function TradeDealsView() {
     const nextGet = c.whoAdds === 'them' ? [...new Set([...getIds, ...ids])] : getIds;
     setGive(nextGive);
     setGetIds(nextGet);
-    setResult(null);
     setCounter(null);
-    void priceTrade(stored.leagueId, {
+    setIsEditingTrade(false);
+    setIsPricing(true);
+    const pricePromise = priceTrade(stored.leagueId, {
       userId: stored.userId,
       partnerRosterId: partnerRosterId!,
       give: nextGive,
       get: nextGet,
       traits: NEUTRAL_TRADE_TRAITS,
     }).then(setResult).catch(() => {});
-    void runAnalysis(nextGive, nextGet, null);
+    const analysisPromise = runAnalysis(nextGive, nextGet, null);
+    void Promise.allSettled([pricePromise, analysisPromise]).finally(() => {
+      setIsPricing(false);
+      setIsEditingTrade(false);
+    });
   };
 
   const runAnalysis = async (giveIds: string[], getIds2: string[], userDrops: string[] | null = null) => {
@@ -504,30 +529,50 @@ function TradeDealsView() {
   };
 
   const toggle = (list: string[], set: (v: string[]) => void, id: string) => {
+    if (isPricing || counterLoading) return;
     set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
     resetOutputs();
   };
 
-  const loadSuggestion = (s: TradeSuggestion) => {
-    const givePlayerIds = s.give.map((g) => g.id);
-    const getPlayerIds = s.get.map((g) => g.id);
-    setPartnerRosterId(s.partnerRosterId);
+  const loadLane = (lane: MarketMover) => {
+    const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
+    const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
+    if (lane.partnerRosterId == null || givePlayerIds.length === 0 || getPlayerIds.length === 0) return;
+    setPartnerRosterId(lane.partnerRosterId);
     setGive(givePlayerIds);
     setGetIds(getPlayerIds);
     resetOutputs();
     setParams({
       view: 'deals',
       leagueId: stored.leagueId,
-      managerRosterId: String(s.partnerRosterId),
+      managerRosterId: String(lane.partnerRosterId),
       give: givePlayerIds.join(','),
       get: getPlayerIds.join(','),
     }, { replace: true });
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   };
 
+  const laneWhy = (lane: MarketMover) => {
+    const parts = [];
+    if (lane.valueGain != null) {
+      parts.push(`Your starters move ${signedPct(lane.valueGain).replace('%', ' pts/wk')}.`);
+    }
+    if (lane.partnerGain != null) {
+      parts.push(`Their starters move ${signedPct(lane.partnerGain).replace('%', ' pts/wk')}.`);
+    }
+    if (lane.acceptanceProbability != null) {
+      parts.push(`${lane.acceptanceProbability}% to accept.`);
+    }
+    if (lane.acceptanceReason) {
+      parts.push(lane.acceptanceReason);
+    }
+    return parts.join(' ');
+  };
+
   const runPricing = async () => {
     if (partnerRosterId == null || give.length === 0 || getIds.length === 0) return;
     setIsPricing(true);
+    setCounter(null);
     // One press: price the trade AND simulate its full-season impact.
     const pricePromise = priceTrade(stored.leagueId, {
       userId: stored.userId,
@@ -543,11 +588,11 @@ function TradeDealsView() {
       await Promise.allSettled([pricePromise, analysisPromise]);
     } finally {
       setIsPricing(false);
+      setIsEditingTrade(false);
     }
   };
 
   // One-tap fair counter: add the suggested throw-in(s) to the right side and reprice.
-  const canPrice = partnerRosterId != null && give.length > 0 && getIds.length > 0;
   const renderLaneHeadshots = (
     getPlayerIds: string[],
     givePlayerIds: string[],
@@ -585,6 +630,29 @@ function TradeDealsView() {
     );
   };
 
+  const renderPlayerUnit = (ids: string[], label: string, tone: 'send' | 'get' = 'send') => (
+    <span className={`trade-cc__deal-unit trade-cc__deal-unit--${tone}`}>
+      <span className="trade-cc__deal-unit-label">{label}</span>
+      <span className="trade-cc__deal-unit-body">
+        <span className="trade-cc__deal-unit-headshots" aria-hidden="true">
+          {ids.slice(0, 3).map((id) => (
+            <PlayerHeadshot
+              className="trade-cc__deal-unit-headshot"
+              fallbackClassName="trade-cc__deal-unit-headshot-fallback"
+              imageClassName="trade-cc__deal-unit-headshot-image"
+              key={id}
+              player={toPlayer(id, bootstrap.players)}
+            />
+          ))}
+          {ids.length > 3 ? <span className="trade-cc__deal-unit-more">+{ids.length - 3}</span> : null}
+        </span>
+        <span className="trade-cc__deal-unit-names">
+          {ids.map((id) => playerName(bootstrap, id)).join(' + ') || 'No players'}
+        </span>
+      </span>
+    </span>
+  );
+
   const renderSelectedCards = (
     _rosterId: number,
     ids: string[],
@@ -614,6 +682,7 @@ function TradeDealsView() {
               <button
                 aria-label={`Remove ${player.name}`}
                 className="trade-cc__asset-remove"
+                disabled={isPricing || counterLoading}
                 onClick={() => toggle(ids, set, id)}
                 type="button"
               >
@@ -641,6 +710,7 @@ function TradeDealsView() {
       <>
         <input
           className="trade-cc__pool-search"
+          disabled={isPricing || counterLoading}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search players"
           type="search"
@@ -658,6 +728,7 @@ function TradeDealsView() {
                 list.includes(row.id) ? 'trade-cc__pill--on' : '',
                 row.isStarter ? '' : 'trade-cc__pill--bench',
               ].join(' ')}
+              disabled={isPricing || counterLoading}
               onClick={() => toggle(list, set, row.id)}
               type="button"
             >
@@ -669,7 +740,7 @@ function TradeDealsView() {
               />
               <span className="trade-cc__pill-pos">{row.player.position}</span>
               <span className="trade-cc__pill-name">{row.player.name}</span>
-              <span className="trade-cc__pill-add">{list.includes(row.id) ? 'Added' : 'Add'}</span>
+              <span className="trade-cc__pill-add">{list.includes(row.id) ? '✓ Added' : 'Add'}</span>
             </button>
           </div>
           ))}
@@ -678,46 +749,93 @@ function TradeDealsView() {
     );
   };
 
+  const choosePartner = (rosterId: number | null) => {
+    if (isPricing || counterLoading) return;
+    setPartnerRosterId(rosterId);
+    setPartnerMenuOpen(false);
+    setGetIds([]);
+    resetOutputs();
+  };
+
+  const renderTeamAvatar = (team: NonNullable<typeof selectedPartner>) => (
+    <span className="trade-cc__team-avatar" aria-hidden="true">
+      {team.avatarUrl ? (
+        <img alt="" src={team.avatarUrl} />
+      ) : (
+        <span>{initials(team.teamName)}</span>
+      )}
+    </span>
+  );
+
+  const renderPartnerSelector = () => (
+    <div className="trade-cc__partner-menu">
+      <button
+        aria-expanded={partnerMenuOpen}
+        className="trade-cc__partner-trigger"
+        disabled={isPricing || counterLoading}
+        onClick={() => setPartnerMenuOpen((current) => !current)}
+        type="button"
+      >
+        {selectedPartner ? renderTeamAvatar(selectedPartner) : <span className="trade-cc__team-avatar" aria-hidden="true">?</span>}
+        <span className="trade-cc__partner-trigger-copy">
+          <span>{selectedPartner?.teamName ?? 'Pick manager'}</span>
+          {selectedPartner ? (
+            <span>{selectedPartner.record.wins}-{selectedPartner.record.losses}</span>
+          ) : null}
+        </span>
+      </button>
+      {partnerMenuOpen ? (
+        <div className="trade-cc__partner-options" role="listbox" aria-label="Pick manager">
+          {partners.map((team) => (
+            <button
+              aria-selected={partnerRosterId === team.rosterId}
+              className={[
+                'trade-cc__partner-option',
+                partnerRosterId === team.rosterId ? 'trade-cc__partner-option--active' : '',
+              ].filter(Boolean).join(' ')}
+              key={team.rosterId}
+              onClick={() => choosePartner(team.rosterId)}
+              role="option"
+              type="button"
+            >
+              {renderTeamAvatar(team)}
+              <span className="trade-cc__partner-option-copy">
+                <span>{team.teamName}</span>
+                <span>{team.record.wins}-{team.record.losses}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="trade-page">
       <h1 className="visually-hidden">Market</h1>
 
-      {SHOW_MATCH_FINDER ? (
       <section className="trade-cc__finder">
         <h2 className="trade-cc__section-label">Managers you match with</h2>
-        <p className="trade-cc__finder-sub">Trades that raise your title odds, ranked by title gain × chance they accept.</p>
-        {belowFloor && rankedSuggestions.length > 0 ? (
-          <p className="trade-cc__finder-note">
-            Nothing clears the {ACCEPT_FLOOR}% acceptance bar right now. Showing the trades most likely to be accepted.
-          </p>
-        ) : null}
-        {suggLoading && suggestions == null ? (
+        {lanes.length > 0 ? (
           <>
-            <div className="trade-cc__lane-skeleton" aria-label="Simulating trades">
-              <span />
-              <span />
-              <span />
-            </div>
-            <p className="trade-cc__finder-note">
-              Simulating every possible trade across the league. This runs a full search and can take a minute.
-            </p>
-          </>
-        ) : rankedSuggestions.length > 0 ? (
-          <>
-          {rankedSuggestions.map((s, index) => {
-            const getPlayerIds = s.get.map((g) => g.id);
-            const givePlayerIds = s.give.map((g) => g.id);
+          {lanes.map((lane, index) => {
+            const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
+            const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
             const compact = index > 0;
-            const key = `sugg-${s.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
+            const partner = partners.find((team) => team.rosterId === lane.partnerRosterId);
+            const acceptance = lane.acceptanceProbability ?? 50;
+            const laneKey = `lane-${lane.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
+            const whyOpen = openLaneWhy === laneKey;
+            const generated = formatGeneratedAt(lane.pricedAt ?? pricing?.computedAt);
             return (
               <article
                 className={['trade-cc__lane', compact ? 'trade-cc__lane--compact' : ''].filter(Boolean).join(' ')}
-                key={key}
-                onClick={() => loadSuggestion(s)}
+                key={laneKey}
+                onClick={() => loadLane(lane)}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter' && event.key !== ' ') return;
                   event.preventDefault();
-                  loadSuggestion(s);
+                  loadLane(lane);
                 }}
                 role="button"
                 tabIndex={0}
@@ -735,40 +853,87 @@ function TradeDealsView() {
 
                 <span className="trade-cc__lane-mid">
                   <span className="trade-cc__lane-copy">
-                    <span className="trade-cc__lane-manager">{s.partnerName}</span>
+                    <span className="trade-cc__lane-manager">{partner?.teamName ?? 'Manager'}</span>
                     <span className="trade-cc__lane-numbers">
-                      <span className="trade-cc__lane-you">your title {s.youDelta > 0 ? '+' : ''}{s.youDelta}%</span>
-                      <span> · them {s.partnerDelta > 0 ? '+' : ''}{s.partnerDelta}%</span>
+                      <span className="trade-cc__lane-you">you {lane.valueGain != null ? signedPct(lane.valueGain).replace('%', '') : '+0.0'} pts/wk</span>
+                      <span> · them {lane.partnerGain != null ? signedPct(lane.partnerGain).replace('%', '') : '+0.0'} pts/wk</span>
                     </span>
                   </span>
-                  <span className="trade-cc__lane-acceptance" style={acceptanceStyle(s.accept)}>
+                  <span className="trade-cc__lane-acceptance" style={acceptanceStyle(acceptance)}>
                     <span className="trade-cc__lane-acceptance-label">
-                      <span>{s.accept}% to accept</span>
+                      <span>{acceptance}% to accept</span>
                     </span>
                     <span className="trade-cc__lane-acceptance-track">
                       <span
-                        className={['trade-cc__lane-acceptance-fill', acceptanceTone(s.accept)].join(' ')}
+                        className={['trade-cc__lane-acceptance-fill', acceptanceTone(acceptance)].join(' ')}
                       />
                       <span className="trade-cc__lane-acceptance-notch" />
                       <span className="trade-cc__lane-acceptance-marker" />
                     </span>
                   </span>
                 </span>
+                <span className="trade-cc__lane-bottom">
+                  <button
+                    aria-expanded={whyOpen}
+                    className="trade-cc__lane-why"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setOpenLaneWhy((current) => (current === laneKey ? null : laneKey));
+                    }}
+                    type="button"
+                  >
+                    Why this trade?
+                  </button>
+                  {generated ? (
+                    <span className="trade-cc__lane-generated">generated at {generated}</span>
+                  ) : null}
+                </span>
+                {whyOpen ? (
+                  <p className="trade-cc__lane-rationale" onClick={(event) => event.stopPropagation()}>
+                    {laneWhy(lane)}
+                  </p>
+                ) : null}
               </article>
             );
           })}
           </>
         ) : (
           <p className="trade-cc__empty-lane">
-            No trade raises your title odds right now
-            {suggDebug ? ` (searched ${suggDebug.enumerated}, ${suggDebug.positive} raised your title).` : '.'}
+            No suggested deals priced yet. Build your own below.
           </p>
         )}
       </section>
-      ) : null}
 
       {/* ── Builder ── */}
-      <section className="trade-cc__builder" ref={builderRef}>
+      <section
+        className={[
+          'trade-cc__builder',
+          builderCollapsed ? 'trade-cc__builder--collapsed' : '',
+        ].filter(Boolean).join(' ')}
+        ref={builderRef}
+      >
+        {builderCollapsed ? (
+          <div className="trade-cc__deal-strip">
+            {renderPlayerUnit(give, 'You send', 'send')}
+            <span className="trade-cc__deal-strip-arrow" aria-hidden="true">⇄</span>
+            {renderPlayerUnit(getIds, 'You get', 'get')}
+            <span className="trade-cc__deal-strip-partner">
+              {selectedPartner?.teamName ?? 'Manager'}
+            </span>
+            {isPricing ? (
+              <SimulationLoader label="Pricing this trade" />
+            ) : (
+              <button
+                className="trade-cc__edit-btn"
+                onClick={() => setIsEditingTrade(true)}
+                type="button"
+              >
+                Edit trade
+              </button>
+            )}
+          </div>
+        ) : (
+        <>
         <div className="trade-cc__builder-head">
           <div>
             <p className="trade-cc__kicker">Build a trade</p>
@@ -796,26 +961,12 @@ function TradeDealsView() {
                 <h3 className="trade-cc__side-title">You get</h3>
               </div>
               <div className="trade-cc__partner-tools">
-                <select
-                  className="trade-cc__partner-select"
-                  onChange={(event) => {
-                    setPartnerRosterId(Number(event.target.value) || null);
-                    setGetIds([]);
-                    resetOutputs();
-                  }}
-                  value={partnerRosterId ?? ''}
-                >
-                  <option value="">Pick manager</option>
-                  {partners.map((team) => (
-                    <option key={team.rosterId} value={team.rosterId}>
-                      {team.teamName}
-                    </option>
-                  ))}
-                </select>
+                {renderPartnerSelector()}
                 {partnerRosterId != null ? (
                   <button
                     className="trade-cc__partner-read"
                     aria-expanded={showRead}
+                    disabled={isPricing || counterLoading}
                     onClick={() => setShowRead((v) => !v)}
                     type="button"
                   >
@@ -843,155 +994,113 @@ function TradeDealsView() {
           </div>
         </div>
 
-        <button
-          className="trade-cc__price-btn"
-          disabled={!canPrice || isPricing}
-          onClick={() => void runPricing()}
-          type="button"
-        >
-          {isPricing ? 'Pricing…' : 'Price this trade'}
-        </button>
-
-        <TradeAnalyzerPanel
-          analysis={analysis}
-          analyzing={analyzing}
-          error={analysisError}
-          drops={analysisDrops}
-          onOverrideDrops={(d) => void runAnalysis(give, getIds, d)}
-          userPlayers={userTeam.players}
-          nameOf={(id) => playerName(bootstrap, id)}
-          posOf={(id) => bootstrap.players[id]?.position ?? ''}
-          friendliness={friendliness}
-          relationship={relationship}
-        />
+        {isPricing ? (
+          <SimulationLoader label="Pricing this trade" />
+        ) : (
+          <button
+            className="trade-cc__price-btn"
+            disabled={!canPrice}
+            onClick={() => void runPricing()}
+            type="button"
+          >
+            Price this trade
+          </button>
+        )}
+        </>
+        )}
       </section>
 
-      {/* ── Verdict ── */}
-      {result && result.available && result.you && result.them ? (
-        (() => {
-          const renderFaces = (ids: string[], tone: 'get' | 'give') => (
-            <div className={`trade-cc__verdict-face-group trade-cc__verdict-face-group--${tone}`}>
-              {ids.map((id) => (
-                <span
-                  className={`trade-cc__verdict-face trade-cc__verdict-face--${tone}`}
-                  key={id}
-                  title={playerName(bootstrap, id)}
-                >
-                  <PlayerHeadshot
-                    name={playerName(bootstrap, id)}
-                    player={toPlayer(id, bootstrap.players)}
-                  />
-                </span>
-              ))}
+      {verdictReady && analysis?.you && analysis.partner && verdictMeta ? (
+        <section className="trade-cc__verdict" ref={verdictRef}>
+          <div className="trade-cc__verdict-hero">
+            <div>
+              <p className={`trade-cc__verdict-stamp trade-cc__verdict-stamp--${verdictMeta.verdict.tone}`}>
+                {verdictMeta.verdict.stamp}
+              </p>
+              <p className="trade-cc__verdict-subhead">
+                your championship <span>{signedPct(analysis.you.delta.titleProb)}</span>
+              </p>
             </div>
-          );
-
-          return (
-            <section className="trade-cc__verdict">
-              <div className="trade-cc__verdict-faces" aria-label="Trade players">
-                <div className="trade-cc__verdict-face-side">
-                  <span className="trade-cc__verdict-face-label">You send</span>
-                  {renderFaces(give, 'give')}
-                </div>
-                <span className="trade-cc__verdict-arrows" aria-hidden="true">
-                  <span>→</span>
-                  <span>←</span>
-                </span>
-                <div className="trade-cc__verdict-face-side">
-                  <span className="trade-cc__verdict-face-label">You get</span>
-                  {renderFaces(getIds, 'get')}
-                </div>
-              </div>
-
-              {analysis?.available && analysis.you && analysis.partner ? (
-                <div className="trade-cc__counter">
-                  {counter == null ? (
+            <div
+              className={[
+                'trade-cc__hero-price',
+                `trade-cc__hero-price--${verdictMeta.railTone}`,
+              ].join(' ')}
+              style={verdictMeta.priceStyle}
+            >
+              <span className="trade-cc__price-track" />
+              <span className="trade-cc__price-center" />
+              <span className="trade-cc__price-fill" />
+              <span className="trade-cc__price-marker" />
+              <span className="trade-cc__price-labels">
+                <span>Overpay</span>
+                <span>Fair</span>
+                <span>Steal</span>
+              </span>
+            </div>
+            {verdictMeta.verdict.label !== 'Fair' ? (
+              <div className="trade-cc__hero-counter">
+                {counterLoading ? (
+                  <SimulationLoader label="Finding fair add" variant="evener" />
+                ) : counter == null ? (
+                  <button
+                    className="trade-cc__counter-btn trade-cc__counter-btn--primary"
+                    onClick={() => void fetchCounter()}
+                    type="button"
+                  >
+                    Even out this trade →
+                  </button>
+                ) : !counter.available ? (
+                  <p className="trade-cc__counter-body">Couldn&apos;t compute a fair counter.</p>
+                ) : counter.needed === false ? (
+                  <p className="trade-cc__counter-body">This trade is already balanced.</p>
+                ) : counter.add && counter.add.length > 0 ? (
+                  <div className="trade-cc__counter-card">
+                    {renderPlayerUnit(counter.add.map((add) => add.id), 'Add', counter.whoAdds === 'you' ? 'send' : 'get')}
+                    <p className="trade-cc__counter-body">
+                      {counter.whoAdds === 'you'
+                        ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out.`
+                        : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')} to even it out.`}
+                    </p>
+                    {counter.before && counter.after ? (
+                      <div className="trade-cc__counter-deltas">
+                        <span>
+                          You <b>{signedPct(counter.before.youDelta)}</b> to <b>{signedPct(counter.after.youDelta)}</b>
+                        </span>
+                        <span>
+                          Them <b>{signedPct(counter.before.partnerDelta)}</b> to <b>{signedPct(counter.after.partnerDelta)}</b>
+                        </span>
+                      </div>
+                    ) : null}
                     <button
                       className="trade-cc__counter-btn"
-                      onClick={() => void fetchCounter()}
-                      disabled={counterLoading}
+                      onClick={() => applyCounterAdd(counter)}
                       type="button"
                     >
-                      {counterLoading ? 'Simulating fair adds…' : 'Even out this trade →'}
+                      {counter.whoAdds === 'you' ? 'Add it to what you give' : 'Add it to what you get'}
                     </button>
-                  ) : !counter.available ? (
-                    <p className="trade-cc__counter-body">Couldn&apos;t compute a fair counter.</p>
-                  ) : counter.needed === false ? (
-                    <p className="trade-cc__counter-body">This trade is already balanced.</p>
-                  ) : counter.add && counter.add.length > 0 ? (
-                    <>
-                      <p className="trade-cc__counter-body">
-                        {counter.whoAdds === 'you'
-                          ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out.`
-                          : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')} to even it out.`}
-                        {counter.before && counter.after
-                          ? ` Your championship ${counter.before.youDelta > 0 ? '+' : ''}${counter.before.youDelta}% to ${counter.after.youDelta > 0 ? '+' : ''}${counter.after.youDelta}%, ${analysis.partner.teamName} ${counter.before.partnerDelta > 0 ? '+' : ''}${counter.before.partnerDelta}% to ${counter.after.partnerDelta > 0 ? '+' : ''}${counter.after.partnerDelta}%.`
-                          : ''}
-                      </p>
-                      <button
-                        className="trade-cc__counter-btn"
-                        onClick={() => applyCounterAdd(counter)}
-                        type="button"
-                      >
-                        {counter.whoAdds === 'you' ? 'Add it to what you give' : 'Add it to what you get'}
-                      </button>
-                    </>
-                  ) : (
-                    <p className="trade-cc__counter-body">No single add balances this trade well.</p>
-                  )}
-                </div>
-              ) : null}
-
-              <div className="trade-cc__fit">
-                <p className="trade-cc__reasons-title">Your depth after</p>
-                <div className="trade-cc__fit-rows">
-                  {['QB', 'RB', 'WR', 'TE', 'K', 'DEF']
-                    .filter((pos) => {
-                      const before = result.you!.depthBefore[pos] ?? 0;
-                      const after = result.you!.depthAfter[pos] ?? 0;
-                      return !['K', 'DEF'].includes(pos) || before !== after;
-                    })
-                    .map((pos) => {
-                      const before = result.you!.depthBefore[pos] ?? 0;
-                      const after = result.you!.depthAfter[pos] ?? 0;
-                      const changed = after !== before;
-                      const improved = after > before;
-                      return (
-                        <div className="trade-cc__fit-row" key={pos}>
-                          <span className="trade-cc__fit-pos">{pos}</span>
-                          <span
-                            className={[
-                              'trade-cc__fit-count',
-                              changed
-                                ? improved
-                                  ? 'trade-cc__fit-count--up'
-                                  : 'trade-cc__fit-count--down'
-                                : '',
-                            ].filter(Boolean).join(' ')}
-                          >
-                            {changed ? (
-                              <>
-                                {before} → {after} {improved ? '▲' : '▼'}
-                              </>
-                            ) : (
-                              after
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
+                  </div>
+                ) : (
+                  <p className="trade-cc__counter-body">No single add balances this trade well.</p>
+                )}
               </div>
+            ) : null}
+          </div>
 
-              {result.isDepthPackage ? (
-                <SeasonalNotice>
-                  This is a depth package: you&apos;re sending several players but only
-                  one would start for them. It&apos;s worth less than it looks.
-                </SeasonalNotice>
-              ) : null}
-            </section>
-          );
-        })()
+          <TradeAnalyzerPanel
+            analysis={analysis}
+            analyzing={analyzing}
+            error={analysisError}
+            drops={analysisDrops}
+            onOverrideDrops={(d) => void runAnalysis(give, getIds, d)}
+            userPlayers={userTeam.players}
+            nameOf={(id) => playerName(bootstrap, id)}
+            posOf={(id) => bootstrap.players[id]?.position ?? ''}
+            friendliness={friendliness}
+            relationship={relationship}
+            showVerdict={false}
+          />
+        </section>
       ) : result && !result.available ? (
         <SeasonalNotice>
           {result.reason === 'no_projections'
