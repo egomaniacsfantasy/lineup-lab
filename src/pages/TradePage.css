@@ -1686,3 +1686,32 @@
   font-size: 0.78rem;
   color: var(--warning, #f0b429);
 }
+
+.trade-cc__finder-managers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 12px;
+}
+
+.trade-cc__finder-mgr {
+  padding: 8px 14px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14));
+  border-radius: 999px;
+  background: var(--bg-inset, rgba(255, 255, 255, 0.04));
+  color: var(--text-soft, rgba(255, 255, 255, 0.82));
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.trade-cc__finder-mgr:hover {
+  border-color: var(--amber, #f0b429);
+}
+
+.trade-cc__finder-mgr--on {
+  background: var(--amber, #f0b429);
+  border-color: var(--amber, #f0b429);
+  color: #101010;
+}

@@ -1981,7 +1981,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
  * Δ championship %. The client applies the acceptance model (its per-manager
  * friendliness/relationship sliders) and ranks by expected gain = yourΔc × P(accept).
  */
-export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -1992,7 +1992,12 @@ export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return { available: false, reason: 'team_not_found' };
-  const opponents = teams.filter((t) => !t.isUser);
+  // Manager-first: when a partner is chosen, search ONLY that manager (a wider,
+  // deeper net for the one team). Otherwise fall back to every opponent.
+  const opponents = partnerRosterId != null
+    ? teams.filter((t) => !t.isUser && t.rosterId === partnerRosterId)
+    : teams.filter((t) => !t.isUser);
+  if (opponents.length === 0) return { available: true, suggestions: [], debug: { generated: 0, simmed: 0, positive: 0, ms: 0 } };
 
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
@@ -2144,8 +2149,9 @@ export async function suggestTrades(ctx, { maxSim = 15 } = {}) {
       partnerDelta: Number(partnerDelta.toFixed(1)),
     });
   }
-  const nearEven = helpsYou.filter((s) => s.partnerDelta >= -MAX_PARTNER_DROP);
-  const suggestions = nearEven.length > 0 ? nearEven : helpsYou;
+  // Strict: only realistic (near-even / win-win) trades. If a manager has none,
+  // we return an empty list and the UI says "no valid trades" — no fleeces.
+  const suggestions = helpsYou.filter((s) => s.partnerDelta >= -MAX_PARTNER_DROP);
   // Client gates on acceptance and ranks by expected gain. Sort by your gain for
   // stable ordering.
   suggestions.sort((a, b) => b.youDelta - a.youDelta);

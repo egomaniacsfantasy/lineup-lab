@@ -674,7 +674,10 @@ export interface TradeSuggestions {
   suggestions?: TradeSuggestion[];
   debug?: { generated: number; simmed: number; positive: number; ms: number };
 }
-export function fetchTradeSuggestions(leagueId: string, body: { userId: string }): Promise<TradeSuggestions> {
+export function fetchTradeSuggestions(
+  leagueId: string,
+  body: { userId: string; partnerRosterId?: number },
+): Promise<TradeSuggestions> {
   return get<TradeSuggestions>(`/api/league/${leagueId}/trade-suggestions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

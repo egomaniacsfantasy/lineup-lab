@@ -256,6 +256,8 @@ function TradeDealsView() {
   const [suggestions, setSuggestions] = useState<TradeSuggestion[] | null>(null);
   const [suggDebug, setSuggDebug] = useState<{ generated: number; positive: number } | null>(null);
   const [suggLoading, setSuggLoading] = useState(false);
+  // Manager-first finder: nothing is simulated until you pick a manager.
+  const [finderPartnerId, setFinderPartnerId] = useState<number | null>(null);
   const [giveSearch, setGiveSearch] = useState('');
   const [getSearch, setGetSearch] = useState('');
   const [friendliness, setFriendliness] = useState(5);
@@ -328,17 +330,20 @@ function TradeDealsView() {
     if (stored) saveTradeTraits(stored.leagueId, partnerRosterId, t);
   };
 
-  // Sim-scored trade suggestions (server returns Δ championship % for both sides;
-  // we rank client-side by expected gain using our per-manager sliders).
-  // TEMPORARILY DISABLED: the exhaustive full-league search takes ~80s and the
-  // request gets cut off before it returns. Flip SHOW_MATCH_FINDER back to true
-  // (and move the search to a background job) to bring it back.
+  // Sim-scored trade suggestions for the SELECTED manager only (nothing runs
+  // until you pick one). The server returns near-even Δc trades for that manager;
+  // we rank client-side by expected gain using your read of them.
   useEffect(() => {
     if (!SHOW_MATCH_FINDER) return;
-    if (!stored || !bootstrap) return;
+    if (!stored || !bootstrap || finderPartnerId == null) {
+      setSuggestions(null);
+      setSuggDebug(null);
+      return;
+    }
     let active = true;
     setSuggLoading(true);
-    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId })
+    setSuggestions(null);
+    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId, partnerRosterId: finderPartnerId })
       .then((r) => {
         if (!active) return;
         setSuggestions(r.available ? r.suggestions ?? [] : []);
@@ -347,7 +352,14 @@ function TradeDealsView() {
       .catch(() => { if (active) setSuggestions([]); })
       .finally(() => { if (active) setSuggLoading(false); });
     return () => { active = false; };
-  }, [stored, bootstrap?.league.id]);
+  }, [stored, bootstrap?.league.id, finderPartnerId]);
+
+  // Picking a finder manager also selects them for the read sliders (so tuning
+  // friendliness/relationship re-ranks in real time) and the builder.
+  const selectFinderManager = (rosterId: number) => {
+    setFinderPartnerId(rosterId);
+    setPartnerRosterId(rosterId);
+  };
 
   // Rank suggestions by expected championship gain = yourΔc × P(partner accepts),
   // where acceptance uses YOUR saved friendliness/relationship read per manager.
@@ -667,8 +679,31 @@ function TradeDealsView() {
 
       {SHOW_MATCH_FINDER ? (
       <section className="trade-cc__finder">
-        <h2 className="trade-cc__section-label">Managers you match with</h2>
-        <p className="trade-cc__finder-sub">Trades that raise your title odds, ranked by title gain × chance they accept.</p>
+        <h2 className="trade-cc__section-label">Find trades with a manager</h2>
+        <p className="trade-cc__finder-sub">Pick a manager. We simulate trades with them and rank by title gain × chance they accept.</p>
+        <div className="trade-cc__finder-managers" role="group" aria-label="Pick a manager">
+          {partners.map((p) => (
+            <button
+              key={p.rosterId}
+              type="button"
+              className={finderPartnerId === p.rosterId ? 'trade-cc__finder-mgr trade-cc__finder-mgr--on' : 'trade-cc__finder-mgr'}
+              onClick={() => selectFinderManager(p.rosterId)}
+            >
+              {p.teamName}
+            </button>
+          ))}
+        </div>
+
+        {finderPartnerId == null ? (
+          <p className="trade-cc__finder-note">Select a manager above to find trades with them.</p>
+        ) : (
+          <>
+          <ManagerReadCard
+            name={partners.find((p) => p.rosterId === finderPartnerId)?.teamName ?? 'Manager'}
+            friendliness={friendliness}
+            relationship={relationship}
+            onChange={updateRead}
+          />
         {belowFloor && rankedSuggestions.length > 0 ? (
           <p className="trade-cc__finder-note">
             Nothing clears the {ACCEPT_FLOOR}% acceptance bar right now. Showing the trades most likely to be accepted.
@@ -682,7 +717,7 @@ function TradeDealsView() {
               <span />
             </div>
             <p className="trade-cc__finder-note">
-              Scanning trades across the league and simulating the best candidates.
+              Simulating trades with {partners.find((p) => p.rosterId === finderPartnerId)?.teamName ?? 'this manager'}…
             </p>
           </>
         ) : rankedSuggestions.length > 0 ? (
@@ -743,9 +778,11 @@ function TradeDealsView() {
           </>
         ) : (
           <p className="trade-cc__empty-lane">
-            No trade raises your title odds right now
-            {suggDebug ? ` (searched ${suggDebug.generated}, ${suggDebug.positive} raised your title).` : '.'}
+            No realistic trades with {partners.find((p) => p.rosterId === finderPartnerId)?.teamName ?? 'this manager'} that raise your title
+            {suggDebug ? ` (searched ${suggDebug.generated}).` : '.'}
           </p>
+        )}
+          </>
         )}
       </section>
       ) : null}
