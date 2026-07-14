@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerChip } from '../components/player/PlayerChip';
+import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useModelOverlay } from '../contexts/ModelOverlayContext';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
-import { fetchLines, type LeagueBootstrap, type LeaguePricing } from '../services/leagueApi';
+import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
+import { fetchLines } from '../services/leagueApi';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import { useNflSchedule } from '../hooks/useNflSchedule';
 import {
@@ -25,10 +27,19 @@ import {
 import { PROVIDER_LABEL } from '../utils/provider';
 import { shareText, type ShareResult } from '../utils/share';
 import {
+  marketMoverSignature,
+  samePositionOneForOneTrade,
+} from '../utils/tradeMarket';
+import {
   roundTo,
   winProbabilityToMoneyline,
 } from '../utils/lineupComparison';
 import { evaluateStarterRoster, getTopSwapEvaluation } from '../utils/starterEvaluation';
+import {
+  acceptanceGaugeLabel,
+  applyTradeDisplayPolicy,
+  lowAcceptanceTag,
+} from '../utils/tradeSuggestionDisplay';
 import {
   createVolatilityResolver,
   type VolatilityProfile,
@@ -102,6 +113,27 @@ function clamp(value: number, min: number, max: number) {
 
 function formatProjection(value: number) {
   return value.toFixed(1);
+}
+
+const SUGGESTION_LOADING_MESSAGES = [
+  'Scanning the market...',
+  'Pricing every swap...',
+  'Looking for your edge...',
+  'Running the league 10,000 times...',
+];
+
+function formatAsOfTime(value: number | null | undefined) {
+  if (!value) return null;
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+function counterpartyLabel(name: string | null | undefined, rosterId: number | null | undefined) {
+  if (name?.trim()) return name.trim();
+  if (rosterId != null) return `Roster ${rosterId}`;
+  return 'Your trade partner';
 }
 
 function formatSignedPercent(value: number) {
@@ -357,11 +389,13 @@ function TeamCrest({
 function marketMoverWhy({
   gain,
   acceptanceProbability,
+  partnerLabel,
   from,
   to,
 }: {
   gain?: number;
   acceptanceProbability?: number | null;
+  partnerLabel?: string;
   from: number;
   to: number;
 }) {
@@ -370,12 +404,11 @@ function marketMoverWhy({
     parts.push(`Moves your starters by ${gain >= 0 ? '+' : ''}${gain.toFixed(1)} pts/wk.`);
   }
   if (acceptanceProbability != null) {
-    parts.push(`${acceptanceProbability}% to accept.`);
+    parts.push(`${partnerLabel ?? 'Your trade partner'} accepts this ${acceptanceProbability}% of the time.`);
   }
   if (Number.isFinite(from) && Number.isFinite(to) && from !== to) {
     parts.push(`Title price ${formatAmericanOdds(from)} to ${formatAmericanOdds(to)}.`);
   }
-  parts.push('Opens the exact deal in Market.');
   return parts.join(' ');
 }
 
@@ -390,17 +423,6 @@ function prettyDay(dayLabel: string) {
   return dayLabel.length <= 3
     ? dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1).toLowerCase()
     : dayLabel;
-}
-
-function samePositionOneForOne(
-  getIds: string[] | undefined,
-  giveIds: string[] | undefined,
-  players: LeagueBootstrap['players'],
-) {
-  if ((getIds?.length ?? 0) !== 1 || (giveIds?.length ?? 0) !== 1) return false;
-  const getPosition = players[getIds![0]]?.position;
-  const givePosition = players[giveIds![0]]?.position;
-  return Boolean(getPosition && givePosition && getPosition === givePosition);
 }
 
 function MarketPlayerUnit({
@@ -467,6 +489,8 @@ function MarketMoverRow({
   claimPlayer,
   crestTeam,
   href,
+  lowAcceptanceTagLabel,
+  onDismiss,
 }: {
   label: string;
   sublabel?: string;
@@ -481,10 +505,14 @@ function MarketMoverRow({
   claimPlayer?: Player;
   crestTeam?: string;
   href?: string | null;
+  lowAcceptanceTagLabel?: string | null;
+  onDismiss?: (() => void) | null;
 }) {
   const [whyOpen, setWhyOpen] = useState(false);
   const isTrade = Boolean(getPlayers?.length || givePlayers?.length);
   const valueLabel = gain != null ? `${gain >= 0 ? '+' : ''}${gain.toFixed(1)}` : null;
+  const acceptanceRead =
+    acceptanceProbability != null ? acceptanceGaugeLabel(acceptanceProbability) : null;
   const content = (
     <>
       <div className="matchup-page__mover-identity">
@@ -499,12 +527,17 @@ function MarketMoverRow({
         ) : crestTeam ? (
           <TeamCrest teamName={crestTeam} />
         ) : null}
-        {!isTrade && !claimPlayer ? (
-        <div>
-          <p className="matchup-page__mover-label">{label}</p>
-          {sublabel ? <p className="matchup-page__mover-meta">{sublabel}</p> : null}
+        <div className="matchup-page__mover-copy">
+          {!isTrade && !claimPlayer ? (
+            <>
+              <p className="matchup-page__mover-label">{label}</p>
+              {sublabel ? <p className="matchup-page__mover-meta">{sublabel}</p> : null}
+            </>
+          ) : null}
+          {lowAcceptanceTagLabel ? (
+            <span className="matchup-page__mover-tag">{lowAcceptanceTagLabel}</span>
+          ) : null}
         </div>
-        ) : null}
       </div>
       <div className="matchup-page__mover-market">
         {valueLabel ? (
@@ -519,20 +552,34 @@ function MarketMoverRow({
         )}
         {acceptanceProbability != null ? (
           <span
-            aria-label={`${acceptanceProbability}% to accept`}
-            className="matchup-page__mover-accept"
-            title={`${acceptanceProbability}% to accept`}
+            aria-label={acceptanceRead ?? `${acceptanceProbability}%`}
+            className="matchup-page__mover-accept-group"
+            title={acceptanceRead ?? `${acceptanceProbability}%`}
           >
-            <span className="matchup-page__mover-accept-fill" style={{ width: `${clamp(acceptanceProbability, 0, 100)}%` }} />
-            <span className="matchup-page__mover-accept-label">{acceptanceProbability}%</span>
+            <span className="matchup-page__mover-accept">
+              <span className="matchup-page__mover-accept-fill" style={{ width: `${clamp(acceptanceProbability, 0, 100)}%` }} />
+              <span className="matchup-page__mover-accept-label">{acceptanceProbability}%</span>
+            </span>
+            {acceptanceRead ? <span className="matchup-page__mover-accept-band">{acceptanceRead}</span> : null}
           </span>
         ) : null}
+        {href ? <span className="matchup-page__mover-chevron" aria-hidden="true">{'>'}</span> : null}
       </div>
     </>
   );
 
   return (
     <div className="matchup-page__mover-card">
+      {onDismiss ? (
+        <button
+          aria-label="Dismiss this suggested trade"
+          className="matchup-page__mover-dismiss"
+          onClick={onDismiss}
+          type="button"
+        >
+          ×
+        </button>
+      ) : null}
       {href ? (
         <a className="matchup-page__mover-row matchup-page__mover-row--link" href={href}>
           {content}
@@ -552,9 +599,36 @@ function MarketMoverRow({
           >
             Why this trade?
           </button>
-          {whyOpen ? <p className="matchup-page__mover-rationale">{why}</p> : null}
+          {whyOpen ? (
+            <div className="matchup-page__mover-rationale">
+              <p>{why}</p>
+              {href ? (
+                <a className="matchup-page__mover-open-link" href={href}>
+                  Open in Market →
+                </a>
+              ) : null}
+            </div>
+          ) : null}
         </>
       ) : null}
+    </div>
+  );
+}
+
+function DismissToast({
+  visible,
+  onUndo,
+}: {
+  visible: boolean;
+  onUndo: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <div className="matchup-page__dismiss-toast" role="status">
+      <span>Dismissed.</span>
+      <button className="matchup-page__dismiss-toast-action" onClick={onUndo} type="button">
+        Undo
+      </button>
     </div>
   );
 }
@@ -792,6 +866,7 @@ interface PricedMover {
   givePlayerIds?: string[];
   getPlayerIds?: string[];
   partnerRosterId?: number;
+  partnerLabel?: string;
   gain?: number;
   acceptanceProbability?: number | null;
   before: number;
@@ -799,6 +874,8 @@ interface PricedMover {
   claimPlayer?: Player;
   givePlayers?: Player[];
   getPlayers?: Player[];
+  lowAcceptanceTag?: string | null;
+  signature?: string | null;
 }
 
 interface MatchupLiveProps {
@@ -810,145 +887,18 @@ interface MatchupLiveProps {
   unpricedStarterCount?: number;
   seasonLabel?: string;
   movers?: PricedMover[];
-}
-
-function hasPricedCurrentMatchupLine(
-  bootstrap: LeagueBootstrap | null,
-  pricing: LeaguePricing | null | undefined,
-) {
-  if (!bootstrap || !pricing?.available) return false;
-
-  const userTeam = bootstrap.teams.find((team) => team.isUser);
-  if (!userTeam) return false;
-
-  const userMatchup = bootstrap.matchups.find((matchup) => matchup.rosterId === userTeam.rosterId);
-  if (!userMatchup) {
-    return Boolean(pricing.playerMeans && Object.keys(pricing.playerMeans).length > 0);
-  }
-
-  const opponentMatchup = bootstrap.matchups.find(
-    (matchup) => matchup.matchupId === userMatchup.matchupId && matchup.rosterId !== userTeam.rosterId,
-  );
-  const pricedLine = pricing.lines?.find((line) => line.matchupId === userMatchup.matchupId);
-
-  return Boolean(
-    pricedLine?.sides[String(userMatchup.rosterId)] &&
-    (!opponentMatchup || pricedLine.sides[String(opponentMatchup.rosterId)]),
-  );
-}
-
-function MatchupPricingLoading({ matchup }: { matchup: MatchupData }) {
-  const rows = [
-    ...matchup.yourTeam.roster.map((slot) => ({
-      key: `${slot.slotLabel}-${slot.starter.id}`,
-      player: slot.starter,
-      slotLabel: slot.slotLabel === 'FLEX' ? 'FLX' : slot.slotLabel,
-      meta: slot.starter.team,
-      tone: 'starter' as const,
-    })),
-    ...(matchup.yourTeam.bench ?? []).map((benchRow) => ({
-      key: `BEN-${benchRow.player.id}`,
-      player: benchRow.player,
-      slotLabel: benchRow.player.position,
-      meta: benchRow.player.team,
-      tone: 'bench' as const,
-    })),
-  ];
-
-  return (
-    <div className="matchup-page">
-      <h1 className="visually-hidden">Matchup</h1>
-      <section className="matchup-page__story">
-        <section className="matchup-page__module matchup-page__module--hero">
-          <div className="matchup-page__module-row">
-            <span className="matchup-page__eyebrow">
-              Week {matchup.week} · head-to-head
-            </span>
-            <span className="matchup-page__live-chip">Pricing your league…</span>
-          </div>
-
-          <div className="matchup-page__faceoff">
-            <div className="matchup-page__faceoff-side">
-              <div className="matchup-page__faceoff-identity">
-                <TeamCrest
-                  avatarUrl={matchup.yourTeam.avatarUrl}
-                  isUser
-                  teamName={matchup.yourTeam.teamName}
-                />
-                <div>
-                  <p className="matchup-page__team-name">{matchup.yourTeam.teamName}</p>
-                  <p className="matchup-page__meta-copy">
-                    {matchup.yourTeam.managerName} · {matchup.yourTeam.record}
-                  </p>
-                </div>
-              </div>
-              <span className="matchup-page__hero-number" aria-hidden="true">
-                —
-              </span>
-            </div>
-
-            <div className="matchup-page__faceoff-vs" aria-hidden="true">
-              VS
-            </div>
-
-            <div className="matchup-page__faceoff-side matchup-page__faceoff-side--opp">
-              <div className="matchup-page__faceoff-identity matchup-page__faceoff-identity--opp">
-                <TeamCrest
-                  avatarUrl={matchup.opponentTeam.avatarUrl}
-                  teamName={matchup.opponentTeam.teamName}
-                />
-                <div>
-                  <p className="matchup-page__team-name">{matchup.opponentTeam.teamName}</p>
-                  <p className="matchup-page__meta-copy">
-                    {matchup.opponentTeam.managerName} · {matchup.opponentTeam.record}
-                  </p>
-                </div>
-              </div>
-              <span className="matchup-page__hero-number matchup-page__hero-number--opp" aria-hidden="true">
-                —
-              </span>
-            </div>
-          </div>
-          <p className="matchup-page__meta-copy">Pricing your league…</p>
-        </section>
-      </section>
-
-      <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--lineup-rail">
-        <div className="matchup-page__module-row matchup-page__module-row--lineup">
-          <div>
-            <h2 className="matchup-page__module-title">Your lineup</h2>
-            <p className="matchup-page__lineup-hint">Tap two players to compare</p>
-          </div>
-        </div>
-
-        <div className="matchup-page__lineup-list">
-          {rows.map((row) => (
-            <div
-              className={[
-                'matchup-page__lineup-row',
-                row.tone === 'bench' ? 'matchup-page__lineup-row--bench' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              key={row.key}
-            >
-              <div className="matchup-page__lineup-hitbox">
-                <span className="matchup-page__slot-tag">{row.slotLabel}</span>
-                <span className="matchup-page__lineup-player">
-                  <PlayerChip player={row.player} showPosition={false} />
-                  <span className="matchup-page__lineup-copy">
-                    <span className="matchup-page__row-name">{row.player.shortName}</span>
-                    <span className="matchup-page__row-secondary">{row.meta}</span>
-                  </span>
-                </span>
-                <span className="matchup-page__projection">—</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
+  suggestionsFetching?: boolean;
+  suggestionsStale?: boolean;
+  suggestionsResolved?: boolean;
+  suggestionsAsOf?: string | null;
+  marketScan?: {
+    isScanning: boolean;
+    buttonLabel: string;
+    coolingDown: boolean;
+    note: string | null;
+  };
+  onScanMarket?: (() => void) | null;
+  onDismissMover?: ((signature: string) => void) | null;
 }
 
 function MatchupColdLoading({ label }: { label: string }) {
@@ -995,6 +945,76 @@ function MatchupColdLoading({ label }: { label: string }) {
   );
 }
 
+function MatchupSuggestionStatus({
+  isFetching,
+  isStale,
+  asOf,
+}: {
+  isFetching: boolean;
+  isStale: boolean;
+  asOf?: string | null;
+}) {
+  if (isFetching) {
+    return (
+      <span className="matchup-page__repricing">
+        <span className="matchup-page__repricing-dot" aria-hidden="true" />
+        repricing...
+      </span>
+    );
+  }
+  if (isStale && asOf) {
+    return <span className="matchup-page__meta-copy">as of {asOf}</span>;
+  }
+  return null;
+}
+
+function MatchupSuggestionSkeleton({
+  title,
+  subtitle,
+  mode,
+}: {
+  title: string;
+  subtitle?: string;
+  mode: 'edge' | 'market';
+}) {
+  return (
+    <section className={`matchup-page__module matchup-page__suggestion-shell matchup-page__suggestion-shell--${mode}`}>
+      <div className="matchup-page__module-row">
+        <h2 className="matchup-page__module-title">{title}</h2>
+        {subtitle ? <p className="matchup-page__meta-copy">{subtitle}</p> : null}
+      </div>
+      <div className="matchup-page__suggestion-loader">
+        <SimulationLoader
+          label={title}
+          messages={SUGGESTION_LOADING_MESSAGES}
+        />
+      </div>
+    </section>
+  );
+}
+
+function MatchupSuggestionEmpty({
+  title,
+  subtitle,
+  mode,
+}: {
+  title: string;
+  subtitle?: string;
+  mode: 'edge' | 'market';
+}) {
+  return (
+    <section className={`matchup-page__module matchup-page__suggestion-shell matchup-page__suggestion-shell--${mode}`}>
+      <div className="matchup-page__module-row">
+        <h2 className="matchup-page__module-title">{title}</h2>
+        {subtitle ? <p className="matchup-page__meta-copy">{subtitle}</p> : null}
+      </div>
+      <p className="matchup-page__suggestion-empty">
+        The book is still pricing your market. Check back in a minute.
+      </p>
+    </section>
+  );
+}
+
 function MatchupLive({
   matchup,
   isConnected,
@@ -1004,6 +1024,18 @@ function MatchupLive({
   unpricedStarterCount = 0,
   seasonLabel,
   movers = [],
+  suggestionsFetching = false,
+  suggestionsStale = false,
+  suggestionsResolved = false,
+  suggestionsAsOf = null,
+  marketScan = {
+    isScanning: false,
+    buttonLabel: 'Scan the market',
+    coolingDown: false,
+    note: null,
+  },
+  onScanMarket = null,
+  onDismissMover = null,
 }: MatchupLiveProps) {
   const engine = useMatchupEngine(matchup);
   const { stored, bootstrap } = useLeagueConnection();
@@ -1147,6 +1179,23 @@ function MatchupLive({
         ),
       }
     : null;
+  const tradeMovers = useMemo(
+    () => movers.filter((mover) => mover.kind === 'trade'),
+    [movers],
+  );
+  const marketRows = useMemo(() => {
+    const nonTradeMovers = movers.filter((mover) => mover.kind !== 'trade');
+    const { visible, longShotFallback } = applyTradeDisplayPolicy(tradeMovers);
+    const taggedTrades = visible.map((mover) => ({
+      ...mover,
+      lowAcceptanceTag: lowAcceptanceTag(
+        mover.acceptanceProbability,
+        longShotFallback === mover,
+      ),
+    }));
+    return [...nonTradeMovers, ...taggedTrades].slice(0, 3);
+  }, [movers, tradeMovers]);
+  const showSuggestionSkeletons = isConnected && suggestionsFetching && !suggestionsResolved;
 
   useEffect(() => {
     if (!topSwapEvaluation?.bestBenchAlternative) {
@@ -1745,7 +1794,14 @@ function MatchupLive({
           <section className="matchup-page__module">
             <div className="matchup-page__module-row">
               <h2 className="matchup-page__module-title">Biggest edge</h2>
-              <span className="matchup-page__signal matchup-page__signal--up">Swap</span>
+              <div className="matchup-page__module-meta">
+                <span className="matchup-page__signal matchup-page__signal--up">Swap</span>
+                <MatchupSuggestionStatus
+                  asOf={suggestionsAsOf}
+                  isFetching={suggestionsFetching}
+                  isStale={suggestionsStale}
+                />
+              </div>
             </div>
             <div className="matchup-page__edge-swap-card">
               <div className="matchup-page__edge-swap-players">
@@ -1812,16 +1868,44 @@ function MatchupLive({
               ) : null}
             </div>
           </section>
+        ) : isConnected ? (
+          showSuggestionSkeletons ? (
+            <MatchupSuggestionSkeleton mode="edge" title="Biggest edge" subtitle="swap" />
+          ) : (
+            <MatchupSuggestionEmpty mode="edge" title="Biggest edge" subtitle={suggestionsAsOf ? `as of ${suggestionsAsOf}` : undefined} />
+          )
         ) : null}
 
         {isConnected ? (
-          movers.length > 0 ? (
+          marketRows.length > 0 ? (
             <section className="matchup-page__module">
               <div className="matchup-page__module-row">
                 <h2 className="matchup-page__module-title">The market</h2>
-                <p className="matchup-page__meta-copy">added to your lineup</p>
+                <div className="matchup-page__module-meta">
+                  {marketScan.isScanning ? (
+                    <SimulationLoader label="Scanning the market" size="compact" variant="scan" />
+                  ) : (
+                    <button
+                      aria-label="Scan the market"
+                      className={[
+                        'matchup-page__market-refresh',
+                        marketScan.coolingDown ? 'matchup-page__market-refresh--cooldown' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      disabled={marketScan.coolingDown}
+                      onClick={() => onScanMarket?.()}
+                      type="button"
+                    >
+                      {marketScan.coolingDown ? marketScan.buttonLabel : <span aria-hidden="true">↻</span>}
+                    </button>
+                  )}
+                </div>
               </div>
-              {movers.map((mover) => (
+              <p className="matchup-page__meta-copy">
+                {marketScan.note ?? 'added to your lineup'}
+              </p>
+              {marketRows.map((mover) => (
                 <MarketMoverRow
                   from={mover.before}
                   gain={mover.gain}
@@ -1832,6 +1916,12 @@ function MatchupLive({
                   href={marketHrefForMover(mover)}
                   key={mover.headline}
                   label={mover.headline}
+                  lowAcceptanceTagLabel={mover.lowAcceptanceTag}
+                  onDismiss={
+                    mover.kind === 'trade' && mover.signature
+                      ? () => onDismissMover?.(mover.signature as string)
+                      : null
+                  }
                   sublabel={mover.kind === 'trade' ? undefined : mover.detail}
                   to={mover.after}
                   why={mover.kind === 'trade'
@@ -1839,13 +1929,22 @@ function MatchupLive({
                         acceptanceProbability: mover.acceptanceProbability,
                         from: mover.before,
                         gain: mover.gain,
+                        partnerLabel: mover.partnerLabel,
                         to: mover.after,
                       })
                     : undefined}
                 />
               ))}
             </section>
-          ) : null
+          ) : showSuggestionSkeletons ? (
+            <MatchupSuggestionSkeleton mode="market" title="The market" subtitle="added to your lineup" />
+          ) : (
+            <MatchupSuggestionEmpty
+              mode="market"
+              title="The market"
+              subtitle={marketScan.note ?? (suggestionsAsOf ? `as of ${suggestionsAsOf}` : 'added to your lineup')}
+            />
+          )
           ) : !isConnected ? (
           <section className="matchup-page__module">
             <div className="matchup-page__module-row">
@@ -1869,7 +1968,7 @@ function MatchupLive({
               givePlayers={topTradeTarget.suggestedPackage.youSend.map(displayPlayerFromMock)}
               label={`Trade lane: ${topTradeTarget.teamName} want ${topTradeTarget.theirNeed}`}
               to={topTradeTarget.suggestedPackage.championshipOddsAfter}
-              why={`${topTradeTarget.suggestedPackage.youSend.map((player) => player.name).join(' + ')} for ${topTradeTarget.player.name}. Title price ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsBefore)} to ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsAfter)}. Opens the deal in Market.`}
+              why={`${topTradeTarget.suggestedPackage.youSend.map((player) => player.name).join(' + ')} for ${topTradeTarget.player.name}. Title price ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsBefore)} to ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsAfter)}.`}
             />
           ) : null}
         </section>
@@ -2336,7 +2435,33 @@ function CompareBoard({
 }
 
 export function MatchupPage() {
-  const { stored, bootstrap, pricing, lineHistory, isLoading, error, refresh } = useLeagueConnection();
+  const {
+    stored,
+    bootstrap,
+    pricing,
+    pricingMeta,
+    lineHistory,
+    isLoading,
+    error,
+    marketScan,
+    scanMarket,
+  } = useLeagueConnection();
+  const [marketScanNote, setMarketScanNote] = useState<string | null>(null);
+  const [scanClock, setScanClock] = useState(() => Date.now());
+  const currentWeek = pricing?.week ?? bootstrap?.week ?? null;
+  const { dismissedSignatures, dismiss, undo, pendingUndoSignature } =
+    useDismissedTradeSuggestions(stored?.leagueId ?? null, currentWeek);
+
+  useEffect(() => {
+    if (
+      !marketScan.lastScannedAt ||
+      Date.now() - marketScan.lastScannedAt >= marketScan.cooldownMs
+    ) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => setScanClock(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [marketScan.cooldownMs, marketScan.lastScannedAt]);
 
   if (stored && !bootstrap) {
     if (isLoading) {
@@ -2380,16 +2505,13 @@ export function MatchupPage() {
   })();
 
   const connectedMatchup = bootstrap ? toMatchupData(bootstrap, pricing) : null;
-  const pricingReady = !bootstrap || hasPricedCurrentMatchupLine(bootstrap, pricing);
 
   const pricedMovers = pricing?.movers ?? [];
   const filteredSamePositionMovers =
     connectedMatchup && bootstrap && pricing?.available
-      ? pricedMovers.filter((mover) => {
-          const getIds = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
-          const giveIds = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
-          return mover.kind === 'trade' && samePositionOneForOne(getIds, giveIds, bootstrap.players);
-        }).length
+      ? pricedMovers.filter(
+          (mover) => mover.kind === 'trade' && samePositionOneForOneTrade(mover, bootstrap.players),
+        ).length
       : 0;
   if (import.meta.env.DEV && filteredSamePositionMovers > 0) {
     console.info('[matchup] filtered same-position trade suggestions', filteredSamePositionMovers);
@@ -2398,16 +2520,23 @@ export function MatchupPage() {
   // Real priced movers (waiver claim + trade lane) for connected leagues.
   const movers =
     connectedMatchup && bootstrap && pricing?.available
-      ? pricedMovers.filter((mover) => {
+      ? pricedMovers
+        .filter(
+          (mover) => !(mover.kind === 'trade' && samePositionOneForOneTrade(mover, bootstrap.players)),
+        )
+        .reduce<PricedMover[]>((nextMovers, mover) => {
           const getIds = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
           const giveIds = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
-          return !(mover.kind === 'trade' && samePositionOneForOne(getIds, giveIds, bootstrap.players));
-        }).map((mover) => {
-          const getIds = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
-          const giveIds = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
+          const signature = stored?.leagueId && mover.kind === 'trade'
+            ? marketMoverSignature(stored.leagueId, mover)
+            : null;
+          if (signature && dismissedSignatures.has(signature)) return nextMovers;
           const getPlayers = getIds.map((id) => toPlayer(id, bootstrap.players));
           const givePlayers = giveIds.map((id) => toPlayer(id, bootstrap.players));
-          return {
+          const partnerTeam = mover.partnerRosterId == null
+            ? null
+            : bootstrap.teams.find((team) => team.rosterId === mover.partnerRosterId);
+          nextMovers.push({
             kind: mover.kind,
             leagueId: mover.leagueId,
             headline: mover.headline,
@@ -2421,49 +2550,84 @@ export function MatchupPage() {
             givePlayers,
             getPlayers,
             partnerRosterId: mover.partnerRosterId,
+            partnerLabel: counterpartyLabel(partnerTeam?.teamName, mover.partnerRosterId ?? null),
             gain: mover.valueGain,
             acceptanceProbability: mover.acceptanceProbability ?? null,
             before: mover.titleOddsBefore,
             after: mover.titleOddsAfter,
-          };
-        })
+            signature,
+          });
+          return nextMovers;
+        }, [])
       : [];
+  const suggestionsAsOf = formatAsOfTime(pricingMeta.lastUpdatedAt);
+  const scanCoolingDown =
+    marketScan.lastScannedAt != null &&
+    scanClock - marketScan.lastScannedAt < marketScan.cooldownMs;
+  const scanButtonLabel = scanCoolingDown && marketScan.lastScannedAt
+    ? `Scanned at ${formatAsOfTime(marketScan.lastScannedAt)}`
+    : 'Scan the market';
 
-  if (connectedMatchup && !pricingReady) {
-    return <MatchupPricingLoading matchup={connectedMatchup} />;
-  }
-
-  if (connectedMatchup && pricing && !pricing.available) {
-    return (
-      <div className="matchup-page">
-        <h1 className="visually-hidden">Matchup</h1>
-        <SeasonalNotice>
-          The book could not price this league yet.{' '}
-          <button className="matchup-page__inline-action" onClick={() => void refresh()} type="button">
-            Try again
-          </button>
-        </SeasonalNotice>
-      </div>
+  const handleScanMarket = async () => {
+    if (!stored || !bootstrap || marketScan.isScanning || scanCoolingDown) return;
+    const visibleBefore = new Set(
+      movers
+        .filter((mover) => mover.kind === 'trade' && mover.signature)
+        .map((mover) => mover.signature as string),
     );
-  }
+    const nextPricing = await scanMarket();
+    const nextVisibleTradeSignatures = (nextPricing?.movers ?? [])
+      .filter((mover) => mover.kind === 'trade' && !samePositionOneForOneTrade(mover, bootstrap.players))
+      .map((mover) => (stored.leagueId ? marketMoverSignature(stored.leagueId, mover) : null))
+      .filter(
+        (signature): signature is string =>
+          signature !== null && !dismissedSignatures.has(signature),
+      );
+    const hasFreshTrade = nextVisibleTradeSignatures.some((signature) => !visibleBefore.has(signature));
+    setMarketScanNote(
+      hasFreshTrade
+        ? null
+        : 'No new deals on the board. The market moves when lineups do.',
+    );
+  };
 
   return (
-    <MatchupLive
-      movers={movers}
-      isConnected={connectedMatchup !== null}
-      isPriced={Boolean(pricing?.available)}
-      lineMovement={connectedMatchup ? lineMovement : null}
-      matchup={connectedMatchup ?? MOCK_MATCHUP}
-      scoringNote={pricing?.available ? pricing.scoringNote ?? null : null}
-      unpricedStarterCount={
-        pricing?.available && bootstrap
-          ? (pricing.lines
-              ?.flatMap((line) => Object.entries(line.sides))
-              .find(([rosterId]) =>
-                String(bootstrap.teams.find((team) => team.isUser)?.rosterId) === rosterId,
-              )?.[1]?.unpricedStarters.length ?? 0)
-          : 0
-      }
-    />
+    <>
+      <MatchupLive
+        movers={movers}
+        isConnected={connectedMatchup !== null}
+        isPriced={Boolean(pricing?.available)}
+        lineMovement={connectedMatchup ? lineMovement : null}
+        matchup={connectedMatchup ?? MOCK_MATCHUP}
+        scoringNote={pricing?.available ? pricing.scoringNote ?? null : null}
+        marketScan={{
+          isScanning: marketScan.isScanning,
+          buttonLabel: scanButtonLabel,
+          coolingDown: scanCoolingDown,
+          note: marketScanNote,
+        }}
+        onDismissMover={(signature) => {
+          dismiss(signature);
+          setMarketScanNote(null);
+        }}
+        onScanMarket={() => {
+          void handleScanMarket();
+        }}
+        suggestionsAsOf={suggestionsAsOf}
+        suggestionsFetching={pricingMeta.isFetching}
+        suggestionsResolved={pricingMeta.hasResolved}
+        suggestionsStale={pricingMeta.isStale}
+        unpricedStarterCount={
+          pricing?.available && bootstrap
+            ? (pricing.lines
+                ?.flatMap((line) => Object.entries(line.sides))
+                .find(([rosterId]) =>
+                  String(bootstrap.teams.find((team) => team.isUser)?.rosterId) === rosterId,
+                )?.[1]?.unpricedStarters.length ?? 0)
+            : 0
+        }
+      />
+      <DismissToast onUndo={undo} visible={pendingUndoSignature != null} />
+    </>
   );
 }

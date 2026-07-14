@@ -18,16 +18,33 @@ const EVENER_MESSAGES = [
   'Setting the price...',
 ];
 
+const SCAN_MESSAGES = [
+  'Scanning the market...',
+  'Pricing every swap...',
+  'Reading the room...',
+];
+
 export function SimulationLoader({
   label = 'Pricing',
   variant = 'trade',
+  size = 'default',
+  messages: customMessages,
 }: {
   label?: string;
-  variant?: 'trade' | 'evener';
+  variant?: 'trade' | 'evener' | 'scan';
+  size?: 'default' | 'compact';
+  messages?: string[];
 }) {
   const messages = useMemo(
-    () => (variant === 'evener' ? EVENER_MESSAGES : DEFAULT_MESSAGES),
-    [variant],
+    () =>
+      customMessages && customMessages.length > 0
+        ? customMessages
+        : variant === 'evener'
+          ? EVENER_MESSAGES
+          : variant === 'scan'
+            ? SCAN_MESSAGES
+            : DEFAULT_MESSAGES,
+    [customMessages, variant],
   );
   const [index, setIndex] = useState(0);
 
@@ -40,7 +57,16 @@ export function SimulationLoader({
   }, [messages.length]);
 
   return (
-    <div className="simulation-loader" role="status" aria-label={label}>
+    <div
+      className={[
+        'simulation-loader',
+        size === 'compact' ? 'simulation-loader--compact' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      role="status"
+      aria-label={label}
+    >
       <span className="simulation-loader__spinner" aria-hidden="true" />
       <span className="simulation-loader__copy">{messages[index]}</span>
     </div>

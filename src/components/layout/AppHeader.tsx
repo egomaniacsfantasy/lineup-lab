@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useDynastyTradesExperimental } from '../../hooks/useLabsFlags';
 import { useSeasonMode } from '../../hooks/useSeasonMode';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { useOddsFormat } from '../../contexts/OddsFormatContext';
@@ -28,6 +29,7 @@ export function AppHeader() {
   const { format, toggleFormat } = useOddsFormat();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isSynced = bootstrap !== null;
+  const dynastyTradesExperimental = useDynastyTradesExperimental();
   const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : 'your league host';
   const scoringLabel = isSynced
     ? SCORING_LABELS[bootstrap.league.scoringFamily]
@@ -39,13 +41,19 @@ export function AppHeader() {
     season,
     displayedWeek,
   );
-  // Market tools are redraft-only for now; hide the tab in dynasty/keeper.
-  const hideTrade = isSynced && bootstrap.league.leagueType !== 'redraft';
+  const hideTrade =
+    isSynced &&
+    (bootstrap.league.leagueType === 'keeper' ||
+      (bootstrap.league.leagueType === 'dynasty' && !dynastyTradesExperimental));
+  const showExperimentalMarketTag =
+    isSynced &&
+    bootstrap.league.leagueType === 'dynasty' &&
+    dynastyTradesExperimental;
   const navItems = stored
     ? [
         { label: 'Matchup', path: '/matchup' },
         { label: 'League', path: '/league' },
-        ...(hideTrade ? [] : [{ label: 'Market', path: '/market' }]),
+        ...(hideTrade ? [] : [{ label: 'Market', path: '/market', badge: showExperimentalMarketTag ? 'experimental' : null }]),
         { label: 'Board', path: '/rankings' },
         { label: 'Projections', path: '/projections' },
         { label: 'More', path: '/more' },
@@ -75,7 +83,8 @@ export function AppHeader() {
               }
               to={item.path}
             >
-              {item.label}
+              <span>{item.label}</span>
+              {item.badge ? <span className="app-header__nav-badge">{item.badge}</span> : null}
             </NavLink>
           ))}
         </nav>

@@ -27,6 +27,7 @@ export interface LeagueWeekMatchup {
   teamAOdds: number;
   teamAWinProb?: number;
   teamAProjection?: number;
+  teamAIsUser?: boolean;
   teamBRosterId?: number;
   teamB: string;
   teamBAvatarUrl?: string | null;
@@ -34,6 +35,7 @@ export interface LeagueWeekMatchup {
   teamBOdds: number;
   teamBWinProb?: number;
   teamBProjection?: number;
+  teamBIsUser?: boolean;
   isUserGame: boolean;
 }
 

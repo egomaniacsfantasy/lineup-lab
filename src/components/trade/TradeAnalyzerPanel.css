@@ -128,6 +128,30 @@
   line-height: 1.35;
 }
 
+.trade-analyzer-panel__why-toggle {
+  width: max-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary, #f4f5f2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.trade-analyzer-panel__why-details {
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.trade-analyzer-panel__why-line {
+  margin: 0;
+  color: var(--text-muted, #8a8f98);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 /* ── Sliders ── */
 .trade-analyzer-panel__slider {
   display: flex;
@@ -180,40 +204,6 @@
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 0.85rem;
-}
-
-.trade-analyzer-panel__drops {
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.trade-analyzer-panel__drops-text {
-  margin: 0;
-  font-size: 0.85rem;
-  flex: 1 1 100%;
-}
-
-.trade-analyzer-panel__drop-select,
-.trade-analyzer-panel__partner-drop {
-  font-size: 0.82rem;
-}
-
-.trade-analyzer-panel__drop-select {
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: var(--surface-2, #17171c);
-  color: inherit;
-  border: 1px solid var(--border, #33333a);
-}
-
-.trade-analyzer-panel__partner-drop {
-  opacity: 0.7;
-  margin: 0;
 }
 
 .trade-analyzer-panel__cards {

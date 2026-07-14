@@ -48,7 +48,7 @@ function getCommentary(winProbability: number) {
   }
 
   if (winProbability >= 50) {
-    return 'Coin flip with a lean. Every roster spot matters.';
+    return 'Dead even with a lean. Every roster spot matters.';
   }
 
   if (winProbability >= 40) {

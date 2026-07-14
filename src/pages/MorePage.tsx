@@ -4,6 +4,7 @@ import { LeagueSettings } from '../components/league/LeagueSettings';
 import { WelcomeCard } from '../components/onboarding/WelcomeCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { useDynastyTradesExperimental, writeDynastyTradesExperimental } from '../hooks/useLabsFlags';
 import { toLeagueConnection } from '../adapters/connectedLeague';
 import { PROVIDER_LABEL } from '../utils/provider';
 import './MorePage.css';
@@ -14,6 +15,7 @@ export function MorePage() {
   const { user, signOut } = useAuth();
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
   const navigate = useNavigate();
+  const dynastyTradesExperimental = useDynastyTradesExperimental();
   const isOwner =
     user?.app_metadata?.role === 'owner' ||
     user?.user_metadata?.role === 'owner' ||
@@ -119,6 +121,29 @@ export function MorePage() {
           </div>
         </section>
       ))}
+      <section className="more-page__section">
+        <p className="more-page__eyebrow">Labs</p>
+        <div className="more-page__card more-page__labs-card">
+          <div>
+            <h3 className="more-page__card-title">Dynasty trades (experimental)</h3>
+            <p className="more-page__card-body">
+              Temporary override for product testing. Market opens in dynasty leagues, but pricing
+              quality is still provisional.
+            </p>
+          </div>
+          <button
+            aria-pressed={dynastyTradesExperimental}
+            className={[
+              'more-page__toggle',
+              dynastyTradesExperimental ? 'more-page__toggle--on' : '',
+            ].filter(Boolean).join(' ')}
+            onClick={() => writeDynastyTradesExperimental(!dynastyTradesExperimental)}
+            type="button"
+          >
+            <span />
+          </button>
+        </div>
+      </section>
       {bootstrap ? (
         <section className="more-page__section">
           <p className="more-page__eyebrow">League settings</p>

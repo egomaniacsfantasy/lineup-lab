@@ -63,10 +63,24 @@
 }
 
 .bottom-tab-bar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+.bottom-tab-bar__badge {
+  padding: 1px 4px;
+  border: 1px solid rgba(255, 128, 73, 0.32);
+  border-radius: var(--radius-pill);
+  color: var(--text-amber);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
 }
 
 @media (min-width: 1024px) {

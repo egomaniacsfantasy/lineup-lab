@@ -1,179 +1,279 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
-import { useScoutingCard } from '../../contexts/ScoutingCardContext';
+import { useScoutingAffectsAcceptance, writeScoutingAffectsAcceptance } from '../../hooks/useLabsFlags';
 import {
-  fetchScoutingLeague,
-  fetchScoutingSuperlatives,
-  type ScoutingRead,
-  type ScoutingSuperlative,
-} from '../../services/leagueApi';
-import { scoutingTagCandidates } from '../../components/scouting/scoutingTags';
+  compileManagerFile,
+  formatCompiledAt,
+  type ManagerFile,
+} from '../../services/managerFiles';
+import { SimulationLoader } from '../../components/ui/SimulationLoader';
 import styles from './ScoutingView.module.css';
 
-function initials(name: string) {
-  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'OG';
+function fileMessages() {
+  return ['Pulling their file...', 'Checking the tape...', 'Calling around the league...'];
 }
 
-function revealKey(leagueId: string) {
-  return `og.scouting.reveal.${leagueId}`;
+function formatPct(value: number | null) {
+  return value == null ? 'n/a' : `${value}%`;
 }
 
-function isVacantRead(read: ScoutingRead) {
-  return read.manager_key.startsWith('vacant:') || read.manager.name === 'Unmanaged team';
+function formatValue(value: number | null, digits = 1) {
+  if (value == null) return 'n/a';
+  return value.toFixed(digits);
 }
 
-function superlativeLabel(item: ScoutingSuperlative, reads: ScoutingRead[]) {
-  const manager = reads.find((read) => read.manager_key === item.manager_key)?.manager;
-  const name = manager?.name ?? manager?.team_name ?? 'Manager';
-  const tag = item.key === 'stingiest'
-    ? 'Stingiest'
-    : item.key === 'biggest_homer'
-      ? 'Biggest homer'
-      : item.key === 'waiver_shark'
-        ? 'Waiver shark'
-        : 'Fastest trigger';
-  const team = item.key === 'biggest_homer'
-    ? reads.find((read) => read.manager_key === item.manager_key)?.traits.team_bias?.team
-    : null;
-  return `${tag}: ${name}${team ? ` (${team})` : ''}`;
+function dossierRows(file: ManagerFile) {
+  return [
+    [`Trades/season (weighted) · ${file.scopes.lineage}`, file.numbers.tradesPerSeason == null ? 'n/a' : formatValue(file.numbers.tradesPerSeason)],
+    [`Initiation · ${file.scopes.lineage}`, formatPct(file.numbers.tradeInitiationRate)],
+    [`Waiver adds/week · ${file.scopes.lineage}`, file.numbers.waiverAddsPerWeek == null ? 'n/a' : formatValue(file.numbers.waiverAddsPerWeek, 2)],
+    [`FAAB used · ${file.scopes.lineage}`, file.numbers.faabUsed == null ? 'n/a' : `$${Math.round(file.numbers.faabUsed)}`],
+    [`Career record · ${file.scopes.career}`, file.numbers.careerRecord ?? 'n/a'],
+    [`Playoff rate · ${file.scopes.career}`, formatPct(file.numbers.playoffRate)],
+    [`Titles · ${file.scopes.career}`, file.numbers.titles == null ? 'n/a' : String(file.numbers.titles)],
+    [`Vs you · ${file.scopes.headToHead}`, file.numbers.headToHeadRecord ?? 'n/a'],
+    [`Bench left/week · ${file.scopes.bench}`, file.numbers.benchPointsLeftPerWeek == null ? 'n/a' : formatValue(file.numbers.benchPointsLeftPerWeek)],
+  ];
+}
+
+function ScoutingToggle({ leagueId, checked }: { leagueId: string; checked: boolean }) {
+  return (
+    <label className={styles.toggle}>
+      <span>Scouting affects acceptance odds</span>
+      <button
+        aria-pressed={checked}
+        className={[styles.toggleTrack, checked ? styles.toggleTrackOn : ''].filter(Boolean).join(' ')}
+        onClick={() => writeScoutingAffectsAcceptance(leagueId, !checked)}
+        type="button"
+      >
+        <span className={styles.toggleThumb} />
+      </button>
+    </label>
+  );
+}
+
+function ManagerProfileCard({
+  leagueId,
+  provider,
+  managerTeam,
+  viewerUserId,
+  currentWeek,
+}: {
+  leagueId: string;
+  provider: 'sleeper' | 'espn';
+  managerTeam: NonNullable<ReturnType<typeof useLeagueConnection>['bootstrap']>['teams'][number];
+  viewerUserId: string;
+  currentWeek: number;
+}) {
+  const cardRef = useRef<HTMLElement | null>(null);
+  const [visible, setVisible] = useState(provider === 'espn' || !managerTeam.ownerId);
+  const [file, setFile] = useState<ManagerFile | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeChip, setActiveChip] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) return;
+    const node = cardRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setVisible(true);
+        observer.disconnect();
+      },
+      { rootMargin: '160px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  const loadFile = useCallback(
+    async (force = false) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const next = await compileManagerFile({
+          provider,
+          leagueId,
+          managerTeam,
+          viewerUserId,
+          currentWeek,
+          force,
+        });
+        setFile(next);
+        setActiveChip((current) =>
+          next.chips.some((chip) => chip.key === current) ? current : next.chips[0]?.key ?? null,
+        );
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : 'Could not compile this file.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [currentWeek, leagueId, managerTeam, provider, viewerUserId],
+  );
+
+  useEffect(() => {
+    if (!visible || file || loading || error) return;
+    void loadFile();
+  }, [error, file, loadFile, loading, visible]);
+
+  if (file?.status === 'unmanaged') {
+    return (
+      <article className={[styles.card, styles.unmanaged].join(' ')} ref={cardRef}>
+        <p className={styles.unmanagedLine}>
+          <span>{managerTeam.teamName}</span>
+          <span>No file. Unmanaged team.</span>
+        </p>
+      </article>
+    );
+  }
+
+  const chip = file?.chips.find((item) => item.key === activeChip) ?? null;
+
+  return (
+    <article className={styles.card} ref={cardRef}>
+      {!file || loading ? (
+        <div className={styles.loaderCard}>
+          <div className={styles.identity}>
+            <p className={styles.eyebrow}>The file</p>
+            <h3>{managerTeam.teamName}</h3>
+            <p>
+              {managerTeam.ownerName} <span>{managerTeam.record.wins}-{managerTeam.record.losses}</span>
+            </p>
+          </div>
+          <SimulationLoader label="Compiling manager file" messages={fileMessages()} size="compact" variant="scan" />
+        </div>
+      ) : null}
+
+      {error && !loading ? (
+        <div className={styles.errorCard}>
+          <p>Could not compile this file right now.</p>
+          <button onClick={() => void loadFile(true)} type="button">Retry</button>
+        </div>
+      ) : null}
+
+      {file ? (
+        <div className={styles.file}>
+          <header className={styles.header}>
+            <div className={styles.avatar}>
+              {file.avatarUrl ? <img alt="" src={file.avatarUrl} /> : file.teamName.slice(0, 2).toUpperCase()}
+            </div>
+            <div className={styles.identity}>
+              <div className={styles.identityTop}>
+                <p className={styles.eyebrow}>The file</p>
+                {file.fileTag ? <span className={styles.fileTag}>{file.fileTag}</span> : null}
+              </div>
+              <h3>{file.teamName}</h3>
+              <p>
+                {file.managerName} <span>{file.record}</span>
+              </p>
+              <p className={styles.tenure}>{file.tenureLine}</p>
+            </div>
+          </header>
+
+          {file.chips.length > 0 ? (
+            <section className={styles.section}>
+              <div className={styles.chips}>
+                {file.chips.map((item) => (
+                  <button
+                    className={[styles.chip, item.key === activeChip ? styles.chipActive : ''].filter(Boolean).join(' ')}
+                    key={item.key}
+                    onClick={() => setActiveChip(item.key === activeChip ? null : item.key)}
+                    type="button"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {chip ? (
+                <div className={styles.receipt}>
+                  <p>{chip.receipt}</p>
+                  <p>{chip.threshold}</p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          <section className={styles.section}>
+            <div className={styles.numbers}>
+              {dossierRows(file).map(([label, value]) => (
+                <div className={styles.numberRow} key={label}>
+                  <span>{label}</span>
+                  <code>{value}</code>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className={styles.section}>
+            <p className={styles.label}>The book&apos;s read</p>
+            <p className={styles.bookRead}>{file.bookRead}</p>
+          </section>
+
+          {file.notes.length > 0 ? (
+            <section className={styles.section}>
+              {file.notes.map((note) => (
+                <p className={styles.note} key={note}>{note}</p>
+              ))}
+            </section>
+          ) : null}
+
+          <footer className={styles.footer}>
+            <div>
+              <p className={styles.footerLine}>
+                Scouted read defaults to {file.readDefaults.friendliness}/{file.readDefaults.relationship}
+              </p>
+              <p className={styles.footerSub}>Compiled {formatCompiledAt(file.compiledAt)}</p>
+            </div>
+            <button className={styles.refresh} onClick={() => void loadFile(true)} type="button">
+              Refresh
+            </button>
+          </footer>
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 export function ScoutingView() {
   const { stored, bootstrap } = useLeagueConnection();
-  const { user } = useAuth();
-  const { openScoutingCard } = useScoutingCard();
-  const [reads, setReads] = useState<ScoutingRead[]>([]);
-  const [superlatives, setSuperlatives] = useState<ScoutingSuperlative[]>([]);
-  const [dismissedKeys, setDismissedKeys] = useState<Set<string>>(() => new Set());
+  const scoutingAffectsAcceptance = useScoutingAffectsAcceptance(stored?.leagueId);
 
-  useEffect(() => {
-    if (!stored || !user) return;
-    let cancelled = false;
-    fetchScoutingLeague(stored.leagueId, stored.userId, user.id)
-      .then((next) => {
-        if (!cancelled) setReads(next);
-      })
-      .catch(() => {
-        if (!cancelled) setReads([]);
-      });
-    fetchScoutingSuperlatives(stored.leagueId)
-      .then((payload) => {
-        if (!cancelled) setSuperlatives(payload.superlatives ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setSuperlatives([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [stored, user]);
-
-  const sortedReads = useMemo(() => {
-    if (!stored) return reads;
-    return [...reads].sort((a, b) => {
-      const aUser = a.manager_key === stored.userId ? 1 : 0;
-      const bUser = b.manager_key === stored.userId ? 1 : 0;
-      return aUser - bUser || a.manager.team_name.localeCompare(b.manager.team_name);
-    });
-  }, [reads, stored]);
-
-  const dismissed = stored
-    ? dismissedKeys.has(stored.leagueId) ||
-      window.localStorage.getItem(revealKey(stored.leagueId)) === '1'
-    : false;
-  const eligibleSuperlatives = useMemo(() => {
-    if (!stored) return [];
-    const readByManager = new Map(reads.map((read) => [read.manager_key, read]));
-    return superlatives.filter((item) => {
-      if (item.manager_key === stored.userId) return false;
-      const read = readByManager.get(item.manager_key);
-      return read && !isVacantRead(read);
-    });
-  }, [reads, stored, superlatives]);
-  const revealManagers = new Set(eligibleSuperlatives.map((item) => item.manager_key));
-  const showReveal = Boolean(stored && !dismissed && eligibleSuperlatives.length >= 2 && revealManagers.size >= 2);
-
-  const tagStats = useMemo(() => {
-    const counts = new Map<string, number>();
-    const strongest = new Map<string, number>();
-    const managedReads = sortedReads.filter((read) => !isVacantRead(read));
-    for (const read of managedReads) {
-      for (const tag of scoutingTagCandidates(read)) {
-        counts.set(tag.label, (counts.get(tag.label) ?? 0) + 1);
-        strongest.set(tag.label, Math.max(strongest.get(tag.label) ?? 0, tag.score));
-      }
-    }
-    return { counts, strongest, managedCount: managedReads.length };
-  }, [sortedReads]);
+  const teams = useMemo(
+    () => (bootstrap ? bootstrap.teams.filter((team) => !team.isUser) : []),
+    [bootstrap],
+  );
 
   if (!stored || !bootstrap) {
     return <div className={styles.empty}>Syncing market reads.</div>;
   }
 
   return (
-    <section className={styles.scouting} aria-label="Scouting reports">
-      {showReveal ? (
-        <article className={styles.reveal} data-share-surface="league-read">
-          <h2>The book has read your league.</h2>
-          <div className={styles.superlatives}>
-            {eligibleSuperlatives.map((item) => (
-              <p key={item.key}>
-                <span>{superlativeLabel(item, reads).split(':')[0]}:</span>{' '}
-                <code>{superlativeLabel(item, reads).split(':').slice(1).join(':').trim()}</code>
-              </p>
-            ))}
-          </div>
-          <button
-            className={styles.revealDismiss}
-            onClick={() => {
-              window.localStorage.setItem(revealKey(stored.leagueId), '1');
-              setDismissedKeys((current) => new Set([...current, stored.leagueId]));
-            }}
-            type="button"
-          >
-            Enter the market
-          </button>
-        </article>
-      ) : null}
+    <section className={styles.scouting} aria-label="Scouting files">
+      <header className={styles.topline}>
+        <div>
+          <p className={styles.pageEyebrow}>Scouting</p>
+          <h2 className={styles.pageTitle}>Manager files</h2>
+          <p className={styles.pageBody}>
+            Public Sleeper history compiled one manager at a time. Thin files stay thin. Vacant rosters stay vacant.
+          </p>
+        </div>
+        <ScoutingToggle checked={scoutingAffectsAcceptance} leagueId={stored.leagueId} />
+      </header>
 
       <div className={styles.grid}>
-        {sortedReads.filter((read) => read.manager_key !== stored.userId).map((read) => {
-          const isVacant = isVacantRead(read);
-          const tags = scoutingTagCandidates(read)
-            .filter((tag) => {
-              const count = tagStats.counts.get(tag.label) ?? 0;
-              if (tagStats.managedCount > 1 && count >= tagStats.managedCount) {
-                return tag.score === tagStats.strongest.get(tag.label);
-              }
-              return true;
-            })
-            .slice(0, 3)
-            .map((tag) => tag.label);
-          return (
-            <button
-              className={[styles.card, isVacant ? styles.vacant : '']
-                .filter(Boolean)
-                .join(' ')}
-              key={read.manager_key}
-              onClick={() => openScoutingCard(read.manager_key)}
-              type="button"
-            >
-              <div className={styles.avatar}>
-                {read.manager.avatar_url ? <img alt="" src={read.manager.avatar_url} /> : initials(read.manager.team_name)}
-              </div>
-              <div className={styles.copy}>
-                <h3>{read.manager.team_name}</h3>
-                <p>{read.manager.name} · <span>{read.manager.record ?? '0-0'}</span></p>
-                {tags.length > 0 ? (
-                  <div className={styles.tags}>
-                    {tags.map((tag) => <span key={tag}>{tag}</span>)}
-                  </div>
-                ) : null}
-              </div>
-            </button>
-          );
-        })}
+        {teams.map((team) => (
+          <ManagerProfileCard
+            currentWeek={bootstrap.week}
+            key={`${team.rosterId}:${team.ownerId ?? 'vacant'}`}
+            leagueId={stored.leagueId}
+            managerTeam={team}
+            provider={stored.provider}
+            viewerUserId={stored.userId}
+          />
+        ))}
       </div>
     </section>
   );

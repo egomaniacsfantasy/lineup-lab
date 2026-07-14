@@ -118,6 +118,44 @@ export function LeaguePage() {
     [],
   );
 
+  const liveBoardLine = useMemo(() => {
+    const userGame = connected?.slate.find((matchup) => matchup.isUserGame);
+    if (!userGame) return null;
+    if (userGame.teamAIsUser) {
+      return {
+        moneyline: userGame.teamAOdds,
+        winProb: userGame.teamAWinProb,
+        projection: userGame.teamAProjection,
+        opponentProjection: userGame.teamBProjection,
+      };
+    }
+    if (userGame.teamBIsUser) {
+      return {
+        moneyline: userGame.teamBOdds,
+        winProb: userGame.teamBWinProb,
+        projection: userGame.teamBProjection,
+        opponentProjection: userGame.teamAProjection,
+      };
+    }
+    return null;
+  }, [connected?.slate]);
+
+  const connectedScheduleItems = useMemo(() => {
+    if (!connectedSeason) return [];
+    if (!bootstrap || !liveBoardLine) return connectedSeason.scheduleItems;
+    return connectedSeason.scheduleItems.map((item) =>
+      item.week === bootstrap.week && item.status === 'live'
+        ? {
+            ...item,
+            yourLine: liveBoardLine.moneyline,
+            winProb: liveBoardLine.winProb ?? item.winProb,
+            projection: liveBoardLine.projection ?? item.projection,
+            opponentProjection: liveBoardLine.opponentProjection ?? item.opponentProjection,
+          }
+        : item,
+    );
+  }, [bootstrap, connectedSeason, liveBoardLine]);
+
   const handleShareDraftWrapped = async () => {
     const message = `My 2026 season outlook: ${MOCK_DRAFT_WRAPPED.projectedRecord}, ${formatAmericanOdds(
       MOCK_DRAFT_WRAPPED.championshipOdds,
@@ -312,18 +350,6 @@ export function LeaguePage() {
 
       {activeView === 'futures' ? (
         <>
-          <p className="league-page__section-label">League futures</p>
-          <LeagueFutures
-            currentWeek={connection.currentWeek}
-            futures={futures}
-            leagueName={connection.leagueName}
-            mode={connected ? 'inseason' : mode}
-            playoffTeams={bootstrap?.league.playoffTeams ?? 6}
-            scoringFormat={connection.scoringFormat}
-            history={lineHistory}
-            totalTeams={connection.totalTeams}
-          />
-
           <p className="league-page__section-label">Your futures</p>
           {connectedSeason ? (
             <SeasonHeadline
@@ -343,7 +369,7 @@ export function LeaguePage() {
                   ? `${connectedSeason.userFuture.projWins.toFixed(1)} wins`
                   : connectedSeason.userFuture?.record ?? connectedSeason.record
               }
-              title={`Your ${bootstrap?.league.season} season futures`}
+              title="Your futures"
             />
           ) : (
             <>
@@ -354,7 +380,7 @@ export function LeaguePage() {
                 recordLabel="Projected record"
                 recordRange={MOCK_SEASON_OUTLOOK.recordRange}
                 recordValue={`${MOCK_SEASON_OUTLOOK.projectedRecord.wins}-${MOCK_SEASON_OUTLOOK.projectedRecord.losses}`}
-                title="Your 2026 season futures"
+                title="Your futures"
               />
               <DraftWrappedCard
                 draftWrapped={MOCK_DRAFT_WRAPPED}
@@ -362,6 +388,18 @@ export function LeaguePage() {
               />
             </>
           )}
+
+          <p className="league-page__section-label">League futures</p>
+          <LeagueFutures
+            currentWeek={connection.currentWeek}
+            futures={futures}
+            leagueName={connection.leagueName}
+            mode={connected ? 'inseason' : mode}
+            playoffTeams={bootstrap?.league.playoffTeams ?? 6}
+            scoringFormat={connection.scoringFormat}
+            history={lineHistory}
+            totalTeams={connection.totalTeams}
+          />
         </>
       ) : null}
 
@@ -370,7 +408,7 @@ export function LeaguePage() {
           {connected ? (
             connectedSeason && connectedSeason.scheduleItems.length > 0 ? (
               <ScheduleGrid
-                items={connectedSeason.scheduleItems}
+                items={connectedScheduleItems}
                 onSelectWeek={(item) => setSelectedWeek(item.week)}
                 title="Schedule"
               />

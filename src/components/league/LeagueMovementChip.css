@@ -1,0 +1,23 @@
+.league-movement-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding-inline: 8px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.league-movement-chip--up {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+}
+
+.league-movement-chip--down {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+}

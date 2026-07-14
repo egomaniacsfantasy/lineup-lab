@@ -30,6 +30,23 @@
   min-width: 0;
 }
 
+.simulation-loader--compact {
+  justify-content: flex-start;
+  min-height: 38px;
+  width: auto;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.simulation-loader--compact .simulation-loader__spinner {
+  width: 14px;
+  height: 14px;
+}
+
 @keyframes simulation-loader-spin {
   to {
     transform: rotate(360deg);

@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { type TradeAnalysis, type TradeSideDelta } from '../../services/leagueApi';
+import { formatAcceptanceSentence, getAcceptanceLingo } from '../../utils/acceptanceLingo';
 import { acceptanceProbability } from '../../utils/tradeAcceptance';
 
 /**
@@ -10,12 +12,15 @@ import { acceptanceProbability } from '../../utils/tradeAcceptance';
  * "Will they accept?" logistic; it never touches the championship numbers.
  */
 
-function acceptanceBand(pct: number) {
-  if (pct >= 80) return 'Very likely';
-  if (pct >= 60) return 'Likely';
-  if (pct >= 40) return 'Coin flip';
-  if (pct >= 20) return 'Unlikely';
-  return 'Long shot';
+function joinNames(names: string[]) {
+  if (names.length <= 1) return names[0] ?? '';
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+}
+
+function assumedDropLine(subject: string, names: string[]) {
+  if (names.length === 0) return null;
+  return `Sim assumes ${subject} drop ${joinNames(names)}.`;
 }
 
 // Verdict is purely YOUR championship change: "should I do this?".
@@ -33,27 +38,23 @@ export function TradeAnalyzerPanel({
   analysis,
   analyzing,
   error,
-  drops,
-  onOverrideDrops,
-  userPlayers,
-  nameOf,
-  posOf,
   friendliness,
   relationship,
+  readSource = 'neutral',
+  readSourceLabel = 'neutral file',
   showVerdict = true,
 }: {
   analysis: TradeAnalysis | null;
   analyzing: boolean;
   error: string | null;
-  drops: string[] | null;
-  onOverrideDrops: (d: string[]) => void;
-  userPlayers: string[];
-  nameOf: (id: string) => string;
-  posOf: (id: string) => string;
   friendliness: number;
   relationship: number;
+  readSource?: 'neutral' | 'scouted' | 'override';
+  readSourceLabel?: string;
   showVerdict?: boolean;
 }) {
+  const [whyOpen, setWhyOpen] = useState(false);
+
   if (!analyzing && !error && !(analysis?.available && analysis.you && analysis.partner)) {
     return null;
   }
@@ -63,6 +64,22 @@ export function TradeAnalyzerPanel({
   const theirDelta = ready ? analysis!.partner!.delta.titleProb : 0;
   const acceptPct = ready ? acceptanceProbability(theirDelta, friendliness, relationship) : 0;
   const partnerName = ready ? analysis!.partner!.teamName : 'They';
+  const acceptance = getAcceptanceLingo(acceptPct);
+  const sourceText =
+    readSource === 'override'
+      ? 'your override'
+      : readSource === 'scouted'
+        ? `scouted: ${readSourceLabel}`
+        : 'neutral file';
+  const whyLines = ready
+    ? [
+        `Your championship ${analysis!.you!.delta.titleProb > 0 ? '+' : ''}${analysis!.you!.delta.titleProb.toFixed(1)}%.`,
+        `Their championship ${theirDelta > 0 ? '+' : ''}${theirDelta.toFixed(1)}%.`,
+        formatAcceptanceSentence(acceptPct),
+        assumedDropLine('you', analysis!.drops?.you.map((drop) => drop.name) ?? []),
+        assumedDropLine(partnerName, analysis!.drops?.partner.map((drop) => drop.name) ?? []),
+      ].filter((line): line is string => Boolean(line))
+    : [];
 
   return (
     <div className="trade-analyzer-panel">
@@ -100,22 +117,34 @@ export function TradeAnalyzerPanel({
             <div className="trade-analyzer-panel__accept-top">
               <span className="trade-analyzer-panel__accept-label">Will {partnerName} accept?</span>
               <span className="trade-analyzer-panel__accept-pct">{acceptPct}%</span>
-              <span className="trade-analyzer-panel__accept-band">{acceptanceBand(acceptPct)}</span>
+              <span className="trade-analyzer-panel__accept-band">{acceptance?.label ?? ''}</span>
             </div>
             <p className="trade-analyzer-panel__accept-note">
               Driven by their championship change (<Delta v={theirDelta} pct />), nudged by your read on{' '}
-              {partnerName} (friendliness {friendliness}, relationship {relationship}). Set that on their
-              card above. It never changes the championship numbers.
+              {partnerName} ({sourceText}; friendliness {friendliness}, relationship {relationship}).
+              Set that on their card above. It never changes the championship numbers.
             </p>
+            <button
+              aria-expanded={whyOpen}
+              className="trade-analyzer-panel__why-toggle"
+              onClick={() => setWhyOpen((current) => !current)}
+              type="button"
+            >
+              Why this trade?
+            </button>
+            {whyOpen ? (
+              <div className="trade-analyzer-panel__why-details">
+                {whyLines.map((line) => (
+                  <p className="trade-analyzer-panel__why-line" key={line}>
+                    {line}
+                  </p>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <Results
             result={analysis!}
-            userPlayers={userPlayers}
-            drops={drops}
-            onOverrideDrops={onOverrideDrops}
-            nameOf={nameOf}
-            posOf={posOf}
           />
         </>
       ) : null}
@@ -133,6 +162,10 @@ function Delta({ v, goodUp = true, pct = false }: { v: number; goodUp?: boolean;
   );
 }
 
+function displayedMetric(value: number) {
+  return Number(value.toFixed(1));
+}
+
 function SideCard({ side }: { side: TradeSideDelta }) {
   const rows = [
     { label: 'Championship', b: side.before.titleProb, a: side.after.titleProb, d: side.delta.titleProb, goodUp: true, pct: true },
@@ -146,23 +179,30 @@ function SideCard({ side }: { side: TradeSideDelta }) {
         {side.teamName} {side.isUser ? '(you)' : ''}
       </p>
       {rows.map((r) => (
-        <div
-          key={r.label}
-          className={[
-            'trade-analyzer-panel__row',
-            r.label === 'Championship' ? 'trade-analyzer-panel__row--primary' : '',
-          ].filter(Boolean).join(' ')}
-        >
-          <span className="trade-analyzer-panel__row-label">{r.label}</span>
-          <span className="trade-analyzer-panel__row-val">
-            <span>{r.b.toFixed(1)}{r.pct ? '%' : ''}</span>
-            <span aria-hidden="true">→</span>
-            <span>{r.a.toFixed(1)}{r.pct ? '%' : ''}</span>
-            <span className="trade-analyzer-panel__delta-chip">
-              <Delta v={r.d} goodUp={r.goodUp} pct={r.pct} />
-            </span>
-          </span>
-        </div>
+        (() => {
+          const before = displayedMetric(r.b);
+          const after = displayedMetric(r.a);
+          const displayedDelta = displayedMetric(after - before);
+          return (
+            <div
+              key={r.label}
+              className={[
+                'trade-analyzer-panel__row',
+                r.label === 'Championship' ? 'trade-analyzer-panel__row--primary' : '',
+              ].filter(Boolean).join(' ')}
+            >
+              <span className="trade-analyzer-panel__row-label">{r.label}</span>
+              <span className="trade-analyzer-panel__row-val">
+                <span>{before.toFixed(1)}{r.pct ? '%' : ''}</span>
+                <span aria-hidden="true">→</span>
+                <span>{after.toFixed(1)}{r.pct ? '%' : ''}</span>
+                <span className="trade-analyzer-panel__delta-chip">
+                  <Delta v={displayedDelta} goodUp={r.goodUp} pct={r.pct} />
+                </span>
+              </span>
+            </div>
+          );
+        })()
       ))}
     </div>
   );
@@ -170,57 +210,11 @@ function SideCard({ side }: { side: TradeSideDelta }) {
 
 function Results({
   result,
-  userPlayers,
-  drops,
-  onOverrideDrops,
-  nameOf,
-  posOf,
 }: {
   result: TradeAnalysis;
-  userPlayers: string[];
-  drops: string[] | null;
-  onOverrideDrops: (d: string[]) => void;
-  nameOf: (id: string) => string;
-  posOf: (id: string) => string;
 }) {
-  const needYou = result.dropsNeeded?.you ?? 0;
-  const suggested = (drops ?? result.drops?.you.map((d) => d.playerId)) ?? [];
-
   return (
     <div className="trade-analyzer-panel__results">
-      {needYou > 0 ? (
-        <div className="trade-analyzer-panel__drops">
-          <p className="trade-analyzer-panel__drops-text">
-            Puts you {needYou} over your roster limit. You&apos;d drop {needYou}{' '}
-            {needYou === 1 ? 'player' : 'players'} (auto-picked; the sim reflects it). Override:
-          </p>
-          {Array.from({ length: needYou }).map((_, i) => (
-            <select
-              key={i}
-              className="trade-analyzer-panel__drop-select"
-              value={suggested[i] ?? ''}
-              onChange={(e) => {
-                const next = [...suggested];
-                next[i] = e.target.value;
-                onOverrideDrops(next.filter(Boolean));
-              }}
-            >
-              {userPlayers.map((id) => (
-                <option key={id} value={id}>
-                  {posOf(id)} {nameOf(id)}
-                </option>
-              ))}
-            </select>
-          ))}
-        </div>
-      ) : null}
-
-      {result.drops && result.drops.partner.length > 0 ? (
-        <p className="trade-analyzer-panel__partner-drop">
-          {result.partner!.teamName} would drop: {result.drops.partner.map((d) => d.name).join(', ')} (auto).
-        </p>
-      ) : null}
-
       <div className="trade-analyzer-panel__cards">
         <SideCard side={result.you!} />
         <SideCard side={result.partner!} />

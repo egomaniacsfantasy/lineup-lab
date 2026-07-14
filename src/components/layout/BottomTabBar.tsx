@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useDynastyTradesExperimental } from '../../hooks/useLabsFlags';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import './BottomTabBar.css';
 
@@ -71,12 +72,23 @@ const BASE_TABS = [
 
 export function BottomTabBar() {
   const { bootstrap, stored } = useLeagueConnection();
-  // The market tools price redraft value; they don't fit dynasty/keeper yet.
-  const hideTrade = bootstrap != null && bootstrap.league.leagueType !== 'redraft';
+  const dynastyTradesExperimental = useDynastyTradesExperimental();
+  const hideTrade =
+    bootstrap != null &&
+    (bootstrap.league.leagueType === 'keeper' ||
+      (bootstrap.league.leagueType === 'dynasty' && !dynastyTradesExperimental));
+  const showExperimentalMarketTag =
+    bootstrap != null &&
+    bootstrap.league.leagueType === 'dynasty' &&
+    dynastyTradesExperimental;
   const tabs = stored
     ? hideTrade
       ? BASE_TABS.filter((t) => t.path !== '/market')
-      : BASE_TABS
+      : BASE_TABS.map((tab) =>
+          tab.path === '/market'
+            ? { ...tab, badge: showExperimentalMarketTag ? 'EXP' : null }
+            : tab,
+        )
     : BASE_TABS.filter((t) => t.path === '/league').map((tab) => ({
         ...tab,
         label: 'Connect',
@@ -89,24 +101,30 @@ export function BottomTabBar() {
         className="bottom-tab-bar__grid"
         style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
       >
-        {tabs.map((tab) => (
-          <NavLink
-            key={tab.path}
-            className={({ isActive }) =>
-              [
-                'bottom-tab-bar__link',
-                isActive ? 'bottom-tab-bar__link--active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')
-            }
-            to={tab.path}
-          >
-            <span className="bottom-tab-bar__indicator" aria-hidden="true" />
-            <span className="bottom-tab-bar__icon">{tab.icon}</span>
-            <span className="bottom-tab-bar__label">{tab.label}</span>
-          </NavLink>
-        ))}
+        {tabs.map((tab) => {
+          const badge = (tab as { badge?: string }).badge;
+          return (
+            <NavLink
+              key={tab.path}
+              className={({ isActive }) =>
+                [
+                  'bottom-tab-bar__link',
+                  isActive ? 'bottom-tab-bar__link--active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+              }
+              to={tab.path}
+            >
+              <span className="bottom-tab-bar__indicator" aria-hidden="true" />
+              <span className="bottom-tab-bar__icon">{tab.icon}</span>
+              <span className="bottom-tab-bar__label">
+                {tab.label}
+                {badge ? <span className="bottom-tab-bar__badge">{badge}</span> : null}
+              </span>
+            </NavLink>
+          );
+        })}
       </div>
     </nav>
   );

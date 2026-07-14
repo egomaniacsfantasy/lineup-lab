@@ -253,6 +253,7 @@ export function toWeekMatchups(
       teamAOdds: oddsA,
       teamAWinProb: pricedA?.winProbability,
       teamAProjection: pricedA?.projection,
+      teamAIsUser: teamA.isUser,
       teamBRosterId: b.rosterId,
       teamB: teamB.teamName,
       teamBAvatarUrl: teamB.avatarUrl,
@@ -260,6 +261,7 @@ export function toWeekMatchups(
       teamBOdds: oddsB,
       teamBWinProb: pricedB?.winProbability,
       teamBProjection: pricedB?.projection,
+      teamBIsUser: teamB.isUser,
       isUserGame: teamA.isUser || teamB.isUser,
     });
   });

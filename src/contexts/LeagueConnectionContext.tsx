@@ -12,8 +12,6 @@ import {
 import {
   connectUsername,
   fetchBootstrap,
-  fetchLineHistory,
-  fetchLines,
   fetchSchedule,
   refreshLeague,
   setApiContext,
@@ -23,11 +21,18 @@ import {
   type LineHistoryEntry,
   type ScheduleWeek,
 } from '../services/leagueApi';
+import {
+  type CachedLeaguePricingSnapshot,
+  fetchLeaguePricingSnapshot,
+  readCachedLeaguePricing,
+} from '../services/leaguePricingCache';
 import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 import { useModelOverlay } from './ModelOverlayContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
+const MARKET_SCAN_KEY = 'og.market.last-scan';
+const MARKET_SCAN_COOLDOWN_MS = 30_000;
 
 interface StoredLeagueSummary {
   id: string;
@@ -76,6 +81,12 @@ interface LeagueConnectionValue {
   bootstrap: LeagueBootstrap | null;
   schedule: ScheduleWeek[] | null;
   pricing: LeaguePricing | null;
+  pricingMeta: {
+    isFetching: boolean;
+    isStale: boolean;
+    hasResolved: boolean;
+    lastUpdatedAt: number | null;
+  };
   lineHistory: LineHistoryEntry[] | null;
   isLoading: boolean;
   error: string | null;
@@ -83,6 +94,12 @@ interface LeagueConnectionValue {
   switchLeague: (provider: StoredConnection['provider'], leagueId: string) => void;
   disconnect: () => void;
   refresh: () => Promise<void>;
+  marketScan: {
+    isScanning: boolean;
+    lastScannedAt: number | null;
+    cooldownMs: number;
+  };
+  scanMarket: () => Promise<LeaguePricing | null>;
 }
 
 /** Stable identity for a saved league across providers. */
@@ -92,6 +109,27 @@ function leagueKey(c: { provider: string; leagueId: string }) {
 
 function hydrateKey(c: StoredConnection) {
   return `${c.provider}:${c.leagueId}:${c.userId}:${c.season ?? ''}`;
+}
+
+function readLastMarketScan(leagueId: string) {
+  try {
+    const raw = window.localStorage.getItem(MARKET_SCAN_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    return typeof parsed[leagueId] === 'number' ? parsed[leagueId] : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLastMarketScan(leagueId: string, timestamp: number) {
+  try {
+    const raw = window.localStorage.getItem(MARKET_SCAN_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    parsed[leagueId] = timestamp;
+    window.localStorage.setItem(MARKET_SCAN_KEY, JSON.stringify(parsed));
+  } catch {
+    // ignore storage failures
+  }
 }
 
 function activeConnectionChanged(a: StoredConnection | null, b: StoredConnection | null) {
@@ -105,6 +143,17 @@ function activeConnectionChanged(a: StoredConnection | null, b: StoredConnection
 }
 
 const LeagueConnectionContext = createContext<LeagueConnectionValue | null>(null);
+
+const EMPTY_PRICING_META: LeagueConnectionValue['pricingMeta'] = {
+  isFetching: false,
+  isStale: false,
+  hasResolved: false,
+  lastUpdatedAt: null,
+};
+
+function hasSuggestionPayload(pricing: LeaguePricing | null | undefined) {
+  return (pricing?.userSwaps?.length ?? 0) > 0 || (pricing?.movers?.length ?? 0) > 0;
+}
 
 function readStored(): StoredConnection | null {
   try {
@@ -233,14 +282,26 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const [bootstrap, setBootstrap] = useState<LeagueBootstrap | null>(null);
   const [schedule, setSchedule] = useState<ScheduleWeek[] | null>(null);
   const [pricing, setPricing] = useState<LeaguePricing | null>(null);
+  const [pricingMeta, setPricingMeta] = useState(EMPTY_PRICING_META);
   const [lineHistory, setLineHistory] = useState<LineHistoryEntry[] | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(stored));
   const [error, setError] = useState<string | null>(null);
+  const [isScanningMarket, setIsScanningMarket] = useState(false);
+  const [lastMarketScanAt, setLastMarketScanAt] = useState<number | null>(
+    () => (stored ? readLastMarketScan(stored.leagueId) : null),
+  );
   const { user } = useAuth();
   const { overlayVersion } = useModelOverlay();
   const userIdRef = useRef<string | null>(null);
   const lastHydrateKeyRef = useRef<string | null>(null);
+  const pricingRef = useRef<LeaguePricing | null>(null);
+  const marketScanPromiseRef = useRef<Promise<LeaguePricing | null> | null>(null);
+  pricingRef.current = pricing;
   userIdRef.current = user?.id ?? null;
+
+  useEffect(() => {
+    setLastMarketScanAt(stored ? readLastMarketScan(stored.leagueId) : null);
+  }, [stored]);
 
   // Saved leagues live on the account, so they follow you to any device.
   // If this browser already has an active league, keep it. Supabase fills the
@@ -268,6 +329,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           setBootstrap(null);
           setSchedule(null);
           setPricing(null);
+          setPricingMeta(EMPTY_PRICING_META);
           setLineHistory(null);
           setError(null);
           return;
@@ -371,39 +433,124 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     };
   }, [leagues, stored, user]);
 
+  const applyPricingSnapshot = useCallback(
+    (
+      snapshot: CachedLeaguePricingSnapshot,
+      meta?: Partial<typeof EMPTY_PRICING_META>,
+    ) => {
+      setPricing(snapshot.pricing);
+      setLineHistory(snapshot.lineHistory);
+      setPricingMeta({
+        ...EMPTY_PRICING_META,
+        hasResolved: true,
+        lastUpdatedAt: snapshot.pricing.computedAt ?? snapshot.updatedAt,
+        ...meta,
+      });
+    },
+    [],
+  );
+
+  const revalidatePricing = useCallback(
+    async (
+      connection: StoredConnection,
+      options?: {
+        week?: number | null;
+        retry?: boolean;
+        silent?: boolean;
+      },
+    ) => {
+      const hasExistingData = Boolean(pricingRef.current);
+      setPricingMeta((current) => ({
+        ...current,
+        isFetching: true,
+        isStale: hasExistingData || current.isStale,
+      }));
+
+      const delays = options?.retry ? [0, 4_000] : [0];
+      let lastError: unknown = null;
+
+      for (const delay of delays) {
+        if (delay > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, delay));
+        }
+        try {
+          const snapshot = await fetchLeaguePricingSnapshot(connection, {
+            expectedWeek: options?.week ?? null,
+          });
+          const currentPricing = pricingRef.current;
+          const shouldKeepExisting =
+            hasExistingData &&
+            currentPricing?.available &&
+            (
+              !snapshot.pricing.available ||
+              (hasSuggestionPayload(currentPricing) && !hasSuggestionPayload(snapshot.pricing))
+            );
+
+          if (!shouldKeepExisting) {
+            applyPricingSnapshot(snapshot);
+          } else {
+            setPricingMeta((current) => ({
+              ...current,
+              isFetching: false,
+              isStale: true,
+              hasResolved: true,
+            }));
+          }
+          return snapshot.pricing;
+        } catch (caught) {
+          lastError = caught;
+        }
+      }
+
+      if (pricingRef.current) {
+        setPricingMeta((current) => ({
+          ...current,
+          isFetching: false,
+          isStale: true,
+          hasResolved: true,
+        }));
+        return pricingRef.current;
+      }
+
+      setPricing({ available: false, reason: 'pricing_timeout' });
+      setLineHistory(null);
+      setPricingMeta({
+        ...EMPTY_PRICING_META,
+        hasResolved: true,
+      });
+      if (!options?.silent && lastError instanceof Error) {
+        setError((current) => current ?? lastError.message);
+      }
+      return null;
+    },
+    [applyPricingSnapshot],
+  );
+
   const hydrate = useCallback(async (connection: StoredConnection) => {
     setIsLoading(true);
     setError(null);
 
-    // The server cold-starts on every deploy: the first pricing call can
-    // fail or land mid-warmup. Retry with backoff instead of showing a
-    // zeroed board until the next hourly poll.
-    const loadPricing = async () => {
-      const delays = [0, 4_000, 12_000, 30_000];
-      for (const delay of delays) {
-        if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-        try {
-          const lines = await fetchLines(connection.leagueId, connection.userId);
-          setPricing(lines);
-          if (lines.available) {
-            const h = await fetchLineHistory(connection.leagueId).catch(() => null);
-            setLineHistory(h?.history ?? null);
-          }
-          return;
-        } catch {
-          setPricing(null);
-        }
-      }
-      setPricing({ available: false, reason: 'pricing_timeout' });
-    };
-
     try {
       const data = await fetchBootstrap(connection.leagueId, connection.userId);
       setBootstrap(data);
+      const cachedPricing = readCachedLeaguePricing(connection, data.week);
+      if (cachedPricing) {
+        applyPricingSnapshot(cachedPricing, {
+          isFetching: true,
+          isStale: true,
+        });
+      } else {
+        setPricing(null);
+        setLineHistory(null);
+        setPricingMeta({
+          ...EMPTY_PRICING_META,
+          isFetching: true,
+        });
+      }
       fetchSchedule(connection.leagueId)
         .then((s) => setSchedule(s.weeks))
         .catch(() => setSchedule(null));
-      void loadPricing();
+      void revalidatePricing(connection, { week: data.week, retry: true, silent: true });
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -414,11 +561,12 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [applyPricingSnapshot, revalidatePricing]);
 
   useEffect(() => {
     if (!stored) {
       lastHydrateKeyRef.current = null;
+      setPricingMeta(EMPTY_PRICING_META);
       return;
     }
     const key = hydrateKey(stored);
@@ -438,6 +586,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setBootstrap(null);
     setSchedule(null);
     setPricing(null);
+    setPricingMeta(EMPTY_PRICING_META);
     setLineHistory(null);
     setError(null);
     setIsLoading(true);
@@ -513,14 +662,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setBootstrap(null);
     setSchedule(null);
     setPricing(null);
+    setPricingMeta(EMPTY_PRICING_META);
     setLineHistory(null);
     setError(null);
   }, [stored, leagues, activateLocal]);
 
   /**
-   * Freshness loop: poll fast (90s) inside NFL game windows, hourly
-   * outside. The server decides the window and gates its own upstream
-   * TTLs the same way; this only refreshes the client's view.
+   * Freshness loop: keep background repricing slow and deliberate so a tab
+   * sitting open does not keep hammering the long-running market endpoint.
    */
   useEffect(() => {
     if (!stored) return undefined;
@@ -533,19 +682,12 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
 
       try {
         const health = await fetch('/api/health').then((r) => r.json());
-        delay = health.gameWindow ? 90_000 : 60 * 60_000;
+        delay = health.gameWindow ? 5 * 60_000 : 60 * 60_000;
 
         const data = await fetchBootstrap(stored.leagueId, stored.userId);
         if (cancelled) return;
         setBootstrap(data);
-
-        const lines = await fetchLines(stored.leagueId, stored.userId);
-        if (cancelled) return;
-        setPricing(lines);
-
-        const history = await fetchLineHistory(stored.leagueId);
-        if (cancelled) return;
-        setLineHistory(history?.history ?? null);
+        await revalidatePricing(stored, { week: data.week, silent: true });
       } catch {
         // keep showing the last good data; try again next cycle
       }
@@ -555,13 +697,13 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       }
     };
 
-    timer = window.setTimeout(() => void tick(), 90_000);
+    timer = window.setTimeout(() => void tick(), 5 * 60_000);
 
     return () => {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [stored]);
+  }, [revalidatePricing, stored]);
 
   // When the user's model (BYOR overlay) changes, reprice the book so the
   // matchup and season tabs reflect their numbers. Debounced: rapid dragging
@@ -575,21 +717,10 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       return undefined;
     }
     const timer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const lines = await fetchLines(stored.leagueId, stored.userId);
-          setPricing(lines);
-          if (lines.available) {
-            const h = await fetchLineHistory(stored.leagueId).catch(() => null);
-            setLineHistory(h?.history ?? null);
-          }
-        } catch {
-          // keep the last good pricing
-        }
-      })();
+      void revalidatePricing(stored, { week: bootstrap?.week ?? pricingRef.current?.week ?? null, silent: true });
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [overlayVersion, stored]);
+  }, [bootstrap?.week, overlayVersion, revalidatePricing, stored]);
 
   const refresh = useCallback(async () => {
     if (!stored) return;
@@ -597,9 +728,76 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     await hydrate(stored);
   }, [stored, hydrate]);
 
+  const scanMarket = useCallback(async () => {
+    if (!stored) return null;
+    if (marketScanPromiseRef.current) return marketScanPromiseRef.current;
+    if (
+      lastMarketScanAt != null &&
+      Date.now() - lastMarketScanAt < MARKET_SCAN_COOLDOWN_MS
+    ) {
+      return pricing;
+    }
+
+    setIsScanningMarket(true);
+    const promise = revalidatePricing(stored, {
+      week: bootstrap?.week ?? pricingRef.current?.week ?? null,
+      silent: true,
+    })
+      .then((lines) => {
+        const completedAt = Date.now();
+        writeLastMarketScan(stored.leagueId, completedAt);
+        setLastMarketScanAt(completedAt);
+        return lines;
+      })
+      .catch(() => pricing)
+      .finally(() => {
+        marketScanPromiseRef.current = null;
+        setIsScanningMarket(false);
+      });
+    marketScanPromiseRef.current = promise;
+    return promise;
+  }, [bootstrap?.week, lastMarketScanAt, pricing, revalidatePricing, stored]);
+
   const value = useMemo(
-    () => ({ stored, leagues, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect, switchLeague, disconnect, refresh }),
-    [stored, leagues, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect, switchLeague, disconnect, refresh],
+    () => ({
+      stored,
+      leagues,
+      bootstrap,
+      schedule,
+      pricing,
+      pricingMeta,
+      lineHistory,
+      isLoading,
+      error,
+      connect,
+      switchLeague,
+      disconnect,
+      refresh,
+      marketScan: {
+        isScanning: isScanningMarket,
+        lastScannedAt: lastMarketScanAt,
+        cooldownMs: MARKET_SCAN_COOLDOWN_MS,
+      },
+      scanMarket,
+    }),
+    [
+      stored,
+      leagues,
+      bootstrap,
+      schedule,
+      pricing,
+      pricingMeta,
+      lineHistory,
+      isLoading,
+      error,
+      connect,
+      switchLeague,
+      disconnect,
+      refresh,
+      isScanningMarket,
+      lastMarketScanAt,
+      scanMarket,
+    ],
   );
 
   return (

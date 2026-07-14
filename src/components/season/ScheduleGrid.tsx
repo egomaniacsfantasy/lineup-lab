@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
 import { TeamAvatar } from '../league/TeamAvatar';
@@ -42,7 +42,14 @@ function formatWinProb(item: ScheduleGridItem) {
   if (item.status === 'loss') return '0.0%';
   if (item.isPlayoff) return 'TBD';
   if (item.status === 'bye') return 'BYE';
-  return '—';
+  return 'N/A';
+}
+
+function pricedChipColor(item: ScheduleGridItem) {
+  if (typeof item.winProb === 'number') return heatColor(item.winProb);
+  if (item.status === 'win') return heatColor(100);
+  if (item.status === 'loss') return heatColor(0);
+  return 'transparent';
 }
 
 function expectedWinsTakeaway(
@@ -66,6 +73,7 @@ function heatTakeaway(items: ScheduleGridItem[]) {
 
 export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) {
   const [expandedChart, setExpandedChart] = useState<ExpandedScheduleChart>(null);
+  const rowRefs = useRef<Record<number, HTMLElement | null>>({});
   const pricedItems = items.filter((item) => typeof item.winProb === 'number');
   const hasFutureBestLineupRows = items.some(
     (item) => item.status === 'projected' && !item.isPlayoff && typeof item.yourLine === 'number',
@@ -89,24 +97,24 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
     });
     return rows;
   }, []);
-  const maxWorm = Math.max(1, ...cumulativeWins.map((item) => item.expectedWins), ...cumulativeWins.map((item) => item.baseline));
-  const wormPoints = cumulativeWins
+  const deltaRows = cumulativeWins.map((item) => ({
+    ...item,
+    delta: item.expectedWins - item.baseline,
+  }));
+  const maxDelta = Math.max(0.5, ...deltaRows.map((item) => Math.abs(item.delta)));
+  const deltaPoints = deltaRows
     .map((item, index) => {
-      const x = cumulativeWins.length <= 1 ? 0 : (index / (cumulativeWins.length - 1)) * 100;
-      const y = 100 - (item.expectedWins / maxWorm) * 100;
-      return `${x},${y}`;
-    })
-    .join(' ');
-  const baselinePoints = cumulativeWins
-    .map((item, index) => {
-      const x = cumulativeWins.length <= 1 ? 0 : (index / (cumulativeWins.length - 1)) * 100;
-      const y = 100 - (item.baseline / maxWorm) * 100;
+      const x = deltaRows.length <= 1 ? 0 : (index / (deltaRows.length - 1)) * 100;
+      const y = 50 - (item.delta / maxDelta) * 42;
       return `${x},${y}`;
     })
     .join(' ');
   const wormTakeaway = expectedWinsTakeaway(cumulativeWins);
   const heatSummary = heatTakeaway(items);
-  const yTicks = [maxWorm, maxWorm / 2, 0];
+  const yTicks = [maxDelta, 0, -maxDelta];
+  const jumpToWeek = (week: number) => {
+    rowRefs.current[week]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
 
   return (
     <section aria-labelledby="schedule-grid-title" className="schedule-grid">
@@ -120,46 +128,40 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
       ) : null}
 
       {leagueChartFlags.scheduleHeatStrip && items.length > 0 ? (
-        <button
-          className="schedule-grid__chart-card"
-          onClick={() => setExpandedChart('heat')}
-          type="button"
-        >
+        <div className="schedule-grid__chart-card schedule-grid__chart-card--heat-nav">
           <span className="schedule-grid__chart-head">
             <span>
               <span className="schedule-grid__chart-title">Season heat strip</span>
-              <span className="schedule-grid__chart-subtitle">Every week by win probability. Playoff weeks stay TBD.</span>
+              <span className="schedule-grid__chart-subtitle">Jump to any week by price.</span>
             </span>
-            <span className="schedule-grid__inspect">Inspect</span>
           </span>
           <span className="schedule-grid__heat" aria-label="Season win probability heat strip">
             {items.map((item) => {
               const winProb = item.winProb ?? (item.status === 'win' ? 100 : item.status === 'loss' ? 0 : 50);
               return (
-                <span
+                <button
                   className={[
                     'schedule-grid__heat-cell',
                     item.isPlayoff ? 'schedule-grid__heat-cell--playoff' : '',
                     item.status === 'bye' ? 'schedule-grid__heat-cell--bye' : '',
+                    item.status === 'live' ? 'schedule-grid__heat-cell--current' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   key={`heat-${item.week}`}
+                  onClick={() => jumpToWeek(item.week)}
                   style={{ '--heat-color': heatColor(winProb) } as CSSProperties}
                   title={`Week ${item.week}${item.isPlayoff ? ': playoff TBD' : typeof item.winProb === 'number' ? `: ${item.winProb.toFixed(1)}%` : ''}`}
+                  type="button"
                 >
-                  {item.week}
-                </span>
+                  <span>{item.week}</span>
+                  <span>{item.isPlayoff ? 'TBD' : item.status === 'bye' ? 'BYE' : formatWinProb(item).replace('.0%', '%')}</span>
+                </button>
               );
             })}
           </span>
-          <span className="schedule-grid__heat-axis">
-            <span>Harder</span>
-            <span>Coin flip</span>
-            <span>Softer</span>
-          </span>
           <span className="schedule-grid__takeaway">{heatSummary}</span>
-        </button>
+        </div>
       ) : null}
 
       {leagueChartFlags.scheduleWorm && pricedItems.length > 1 ? (
@@ -171,33 +173,24 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
           <span className="schedule-grid__chart-head">
             <span>
               <span className="schedule-grid__chart-title">Expected wins pace</span>
-              <span className="schedule-grid__chart-subtitle">Your projected win total banking week by week vs. a .500 team.</span>
+              <span className="schedule-grid__chart-subtitle">{wormTakeaway}</span>
             </span>
             <span className="schedule-grid__inspect">Inspect</span>
           </span>
-          <span className="schedule-grid__worm" aria-label="Expected wins by week">
-            <span className="schedule-grid__axis-label schedule-grid__axis-label--y">Cumulative wins</span>
+          <span className="schedule-grid__worm schedule-grid__worm--spark" aria-label="Expected wins pace delta">
+            <span className="schedule-grid__axis-label schedule-grid__axis-label--y">Wins vs .500</span>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-              <rect className="schedule-grid__worm-ahead" x="0" y="0" width="100" height="50" />
-              <rect className="schedule-grid__worm-behind" x="0" y="50" width="100" height="50" />
-              <polyline className="schedule-grid__worm-baseline" points={baselinePoints} />
-              <polyline className="schedule-grid__worm-line" points={wormPoints} />
+              <line className="schedule-grid__worm-baseline" x1="0" x2="100" y1="50" y2="50" />
+              <polyline className="schedule-grid__worm-line" points={deltaPoints} />
             </svg>
             <span className="schedule-grid__worm-y-ticks">
-              {yTicks.map((tick) => <span key={`tick-${tick.toFixed(2)}`}>{tick.toFixed(1)}</span>)}
+              {yTicks.map((tick) => <span key={`tick-${tick.toFixed(2)}`}>{tick > 0 ? '+' : ''}{tick.toFixed(1)}</span>)}
             </span>
-            <span className="schedule-grid__worm-line-label schedule-grid__worm-line-label--team">Your team</span>
-            <span className="schedule-grid__worm-line-label schedule-grid__worm-line-label--pace">.500</span>
             <span className="schedule-grid__axis-label schedule-grid__axis-label--x">Week</span>
           </span>
           <span className="schedule-grid__worm-x-ticks">
             {cumulativeWins.map((item) => <span key={`week-tick-${item.week}`}>{item.week}</span>)}
           </span>
-          <span className="schedule-grid__pace-labels">
-            <span>Ahead of pace</span>
-            <span>Behind pace</span>
-          </span>
-          <span className="schedule-grid__takeaway">{wormTakeaway}</span>
         </button>
       ) : null}
 
@@ -217,6 +210,7 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
             className={[
               'schedule-grid__row',
               `schedule-grid__row--${item.status}`,
+              item.status === 'live' ? 'schedule-grid__row--current' : '',
               clickable ? 'schedule-grid__row--clickable' : '',
               item.status === 'projected' && typeof item.yourLine === 'number'
                 ? item.yourLine < 0
@@ -226,6 +220,9 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
             ].join(' ')}
             key={`${item.week}-${item.opponent}`}
             onClick={clickable ? () => onSelectWeek?.(item) : undefined}
+            ref={(node) => {
+              rowRefs.current[item.week] = node;
+            }}
             role={clickable ? 'button' : undefined}
             tabIndex={clickable ? 0 : undefined}
             onKeyDown={
@@ -279,10 +276,13 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
               ) : (
                 <>
                   <span className="schedule-grid__odds">
-                    {item.yourLine ? formatAmericanOdds(item.yourLine) : '—'}
+                    {item.yourLine ? formatAmericanOdds(item.yourLine) : 'N/A'}
                   </span>
-                  <span className="schedule-grid__result-detail">
-                    {item.status === 'live' ? 'Live line' : 'Projected'}
+                  <span
+                    className="schedule-grid__result-detail schedule-grid__result-detail--priced"
+                    style={{ '--heat-color': pricedChipColor(item) } as CSSProperties}
+                  >
+                    {formatWinProb(item)}
                   </span>
                 </>
               )}
@@ -325,28 +325,24 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
             ) : (
               <>
                 <h3 className="schedule-grid__modal-title">Expected wins pace</h3>
-                <p className="schedule-grid__chart-subtitle">X-axis is week. Y-axis is cumulative expected wins.</p>
+                <p className="schedule-grid__chart-subtitle">X-axis is week. Y-axis is wins above or below .500 pace.</p>
                 <div className="schedule-grid__worm schedule-grid__worm--detail">
-                  <span className="schedule-grid__axis-label schedule-grid__axis-label--y">Cumulative wins</span>
+                  <span className="schedule-grid__axis-label schedule-grid__axis-label--y">Wins vs .500</span>
                   <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <rect className="schedule-grid__worm-ahead" x="0" y="0" width="100" height="50" />
-                    <rect className="schedule-grid__worm-behind" x="0" y="50" width="100" height="50" />
-                    <polyline className="schedule-grid__worm-baseline" points={baselinePoints} />
-                    <polyline className="schedule-grid__worm-line" points={wormPoints} />
+                    <line className="schedule-grid__worm-baseline" x1="0" x2="100" y1="50" y2="50" />
+                    <polyline className="schedule-grid__worm-line" points={deltaPoints} />
                   </svg>
                   <span className="schedule-grid__worm-y-ticks">
-                    {yTicks.map((tick) => <span key={`modal-tick-${tick.toFixed(2)}`}>{tick.toFixed(1)}</span>)}
+                    {yTicks.map((tick) => <span key={`modal-tick-${tick.toFixed(2)}`}>{tick > 0 ? '+' : ''}{tick.toFixed(1)}</span>)}
                   </span>
-                  <span className="schedule-grid__worm-line-label schedule-grid__worm-line-label--team">Your team</span>
-                  <span className="schedule-grid__worm-line-label schedule-grid__worm-line-label--pace">.500</span>
                   <span className="schedule-grid__axis-label schedule-grid__axis-label--x">Week</span>
                 </div>
                 <div className="schedule-grid__detail-list">
-                  {cumulativeWins.map((item) => (
+                  {deltaRows.map((item) => (
                     <div className="schedule-grid__detail-row" key={`detail-worm-${item.week}`}>
                       <span>Week {item.week}</span>
                       <span>{item.expectedWins.toFixed(2)} expected wins</span>
-                      <span>{item.baseline.toFixed(1)} .500 pace</span>
+                      <span>{item.delta >= 0 ? '+' : ''}{item.delta.toFixed(2)} vs .500</span>
                     </div>
                   ))}
                 </div>
