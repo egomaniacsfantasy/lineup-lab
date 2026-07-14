@@ -466,9 +466,9 @@ function TradeDealsView() {
   const visibleFilteredLanes = showAllMarketCards
     ? filteredLanes
     : filteredLanes.slice(0, MAX_VISIBLE_MARKET_CARDS);
-  const visibleMarketCount = showingManagerMarket
-    ? managerSuggestionEntries.length
-    : filteredLanes.length;
+  // Manager-first: nothing shows until a manager is picked. The market grid
+  // only ever renders the per-manager suggestions (full 10k-sim), never lanes.
+  const visibleMarketCount = showingManagerMarket ? managerSuggestionEntries.length : 0;
   const hiddenMarketCount = showingManagerMarket
     ? managerSuggestionEntries.length - visibleManagerSuggestions.length
     : filteredLanes.length - visibleFilteredLanes.length;
@@ -1106,17 +1106,6 @@ function TradeDealsView() {
           <div className="trade-cc__filter-row">
             <span className="trade-cc__filter-label">Managers</span>
             <div className="trade-cc__filter-chips">
-              <button
-                aria-pressed={marketManagerFilter === 'all'}
-                className={[
-                  'trade-cc__filter-chip',
-                  marketManagerFilter === 'all' ? 'trade-cc__filter-chip--active' : '',
-                ].filter(Boolean).join(' ')}
-                onClick={() => applyMarketManagerFilter('all')}
-                type="button"
-              >
-                All
-              </button>
               {partners.map((team) => (
                 <button
                   aria-pressed={marketManagerFilter === team.rosterId}
@@ -1342,9 +1331,7 @@ function TradeDealsView() {
           <p className="trade-cc__empty-lane">
             {showingManagerMarket
               ? 'No priced deals cleared the board for this manager yet. Try another manager or widen the position filter.'
-              : laneEntries.length > 0
-                ? 'All current deals are dismissed or filtered out. Restore them below or widen the filters.'
-                : 'No suggested deals priced yet. Build your own below.'}
+              : 'Pick a manager above to see the trades that most improve your title odds with them.'}
           </p>
         )}
         {dismissedSignatures.size > 0 ? (

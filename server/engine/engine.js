@@ -18,15 +18,12 @@ import crypto from 'node:crypto';
 import { getActiveProjections } from '../projections/store.js';
 import { cached } from '../cache.js';
 
-const SIMS = 10_000;
-const FUTURES_SIMS = 2_000; // team-level sims for the off-season FA-claim mover only
-const SEASON_SIMS = 10_000; // player-level season Monte Carlo for the Futures tab
-const TRADE_LANE_SIMS = 1_000; // player-level post-trade sims for the always-on market lane previews (baseline reused from Futures, so 1 sim/lane keeps this at parity with the old 2 team-level sims/lane)
+const SEASON_SIMS = 10_000; // player-level season Monte Carlo — the ONE sim behind every value: Futures, trades, movers
 const MATCHUP_SIMS = 5_000; // seeded player-level sims for the headline matchup win%
 const Z80 = 1.2815515594; // 80% CI half-width in sigmas (matches our weekly CI)
 const INV_SQRT_2PI = 0.3989422804014327;
-const LANE_PRICING_LIMIT_PER_OPPONENT = 2;
-const LANE_PRICING_LIMIT_TOTAL = 12;
+const LANE_PRICING_LIMIT_PER_OPPONENT = 1;
+const LANE_PRICING_LIMIT_TOTAL = 3; // capped: each priced lane now runs a full 10k-sim season, so keep the always-on movers cheap (manager-first suggestions own trade discovery)
 
 const FLEX_ELIGIBILITY = {
   FLEX: ['RB', 'WR', 'TE'],
@@ -38,13 +35,6 @@ const FLEX_ELIGIBILITY = {
 function slotAllows(slotLabel, position) {
   if (FLEX_ELIGIBILITY[slotLabel]) return FLEX_ELIGIBILITY[slotLabel].includes(position);
   return slotLabel === position;
-}
-
-function normalCdf(z) {
-  const t = 1 / (1 + 0.2316419 * Math.abs(z));
-  const d = 0.3989423 * Math.exp((-z * z) / 2);
-  let p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
-  return z > 0 ? 1 - p : p;
 }
 
 function probToAmerican(prob) {
@@ -142,18 +132,6 @@ function teamDistribution(starterIds, projectionMap, catalog, week = null) {
   }
 
   return { mean, sigma: Math.sqrt(variance), unpriced, zeroed };
-}
-
-/** 10k-sim win probability between two team distributions. */
-function simulateWinProb(a, b, rng) {
-  let wins = 0;
-  for (let i = 0; i < SIMS; i += 1) {
-    const scoreA = Math.max(0, a.mean + a.sigma * gaussian(rng));
-    const scoreB = Math.max(0, b.mean + b.sigma * gaussian(rng));
-    if (scoreA > scoreB) wins += 1;
-    else if (scoreA === scoreB) wins += 0.5;
-  }
-  return wins / SIMS;
 }
 
 /**
@@ -966,21 +944,6 @@ function computeDraftWrapped({ league, teams, draftPicks, projectionMap, distByR
   };
 }
 
-/**
- * Re-run the futures sim with the user's team mean shifted by delta.
- * Same seed as the baseline run: the only difference between before and
- * after is the roster change itself, never sim noise.
- */
-function titleOddsWithUserDelta({ league, teams, distByRoster, scheduleWeeks, week, seed }, userRosterId, deltaMean) {
-  const shifted = new Map(distByRoster);
-  const base = distByRoster.get(userRosterId);
-  if (base) {
-    shifted.set(userRosterId, { ...base, mean: Math.max(1, base.mean + deltaMean) });
-  }
-  const futures = simulateFutures({ league, teams, distByRoster: shifted, scheduleWeeks, week, seed });
-  return futures.find((f) => f.rosterId === userRosterId) ?? null;
-}
-
 export function tradeLaneMatchesPricedResult(lane, priced) {
   if (!priced?.available || !priced.you || !priced.them) return false;
   const youGain = roundTradeDelta(priced.you.valueDelta ?? 0);
@@ -1080,11 +1043,12 @@ function computeMovers(ctx) {
   // picks carry the value Franco's weekly model doesn't price yet.
   if (league.leagueType && league.leagueType !== 'redraft') return [];
 
-  const baseFutures = simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, seed });
+  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+  // Reuse the Futures-tab per-player season baseline (10k sims, asymmetric CIs)
+  // so every mover's "before" title odds match the Futures panel exactly.
+  const baseFutures = seasonBaseline ?? simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed });
   const baseUser = baseFutures.find((f) => f.rosterId === userTeam.rosterId);
   if (!baseUser) return [];
-
-  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const userMatchup = matchups.find((m) => m.rosterId === userTeam.rosterId);
   const starters = userMatchup?.starters?.length ? userMatchup.starters : userTeam.starters;
   const rostered = new Set(teams.flatMap((t) => t.players));
@@ -1117,7 +1081,15 @@ function computeMovers(ctx) {
     }
   }
   if (bestClaim) {
-    const after = titleOddsWithUserDelta(ctx, userTeam.rosterId, bestClaim.delta);
+    // Per-player "after": add the free agent to your roster and re-run the SAME
+    // 10k-sim season Monte Carlo (the sim starts him if he's the upgrade), so the
+    // title-odds move is measured the same way as a trade — no team-mean shortcut.
+    const afterPlayers = [...userTeam.players, bestClaim.candidate.playerId];
+    const claimTeams = teams.map((t) =>
+      t.rosterId === userTeam.rosterId ? { ...t, players: afterPlayers } : t,
+    );
+    const after = simulateSeason({ league, teams: claimTeams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed })
+      .find((f) => f.rosterId === userTeam.rosterId);
     movers.push({
       kind: 'waiver',
       headline: `Claim ${bestClaim.candidate.name} off waivers`,
@@ -1290,10 +1262,11 @@ function computeMovers(ctx) {
         get: candidate.get,
         traits: { toughness: 5, dealAppetite: 5, fandomTeam: null, fandomLevel: 5 },
         // Share the Futures-tab season baseline (so titleOddsBefore matches it
-        // exactly) and price the post-trade side on a lighter per-player pass —
-        // 12 lanes at full season sims would stall the always-on market view.
+        // exactly); the post-trade side runs the SAME 10k-sim per-player season
+        // Monte Carlo as the analyzer. The lane count is capped low so these
+        // always-on movers don't stall the price.
         baseline: seasonBaseline,
-        sims: TRADE_LANE_SIMS,
+        sims: SEASON_SIMS,
         seed,
       });
       if (!priced.available || !priced.you || !priced.them) continue;
@@ -1366,128 +1339,6 @@ function computeMovers(ctx) {
   );
 
   return movers;
-}
-
-function simulateFutures({ league, teams, distByRoster, scheduleWeeks, week, distForWeek = null, seed = 1 }) {
-  const rng = mulberry32(seed);
-  const regularWeeks = league.regularSeasonWeeks ?? 14;
-  // Can't seat more playoff teams than exist — a small league clinches everyone.
-  const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
-  // Start at the first UNPLAYED week (record already holds weeks 1..lastScoredWeek),
-  // not the displayWeek — same current-week double-count fix as simulateSeason.
-  const lastScored = Number.isFinite(league.lastScoredWeek) ? league.lastScoredWeek : (week - 1);
-  const startWeek = Math.max(1, (lastScored ?? (week - 1)) + 1);
-  const remaining = (scheduleWeeks ?? []).filter(
-    (w) => w.week >= startWeek && w.week <= regularWeeks,
-  );
-
-  const rosterIds = teams.map((t) => t.rosterId);
-  const strength = new Map(
-    rosterIds.map((id) => [id, Math.max(1, distByRoster.get(id)?.mean ?? 1)]),
-  );
-
-  const playoffCounts = new Map(rosterIds.map((id) => [id, 0]));
-  const finalsCounts = new Map(rosterIds.map((id) => [id, 0]));
-  const titleCounts = new Map(rosterIds.map((id) => [id, 0]));
-  const winSums = new Map(rosterIds.map((id) => [id, 0]));
-
-  // Weighted draw (by strength) from a pool — the bracket stand-in.
-  const drawByStrength = (pool) => {
-    const total = pool.reduce((sum, id) => sum + strength.get(id), 0);
-    let draw = rng() * total;
-    for (const id of pool) {
-      draw -= strength.get(id);
-      if (draw <= 0) return id;
-    }
-    return pool[pool.length - 1];
-  };
-
-  for (let sim = 0; sim < FUTURES_SIMS; sim += 1) {
-    const wins = new Map(teams.map((t) => [t.rosterId, t.record.wins]));
-    const pf = new Map(teams.map((t) => [t.rosterId, t.pointsFor]));
-
-    for (const weekEntry of remaining) {
-      const byMatchup = new Map();
-      weekEntry.matchups.forEach((m) => {
-        if (m.matchupId == null) return;
-        const list = byMatchup.get(m.matchupId) ?? [];
-        list.push(m);
-        byMatchup.set(m.matchupId, list);
-      });
-
-      byMatchup.forEach((pair) => {
-        if (pair.length !== 2) return;
-        const [a, b] = pair;
-        const distA = distForWeek
-          ? distForWeek(a.rosterId, weekEntry.week)
-          : distByRoster.get(a.rosterId);
-        const distB = distForWeek
-          ? distForWeek(b.rosterId, weekEntry.week)
-          : distByRoster.get(b.rosterId);
-        if (!distA || !distB) return;
-        const scoreA = Math.max(0, distA.mean + distA.sigma * gaussian(rng));
-        const scoreB = Math.max(0, distB.mean + distB.sigma * gaussian(rng));
-        pf.set(a.rosterId, (pf.get(a.rosterId) ?? 0) + scoreA);
-        pf.set(b.rosterId, (pf.get(b.rosterId) ?? 0) + scoreB);
-        wins.set(a.rosterId, (wins.get(a.rosterId) ?? 0) + (scoreA > scoreB ? 1 : 0));
-        wins.set(b.rosterId, (wins.get(b.rosterId) ?? 0) + (scoreB > scoreA ? 1 : 0));
-      });
-    }
-
-    rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + (wins.get(id) ?? 0)));
-
-    const standings = [...rosterIds].sort(
-      (x, y) => (wins.get(y) - wins.get(x)) || (pf.get(y) - pf.get(x)),
-    );
-    const playoff = standings.slice(0, playoffTeams);
-    playoff.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
-
-    // Reach the final: draw two finalists by strength (no replacement). This
-    // keeps the league's finals probabilities summing to exactly 2 of N — so
-    // when only two teams make the final, they can't all be favorites.
-    const finalist1 = drawByStrength(playoff);
-    finalsCounts.set(finalist1, finalsCounts.get(finalist1) + 1);
-    const rest = playoff.filter((id) => id !== finalist1);
-    let champion = finalist1;
-    if (rest.length > 0) {
-      const finalist2 = drawByStrength(rest);
-      finalsCounts.set(finalist2, finalsCounts.get(finalist2) + 1);
-      // Championship game: the stronger finalist is favored.
-      const s1 = strength.get(finalist1);
-      const s2 = strength.get(finalist2);
-      champion = rng() < s1 / (s1 + s2) ? finalist1 : finalist2;
-    }
-    titleCounts.set(champion, titleCounts.get(champion) + 1);
-  }
-
-  const totalGames = (league.regularSeasonWeeks ?? 14);
-
-  return teams.map((t) => {
-    const playoffProb = playoffCounts.get(t.rosterId) / FUTURES_SIMS;
-    const finalsProb = finalsCounts.get(t.rosterId) / FUTURES_SIMS;
-    const titleProb = titleCounts.get(t.rosterId) / FUTURES_SIMS;
-    const projWinsExact = winSums.get(t.rosterId) / FUTURES_SIMS;
-    const projWins = Number(projWinsExact.toFixed(1)); // 1 decimal (avg, not rounded)
-    const projLosses = Number(Math.max(0, totalGames - projWinsExact).toFixed(1));
-
-    return {
-      rosterId: t.rosterId,
-      projWins,
-      projLosses,
-      projRecord: `${Math.round(projWinsExact)}-${Math.max(0, totalGames - Math.round(projWinsExact))}`,
-      teamName: t.teamName,
-      record: t.record,
-      playoffProb: Number((playoffProb * 100).toFixed(1)),
-      // Everyone makes a small league's playoffs — that's clinched, not a price.
-      playoffClinched: playoffProb >= 0.999,
-      playoffOdds: probToAmerican(playoffProb),
-      finalsProb: Number((finalsProb * 100).toFixed(1)),
-      finalsOdds: probToAmerican(finalsProb),
-      titleProb: Number((titleProb * 100).toFixed(1)),
-      championOdds: probToAmerican(titleProb),
-      isUser: t.isUser,
-    };
-  });
 }
 
 /** Sum a team's simulated score for a week: each starter drawn from their CI. */
