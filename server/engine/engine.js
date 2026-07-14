@@ -2077,70 +2077,80 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null }
         for (const get of combos(theirs, j)) {
           const tv = val(get);
           const r = tv > 0 ? gv / tv : 1;
-          if (r < 0.7 || r > 1.4) continue; // fair value only — no lopsided fleeces
+          if (r < 0.75 || r > 1.3) continue; // fair value only — no lopsided fleeces
           const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
           const youGain = computeStarterImpact(userTeam.players, userAfter, slotLabels, projectionMap, catalog).delta;
-          if (youGain <= 0) continue; // must improve YOUR starting lineup
           const oppAfter = opp.players.filter((id) => !get.includes(id)).concat(give);
           const themGain = computeStarterImpact(opp.players, oppAfter, slotLabels, projectionMap, catalog).delta;
-          scored.push({ partner: opp, give, get, youGain, themGain });
+          if (themGain < -6) continue; // proxy: never even consider gutting the partner
+          // NOTE: we do NOT require youGain > 0 — a near-even star-for-star swap is
+          // roughly lateral on starter points but can still lift your title via
+          // fit/depth/schedule. The sim decides; the proxy just avoids fleeces.
+          scored.push({ partner: opp, give, get, youGain, themGain, gap: Math.abs(gv - tv) });
         }
       }
     }
   }
 
-  // Pick the "competent" set to sim, giving EVERY opponent representation. If we
-  // picked the best trades globally, the one opponent with the most complementary
-  // roster would monopolize the shortlist and the client's per-manager acceptance
-  // (friendliness/relationship) would have nothing to choose from for the others.
-  // So we rank each opponent's candidates by a help-you-plus-help-them blend and
-  // take them round-robin (best of each, then 2nd-best of each, ...).
+  // Build a broad SCAN set per opponent: the most BALANCED fair trades (smallest
+  // value gap — the near-even star-for-star swaps) PLUS the best mutual-benefit
+  // ones (win-wins). This covers the lateral near-even trades the old magnitude
+  // ranking always missed.
   const dedupeKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
   const numOpp = Math.max(1, opponents.length);
-  const perOpp = Math.max(3, Math.ceil(maxSim / numOpp));
-  const SIM_CAP = 24; // hard bound so many-team leagues don't sim too many
+  const SCAN_CAP = 54;
+  const perOpp = Math.max(12, Math.ceil(SCAN_CAP / numOpp));
   const byOpp = new Map();
   for (const c of scored) {
     const list = byOpp.get(c.partner.rosterId) ?? [];
     list.push(c);
     byOpp.set(c.partner.rosterId, list);
   }
-  const oppLists = [...byOpp.values()].map((list) =>
-    list.sort((a, b) => (b.youGain + 0.5 * b.themGain) - (a.youGain + 0.5 * a.themGain)),
-  );
   const seen = new Set();
   const promising = [];
-  for (let rank = 0; rank < perOpp && promising.length < SIM_CAP; rank += 1) {
-    for (const list of oppLists) {
-      if (promising.length >= SIM_CAP) break;
-      const c = list[rank];
-      if (!c) continue;
+  const takeFrom = (sorted, quota) => {
+    let taken = 0;
+    for (const c of sorted) {
+      if (taken >= quota || promising.length >= SCAN_CAP) break;
       const key = dedupeKey(c);
       if (seen.has(key)) continue;
       seen.add(key);
       promising.push(c);
+      taken += 1;
     }
+  };
+  for (const list of byOpp.values()) {
+    if (promising.length >= SCAN_CAP) break;
+    takeFrom([...list].sort((a, b) => a.gap - b.gap), Math.ceil(perOpp * 0.6)); // most balanced
+    takeFrom([...list].sort((a, b) => (b.youGain + b.themGain) - (a.youGain + a.themGain)), perOpp); // win-wins
   }
 
-  // ── Sim only the promising set for real Δ championship %, yielding between
-  // small batches so we never block other requests for long. Use the SAME sim
-  // count + seed as the Build-a-trade analyzer (analyzeTrade), so a suggestion's
-  // numbers here match exactly when you open it in the analyzer.
-  const SIMS = SEASON_SIMS;
-  // Prefer REALISTIC (near-even) trades: they help you AND don't gut the partner
-  // (title drop within this many points — a big partner loss is a fleece no one
-  // accepts). We PREFER these but fall back to any title-raising trade if none
-  // are near-even, so the finder is never empty when a helpful trade exists.
-  const MAX_PARTNER_DROP = 2;
-  const baseline = simulateSeason({ ...base, sims: SIMS });
-  const helpsYou = [];
+  const MAX_PARTNER_DROP = 2; // realistic: partner's title drop no worse than this
+  // ── Pass 1: cheap scan to find which balanced candidates actually raise your
+  // title without dropping the partner past the near-even gate.
+  const SCAN_SIMS = 1200;
+  const scanBaseline = simulateSeason({ ...base, sims: SCAN_SIMS });
+  const scanned = [];
   let simmed = 0;
   for (const c of promising) {
-    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SIMS, baseline);
+    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline);
     simmed += 1;
-    if (simmed % 3 === 0) await yieldToLoop();
-    if (youDelta <= 0) continue; // must raise YOUR title
-    helpsYou.push({
+    if (simmed % 4 === 0) await yieldToLoop();
+    if (youDelta > 0 && partnerDelta >= -MAX_PARTNER_DROP) scanned.push({ ...c, youDelta });
+  }
+
+  // ── Pass 2: re-sim the best survivors at FULL sims (same seed + count as the
+  // Build-a-trade analyzer) so the shown Δc matches exactly. Re-confirm the gate.
+  const finalists = scanned.sort((a, b) => b.youDelta - a.youDelta).slice(0, 8);
+  const finalBaseline = simulateSeason({ ...base, sims: SEASON_SIMS });
+  const suggestions = [];
+  let re = 0;
+  for (const c of finalists) {
+    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline);
+    re += 1;
+    if (re % 3 === 0) await yieldToLoop();
+    if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
+    suggestions.push({
       partnerRosterId: c.partner.rosterId,
       partnerName: c.partner.teamName,
       give: c.give.map((id) => ({ id, name: nameOf(id) })),
@@ -2149,11 +2159,6 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null }
       partnerDelta: Number(partnerDelta.toFixed(1)),
     });
   }
-  // Strict: only realistic (near-even / win-win) trades. If a manager has none,
-  // we return an empty list and the UI says "no valid trades" — no fleeces.
-  const suggestions = helpsYou.filter((s) => s.partnerDelta >= -MAX_PARTNER_DROP);
-  // Client gates on acceptance and ranks by expected gain. Sort by your gain for
-  // stable ordering.
   suggestions.sort((a, b) => b.youDelta - a.youDelta);
   return {
     available: true,
@@ -2161,6 +2166,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null }
     debug: {
       generated: scored.length,
       simmed: promising.length,
+      scanned: scanned.length,
       positive: suggestions.length,
       ms: Date.now() - t0,
     },
