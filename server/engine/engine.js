@@ -1054,6 +1054,18 @@ function computeMovers(ctx) {
   const movers = [];
 
   // 1) waiver / free-agent claim
+  // The season sim streams a replacement-level free agent into any slot you
+  // can't fill (see streamedLineupParams), so a claim only moves your title
+  // odds if it BEATS that streamable replacement — not merely your current
+  // (possibly empty) starter. Comparing against the empty slot is why a bare
+  // kicker pickup used to get flagged and then priced at ~0.0%: the sim already
+  // assumed you'd stream one, so the specific kicker adds nothing. Measure the
+  // upgrade the same way the sim scores it.
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
+  const slotReplacement = (slot) =>
+    FLEX_ELIGIBILITY[slot]
+      ? Math.max(...FLEX_ELIGIBILITY[slot].map((p) => replacementFor(p)))
+      : replacementFor(slot);
   const starterMeans = starters.map((id, i) => ({
     id,
     slot: slotLabels[i] ?? 'FLEX',
@@ -1070,7 +1082,10 @@ function computeMovers(ctx) {
     for (const starter of starterMeans) {
       const allowed = FLEX_ELIGIBILITY[starter.slot] ?? [starter.slot];
       if (!allowed.includes(candidate.position)) continue;
-      const delta = candidate.mean - starter.mean;
+      // Beat what you'd actually field this week: your current starter, or the
+      // free agent you'd otherwise stream into the slot — whichever is better.
+      const floor = Math.max(starter.mean, slotReplacement(starter.slot));
+      const delta = candidate.mean - floor;
       // a waiver claim has to be a real upgrade, not a rounding-error edge
       if (delta < 2) continue;
       if (!bestClaim || delta > bestClaim.delta) {
