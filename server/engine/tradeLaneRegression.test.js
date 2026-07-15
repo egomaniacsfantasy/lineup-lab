@@ -206,45 +206,23 @@ test('trade lane card deltas must equal verdict display deltas exactly', () => {
   );
 });
 
-test('generated trade lanes reuse the exact priced verdict output', () => {
+test('priced trade title baseline matches the league futures snapshot', () => {
+  // Trade-lane movers were retired (the manager-first finder owns discovery),
+  // so build a trade directly. The invariant that matters: priceTrade's own
+  // "before" title odds are the SAME per-player season sim as the Futures tab.
   const ctx = realLaneContext();
   const pricing = priceLeague(ctx);
-  const lane = pricing.movers.find((mover) => mover.kind === 'trade');
-  assert.ok(lane, 'expected a generated trade lane');
+  const userFuture = pricing.futures.find((future) => future.rosterId === 1);
 
   const verdict = priceTrade(ctx, {
     userRosterId: 1,
-    partnerRosterId: lane.partnerRosterId,
-    give: lane.givePlayerIds,
-    get: lane.getPlayerIds,
+    partnerRosterId: 2,
+    give: ['u-wr1'],
+    get: ['o-rb1'],
     traits: { toughness: 5, dealAppetite: 5, fandomTeam: null, fandomLevel: 5 },
   });
 
   assert.equal(verdict.available, true);
-  assert.equal(lane.valueGain, roundTradeDelta(verdict.you.valueDelta));
-  assert.equal(lane.partnerGain, roundTradeDelta(verdict.them.valueDelta));
-  assert.equal(lane.acceptanceProbability, verdict.acceptance.probability);
-  assert.equal(lane.verdict, verdict.verdict);
-  assert.equal(lane.valueGap, verdict.valueGap);
-  assert.equal(tradeLaneMatchesPricedResult(lane, verdict), true);
-});
-
-test('trade verdict title baseline matches the league futures snapshot', () => {
-  const ctx = realLaneContext();
-  const pricing = priceLeague(ctx);
-  const lane = pricing.movers.find((mover) => mover.kind === 'trade');
-  assert.ok(lane, 'expected a generated trade lane');
-
-  const userFuture = pricing.futures.find((future) => future.rosterId === 1);
-  const verdict = priceTrade(ctx, {
-    userRosterId: 1,
-    partnerRosterId: lane.partnerRosterId,
-    give: lane.givePlayerIds,
-    get: lane.getPlayerIds,
-    traits: { toughness: 5, dealAppetite: 5, fandomTeam: null, fandomLevel: 5 },
-  });
-
-  assert.equal(lane.titleOddsBefore, userFuture.championOdds);
   assert.equal(verdict.you.titleBefore, userFuture.championOdds);
 });
 

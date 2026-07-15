@@ -21,6 +21,7 @@ import {
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { formatAmericanOdds } from '../utils/formatOdds';
+import { oddsPairDelta } from '../utils/noTradeMath';
 import {
   formatDisplayedWinProbabilityDelta,
   getDisplayedWinProbabilityDelta,
@@ -534,6 +535,10 @@ function MarketMoverRow({
   const [whyOpen, setWhyOpen] = useState(false);
   const isTrade = Boolean(getPlayers?.length || givePlayers?.length);
   const valueLabel = gain != null ? `${gain >= 0 ? '+' : ''}${gain.toFixed(1)}` : null;
+  // Championship-% swing of a waiver claim, derived only from the engine's
+  // before/after title odds (per-player 10k season sim).
+  const titleDelta = Number.isFinite(from) && Number.isFinite(to) ? oddsPairDelta(from, to) : null;
+  const titleDeltaLabel = titleDelta != null ? `${titleDelta > 0 ? '+' : ''}${titleDelta.toFixed(1)}%` : null;
   const acceptanceRead =
     acceptanceProbability != null ? acceptanceGaugeLabel(acceptanceProbability) : null;
   const acceptancePercent = formatAcceptancePercent(acceptanceProbability);
@@ -606,8 +611,11 @@ function MarketMoverRow({
         </div>
       </div>
       <div className="matchup-page__mover-market">
-        {valueLabel ? (
-          <p className="matchup-page__mover-gain">{valueLabel}<span> pts/wk</span></p>
+        {titleDeltaLabel ? (
+          // What a waiver claim actually does: its change in your championship
+          // odds, off the same 10k-sim per-player season Monte Carlo as everything
+          // else — not a raw points/week figure.
+          <p className="matchup-page__mover-gain">{titleDeltaLabel}<span> to win league</span></p>
         ) : (
           <p className="matchup-page__price-shift">
             <span className="matchup-page__price-old">{formatAmericanOdds(from)}</span>{' '}
