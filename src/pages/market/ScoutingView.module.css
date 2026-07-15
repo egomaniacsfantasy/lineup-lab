@@ -76,6 +76,23 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
     var(--bg-surface);
   box-shadow: var(--shadow-card);
+  /* Rendered as a <button> (tap to open the read editor): reset button chrome. */
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.card:hover:not(:disabled) {
+  border-color: var(--accent, rgba(255, 128, 73, 0.55));
+  transform: translateY(-2px);
+}
+
+.card:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .loaderCard,
