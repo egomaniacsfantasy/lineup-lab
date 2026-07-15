@@ -254,13 +254,22 @@ apiRouter.get('/connect/:username', async (req, res, next) => {
     }
 
     const state = await provider.getSeasonState();
-    let season = state.season;
-    let leagues = await provider.getLeagues(user.id, season);
+    const season = state.season;
 
-    if (leagues.length === 0 && state.previousSeason) {
-      season = state.previousSeason;
-      leagues = await provider.getLeagues(user.id, season);
+    // Merge the current AND previous season, deduped, instead of only falling
+    // back to the previous season when the current is empty. In the off-season
+    // Sleeper's "current" season can lag the season a freshly-created/-joined
+    // league is filed under, so a league you just joined could sit in the other
+    // season while you already have leagues in this one — and never show. Each
+    // league carries its own season, so the picker connects to the right one.
+    const seasons = [season, state.previousSeason].filter(Boolean);
+    const byId = new Map();
+    for (const s of seasons) {
+      for (const lg of await provider.getLeagues(user.id, s)) {
+        if (!byId.has(lg.id)) byId.set(lg.id, lg);
+      }
     }
+    const leagues = [...byId.values()];
 
     if (leagues.length === 0) {
       res.status(404).json({

@@ -134,7 +134,11 @@ export const sleeperProvider = {
   },
 
   async getLeagues(userId, season) {
-    const raw = await cached(`sleeper:leagues:${userId}:${season}`, DAY, () =>
+    // Which leagues you belong to changes the moment you join or leave one, so
+    // this must stay fresh — a day-long cache means a league you just joined
+    // won't appear for up to 24h. Keep a short cache only to dedupe rapid
+    // reconnects.
+    const raw = await cached(`sleeper:leagues:${userId}:${season}`, 2 * MINUTE, () =>
       sleeperGet(`/user/${userId}/leagues/nfl/${season}`, 'user/leagues'),
     );
     return (raw ?? []).map(mapLeagueSummary);
