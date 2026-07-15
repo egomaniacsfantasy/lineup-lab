@@ -1042,78 +1042,94 @@ function computeMovers(ctx) {
   if (league.leagueType && league.leagueType !== 'redraft') return [];
 
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
-  // Reuse the Futures-tab per-player season baseline (10k sims, asymmetric CIs)
-  // so every mover's "before" title odds match the Futures panel exactly.
-  const baseFutures = seasonBaseline ?? simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed });
-  const baseUser = baseFutures.find((f) => f.rosterId === userTeam.rosterId);
-  if (!baseUser) return [];
-  const userMatchup = matchups.find((m) => m.rosterId === userTeam.rosterId);
-  const starters = userMatchup?.starters?.length ? userMatchup.starters : userTeam.starters;
   const rostered = new Set(teams.flatMap((t) => t.players));
-
   const movers = [];
 
-  // 1) waiver / free-agent claim
-  // The season sim streams a replacement-level free agent into any slot you
-  // can't fill (see streamedLineupParams), so a claim only moves your title
-  // odds if it BEATS that streamable replacement — not merely your current
-  // (possibly empty) starter. Comparing against the empty slot is why a bare
-  // kicker pickup used to get flagged and then priced at ~0.0%: the sim already
-  // assumed you'd stream one, so the specific kicker adds nothing. Measure the
-  // upgrade the same way the sim scores it.
-  const replacementFor = replacementLevels(teams, projectionMap, catalog);
-  const slotReplacement = (slot) =>
-    FLEX_ELIGIBILITY[slot]
-      ? Math.max(...FLEX_ELIGIBILITY[slot].map((p) => replacementFor(p)))
-      : replacementFor(slot);
-  const starterMeans = starters.map((id, i) => ({
-    id,
-    slot: slotLabels[i] ?? 'FLEX',
-    mean: projectionMap.get(id)?.mean ?? 0,
-  }));
+  // 1) waiver / free-agent claim — priced on THIS WEEK's win probability.
+  // The matchup tab is a this-week view, so the claim answers "which free agent
+  // most raises my chance to win THIS week": fill an empty slot, beat a bye'd or
+  // injured starter, a favorable streamer. Priced on the SAME per-player
+  // asymmetric matchup sim as the headline line and the biggest-edge swaps.
+  // (Season title odds are the wrong metric here — over a full year any single
+  // add is fungible, e.g. a specific kicker ~ the one you'd stream, so it always
+  // read ~0%.)
+  const weekMeanOf = (id) => playerDistribution(id, projectionMap, catalog[id], week).mean;
+
+  // Your opponent this week (or the league-median team in the preseason).
+  const userMatchup = matchups.find((m) => m.rosterId === userTeam.rosterId && m.matchupId != null);
+  const oppMatchup = userMatchup
+    ? matchups.find((m) => m.matchupId === userMatchup.matchupId && m.rosterId !== userTeam.rosterId)
+    : null;
+  const oppTeam = oppMatchup ? teams.find((t) => t.rosterId === oppMatchup.rosterId) : null;
+  const oppParams = oppTeam
+    ? optimalLineupParams(oppTeam.players, slotLabels, projectionMap, catalog, week)
+    : (() => {
+        const d = leagueMedianDistribution(distByRoster);
+        return { players: [{ mean: d.mean, sigmaUp: d.sigma, sigmaDown: d.sigma }] };
+      })();
+
+  // Your current best lineup this week: a candidate is scored by how many points
+  // it adds to the OPTIMAL lineup (it must beat the weakest starter it can
+  // legally replace — and an unfilled slot, e.g. no kicker, counts as 0).
+  const baseAssign = optimalAssign(userTeam.players, slotLabels, projectionMap, catalog, week);
+  const assignMean = baseAssign.map((a) => ({ slot: a.slot, mean: a.playerId ? weekMeanOf(a.playerId) : 0 }));
+
   let bestClaim = null;
   for (const candidate of projections) {
     if (rostered.has(candidate.playerId)) continue;
     if (!['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(candidate.position)) continue;
-    // Never suggest dropping a real starter for a depth-chart backup. A QB2
-    // who out-projects a QB1 in one slice is noise (he barely plays); Franco's
-    // depth_rank is the truth source for that.
+    // Never suggest a depth-chart backup. A QB2 who out-projects a QB1 in one
+    // slice is noise (he barely plays); Franco's depth_rank is the truth source.
     if (candidate.depthRank != null && candidate.depthRank >= 2) continue;
-    for (const starter of starterMeans) {
-      const allowed = FLEX_ELIGIBILITY[starter.slot] ?? [starter.slot];
-      if (!allowed.includes(candidate.position)) continue;
-      // Beat what you'd actually field this week: your current starter, or the
-      // free agent you'd otherwise stream into the slot — whichever is better.
-      const floor = Math.max(starter.mean, slotReplacement(starter.slot));
-      const delta = candidate.mean - floor;
-      // a waiver claim has to be a real upgrade, not a rounding-error edge
-      if (delta < 2) continue;
-      if (!bestClaim || delta > bestClaim.delta) {
-        bestClaim = { candidate, starter, delta };
-      }
+    let displaced = null;
+    for (const a of assignMean) {
+      if (!slotAllows(a.slot, candidate.position)) continue;
+      if (displaced == null || a.mean < displaced) displaced = a.mean;
     }
+    if (displaced == null) continue; // no legal slot for this position
+    const gain = weekMeanOf(candidate.playerId) - displaced;
+    if (gain < 2) continue; // must add real points to this week's lineup
+    if (!bestClaim || gain > bestClaim.gain) bestClaim = { candidate, gain };
   }
+
   if (bestClaim) {
-    // Per-player "after": add the free agent to your roster and re-run the SAME
-    // 10k-sim season Monte Carlo (the sim starts him if he's the upgrade), so the
-    // title-odds move is measured the same way as a trade — no team-mean shortcut.
-    const afterPlayers = [...userTeam.players, bestClaim.candidate.playerId];
-    const claimTeams = teams.map((t) =>
-      t.rosterId === userTeam.rosterId ? { ...t, players: afterPlayers } : t,
+    const baseParams = optimalLineupParams(userTeam.players, slotLabels, projectionMap, catalog, week);
+    const afterParams = optimalLineupParams(
+      [...userTeam.players, bestClaim.candidate.playerId], slotLabels, projectionMap, catalog, week,
     );
-    const after = simulateSeason({ league, teams: claimTeams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed })
-      .find((f) => f.rosterId === userTeam.rosterId);
+    // Common random numbers: draw the opponent's totals ONCE and reuse them for
+    // before and after, so the win-prob delta is the swap, not sim noise.
+    const N = MATCHUP_SIMS;
+    const oppRng = mulberry32((seed ^ 0x51ed270b) >>> 0);
+    const oppTotals = new Float64Array(N);
+    for (let i = 0; i < N; i += 1) {
+      let s = 0;
+      for (const p of oppParams.players) s += splitNormalDraw(p, oppRng);
+      oppTotals[i] = s;
+    }
+    const winProbVs = (params) => {
+      const r = mulberry32((seed ^ 0x9e3779b9) >>> 0);
+      let wins = 0;
+      for (let i = 0; i < N; i += 1) {
+        let s = 0;
+        for (const p of params.players) s += splitNormalDraw(p, r);
+        if (s > oppTotals[i]) wins += 1;
+        else if (s === oppTotals[i]) wins += 0.5;
+      }
+      return wins / N;
+    };
+    const beforeWinProb = winProbVs(baseParams);
+    // Adding a player to the optimal lineup can only help; clamp off sim noise.
+    const afterWinProb = Math.max(beforeWinProb, winProbVs(afterParams));
     movers.push({
       kind: 'waiver',
       headline: `Claim ${bestClaim.candidate.name} off waivers`,
-      detail: `Upgrade over ${catalog[bestClaim.starter.id]?.name ?? 'your current starter'} at ${bestClaim.candidate.position}`,
+      detail: `Starts at ${bestClaim.candidate.position} this week (+${bestClaim.gain.toFixed(1)} pts to your lineup)`,
       playerId: bestClaim.candidate.playerId,
-      valueGain: Number(bestClaim.delta.toFixed(1)),
-      titleOddsBefore: baseUser.championOdds,
-      titleOddsAfter: noWorseThan(
-        baseUser.championOdds,
-        after?.championOdds ?? baseUser.championOdds,
-      ),
+      valueGain: Number(bestClaim.gain.toFixed(1)),
+      weekly: true,
+      titleOddsBefore: probToAmerican(beforeWinProb),
+      titleOddsAfter: probToAmerican(afterWinProb),
     });
   }
 

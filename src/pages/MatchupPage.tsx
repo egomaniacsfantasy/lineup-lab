@@ -612,10 +612,9 @@ function MarketMoverRow({
       </div>
       <div className="matchup-page__mover-market">
         {titleDeltaLabel ? (
-          // What a waiver claim actually does: its change in your championship
-          // odds, off the same 10k-sim per-player season Monte Carlo as everything
-          // else — not a raw points/week figure.
-          <p className="matchup-page__mover-gain">{titleDeltaLabel}<span> to win league</span></p>
+          // What a waiver claim actually does: its change in your win probability
+          // THIS week (per-player asymmetric matchup sim), not a raw points figure.
+          <p className="matchup-page__mover-gain">{titleDeltaLabel}<span> this week</span></p>
         ) : (
           <p className="matchup-page__price-shift">
             <span className="matchup-page__price-old">{formatAmericanOdds(from)}</span>{' '}
