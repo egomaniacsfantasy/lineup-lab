@@ -1055,24 +1055,31 @@ function computeMovers(ctx) {
   // read ~0%.)
   const weekMeanOf = (id) => playerDistribution(id, projectionMap, catalog[id], week).mean;
 
-  // Your opponent this week (or the league-median team in the preseason).
+  // Your opponent this week (or the league-median team in the preseason). Use
+  // the ACTUAL set lineups the matchup tab prices — no replacement fill, so an
+  // empty slot (you have no kicker) genuinely scores 0 this week.
   const userMatchup = matchups.find((m) => m.rosterId === userTeam.rosterId && m.matchupId != null);
   const oppMatchup = userMatchup
     ? matchups.find((m) => m.matchupId === userMatchup.matchupId && m.rosterId !== userTeam.rosterId)
     : null;
   const oppTeam = oppMatchup ? teams.find((t) => t.rosterId === oppMatchup.rosterId) : null;
-  const oppParams = oppTeam
-    ? optimalLineupParams(oppTeam.players, slotLabels, projectionMap, catalog, week)
+  const oppStarters = oppMatchup?.starters?.length ? oppMatchup.starters : (oppTeam?.starters ?? []);
+  const oppParams = oppStarters.length
+    ? starterParams(oppStarters, projectionMap, catalog, week)
     : (() => {
         const d = leagueMedianDistribution(distByRoster);
         return { players: [{ mean: d.mean, sigmaUp: d.sigma, sigmaDown: d.sigma }] };
       })();
 
-  // Your current best lineup this week: a candidate is scored by how many points
-  // it adds to the OPTIMAL lineup (it must beat the weakest starter it can
-  // legally replace — and an unfilled slot, e.g. no kicker, counts as 0).
-  const baseAssign = optimalAssign(userTeam.players, slotLabels, projectionMap, catalog, week);
-  const assignMean = baseAssign.map((a) => ({ slot: a.slot, mean: a.playerId ? weekMeanOf(a.playerId) : 0 }));
+  // Your CURRENT starters this week, slot by slot (the exact lineup the matchup
+  // line prices). A candidate takes the weakest current starter it can legally
+  // replace; an empty / 0-projected slot is the easiest to beat.
+  const userStarterIds = (userMatchup?.starters?.length ? userMatchup.starters : userTeam.starters) ?? [];
+  const starterSlots = userStarterIds.map((id, i) => ({
+    index: i,
+    slot: slotLabels[i] ?? 'FLEX',
+    mean: (id && id !== '0' && projectionMap.has(id)) ? weekMeanOf(id) : 0,
+  }));
 
   let bestClaim = null;
   for (const candidate of projections) {
@@ -1081,22 +1088,26 @@ function computeMovers(ctx) {
     // Never suggest a depth-chart backup. A QB2 who out-projects a QB1 in one
     // slice is noise (he barely plays); Franco's depth_rank is the truth source.
     if (candidate.depthRank != null && candidate.depthRank >= 2) continue;
-    let displaced = null;
-    for (const a of assignMean) {
-      if (!slotAllows(a.slot, candidate.position)) continue;
-      if (displaced == null || a.mean < displaced) displaced = a.mean;
+    let target = null;
+    for (const s of starterSlots) {
+      if (!slotAllows(s.slot, candidate.position)) continue;
+      if (target == null || s.mean < target.mean) target = s;
     }
-    if (displaced == null) continue; // no legal slot for this position
-    const gain = weekMeanOf(candidate.playerId) - displaced;
+    if (!target) continue; // no legal slot for this position
+    const gain = weekMeanOf(candidate.playerId) - target.mean;
     if (gain < 2) continue; // must add real points to this week's lineup
-    if (!bestClaim || gain > bestClaim.gain) bestClaim = { candidate, gain };
+    if (!bestClaim || gain > bestClaim.gain) {
+      bestClaim = { candidate, gain, targetIndex: target.index, slot: target.slot };
+    }
   }
 
   if (bestClaim) {
-    const baseParams = optimalLineupParams(userTeam.players, slotLabels, projectionMap, catalog, week);
-    const afterParams = optimalLineupParams(
-      [...userTeam.players, bestClaim.candidate.playerId], slotLabels, projectionMap, catalog, week,
-    );
+    // Before = your current lineup as priced now. After = that same lineup with
+    // the claim dropped into that slot (fills the empty spot, or replaces the
+    // weakest current starter it beats).
+    const afterStarterIds = userStarterIds.map((id, i) => (i === bestClaim.targetIndex ? bestClaim.candidate.playerId : id));
+    const baseParams = starterParams(userStarterIds, projectionMap, catalog, week);
+    const afterParams = starterParams(afterStarterIds, projectionMap, catalog, week);
     // Common random numbers: draw the opponent's totals ONCE and reuse them for
     // before and after, so the win-prob delta is the swap, not sim noise.
     const N = MATCHUP_SIMS;
