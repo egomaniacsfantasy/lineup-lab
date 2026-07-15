@@ -549,6 +549,11 @@ export function priceLeague(ctx) {
   const linesRng = mulberry32(seed);
 
   const lines = [];
+  // The user's own displayed win% this week — captured here so the market's
+  // waiver card can anchor its "before" to the EXACT number the matchup shows
+  // (not a second, independently-seeded sim that drifts by noise).
+  const userRosterIdForLines = teams.find((t) => t.isUser)?.rosterId ?? null;
+  let userDisplayWinProb = null;
   byMatchup.forEach((pair, matchupId) => {
     if (pair.length !== 2) return;
     const [a, b] = pair;
@@ -561,6 +566,8 @@ export function priceLeague(ctx) {
       paramsByRoster.get(b.rosterId),
       linesRng,
     );
+    if (a.rosterId === userRosterIdForLines) userDisplayWinProb = winProbA;
+    else if (b.rosterId === userRosterIdForLines) userDisplayWinProb = 1 - winProbA;
 
     lines.push({
       matchupId,
@@ -809,9 +816,9 @@ export function priceLeague(ctx) {
     catalog,
     seed,
     overlay,
-    // Reuse the per-player season baseline the Futures tab already ran, so trade
-    // lanes price their title-odds on the same sim (and don't re-sim it per lane).
-    seasonBaseline: futures,
+    // The user's displayed matchup win% — the waiver card anchors its "before"
+    // to this exact value so it matches the matchup tab and the biggest-edge card.
+    userDisplayWinProb,
   });
 
   // ── scoring honesty ──
@@ -1034,7 +1041,7 @@ export function laneAcceptReasons({ opp, give, get, priced, catalog, framing = '
  *  2. best mutually-positive 1-for-1 trade lane against a real roster
  */
 function computeMovers(ctx) {
-  const { league, teams, matchups, projections, projectionMap, distByRoster, scheduleWeeks, week, catalog, seed, seasonBaseline = null } = ctx;
+  const { league, teams, matchups, projections, projectionMap, distByRoster, week, catalog, seed, userDisplayWinProb = null } = ctx;
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return [];
   // Redraft-value movers are misleading in dynasty/keeper, where youth and
@@ -1129,9 +1136,16 @@ function computeMovers(ctx) {
       }
       return wins / N;
     };
-    const beforeWinProb = winProbVs(baseParams);
-    // Adding a player to the optimal lineup can only help; clamp off sim noise.
-    const afterWinProb = Math.max(beforeWinProb, winProbVs(afterParams));
+    // CRN delta: same opponent + same current-lineup draws, only the claimed
+    // slot changes — so this is the pure effect of the add, not sim noise.
+    const baseCrn = winProbVs(baseParams);
+    const afterCrn = Math.max(baseCrn, winProbVs(afterParams));
+    const delta = afterCrn - baseCrn;
+    // Anchor the shown "before" to the EXACT win% the matchup tab displays (same
+    // seeded sim as the headline line), then apply the CRN delta. So the card
+    // reads "30.5% -> 30.5%+gain", consistent with the matchup and biggest-edge.
+    const beforeWinProb = userDisplayWinProb != null ? userDisplayWinProb : baseCrn;
+    const afterWinProb = Math.min(0.985, Math.max(0.015, beforeWinProb + delta));
     movers.push({
       kind: 'waiver',
       headline: `Claim ${bestClaim.candidate.name} off waivers`,
