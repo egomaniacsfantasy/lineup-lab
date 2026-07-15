@@ -20,7 +20,7 @@ import {
 } from '../mocks';
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
-import { formatAmericanOdds } from '../utils/formatOdds';
+import { formatAmericanOdds, impliedProbability } from '../utils/formatOdds';
 import { oddsPairDelta } from '../utils/noTradeMath';
 import {
   formatDisplayedWinProbabilityDelta,
@@ -611,10 +611,17 @@ function MarketMoverRow({
         </div>
       </div>
       <div className="matchup-page__mover-market">
-        {titleDeltaLabel ? (
-          // What a waiver claim actually does: its change in your win probability
-          // THIS week (per-player asymmetric matchup sim), not a raw points figure.
-          <p className="matchup-page__mover-gain">{titleDeltaLabel}<span> this week</span></p>
+        {titleDeltaLabel && Number.isFinite(from) && Number.isFinite(to) ? (
+          // Your actual win probability THIS week, before and after the claim
+          // (per-player asymmetric matchup sim) — shown as the transition so it
+          // reads unmistakably as a probability, with the delta beside it.
+          <p className="matchup-page__price-shift">
+            <span className="matchup-page__price-old">{impliedProbability(from).toFixed(1)}%</span>{' '}
+            <span className="matchup-page__price-new matchup-page__price-new--up">
+              {impliedProbability(to).toFixed(1)}% to win
+            </span>
+            <span> this week ({titleDeltaLabel})</span>
+          </p>
         ) : (
           <p className="matchup-page__price-shift">
             <span className="matchup-page__price-old">{formatAmericanOdds(from)}</span>{' '}
