@@ -1084,7 +1084,9 @@ function MatchupSuggestionEmpty({
         {subtitle ? <p className="matchup-page__meta-copy">{subtitle}</p> : null}
       </div>
       <p className="matchup-page__suggestion-empty">
-        The book is still pricing your market. Check back in a minute.
+        {mode === 'market'
+          ? 'No free-agent claim beats what you would already stream into your lineup, so there is nothing worth adding right now.'
+          : 'Your lineup is already the best play. No bench swap raises your win probability this week.'}
       </p>
     </section>
   );
@@ -1101,7 +1103,6 @@ function MatchupLive({
   movers = [],
   suggestionsFetching = false,
   suggestionsStale = false,
-  suggestionsResolved = false,
   suggestionsAsOf = null,
   marketScan = {
     isScanning: false,
@@ -1270,7 +1271,6 @@ function MatchupLive({
     }));
     return [...nonTradeMovers, ...taggedTrades].slice(0, 3);
   }, [movers, tradeMovers]);
-  const showSuggestionSkeletons = isConnected && suggestionsFetching && !suggestionsResolved;
 
   useEffect(() => {
     if (!topSwapEvaluation?.bestBenchAlternative) {
@@ -1944,10 +1944,10 @@ function MatchupLive({
             </div>
           </section>
         ) : isConnected ? (
-          showSuggestionSkeletons ? (
-            <MatchupSuggestionSkeleton mode="edge" title="Biggest edge" subtitle="swap" />
-          ) : (
+          isPriced ? (
             <MatchupSuggestionEmpty mode="edge" title="Biggest edge" subtitle={suggestionsAsOf ? `as of ${suggestionsAsOf}` : undefined} />
+          ) : (
+            <MatchupSuggestionSkeleton mode="edge" title="Biggest edge" subtitle="swap" />
           )
         ) : null}
 
@@ -2011,14 +2011,14 @@ function MatchupLive({
                 />
               ))}
             </section>
-          ) : showSuggestionSkeletons ? (
-            <MatchupSuggestionSkeleton mode="market" title="The market" subtitle="added to your lineup" />
-          ) : (
+          ) : isPriced ? (
             <MatchupSuggestionEmpty
               mode="market"
               title="The market"
-              subtitle={marketScan.note ?? (suggestionsAsOf ? `as of ${suggestionsAsOf}` : 'added to your lineup')}
+              subtitle={marketScan.note ?? (suggestionsAsOf ? `as of ${suggestionsAsOf}` : undefined)}
             />
+          ) : (
+            <MatchupSuggestionSkeleton mode="market" title="The market" subtitle="added to your lineup" />
           )
           ) : !isConnected ? (
           <section className="matchup-page__module">
