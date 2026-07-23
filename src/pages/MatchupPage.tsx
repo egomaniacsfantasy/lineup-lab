@@ -1102,6 +1102,7 @@ function MatchupLive({
   movers = [],
   suggestionsFetching = false,
   suggestionsStale = false,
+  suggestionsResolved = false,
   suggestionsAsOf = null,
   marketScan = {
     isScanning: false,
