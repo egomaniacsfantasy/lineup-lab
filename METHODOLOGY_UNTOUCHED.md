@@ -38,6 +38,7 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `scripts/design-shots.mjs`
 - `src/dev/designFixtures.ts`
 - `src/pages/DesignFixturePage.tsx`
+- `src/pages/DesignBoardRowPage.tsx`
 - `src/App.tsx`
 - `src/services/leagueApi.ts`
 - `src/styles/tokens.css`
@@ -55,6 +56,7 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `src/components/league/LeagueMovementChip.tsx`
 - `src/components/league/LeagueMovementChip.css`
 - `test/matchupSlateAlignment.test.mjs`
+- `test/matchupSlateBoardRowRegression.test.mjs`
 - `DESIGN_PASS.md`
 
 ## Payload Map Additions
@@ -76,6 +78,7 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - League This week board:
   - The fixed chip rail changes layout only
   - Row prices, win percentages, and movement summaries still render from existing board/history view-model fields in engine order
+  - The July 23 board-row fix only changes grid allocation, truncation behavior, and dev-only screenshot coverage
 - Design fixtures:
   - `src/dev/designFixtures.ts` mirrors payload shapes for browser capture only
   - Fixtures never replace server methodology in connected-league runtime
@@ -85,3 +88,4 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `test/noTradeMath.test.mjs` locks TradePage to the branded `oddsPairDelta` display helper instead of inline probability math.
 - `src/utils/noTradeMath.ts` brands the only allowed frontend delta transform for engine-provided odds pairs.
 - `test/matchupSlateAlignment.test.mjs` locks the League This week board to a fixed chip rail on desktop and tablet widths so `YOUR GAME` never shifts row alignment.
+- `test/matchupSlateBoardRowRegression.test.mjs` launches the dev-only board-row fixture and checks that the right avatar never overlaps the fixed chip rail, while long left and right team names share width evenly before ellipsis kicks in.

@@ -220,7 +220,13 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                 <span className="matchup-slate__team matchup-slate__team--left">
                   {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={left.avatarUrl} name={left.name} /> : null}
                   <span className="matchup-slate__team-copy">
-                    <span className={['matchup-slate__team-name', leftFavored ? 'matchup-slate__team-name--favored' : 'matchup-slate__team-name--dog'].join(' ')}>
+                    <span
+                      className={[
+                        'matchup-slate__team-name',
+                        leftFavored ? 'matchup-slate__team-name--favored' : 'matchup-slate__team-name--dog',
+                      ].join(' ')}
+                      title={left.name}
+                    >
                       {left.name}
                     </span>
                     <span className="matchup-slate__record">{left.record}</span>
@@ -233,12 +239,16 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                   </span>
                 </span>
 
-                <span className="matchup-slate__prob">
-                  <span className="matchup-slate__prob-number">{left.winProb.toFixed(1)}%</span>
-                  <span className="matchup-slate__prob-track" aria-hidden="true">
-                    <span className="matchup-slate__prob-fill matchup-slate__prob-fill--left" style={{ width: `${left.winProb}%` }} />
-                  </span>
-                  <span className="matchup-slate__prob-number">{right.winProb.toFixed(1)}%</span>
+                <span className="matchup-slate__prob-number matchup-slate__prob-number--left">
+                  {left.winProb.toFixed(1)}%
+                </span>
+
+                <span className="matchup-slate__prob-track" aria-hidden="true">
+                  <span className="matchup-slate__prob-fill matchup-slate__prob-fill--left" style={{ width: `${left.winProb}%` }} />
+                </span>
+
+                <span className="matchup-slate__prob-number matchup-slate__prob-number--right">
+                  {right.winProb.toFixed(1)}%
                 </span>
 
                 <span className="matchup-slate__moneyline matchup-slate__moneyline--right">
@@ -249,7 +259,13 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
 
                 <span className="matchup-slate__team matchup-slate__team--right">
                   <span className="matchup-slate__team-copy">
-                    <span className={['matchup-slate__team-name', !leftFavored ? 'matchup-slate__team-name--favored' : 'matchup-slate__team-name--dog'].join(' ')}>
+                    <span
+                      className={[
+                        'matchup-slate__team-name',
+                        !leftFavored ? 'matchup-slate__team-name--favored' : 'matchup-slate__team-name--dog',
+                      ].join(' ')}
+                      title={right.name}
+                    >
                       {right.name}
                     </span>
                     <span className="matchup-slate__record">{right.record}</span>

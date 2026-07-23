@@ -115,6 +115,33 @@ Ship call:
 
 - Yes. The rail is now a rule, not a hope.
 
+### Board Row Surgical Fix (July 23, 2026)
+
+Before:
+
+![Board row collision before](artifacts/design-shots/board-row-fix/before-collision-1512.png)
+![Board row truncation before](artifacts/design-shots/board-row-fix/before-truncation-1512.png)
+
+Critique:
+
+- The user's row proved the old rail was not real. The opponent avatar was winning a space fight with `YOUR GAME`, which means the row still depended on incidental overflow behavior instead of reserved columns.
+- The long-name stress case showed the right lockup tightening first even while the left side still had room, so the row was not giving both teams equal claim on the board width.
+
+After:
+
+![Board row collision after](artifacts/design-shots/board-row-fix/after-collision-1512.png)
+![Board row truncation after](artifacts/design-shots/board-row-fix/after-truncation-1512.png)
+
+What changed:
+
+- Rebuilt the row as one explicit grid: equal `minmax(0, 1fr)` team lockups, separate price and probability columns, a fixed 180px win bar, and a fixed 168px chip rail.
+- Kept the avatar inside the right lockup where it belongs. The rail now owns only `YOUR GAME` and the movement chip, so there is no way for the avatar to render on top of the pill.
+- Added title tooltips on both team names and verified the stress row at 1512px and 1280px: the left and right lockups now resolve to the same width, and `"FantasyGodCasta's Team"` fits without ellipsis in the available space.
+
+Ship call:
+
+- Yes. This is the first version of the row that behaves like a board row instead of a special case.
+
 ## Futures
 
 ### Before
@@ -183,6 +210,8 @@ Critique:
 - `src/components/league/LeagueMovementChip.tsx`
 - `src/components/league/LeagueMovementChip.css`
 - `test/matchupSlateAlignment.test.mjs`
+- `src/pages/DesignBoardRowPage.tsx`
+- `test/matchupSlateBoardRowRegression.test.mjs`
 
 ## Final Read
 
