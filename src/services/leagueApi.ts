@@ -2,6 +2,7 @@
  * Client for the Odds Gods server API. Provider-agnostic: the browser never
  * talks to Sleeper (or any provider) directly.
  */
+import { maybeHandleDesignFixtureRequest } from '../dev/designFixtures';
 
 export interface ProviderUser {
   id: string;
@@ -417,6 +418,8 @@ function withContext(path: string, init: RequestInit = {}): [string, RequestInit
 
 async function get<T>(path: string, init?: RequestInit): Promise<T> {
   const [url, decorated] = withContext(path, init);
+  const fixture = await maybeHandleDesignFixtureRequest(url, decorated);
+  if (fixture !== null) return fixture as T;
   const response = await fetch(url, decorated);
   const body = await response.json().catch(() => null);
 

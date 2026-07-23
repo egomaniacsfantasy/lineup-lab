@@ -3,6 +3,7 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerChip } from '../components/player/PlayerChip';
 import { TradeRow } from '../components/trade-display/TradeDisplay';
+import { Card, Chip } from '../components/ui/DesignPrimitives';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useModelOverlay } from '../contexts/ModelOverlayContext';
@@ -1075,26 +1076,18 @@ function MatchupSuggestionSkeleton({
 }
 
 function MatchupSuggestionEmpty({
-  title,
-  subtitle,
-  mode,
+  copy,
+  meta = null,
 }: {
-  title: string;
-  subtitle?: string;
-  mode: 'edge' | 'market';
+  copy: string;
+  meta?: ReactNode;
 }) {
   return (
-    <section className={`matchup-page__module matchup-page__suggestion-shell matchup-page__suggestion-shell--${mode}`}>
-      <div className="matchup-page__module-row">
-        <h2 className="matchup-page__module-title">{title}</h2>
-        {subtitle ? <p className="matchup-page__meta-copy">{subtitle}</p> : null}
-      </div>
-      <p className="matchup-page__suggestion-empty">
-        {mode === 'market'
-          ? 'No free-agent claim beats what you would already stream into your lineup, so there is nothing worth adding right now.'
-          : 'Your lineup is already the best play. No bench swap raises your win probability this week.'}
-      </p>
-    </section>
+    <Card className="matchup-page__confirm-strip" compact tone="strip">
+      <Chip size="sm" tone="accent">Optimal</Chip>
+      <p className="matchup-page__confirm-copy">{copy}</p>
+      {meta ? <span className="matchup-page__confirm-meta">{meta}</span> : null}
+    </Card>
   );
 }
 
@@ -1277,6 +1270,12 @@ function MatchupLive({
     }));
     return [...nonTradeMovers, ...taggedTrades].slice(0, 3);
   }, [movers, tradeMovers]);
+  const showSuggestionSkeletons = isConnected && suggestionsFetching && !suggestionsResolved;
+  const showMergedEmptySuggestions =
+    isConnected &&
+    !showSuggestionSkeletons &&
+    !biggestSwing &&
+    marketRows.length === 0;
 
   useEffect(() => {
     if (!topSwapEvaluation?.bestBenchAlternative) {
@@ -1871,7 +1870,12 @@ function MatchupLive({
         ) : null}
         {seasonLabel ? <SeasonalNotice>{seasonLabel}</SeasonalNotice> : null}
 
-        {biggestSwing ? (
+        {showMergedEmptySuggestions ? (
+          <MatchupSuggestionEmpty
+            copy="The book has no plays for you. Lineup optimal. Nothing on waivers beats what you'd already stream."
+            meta={suggestionsAsOf ? `as of ${suggestionsAsOf}` : null}
+          />
+        ) : biggestSwing ? (
           <section className="matchup-page__module">
             <div className="matchup-page__module-row">
               <h2 className="matchup-page__module-title">Biggest edge</h2>
@@ -1950,14 +1954,17 @@ function MatchupLive({
             </div>
           </section>
         ) : isConnected ? (
-          isPriced ? (
-            <MatchupSuggestionEmpty mode="edge" title="Biggest edge" subtitle={suggestionsAsOf ? `as of ${suggestionsAsOf}` : undefined} />
-          ) : (
+          showSuggestionSkeletons ? (
             <MatchupSuggestionSkeleton mode="edge" title="Biggest edge" subtitle="swap" />
+          ) : (
+            <MatchupSuggestionEmpty
+              copy="Your lineup is already the best play."
+              meta={suggestionsAsOf ? `as of ${suggestionsAsOf}` : null}
+            />
           )
         ) : null}
 
-        {isConnected ? (
+        {!showMergedEmptySuggestions && isConnected ? (
           marketRows.length > 0 ? (
             <section className="matchup-page__module">
               <div className="matchup-page__module-row">
@@ -2019,9 +2026,8 @@ function MatchupLive({
             </section>
           ) : isPriced ? (
             <MatchupSuggestionEmpty
-              mode="market"
-              title="The market"
-              subtitle={marketScan.note ?? (suggestionsAsOf ? `as of ${suggestionsAsOf}` : undefined)}
+              copy="Nothing on waivers beats what you'd already stream."
+              meta={marketScan.note ?? (suggestionsAsOf ? `as of ${suggestionsAsOf}` : 'added to your lineup')}
             />
           ) : (
             <MatchupSuggestionSkeleton mode="market" title="The market" subtitle="added to your lineup" />

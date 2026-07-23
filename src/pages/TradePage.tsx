@@ -657,6 +657,7 @@ function TradeDealsView() {
     analysis.partner,
   );
   const builderCollapsed = verdictReady && !isEditingTrade;
+  const builderIdle = !builderCollapsed && partnerRosterId == null && give.length === 0 && getIds.length === 0;
   const verdictMeta = verdictReady && analysis?.you && analysis.partner
     ? {
         verdict: analysisVerdict(analysis.you.delta.titleProb),
@@ -1349,6 +1350,7 @@ function TradeDealsView() {
         className={[
           'trade-cc__builder',
           builderCollapsed ? 'trade-cc__builder--collapsed' : '',
+          builderIdle ? 'trade-cc__builder--idle' : '',
         ].filter(Boolean).join(' ')}
         ref={builderRef}
       >
@@ -1385,7 +1387,12 @@ function TradeDealsView() {
           </div>
         </div>
 
-        <div className="trade-cc__columns">
+        <div
+          className={[
+            'trade-cc__columns',
+            builderIdle ? 'trade-cc__columns--idle' : '',
+          ].filter(Boolean).join(' ')}
+        >
           <div className="trade-cc__side">
             <div className="trade-cc__side-head">
               <div>
@@ -1398,7 +1405,13 @@ function TradeDealsView() {
             {renderPool(userTeam.rosterId, give, setGive, giveSearch, setGiveSearch)}
           </div>
 
-          <div className="trade-cc__side trade-cc__side--partner">
+          <div
+            className={[
+              'trade-cc__side',
+              'trade-cc__side--partner',
+              partnerRosterId == null ? 'trade-cc__side--idle' : '',
+            ].filter(Boolean).join(' ')}
+          >
             <div className="trade-cc__side-head">
               <div>
                 <p className="trade-cc__column-label">Their side</p>
@@ -1444,7 +1457,12 @@ function TradeDealsView() {
                 {renderPool(partnerRosterId, getIds, setGetIds, getSearch, setGetSearch)}
               </>
             ) : (
-              <p className="trade-cc__hint">Pick a manager to see their roster.</p>
+              <div className="trade-cc__partner-empty">
+                <p className="trade-cc__hint">Pick a manager to open the other side of the market.</p>
+                <p className="trade-cc__partner-empty-note">
+                  The builder stays quiet until you choose who you want to price.
+                </p>
+              </div>
             )}
           </div>
         </div>

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "matchup-cold",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/matchup-cold.png"
+  },
+  {
+    "name": "matchup-empty",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/matchup-empty.png"
+  },
+  {
+    "name": "matchup-live-expanded",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/matchup-live-expanded.png"
+  },
+  {
+    "name": "market-default",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/market-default.png"
+  },
+  {
+    "name": "market-manager-apollo",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/market-manager-apollo.png"
+  },
+  {
+    "name": "market-verdict-1for1",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/market-verdict-1for1.png"
+  },
+  {
+    "name": "market-verdict-3for1",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/market-verdict-3for1.png"
+  },
+  {
+    "name": "league-board",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/league-board.png"
+  },
+  {
+    "name": "league-board-expanded",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/league-board-expanded.png"
+  },
+  {
+    "name": "league-futures",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/league-futures.png"
+  },
+  {
+    "name": "league-schedule",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/loop2/league-schedule.png"
+  }
+]

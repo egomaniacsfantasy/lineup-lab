@@ -76,13 +76,23 @@
   --pos-flex-text: rgba(244, 245, 242, 0.9);
 
   /* ── Spacing ── */
-  --space-xs: 4px;
-  --space-sm: 8px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
   --space-md: 16px;
   --space-lg: 24px;
   --space-xl: 32px;
   --space-2xl: 48px;
   --space-3xl: 64px;
+
+  /* ── Type Scale ── */
+  --type-display: clamp(40px, 6vw, 62px);
+  --type-title-xl: clamp(28px, 4vw, 38px);
+  --type-title-lg: 22px;
+  --type-title-md: 16px;
+  --type-body: 14px;
+  --type-caption: 11px;
+  --type-stat: 17px;
 
   /* ── Border Radius ── */
   --radius-sm: 6px;
@@ -90,11 +100,14 @@
   --radius-lg: 18px;
   --radius-xl: 24px;
   --radius-pill: 9999px;
+  --radius-card: 20px;
+  --radius-strip: 14px;
 
   /* ── Shadows ── */
   --shadow-card: 0 12px 36px rgba(0, 0, 0, 0.34);
   --shadow-elevated: 0 22px 60px rgba(0, 0, 0, 0.44);
   --shadow-glow-amber: 0 0 0 1px var(--border-subtle);
+  --shadow-soft-edge: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
 
   /* ── Glass Effect ── */
   --glass-bg: #15181b;

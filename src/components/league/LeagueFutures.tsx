@@ -157,7 +157,7 @@ export function LeagueFutures({
   const cutoffLabel = 'Playoff line';
   const allTeamsReachPlayoffs = playoffTeams >= totalTeams;
   const isPlayoffMarket = chartMarket === 'playoff';
-  const chartTitle = isPlayoffMarket ? 'PLAYOFF ODDS, CLOSING LINE' : 'TITLE ODDS, CLOSING LINE';
+  const chartTitle = isPlayoffMarket ? 'Your playoff odds, day by day' : 'Your title odds, day by day';
   const titleHistoryTeams = useMemo(
     () =>
       leagueChartFlags.titleOddsOverTime
@@ -181,6 +181,11 @@ export function LeagueFutures({
   const comparisonHistory = comparisonTeam ? titleHistoryTeams.find((row) => row.team.rosterId === comparisonTeam.rosterId) : null;
   const envelope = titleHistoryTeams.length > 0 ? envelopePoints(titleHistoryTeams) : [];
   const titleTakeaway = historyTakeaway(titleHistoryTeams, userTeam);
+  const userEndpoint = userHistory?.series.at(-1) ?? null;
+  const endpointTop =
+    titleHistoryBounds && userEndpoint
+      ? `${((titleHistoryBounds.maxValue - userEndpoint.probability) / Math.max(1, titleHistoryBounds.maxValue - titleHistoryBounds.minValue)) * 100}%`
+      : null;
   const yTicks = titleHistoryBounds
     ? [titleHistoryBounds.maxValue, (titleHistoryBounds.maxValue + titleHistoryBounds.minValue) / 2, titleHistoryBounds.minValue]
     : [];
@@ -294,7 +299,7 @@ export function LeagueFutures({
                     {formatAmericanOdds(odds)}
                   </span>
                   {move != null ? (
-                    <LeagueMovementChip className="league-futures__move-chip" move={move} timeframe="this week" />
+                    <LeagueMovementChip className="league-futures__move-chip" move={move} timeframe="this week" variant="quiet" />
                   ) : null}
                 </span>
               </button>
@@ -307,7 +312,7 @@ export function LeagueFutures({
         <span className="league-futures__chart-head">
           <span>
             <span className="league-futures__chart-title">{chartTitle}</span>
-            <span className="league-futures__chart-subtitle">Each day's last price. Tap a team above to compare.</span>
+            <span className="league-futures__chart-subtitle">Gray band = league range. Tap a team above to compare.</span>
           </span>
         </span>
         {titleHistoryTeams.length > 0 && titleHistoryBounds && userHistory ? (
@@ -346,6 +351,15 @@ export function LeagueFutures({
                 svgClassName="league-futures__detail-chart-svg"
                 yTicks={yTicks}
               />
+              {userEndpoint && endpointTop ? (
+                <span className="league-futures__endpoint-tag" style={{ top: endpointTop }}>
+                  {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={userHistory.team.avatarUrl} name={userHistory.team.teamName} /> : null}
+                  <span>
+                    <strong>{userHistory.team.teamName}</strong>
+                    <span>{formatAmericanOdds(isPlayoffMarket ? userHistory.team.playoffOdds : userHistory.team.championOdds)}</span>
+                  </span>
+                </span>
+              ) : null}
               <span className="league-futures__detail-axis league-futures__detail-axis--x">Date</span>
             </div>
             <div className="league-futures__xlabels">

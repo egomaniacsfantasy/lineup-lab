@@ -168,6 +168,28 @@
   line-height: 1.45;
 }
 
+.matchup-page__confirm-strip {
+  margin: 0;
+}
+
+.matchup-page__confirm-copy {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.matchup-page__confirm-meta {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .matchup-page__inline-number,
 .matchup-page__hero-winprob,
 .matchup-page__opponent-odds,
@@ -235,6 +257,18 @@
   color: var(--ink-3);
   cursor: default;
   white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .matchup-page__confirm-strip {
+    grid-template-columns: auto 1fr;
+    align-items: start;
+  }
+
+  .matchup-page__confirm-meta {
+    grid-column: 2;
+    text-align: left;
+  }
 }
 
 .matchup-page__live-chip {

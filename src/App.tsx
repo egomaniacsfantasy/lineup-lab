@@ -12,6 +12,7 @@ import { AuthLanding } from './pages/AuthLanding';
 import { ConnectPage } from './pages/ConnectPage';
 import { DraftPage } from './pages/DraftPage';
 import { DemoPage, LandingPage } from './pages/LandingPage';
+import { DesignFixturePage } from './pages/DesignFixturePage';
 import { LeaguePage } from './pages/LeaguePage';
 import { MatchupPage } from './pages/MatchupPage';
 import { MorePage } from './pages/MorePage';
@@ -78,6 +79,7 @@ function PublicRoutes() {
               <Route path="/signin" element={<AuthLanding />} />
               <Route element={<AppShell />}>
                 <Route path="/demo" element={<DemoPage />} />
+                {import.meta.env.DEV ? <Route path="/design/:scene" element={<DesignFixturePage />} /> : null}
               </Route>
               <Route path="*" element={<AuthLanding />} />
             </Routes>

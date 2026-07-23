@@ -1,0 +1,189 @@
+.ui-card {
+  position: relative;
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 22%),
+    color-mix(in srgb, var(--bg-surface) 96%, transparent);
+  box-shadow: var(--shadow-card), var(--shadow-soft-edge);
+}
+
+.ui-card--compact {
+  padding: var(--space-sm) var(--space-md);
+}
+
+.ui-card--quiet {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 22%),
+    color-mix(in srgb, var(--bg-inset) 72%, var(--bg-surface));
+}
+
+.ui-card--hero {
+  border-color: color-mix(in srgb, var(--amber) 24%, var(--glass-border));
+  background:
+    radial-gradient(140% 140% at 0% 0%, rgba(232, 84, 29, 0.13), transparent 52%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 22%),
+    color-mix(in srgb, var(--bg-surface) 98%, transparent);
+}
+
+.ui-card--strip {
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-md);
+  min-height: 60px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-strip);
+  background:
+    linear-gradient(90deg, rgba(232, 84, 29, 0.06), transparent 28%),
+    color-mix(in srgb, var(--bg-inset) 72%, var(--bg-surface));
+}
+
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-surface-soft) 88%, transparent);
+  font-family: var(--font-ui);
+  font-size: var(--type-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ui-chip--sm {
+  min-height: 18px;
+  padding-inline: 7px;
+  font-size: 10px;
+}
+
+.ui-chip--accent {
+  border-color: color-mix(in srgb, var(--amber) 28%, var(--glass-border));
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  color: var(--amber-bright);
+}
+
+.ui-chip--positive {
+  border-color: rgba(52, 210, 123, 0.22);
+  background: rgba(52, 210, 123, 0.1);
+  color: var(--green);
+}
+
+.ui-chip--negative {
+  border-color: rgba(255, 92, 77, 0.22);
+  background: rgba(255, 92, 77, 0.1);
+  color: var(--red);
+}
+
+.ui-chip--ghost {
+  background: transparent;
+  color: var(--ink-3);
+}
+
+.ui-stat-block {
+  display: grid;
+  gap: 6px;
+  min-height: 94px;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-inset) 78%, transparent);
+}
+
+.ui-stat-block__label,
+.ui-stat-block__meta {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: var(--type-caption);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ui-stat-block__value {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 0.95;
+}
+
+.ui-stat-block--accent .ui-stat-block__value {
+  color: var(--amber-bright);
+}
+
+.ui-stat-block__meta {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.ui-player-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 38px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-inset) 82%, transparent);
+}
+
+.ui-player-line--compact {
+  min-height: 32px;
+  padding-block: 5px;
+}
+
+.ui-player-line__media {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ui-player-line__copy {
+  display: grid;
+  min-width: 0;
+}
+
+.ui-player-line__name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-player-line__subtitle {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-player-line__badge {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ui-player-line__trailing {
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}

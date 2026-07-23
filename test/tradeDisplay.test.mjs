@@ -11,16 +11,25 @@ const require = createRequire(import.meta.url);
 const ts = require('typescript');
 
 async function loadTradeDisplayModule() {
-  const source = await fs.readFile(path.resolve('src/components/trade-display/TradeDisplay.tsx'), 'utf8');
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ESNext,
-      jsx: ts.JsxEmit.ReactJSX,
-      target: ts.ScriptTarget.ES2022,
-    },
-  });
+  const transpile = async (inputPath) => {
+    const source = await fs.readFile(path.resolve(inputPath), 'utf8');
+    return ts.transpileModule(source, {
+      compilerOptions: {
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.ReactJSX,
+        target: ts.ScriptTarget.ES2022,
+      },
+    }).outputText;
+  };
+  const source = await transpile('src/components/trade-display/TradeDisplay.tsx');
+  const primitives = await transpile('src/components/ui/DesignPrimitives.tsx');
+  const outputText = source
+    .replace("import { PlayerLine } from '../ui/DesignPrimitives';", "import { PlayerLine } from '../ui/DesignPrimitives.mjs';")
+    .replace("import './TradeDisplay.css';", '');
+  const primitivesOutput = primitives.replace("import './DesignPrimitives.css';", '');
   const tempRoot = path.resolve('.tmp-tests');
-  await fs.mkdir(tempRoot, { recursive: true });
+  await fs.mkdir(path.join(tempRoot, 'ui'), { recursive: true });
+  await fs.writeFile(path.join(tempRoot, 'ui', 'DesignPrimitives.mjs'), primitivesOutput);
   const tempDir = await fs.mkdtemp(path.join(tempRoot, 'trade-display-'));
   const tempFile = path.join(tempDir, 'TradeDisplay.mjs');
   await fs.writeFile(tempFile, outputText);
@@ -65,7 +74,7 @@ test('TradeRow snapshot: 2-for-1 keeps all names visible in a vertical stack', a
     acceptanceProbability: 57,
     acceptanceLabel: '57% · Likely',
   }));
-  assert.equal((html.match(/trade-display__asset-name/g) ?? []).length, 3);
+  assert.equal((html.match(/ui-player-line__name/g) ?? []).length, 3);
   assert.match(html, /Alpha Runner/);
   assert.match(html, /Bravo Runner/);
   assert.match(html, /Charlie Catcher/);
@@ -87,7 +96,7 @@ test('TradeCard snapshot: 3-for-3 renders every visible asset line without clipp
     acceptanceProbability: 62,
     acceptanceLabel: '62% · Likely',
   }));
-  assert.equal((html.match(/trade-display__asset-name/g) ?? []).length, 6);
+  assert.equal((html.match(/ui-player-line__name/g) ?? []).length, 6);
   assert.ok(!/\+\d+ more/.test(html));
 });
 
@@ -116,5 +125,5 @@ test('TradeCard snapshot: 6-for-2 collapses overflow into a final expansion line
   }));
   assert.match(html, /\+2 more/);
   assert.ok(!/2028 2nd/.test(html));
-  assert.equal((html.match(/trade-display__asset-name/g) ?? []).length, 6);
+  assert.equal((html.match(/ui-player-line__name/g) ?? []).length, 6);
 });

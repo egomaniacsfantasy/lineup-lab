@@ -60,11 +60,12 @@
 
 .matchup-slate__row--user {
   box-shadow: inset 3px 0 0 var(--amber);
+  background: color-mix(in srgb, rgba(232, 84, 29, 0.08) 100%, transparent);
 }
 
 .matchup-slate__row-button {
   display: grid;
-  grid-template-columns: minmax(150px, 1.15fr) auto minmax(190px, 1fr) auto minmax(150px, 1.15fr) auto;
+  grid-template-columns: minmax(150px, 1.15fr) minmax(70px, 80px) minmax(190px, 1fr) minmax(70px, 80px) minmax(150px, 1.15fr) 124px;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -183,10 +184,12 @@
 }
 
 .matchup-slate__extras {
-  display: flex;
-  justify-content: flex-end;
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: end;
+  align-items: center;
   gap: 8px;
-  min-width: 92px;
+  width: 124px;
 }
 
 .matchup-slate__tag,
@@ -201,8 +204,10 @@
 }
 
 .matchup-slate__tag {
-  background: var(--amber);
-  color: var(--bg-deep);
+  min-width: 82px;
+  border: 1px solid rgba(232, 84, 29, 0.26);
+  background: rgba(232, 84, 29, 0.12);
+  color: var(--amber-bright);
 }
 
 .matchup-slate__detail {
@@ -327,12 +332,17 @@
 
 @media (max-width: 900px) {
   .matchup-slate__row-button {
-    grid-template-columns: minmax(0, 1fr) auto minmax(124px, 0.9fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(124px, 0.95fr) 112px;
   }
 
+  .matchup-slate__moneyline,
   .matchup-slate__moneyline--right,
   .matchup-slate__team--right {
     display: none;
+  }
+
+  .matchup-slate__extras {
+    width: 112px;
   }
 }
 
@@ -357,6 +367,7 @@
   .matchup-slate__extras {
     text-align: left;
     justify-content: flex-start;
+    width: auto;
   }
 
   .matchup-slate__detail-line,

@@ -6,6 +6,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from 'react';
+import { PlayerLine } from '../ui/DesignPrimitives';
 
 export interface TradeAssetItem {
   id: string;
@@ -100,21 +101,18 @@ export function TradeSide({ side, tone, dense = false }: TradeSideProps) {
       <span className="trade-display__eyebrow">{side.label}</span>
       <div className="trade-display__asset-list">
         {visibleAssets.map((asset) => (
-          <div
+          <PlayerLine
+            badge={asset.position ? <span className="trade-display__asset-pill">{asset.position}</span> : null}
             className={[
               'trade-display__asset',
               asset.kind === 'player' ? '' : 'trade-display__asset--textual',
             ].filter(Boolean).join(' ')}
+            compact={dense}
             key={asset.id}
-            title={asset.name}
-          >
-            {renderAssetIcon(asset)}
-            <div className="trade-display__asset-copy">
-              <span className="trade-display__asset-name">{asset.name}</span>
-              {asset.subtitle ? <span className="trade-display__asset-subtitle">{asset.subtitle}</span> : null}
-            </div>
-            {asset.position ? <span className="trade-display__asset-pill">{asset.position}</span> : null}
-          </div>
+            media={renderAssetIcon(asset)}
+            name={asset.name}
+            subtitle={asset.subtitle}
+          />
         ))}
         {overflow > 0 && !expanded ? (
           <button
