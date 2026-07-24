@@ -54,6 +54,8 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `src/dev/designFixtures.ts`
 - `src/pages/DesignFixturePage.tsx`
 - `src/pages/DesignBoardRowPage.tsx`
+- `src/pages/DesignChartPage.tsx`
+- `src/pages/DesignChartPage.css`
 - `src/App.tsx`
 - `src/services/leagueApi.ts`
 - `src/styles/tokens.css`
@@ -97,6 +99,7 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `test/boardMergeRoutes.test.mjs`
 - `src/utils/displayDelta.ts`
 - `test/displayDelta.test.mjs`
+- `test/oddsChartDeltaFill.test.mjs`
 
 ## Payload Map Additions
 
@@ -116,7 +119,8 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Market deals suggestions:
   - Manager chips are now seeded from `bootstrap.teams.filter((team) => !team.isUser)`
   - Suggestion card partner name reads from `TradeSuggestion.partnerName` with the synced roster name as display fallback
-  - Suggestion card `Title` row reads directly from `TradeSuggestion.youDelta`
+  - Suggestion card `Your title` row reads directly from `TradeSuggestion.youDelta`
+  - Suggestion card quiet `them` row reads directly from `TradeSuggestion.partnerDelta`
   - `Playoffs` and `This week` lines are intentionally absent because `/trade-suggestions` does not currently provide those per-suggestion deltas
   - The `generated at h:mm` stamp remains display-only from the fetch completion time for the current suggestions response
 - Futures board and chart:
@@ -167,12 +171,16 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
     - scrub activation, snap-to-previous-point behavior, and tick de-collision are all presentation-only reads over existing point arrays
     - `displayValueForDelta(...)` lets a surface derive the delta chip from the same rounded display values already shown in the hero header. No new number enters the UI from this hook
     - `src/utils/displayDelta.ts` is the shared display-only rounding rule for before and after pairs. It rounds the displayed endpoints first, then computes the rendered delta from those displayed values
+    - the chart header now reserves fixed-width display slots for the delta chip and `Open → Now` summary, but the chip itself remains intrinsic-width inside that slot
+    - `heroFillMode="zero"` now splits the existing point series into positive and negative rendered fill paths at the zero line. This is a drawing change only; the underlying point arrays are untouched
+    - the futures envelope band still renders the same payload band points, but the left-edge fade now keys off chart-space x coordinates so the band starts where the payload starts without a detached slab
 - Futures board and chart:
   - Quiet movement still reads only from existing `LineHistoryEntry.titleProb` / `playoffProb` history
   - The July 24 polish pass only splits that existing movement label into its own fixed display column and removes the per-row timeframe suffix from the rendered text
 - Design fixtures:
   - `src/dev/designFixtures.ts` mirrors payload shapes for browser capture only
   - Fixtures never replace server methodology in connected-league runtime
+  - `src/pages/DesignChartPage.tsx` adds synthetic positive-only and negative-only pace fixtures for visual regression of fill rendering only
 
 ## Guard Rails
 
@@ -183,3 +191,4 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `test/matchupSlateBoardRowRegression.test.mjs` launches the dev-only board-row fixture and checks that the right avatar never overlaps the fixed rail after the pill removal, while long left and right team names share width evenly before truncation pressure would appear.
 - `test/boardMergeRoutes.test.mjs` locks the nav merge: no standalone Projections tab, `/projections` redirects to `Board · Sheet`, and the More-page tool card points at the merged surface.
 - `test/displayDelta.test.mjs` locks the shared displayed-delta rule so the rendered delta always equals the difference of the rounded displayed endpoints.
+- `test/oddsChartDeltaFill.test.mjs` launches the synthetic chart fixtures and samples rendered fill pixels so all-negative pace charts cannot leak green fill and all-positive pace charts cannot leak red fill.

@@ -1020,10 +1020,16 @@ function TradeDealsView() {
                     getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
                     impactRows={[
                       {
-                        label: 'Title',
+                        label: 'Your title',
                         value: signedPct(entry.suggestion.youDelta),
                         tone: deltaTone(entry.suggestion.youDelta),
                         emphasis: 'primary',
+                      },
+                      {
+                        label: 'them',
+                        value: signedPct(entry.suggestion.partnerDelta),
+                        tone: deltaTone(entry.suggestion.partnerDelta),
+                        emphasis: 'secondary',
                       },
                     ]}
                     key={entry.signature}

@@ -8,6 +8,7 @@ const cwd = process.cwd();
 const outputLabelArg = process.argv.find((arg) => arg.startsWith('--label='));
 const label = outputLabelArg ? outputLabelArg.slice('--label='.length) : 'current';
 const outputDir = path.join(cwd, 'artifacts', 'design-shots', label);
+const DEFAULT_VIEWPORT = { width: 1512, height: 1800 };
 
 function isPortOpen(port) {
   return new Promise((resolve) => {
@@ -71,9 +72,9 @@ try {
 
   const browser = await chromium.launch({ headless: true });
   const shots = [];
-  const capture = async (name, callback) => {
+  const capture = async (name, callback, viewport = DEFAULT_VIEWPORT) => {
     const page = await browser.newPage({
-      viewport: { width: 1440, height: 1800 },
+      viewport,
       colorScheme: 'dark',
     });
     try {
@@ -84,6 +85,13 @@ try {
     } finally {
       await page.close();
     }
+  };
+  const scrubChart = async (page, selector, ratio = 0.56) => {
+    const plot = page.locator(selector);
+    const box = await plot.boundingBox();
+    if (!box) throw new Error(`Missing chart plot for ${selector}`);
+    await page.mouse.move(box.x + box.width * ratio, box.y + box.height * 0.42);
+    await page.waitForTimeout(180);
   };
 
   await capture('matchup-cold', async (page) => {
@@ -148,6 +156,11 @@ try {
     await page.waitForTimeout(800);
   });
 
+  await capture('league-futures-scrub', async (page) => {
+    await page.goto('http://127.0.0.1:4173/design/league?view=futures', { waitUntil: 'networkidle' });
+    await scrubChart(page, '.league-futures__chart .odds-chart__plot');
+  });
+
   await capture('league-futures-compare', async (page) => {
     await page.goto('http://127.0.0.1:4173/design/league?view=futures', { waitUntil: 'networkidle' });
     await page.locator('.league-futures__row').nth(3).click();
@@ -157,6 +170,11 @@ try {
   await capture('league-schedule', async (page) => {
     await page.goto('http://127.0.0.1:4173/design/league?view=schedule', { waitUntil: 'networkidle' });
     await page.waitForTimeout(800);
+  });
+
+  await capture('league-schedule-scrub', async (page) => {
+    await page.goto('http://127.0.0.1:4173/design/league?view=schedule', { waitUntil: 'networkidle' });
+    await scrubChart(page, '.schedule-grid__pace-chart .odds-chart__plot');
   });
 
   await capture('board-default', async (page) => {
@@ -177,6 +195,30 @@ try {
     await page.locator('.board-page__table').waitFor({ state: 'visible' });
     await page.waitForTimeout(250);
   });
+
+  await capture('board-sheet-expanded', async (page) => {
+    await page.goto('http://127.0.0.1:4173/design/board?view=sheet&pos=WR', { waitUntil: 'domcontentloaded' });
+    await page.locator('.board-page__table').waitFor({ state: 'visible' });
+    await page.locator('.board-page__table-row').first().click();
+    await page.waitForTimeout(300);
+  });
+
+  await capture('board-sheet-rating-open', async (page) => {
+    await page.goto('http://127.0.0.1:4173/design/board?view=sheet&pos=WR', { waitUntil: 'domcontentloaded' });
+    await page.locator('.board-page__table').waitFor({ state: 'visible' });
+    const unrated = page.locator('.board-page__rating-button').filter({ hasText: '-' }).first();
+    await unrated.click();
+    await page.waitForTimeout(300);
+  });
+
+  await capture(
+    'board-row-truncation-1512',
+    async (page) => {
+      await page.goto('http://127.0.0.1:4173/design/board-row/truncation', { waitUntil: 'networkidle' });
+      await page.waitForTimeout(250);
+    },
+    { width: 1512, height: 900 },
+  );
 
   await browser.close();
   await writeFile(path.join(outputDir, 'manifest.json'), `${JSON.stringify(shots, null, 2)}\n`, 'utf8');

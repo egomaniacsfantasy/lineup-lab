@@ -1,0 +1,26 @@
+.design-chart-page {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 24px 16px 80px;
+}
+
+.design-chart-page__card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 95%, transparent);
+}
+
+.design-chart-page__eyebrow {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.design-chart-page__chart--fill-test .odds-chart__line--hero {
+  opacity: 0;
+  stroke: transparent;
+}

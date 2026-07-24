@@ -88,10 +88,17 @@
 
 .odds-chart__value-row {
   display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(132px, 1fr);
+  grid-template-columns: minmax(0, max-content) minmax(132px, 13ch);
   align-items: end;
   gap: 10px;
   min-height: 42px;
+}
+
+.odds-chart__delta-slot {
+  display: flex;
+  justify-content: flex-start;
+  min-width: 132px;
+  width: 100%;
 }
 
 .odds-chart__value {
@@ -107,7 +114,6 @@
   align-items: center;
   justify-content: center;
   min-height: 24px;
-  min-width: 132px;
   padding: 0 10px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-surface-soft) 88%, transparent);
@@ -133,10 +139,15 @@
   line-height: 1.35;
 }
 
-.odds-chart__summary {
-  min-height: 30px;
+.odds-chart__summary-slot {
+  display: flex;
+  justify-content: flex-end;
   min-width: 220px;
-  max-width: 320px;
+}
+
+.odds-chart__summary {
+  width: 220px;
+  min-height: 30px;
   text-align: right;
 }
 
@@ -193,6 +204,11 @@
 
 .odds-chart__area {
   stroke: none;
+}
+
+.odds-chart__area--delta-positive,
+.odds-chart__area--delta-negative {
+  shape-rendering: geometricPrecision;
 }
 
 .odds-chart__y-axis {

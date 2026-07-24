@@ -84,6 +84,12 @@ const PLOT = {
   bottom: 84,
 };
 
+type StepSegment = {
+  startX: number;
+  endX: number;
+  y: number;
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -330,6 +336,103 @@ function areaPathToBaseline(
   ].join(' ');
 }
 
+function stepSegments(points: OddsChartPoint[], bounds: ReturnType<typeof chartBounds>) {
+  if (points.length === 0) return [];
+  const segments: StepSegment[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    const nextPoint = points[index + 1];
+    const startX = xCoord(point.x, bounds);
+    const endX = xCoord(nextPoint?.x ?? bounds.maxX, bounds);
+    if (endX <= startX) continue;
+    segments.push({
+      startX,
+      endX,
+      y: yCoord(point.y, bounds),
+    });
+  }
+  return segments;
+}
+
+function stepAreaPath(segments: StepSegment[], baselineY: number) {
+  if (segments.length === 0) return '';
+  const first = segments[0];
+  const commands = [
+    `M ${first.startX.toFixed(2)} ${baselineY.toFixed(2)}`,
+    `L ${first.startX.toFixed(2)} ${first.y.toFixed(2)}`,
+    `L ${first.endX.toFixed(2)} ${first.y.toFixed(2)}`,
+  ];
+
+  for (let index = 1; index < segments.length; index += 1) {
+    const previous = segments[index - 1];
+    const current = segments[index];
+    if (Math.abs(current.startX - previous.endX) > 0.01) {
+      commands.push(`L ${current.startX.toFixed(2)} ${baselineY.toFixed(2)}`);
+      commands.push(`L ${current.startX.toFixed(2)} ${current.y.toFixed(2)}`);
+    } else if (Math.abs(current.y - previous.y) > 0.01) {
+      commands.push(`L ${current.startX.toFixed(2)} ${current.y.toFixed(2)}`);
+    }
+    commands.push(`L ${current.endX.toFixed(2)} ${current.y.toFixed(2)}`);
+  }
+
+  commands.push(`L ${segments.at(-1)?.endX.toFixed(2)} ${baselineY.toFixed(2)}`);
+  commands.push('Z');
+  return commands.join(' ');
+}
+
+function splitAreaPathsAtBaseline(
+  points: OddsChartPoint[],
+  bounds: ReturnType<typeof chartBounds>,
+  baselineValue: number,
+) {
+  const baselineY = yCoord(baselineValue, bounds);
+  const positiveRuns: StepSegment[][] = [];
+  const negativeRuns: StepSegment[][] = [];
+  let activeRun: StepSegment[] = [];
+  let activeTone: 'positive' | 'negative' | null = null;
+
+  stepSegments(points, bounds).forEach((segment, index) => {
+    const rawValue = points[index]?.y ?? baselineValue;
+    const nextTone =
+      rawValue > baselineValue ? 'positive' : rawValue < baselineValue ? 'negative' : null;
+
+    if (!nextTone) {
+      if (activeRun.length > 0 && activeTone) {
+        (activeTone === 'positive' ? positiveRuns : negativeRuns).push(activeRun);
+      }
+      activeRun = [];
+      activeTone = null;
+      return;
+    }
+
+    const lastSegment = activeRun.at(-1);
+    const continuesSameRun =
+      activeTone === nextTone &&
+      lastSegment != null &&
+      Math.abs(lastSegment.endX - segment.startX) <= 0.01;
+
+    if (!continuesSameRun) {
+      if (activeRun.length > 0 && activeTone) {
+        (activeTone === 'positive' ? positiveRuns : negativeRuns).push(activeRun);
+      }
+      activeRun = [segment];
+      activeTone = nextTone;
+      return;
+    }
+
+    activeRun.push(segment);
+  });
+
+  if (activeRun.length > 0 && activeTone) {
+    (activeTone === 'positive' ? positiveRuns : negativeRuns).push(activeRun);
+  }
+
+  return {
+    positive: positiveRuns.map((run) => stepAreaPath(run, baselineY)).filter(Boolean),
+    negative: negativeRuns.map((run) => stepAreaPath(run, baselineY)).filter(Boolean),
+  };
+}
+
 function stepBandPoints(points: OddsChartBandPoint[], bounds: ReturnType<typeof chartBounds>, side: 'low' | 'high') {
   if (points.length === 0) return [];
   const firstValue = side === 'high' ? points[0].high : points[0].low;
@@ -484,9 +587,25 @@ export function OddsChart({
   const bandFadeStart = visibleBand.length > 0 ? xCoord(visibleBand[0].x, bounds) : PLOT.left;
   const bandFadeInStart = Math.max(PLOT.left, bandFadeStart - 2);
   const bandFadeInEnd = Math.min(PLOT.right, bandFadeStart + 3);
+  const bandFadeStartOffset = clamp(
+    ((bandFadeInStart - PLOT.left) / Math.max(1, PLOT.right - PLOT.left)) * 100,
+    0,
+    100,
+  );
+  const bandFadeEndOffset = clamp(
+    ((bandFadeInEnd - PLOT.left) / Math.max(1, PLOT.right - PLOT.left)) * 100,
+    0,
+    100,
+  );
+  const zeroAreaPaths = useMemo(
+    () =>
+      heroFillMode === 'zero'
+        ? splitAreaPathsAtBaseline(visibleHero, bounds, resolvedReferenceValue)
+        : { positive: [], negative: [] },
+    [bounds, heroFillMode, resolvedReferenceValue, visibleHero],
+  );
 
   const heroGradientId = `${chartId}-hero-fill`;
-  const deltaGradientId = `${chartId}-delta-fill`;
   const bandGradientId = `${chartId}-band-fill`;
 
   const clearTouchHold = () => {
@@ -611,13 +730,19 @@ export function OddsChart({
           <span className="odds-chart__subject-name">{hero.name}</span>
           <div className="odds-chart__value-row">
             <span className="odds-chart__value">{heroValueText}</span>
-            <span className={['odds-chart__delta', `odds-chart__delta--${deltaRead.tone}`].join(' ')}>
-              {deltaRead.text}
+            <span className="odds-chart__delta-slot">
+              <span className={['odds-chart__delta', `odds-chart__delta--${deltaRead.tone}`].join(' ')}>
+                {deltaRead.text}
+              </span>
             </span>
           </div>
           <span className="odds-chart__date">{scrubActive ? liveDate : 'Live'}</span>
         </div>
-        {summaryText ? <span className="odds-chart__summary">{summaryText}</span> : null}
+        {summaryText ? (
+          <span className="odds-chart__summary-slot">
+            <span className="odds-chart__summary">{summaryText}</span>
+          </span>
+        ) : null}
       </div>
 
       <div
@@ -640,15 +765,9 @@ export function OddsChart({
               <stop offset="0%" stopColor="rgba(232, 84, 29, 0.18)" />
               <stop offset="100%" stopColor="rgba(232, 84, 29, 0)" />
             </linearGradient>
-            <linearGradient id={deltaGradientId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="rgba(52, 210, 123, 0.18)" />
-              <stop offset={`${clamp(((resolvedReferenceValue - bounds.minY) / Math.max(1, bounds.maxY - bounds.minY)) * 100, 0, 100)}%`} stopColor="rgba(52, 210, 123, 0.18)" />
-              <stop offset={`${clamp(((resolvedReferenceValue - bounds.minY) / Math.max(1, bounds.maxY - bounds.minY)) * 100, 0, 100)}%`} stopColor="rgba(255, 92, 77, 0.18)" />
-              <stop offset="100%" stopColor="rgba(255, 92, 77, 0.18)" />
-            </linearGradient>
-            <linearGradient id={bandGradientId} x1="0" x2="1" y1="0" y2="0">
-              <stop offset={`${bandFadeInStart}%`} stopColor="rgba(244, 245, 242, 0)" />
-              <stop offset={`${bandFadeInEnd}%`} stopColor="rgba(244, 245, 242, 0.08)" />
+            <linearGradient id={bandGradientId} gradientUnits="userSpaceOnUse" x1={PLOT.left} x2={PLOT.right} y1="0" y2="0">
+              <stop offset={`${bandFadeStartOffset}%`} stopColor="rgba(244, 245, 242, 0)" />
+              <stop offset={`${bandFadeEndOffset}%`} stopColor="rgba(244, 245, 242, 0.08)" />
               <stop offset="100%" stopColor="rgba(244, 245, 242, 0.08)" />
             </linearGradient>
           </defs>
@@ -675,15 +794,35 @@ export function OddsChart({
             <path className="odds-chart__line odds-chart__line--compare" d={linePath(visibleComparison, bounds)} />
           ) : null}
 
-          {heroFillMode !== 'none' && visibleHero.length > 1 ? (
+          {heroFillMode === 'floor' && visibleHero.length > 1 ? (
             <path
-              className={[
-                'odds-chart__area',
-                heroFillMode === 'zero' ? 'odds-chart__area--delta' : 'odds-chart__area--hero',
-              ].join(' ')}
-              d={areaPathToBaseline(visibleHero, bounds, heroFillMode === 'zero' ? resolvedReferenceValue : bounds.minY)}
-              fill={`url(#${heroFillMode === 'zero' ? deltaGradientId : heroGradientId})`}
+              className="odds-chart__area odds-chart__area--hero"
+              d={areaPathToBaseline(visibleHero, bounds, bounds.minY)}
+              fill={`url(#${heroGradientId})`}
             />
+          ) : null}
+
+          {heroFillMode === 'zero' && visibleHero.length > 1 ? (
+            <>
+              {zeroAreaPaths.positive.map((pathData, index) => (
+                <path
+                  className="odds-chart__area odds-chart__area--delta-positive"
+                  d={pathData}
+                  data-tone="positive"
+                  fill="rgba(52, 210, 123, 0.18)"
+                  key={`positive-area-${index}`}
+                />
+              ))}
+              {zeroAreaPaths.negative.map((pathData, index) => (
+                <path
+                  className="odds-chart__area odds-chart__area--delta-negative"
+                  d={pathData}
+                  data-tone="negative"
+                  fill="rgba(255, 92, 77, 0.18)"
+                  key={`negative-area-${index}`}
+                />
+              ))}
+            </>
           ) : null}
 
           {visibleHero.length > 1 ? (

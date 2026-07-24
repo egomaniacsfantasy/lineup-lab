@@ -341,6 +341,98 @@ Ship call:
 
 - Yes. The audit's broken flows are fixed, the repeated delta bug is now structural instead of surface-by-surface, and the docs now match what the Friday, July 24, 2026 screenshots actually show.
 
+## Iteration 2: stubborn four + regressions (July 24, 2026)
+
+### Chart header slots
+
+After:
+
+![Futures mid-scrub](artifacts/design-shots/iteration2-2026-07-24/league-futures-scrub.png)
+![Schedule mid-scrub](artifacts/design-shots/iteration2-2026-07-24/league-schedule-scrub.png)
+
+Critique:
+
+- The previous scrub-stability fix solved reflow by turning the delta chip into a full-width banner, which was calmer mathematically and much worse visually.
+- The right answer was a fixed slot, not a growing chip. The pill needed to go back to feeling like a pill.
+- Both charts now hold their shape while scrubbing, and the chip reads like seasoning again instead of a second header bar.
+
+What changed:
+
+- Kept the header slots fixed-width, but moved the actual delta chip back to intrinsic width inside the slot.
+- Gave the `Open → Now` summary its own stable slot as well, so the header no longer shuffles while the scrubbed values change length.
+
+### Pace fill regression
+
+After:
+
+![Schedule pace mid-scrub](artifacts/design-shots/iteration2-2026-07-24/league-schedule-scrub.png)
+
+Critique:
+
+- This one had already survived too many screenshot-only passes. The fix needed to be structural, not interpretive.
+- The live schedule chart now reads correctly at a glance: green only above zero, red only below it.
+- The important part is invisible in the screenshot: the regression now has a synthetic rendered-pixel test, so a future one-color fill shortcut should fail immediately.
+
+What changed:
+
+- Split `heroFillMode="zero"` into separate positive and negative area paths instead of one shared area with a color break.
+- Added dev-only pace fixtures for all-negative and all-positive series.
+- Added `test/oddsChartDeltaFill.test.mjs`, which samples rendered fill pixels and fails if the wrong color appears.
+
+### Futures envelope band
+
+After:
+
+![Futures chart after iteration 2](artifacts/design-shots/iteration2-2026-07-24/league-futures.png)
+
+Critique:
+
+- The detached left slab looked like bad data, so the first job was to inspect the data head before touching the draw code.
+- The first three title-envelope points were normal, not degenerate: Jul 18 `6.2 → 28.9`, Jul 19 `5.9 → 28.1`, Jul 20 `5.7 → 27.9`.
+- That ruled the data out and pointed back at the draw layer. The slab was coming from how the left-edge fade was being mapped, not from a missing min or max.
+
+What changed:
+
+- Kept the same envelope payload points and the same one-path band shape.
+- Rebased the fade-in onto chart-space x coordinates so the band starts where the data starts, without the detached left block.
+- Left the band borderless and quiet so the orange hero line still owns the chart.
+
+### Market attribution
+
+After:
+
+![Market manager flow after iteration 2](artifacts/design-shots/iteration2-2026-07-24/market-manager-apollo.png)
+
+Critique:
+
+- The prior rail read as if Apollo's title was moving, which was the wrong owner for the number even though the payload itself was fine.
+- The card reads clearly now: partner name labels the deal, `Your title` owns the headline delta, and `them` stays as the quiet second read.
+- The missing `Playoffs` and `This week` lines are still correctly absent because the payload still does not provide those fields.
+
+What changed:
+
+- Re-attributed the existing payload rows only: `TradeSuggestion.youDelta` now renders as `Your title`, and `TradeSuggestion.partnerDelta` renders as `them`.
+- Kept the existing handoff request for per-suggestion playoff and current-week deltas intact.
+
+### Board and Sheet verification
+
+After:
+
+![Board sheet expanded](artifacts/design-shots/iteration2-2026-07-24/board-sheet-expanded.png)
+![Board sheet rating jump](artifacts/design-shots/iteration2-2026-07-24/board-sheet-rating-open.png)
+![Board row width proof](artifacts/design-shots/iteration2-2026-07-24/board-row-truncation-1512.png)
+
+Critique:
+
+- The Sheet view is doing the right job now: position-specific stat columns are present under the WR filter, the open card absorbs the row instead of duplicating it, and the rating jump lands exactly on the slider.
+- The DINK long-name fixture finally proves the board is using the space it actually has before shortening names.
+- These are not glamorous screenshots, but they are the receipts this pass needed.
+
+What changed:
+
+- Expanded the harness to capture the Sheet open-row state, the rating-control jump state, and the 1512px board-row stress fixture.
+- Verified the WR-scoped stat columns remain live after the preset removal.
+
 ## League Tab Polish Pass (July 24, 2026)
 
 ### Loop 1 review

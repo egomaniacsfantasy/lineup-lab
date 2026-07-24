@@ -53,6 +53,9 @@
   - your current-week matchup win-probability delta
 - Request for Franco's side:
   - add those two per-suggestion deltas directly to `/trade-suggestions` so the Deals rail can render `Playoffs` and `This week` without client derivation or per-card `/trade-analyze` fan-out
+- Current UI status on Friday, July 24, 2026:
+  - the Deals rail now labels the existing payload fields as `Your title` (`youDelta`) and `them` (`partnerDelta`)
+  - `Playoffs` and `This week` remain intentionally absent because those fields are still not present in the payload
 
 ## Matchup optimality contradiction, resolved display-side
 
