@@ -98,8 +98,7 @@ try {
 
   await capture('matchup-live-expanded', async (page) => {
     await page.goto('http://127.0.0.1:4173/design/matchup-live', { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'Why this trade?', exact: true }).first().click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(800);
   });
 
   await capture('market-default', async (page) => {
@@ -147,6 +146,12 @@ try {
   await capture('league-futures', async (page) => {
     await page.goto('http://127.0.0.1:4173/design/league?view=futures', { waitUntil: 'networkidle' });
     await page.waitForTimeout(800);
+  });
+
+  await capture('league-futures-compare', async (page) => {
+    await page.goto('http://127.0.0.1:4173/design/league?view=futures', { waitUntil: 'networkidle' });
+    await page.locator('.league-futures__row').nth(3).click();
+    await page.waitForTimeout(400);
   });
 
   await capture('league-schedule', async (page) => {

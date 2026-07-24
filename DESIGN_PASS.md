@@ -218,3 +218,84 @@ Critique:
 - This pass is materially better than baseline.
 - The strongest improvements are the Matchup empty-state compaction, the Market composition rhythm, the fixed rail on the League board, and the calmer Futures hierarchy.
 - I would ship these surfaces to strangers.
+
+---
+
+## Chart Bible + Board v2 (July 24, 2026)
+
+### Futures chart, loop 1
+
+![Futures chart loop 1](artifacts/design-shots/chart-bible-loop1/league-futures.png)
+
+Critique:
+
+- The new chart system was working, but the default Season view still made the line read flatter than it needed to for a first look.
+- The comparison capture was not even proving the comparison state machine yet, which meant the screenshots were not honest enough to ship from.
+- The footer and endpoint labeling were mechanically correct, but the chart still felt more "component demo" than "market surface."
+
+### Futures chart, loop 2
+
+![Futures chart loop 2](artifacts/design-shots/chart-bible-loop2/league-futures.png)
+![Futures comparison loop 2](artifacts/design-shots/chart-bible-loop2/league-futures-compare.png)
+
+Critique:
+
+- Defaulting to the Month view made the history immediately legible without lying about the values.
+- The comparison state was finally visible, but the compare code was crowding the hero endpoint when the two lines finished near each other.
+- The surface was close, but not calm enough yet at the chart endpoint.
+
+### Futures chart, loop 3
+
+![Futures chart loop 3](artifacts/design-shots/chart-bible-loop3/league-futures.png)
+![Futures comparison loop 3](artifacts/design-shots/chart-bible-loop3/league-futures-compare.png)
+
+What changed:
+
+- Rebuilt the Futures chart on the shared scrubber system: header-as-tooltip, snapped real points, step rendering, endpoint gutter, live delta chip, and range pills.
+- Fixed the comparison state machine so only one comparison line is ever active, the takeaway only names the drawn line, and switching markets clears stale compare state.
+- Kept the gray league envelope quiet and the orange hero line loud, which finally gives the chart a real visual hierarchy.
+
+Ship call:
+
+- Yes. This is the first Futures chart in the repo that feels like a live market chart instead of a historical diagram.
+
+### League board v2
+
+![League board loop 1](artifacts/design-shots/chart-bible-loop1/league-board.png)
+![League board loop 2](artifacts/design-shots/chart-bible-loop2/league-board.png)
+![League board loop 3](artifacts/design-shots/chart-bible-loop3/league-board.png)
+
+Critique:
+
+- Loop 1 proved the structural idea: one hairline board plus a docked rail fixed the old empty-page problem immediately.
+- Loop 2 showed the remaining weakness clearly. The drill-in rail was still too cramped, and the board rows were not giving the right-side team stack enough breathing room.
+- Loop 3 tightened the fixed columns, widened the rail, and removed the old `YOUR GAME` pill entirely. The orange left edge and row tint carry the state without adding another widget.
+
+What changed:
+
+- Rebuilt the board as one continuous surface with fixed price and win-percentage columns and flexible team stacks.
+- Added the right-column rail on wide viewports with payload-backed glance cards plus the selected game's drill-in chart docked open by default.
+- Replaced inline row expansion with row selection, which reads closer to an actual board-to-drill-in flow.
+
+Ship call:
+
+- Yes, with one honest caveat: the fixture only has three games, so the page still shows a lot of empty black below the board. The structure is right; the demo volume is what makes it feel sparse.
+
+### Schedule pace
+
+![Schedule pace loop 3](artifacts/design-shots/chart-bible-loop3/league-schedule.png)
+
+Critique:
+
+- The first loop exposed the worst mistake immediately: the pace chart was still speaking percentage on the y-axis, which made the whole chart feel fake.
+- Recasting the axis, ticks, and scrub labels in wins fixed the trust problem.
+
+What changed:
+
+- Moved the pace surface onto the same shared scrubber system as Futures and the board drill-in.
+- Kept the zero line as the semantic anchor and reserved green and red for above and below zero only.
+- Removed the old inspect-card behavior so the pace chart now reads as a first-class chart, not a preview that still needs another click.
+
+Ship call:
+
+- Yes. It now reads as a pace chart in wins, not as a recycled probability sparkline.

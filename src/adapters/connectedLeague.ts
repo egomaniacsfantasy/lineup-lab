@@ -148,6 +148,7 @@ export function toLeagueFutures(
       .sort((a, b) => b.titleProb - a.titleProb)
       .map((f) => ({
         teamName: f.teamName,
+        ownerName: bootstrap.teams.find((team) => team.rosterId === f.rosterId)?.ownerName,
         rosterId: f.rosterId,
         avatarUrl: bootstrap.teams.find((team) => team.rosterId === f.rosterId)?.avatarUrl ?? null,
         record:
@@ -248,6 +249,7 @@ export function toWeekMatchups(
       matchupId: a.matchupId,
       teamARosterId: a.rosterId,
       teamA: teamA.teamName,
+      teamAOwnerName: teamA.ownerName,
       teamAAvatarUrl: teamA.avatarUrl,
       teamARecord: recordLabel(teamA),
       teamAOdds: oddsA,
@@ -256,11 +258,13 @@ export function toWeekMatchups(
       teamAIsUser: teamA.isUser,
       teamBRosterId: b.rosterId,
       teamB: teamB.teamName,
+      teamBOwnerName: teamB.ownerName,
       teamBAvatarUrl: teamB.avatarUrl,
       teamBRecord: recordLabel(teamB),
       teamBOdds: oddsB,
       teamBWinProb: pricedB?.winProbability,
       teamBProjection: pricedB?.projection,
+      totalProjection: pricedA?.total ?? line.yours.total,
       teamBIsUser: teamB.isUser,
       isUserGame: teamA.isUser || teamB.isUser,
     });

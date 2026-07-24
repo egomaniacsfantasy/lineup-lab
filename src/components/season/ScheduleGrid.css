@@ -25,7 +25,6 @@
   background: color-mix(in srgb, var(--bg-inset) 80%, transparent);
   color: inherit;
   text-align: left;
-  cursor: pointer;
 }
 
 .schedule-grid__chart-card:hover {
@@ -38,6 +37,10 @@
 
 .schedule-grid__chart-card--heat-nav:hover {
   border-color: var(--glass-border);
+}
+
+.schedule-grid__chart-card--worm {
+  cursor: default;
 }
 
 .schedule-grid__chart-card:focus-visible {
@@ -92,11 +95,6 @@
   text-transform: uppercase;
 }
 
-.schedule-grid__inspect {
-  color: var(--amber);
-  white-space: nowrap;
-}
-
 .schedule-grid__takeaway {
   display: block;
   color: var(--text-primary);
@@ -149,63 +147,8 @@
   box-shadow: 0 0 0 2px var(--amber);
 }
 
-.schedule-grid__worm {
-  position: relative;
-  display: block;
-  min-height: 128px;
-  padding: 18px 0 20px 28px;
-}
-
-.schedule-grid__worm svg {
-  width: 100%;
-  height: 90px;
-  overflow: visible;
-}
-
-.schedule-grid__worm-line,
-.schedule-grid__worm-baseline {
-  fill: none;
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-}
-
-.schedule-grid__worm-line {
-  stroke: var(--amber);
-}
-
-.schedule-grid__worm-baseline {
-  stroke: var(--ink-3);
-  stroke-dasharray: 3 4;
-  vector-effect: non-scaling-stroke;
-}
-
-.schedule-grid__worm-y-ticks {
-  position: absolute;
-  top: 11px;
-  bottom: 30px;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-}
-
-.schedule-grid__worm-x-ticks {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12px, 1fr));
-  gap: 2px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  text-align: center;
-}
-
-.schedule-grid__axis-label--x {
-  position: absolute;
-  right: 0;
-  bottom: 0;
+.schedule-grid__pace-chart {
+  padding-top: 2px;
 }
 
 .schedule-grid__kicker {

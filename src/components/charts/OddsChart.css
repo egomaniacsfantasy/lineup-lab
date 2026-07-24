@@ -1,0 +1,388 @@
+.odds-chart {
+  display: grid;
+  gap: 12px;
+}
+
+.odds-chart__topline {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.odds-chart__headline {
+  display: grid;
+  gap: 4px;
+}
+
+.odds-chart__title {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.odds-chart__caption,
+.odds-chart__summary,
+.odds-chart__date,
+.odds-chart__footer,
+.odds-chart__y-tick,
+.odds-chart__x-axis,
+.odds-chart__scrub-date,
+.odds-chart__range {
+  font-family: var(--font-mono);
+}
+
+.odds-chart__caption {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.odds-chart__ranges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-inset) 90%, transparent);
+}
+
+.odds-chart__range {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.odds-chart__range--active {
+  background: rgba(232, 84, 29, 0.16);
+  color: var(--text-primary);
+}
+
+.odds-chart__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.odds-chart__subject {
+  display: grid;
+  gap: 3px;
+}
+
+.odds-chart__subject-name {
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.odds-chart__value-row {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  min-height: 42px;
+}
+
+.odds-chart__value {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 34px);
+  font-weight: 600;
+  line-height: 0.95;
+}
+
+.odds-chart__delta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--bg-surface-soft) 88%, transparent);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.odds-chart__delta--positive {
+  color: color-mix(in srgb, var(--green) 70%, var(--text-primary));
+}
+
+.odds-chart__delta--negative {
+  color: color-mix(in srgb, var(--red) 72%, var(--text-primary));
+}
+
+.odds-chart__date,
+.odds-chart__summary {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.odds-chart__summary {
+  max-width: 320px;
+  text-align: right;
+}
+
+.odds-chart__plot {
+  position: relative;
+  min-height: 238px;
+  padding: 2px 0 24px;
+  touch-action: pan-y;
+}
+
+.odds-chart__plot--scrubbing {
+  cursor: ew-resize;
+}
+
+.odds-chart__svg {
+  width: 100%;
+  height: 206px;
+  overflow: visible;
+}
+
+.odds-chart__grid {
+  stroke: rgba(244, 245, 242, 0.08);
+  stroke-dasharray: 2 3;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.odds-chart__grid--anchor {
+  stroke: rgba(244, 245, 242, 0.15);
+}
+
+.odds-chart__band {
+  stroke: none;
+}
+
+.odds-chart__line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.odds-chart__line--hero {
+  stroke: var(--amber);
+  stroke-width: 2.5;
+}
+
+.odds-chart__line--compare {
+  stroke: rgba(185, 189, 180, 0.72);
+  stroke-width: 1.5;
+}
+
+.odds-chart__area {
+  stroke: none;
+}
+
+.odds-chart__y-axis {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  bottom: 24px;
+  width: 56px;
+}
+
+.odds-chart__y-tick {
+  position: absolute;
+  right: 0;
+  color: rgba(244, 245, 242, 0.45);
+  font-size: 11px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+
+.odds-chart__y-tick--anchor {
+  color: rgba(244, 245, 242, 0.64);
+}
+
+.odds-chart__scrub-wash {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  bottom: 24px;
+  background: linear-gradient(90deg, rgba(13, 15, 17, 0.05), rgba(13, 15, 17, 0.28));
+}
+
+.odds-chart__scrub-line {
+  position: absolute;
+  top: 8px;
+  bottom: 24px;
+  width: 1px;
+  border-left: 1px dashed rgba(244, 245, 242, 0.35);
+}
+
+.odds-chart__scrub-dot,
+.odds-chart__beacon {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.odds-chart__scrub-dot--hero,
+.odds-chart__beacon {
+  background: var(--amber-bright);
+  box-shadow: 0 0 0 2px rgba(13, 15, 17, 0.85);
+}
+
+.odds-chart__scrub-dot--compare {
+  background: rgba(185, 189, 180, 0.88);
+  box-shadow: 0 0 0 2px rgba(13, 15, 17, 0.85);
+}
+
+.odds-chart__beacon::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 1px solid rgba(255, 128, 73, 0.28);
+  border-radius: 50%;
+  animation: odds-chart-pulse 2.6s ease-out infinite;
+}
+
+.odds-chart__scrub-date {
+  position: absolute;
+  bottom: 0;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.odds-chart__endpoint {
+  position: absolute;
+  right: 0;
+  display: inline-grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  max-width: 176px;
+  padding: 6px 9px;
+  border: 1px solid rgba(232, 84, 29, 0.22);
+  border-radius: var(--radius-pill);
+  background: rgba(11, 13, 15, 0.92);
+  transform: translateY(-50%);
+}
+
+.odds-chart__endpoint .team-avatar {
+  width: 22px;
+  height: 22px;
+}
+
+.odds-chart__endpoint > span {
+  display: grid;
+  min-width: 0;
+}
+
+.odds-chart__endpoint strong,
+.odds-chart__endpoint span span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.odds-chart__endpoint strong {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.odds-chart__endpoint span span {
+  color: var(--amber-bright);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.odds-chart__endpoint-label {
+  position: absolute;
+  right: 0;
+  color: rgba(244, 245, 242, 0.76);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.odds-chart__x-axis {
+  position: absolute;
+  left: 0;
+  right: 56px;
+  bottom: 0;
+  height: 18px;
+}
+
+.odds-chart__x-axis span {
+  position: absolute;
+  color: rgba(244, 245, 242, 0.45);
+  font-size: 10px;
+  line-height: 1;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.odds-chart__footer {
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+@keyframes odds-chart-pulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.92);
+  }
+
+  70% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
+}
+
+@media (max-width: 767px) {
+  .odds-chart__topline,
+  .odds-chart__header {
+    display: grid;
+  }
+
+  .odds-chart__summary {
+    max-width: none;
+    text-align: left;
+  }
+
+  .odds-chart__endpoint {
+    position: static;
+    max-width: 100%;
+    margin-top: 8px;
+    transform: none;
+  }
+
+  .odds-chart__endpoint-label {
+    display: none;
+  }
+}

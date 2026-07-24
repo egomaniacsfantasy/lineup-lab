@@ -1,7 +1,7 @@
-import { useRef, useState, type CSSProperties } from 'react';
+import { useRef, type CSSProperties } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
-import { OddsChart } from '../charts/OddsChart';
+import { OddsChart, type OddsChartPoint, type OddsChartRangeOption } from '../charts/OddsChart';
 import { TeamAvatar } from '../league/TeamAvatar';
 import './ScheduleGrid.css';
 
@@ -27,7 +27,7 @@ interface ScheduleGridProps {
   onSelectWeek?: (item: ScheduleGridItem) => void;
 }
 
-type ExpandedScheduleChart = 'heat' | 'worm' | null;
+const PACE_RANGES: OddsChartRangeOption[] = [{ id: 'season', label: 'Season' }];
 
 function heatColor(winProb: number) {
   const t = Math.max(0, Math.min(1, winProb / 100));
@@ -76,8 +76,36 @@ function heatTakeaway(items: ScheduleGridItem[]) {
   return `Softest: Week ${softest.week} ${formatWinProb(softest)} · toughest: Week ${toughest.week} ${formatWinProb(toughest)}.`;
 }
 
+function paceHeadline(delta: number) {
+  if (Math.abs(delta) < 0.05) return 'Even with .500 pace';
+  return `${Math.abs(delta).toFixed(1)} wins ${delta > 0 ? 'ahead of' : 'behind'} .500 pace`;
+}
+
+function paceValue(delta: number) {
+  return `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
+}
+
+function paceDeltaRead(delta: number, rangeLabel: string) {
+  return {
+    text: `${delta >= 0 ? '+' : ''}${delta.toFixed(1)} wins this ${rangeLabel.toLowerCase()}`,
+    tone: delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral',
+  } as const;
+}
+
+function paceSummary(openValue: number, currentValue: number) {
+  return `Open ${paceValue(openValue)} → Now ${paceValue(currentValue)}`;
+}
+
+function weekLabel(value: number) {
+  return `Wk ${Math.round(value)}`;
+}
+
+function paceYAxis(value: number) {
+  const rounded = Math.abs(value) < 0.05 ? 0 : Number(value.toFixed(1));
+  return `${rounded >= 0 ? '+' : ''}${rounded.toFixed(1)}`;
+}
+
 export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) {
-  const [expandedChart, setExpandedChart] = useState<ExpandedScheduleChart>(null);
   const rowRefs = useRef<Record<number, HTMLElement | null>>({});
   const pricedItems = items.filter((item) => typeof item.winProb === 'number');
   const hasFutureBestLineupRows = items.some(
@@ -106,17 +134,16 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
     ...item,
     delta: item.expectedWins - item.baseline,
   }));
-  const maxDelta = Math.max(0.5, ...deltaRows.map((item) => Math.abs(item.delta)));
-  const deltaPoints = deltaRows.map((item, index) => ({
-    x: index,
+  const deltaPoints = deltaRows.map<OddsChartPoint>((item) => ({
+    x: item.week,
     y: item.delta,
   }));
   const wormTakeaway = expectedWinsTakeaway(cumulativeWins);
   const heatSummary = heatTakeaway(items);
-  const yTicks = [maxDelta, 0, -maxDelta];
   const jumpToWeek = (week: number) => {
     rowRefs.current[week]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   };
+  const currentDelta = deltaRows.at(-1)?.delta ?? 0;
 
   return (
     <section aria-labelledby="schedule-grid-title" className="schedule-grid">
@@ -167,39 +194,30 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
       ) : null}
 
       {leagueChartFlags.scheduleWorm && pricedItems.length > 1 ? (
-        <button
-          className="schedule-grid__chart-card schedule-grid__chart-card--worm"
-          onClick={() => setExpandedChart('worm')}
-          type="button"
-        >
-          <span className="schedule-grid__chart-head">
-            <span>
-              <span className="schedule-grid__chart-title">Expected wins pace</span>
-              <span className="schedule-grid__chart-subtitle">{wormTakeaway}</span>
-            </span>
-            <span className="schedule-grid__inspect">Inspect</span>
-          </span>
-          <span className="schedule-grid__worm schedule-grid__worm--spark" aria-label="Expected wins pace delta">
-            <span className="schedule-grid__axis-title">Wins vs .500</span>
-            <OddsChart
-              ariaLabel="Expected wins pace delta"
-              maxX={Math.max(0, deltaPoints.length - 1)}
-              maxY={maxDelta}
-              minX={0}
-              minY={-maxDelta}
-              referenceLines={[{ id: 'pace-baseline', className: 'schedule-grid__worm-baseline', value: 0 }]}
-              series={[{ id: 'pace-line', className: 'schedule-grid__worm-line', points: deltaPoints }]}
-              svgClassName="schedule-grid__worm-chart"
-            />
-            <span className="schedule-grid__worm-y-ticks">
-              {yTicks.map((tick) => <span key={`tick-${tick.toFixed(2)}`}>{tick > 0 ? '+' : ''}{tick.toFixed(1)}</span>)}
-            </span>
-            <span className="schedule-grid__axis-label schedule-grid__axis-label--x">Week</span>
-          </span>
-          <span className="schedule-grid__worm-x-ticks">
-            {cumulativeWins.map((item) => <span key={`week-tick-${item.week}`}>{item.week}</span>)}
-          </span>
-        </button>
+        <div className="schedule-grid__chart-card schedule-grid__chart-card--worm">
+          <OddsChart
+            caption="Zero line = .500 pace. Green and red only mark the side of zero."
+            className="schedule-grid__pace-chart"
+            defaultRangeId="season"
+            deltaFormatter={paceDeltaRead}
+            domainMode="delta"
+            footer={wormTakeaway}
+            hero={{
+              id: 'pace-line',
+              name: paceHeadline(currentDelta),
+              points: deltaPoints,
+            }}
+            heroFillMode="zero"
+            rangeOptions={PACE_RANGES}
+            showHeroEndpoint={false}
+            summaryFormatter={paceSummary}
+            title="Expected wins pace"
+            valueFormatter={paceValue}
+            xTickFormatter={weekLabel}
+            yTickFormatter={paceYAxis}
+            dateFormatter={weekLabel}
+          />
+        </div>
       ) : null}
 
       <div className="schedule-grid__rows">
@@ -304,68 +322,6 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
           );
         })}
       </div>
-      {expandedChart ? (
-        <div
-          aria-modal="true"
-          className="schedule-grid__modal"
-          onClick={() => setExpandedChart(null)}
-          role="dialog"
-        >
-          <div className="schedule-grid__modal-card" onClick={(event) => event.stopPropagation()}>
-            <button className="schedule-grid__modal-close" onClick={() => setExpandedChart(null)} type="button">
-              Close
-            </button>
-            {expandedChart === 'heat' ? (
-              <>
-                <h3 className="schedule-grid__modal-title">Season heat strip</h3>
-                <p className="schedule-grid__chart-subtitle">Week number on the x-axis. Color is your win probability.</p>
-                <div className="schedule-grid__detail-list">
-                  {items.map((item) => (
-                    <div className="schedule-grid__detail-row" key={`detail-heat-${item.week}`}>
-                      <span>Week {item.week}</span>
-                      <span>{item.isPlayoff ? 'Playoff TBD' : item.status === 'bye' ? 'Bye' : `${item.isHome ? 'vs' : '@'} ${item.opponent}`}</span>
-                      <span>{formatWinProb(item)}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="schedule-grid__takeaway">{heatSummary}</p>
-              </>
-            ) : (
-              <>
-                <h3 className="schedule-grid__modal-title">Expected wins pace</h3>
-                <p className="schedule-grid__chart-subtitle">X-axis is week. Y-axis is wins above or below .500 pace.</p>
-                <div className="schedule-grid__worm schedule-grid__worm--detail">
-                  <span className="schedule-grid__axis-title">Wins vs .500</span>
-                  <OddsChart
-                    ariaLabel="Expected wins pace detail"
-                    maxX={Math.max(0, deltaPoints.length - 1)}
-                    maxY={maxDelta}
-                    minX={0}
-                    minY={-maxDelta}
-                    referenceLines={[{ id: 'pace-baseline-detail', className: 'schedule-grid__worm-baseline', value: 0 }]}
-                    series={[{ id: 'pace-line-detail', className: 'schedule-grid__worm-line', points: deltaPoints }]}
-                    svgClassName="schedule-grid__worm-chart"
-                  />
-                  <span className="schedule-grid__worm-y-ticks">
-                    {yTicks.map((tick) => <span key={`modal-tick-${tick.toFixed(2)}`}>{tick > 0 ? '+' : ''}{tick.toFixed(1)}</span>)}
-                  </span>
-                  <span className="schedule-grid__axis-label schedule-grid__axis-label--x">Week</span>
-                </div>
-                <div className="schedule-grid__detail-list">
-                  {deltaRows.map((item) => (
-                    <div className="schedule-grid__detail-row" key={`detail-worm-${item.week}`}>
-                      <span>Week {item.week}</span>
-                      <span>{item.expectedWins.toFixed(2)} expected wins</span>
-                      <span>{item.delta >= 0 ? '+' : ''}{item.delta.toFixed(2)} vs .500</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="schedule-grid__takeaway">{wormTakeaway}</p>
-              </>
-            )}
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

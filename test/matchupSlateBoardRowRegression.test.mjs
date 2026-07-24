@@ -61,16 +61,16 @@ test.after(async () => {
   if (vite && ownsVite) vite.kill('SIGTERM');
 });
 
-test('your-game row keeps the avatar and chip rail from intersecting at desktop widths', async () => {
+test('your-game row keeps the avatar outside the fixed rail even after the pill is removed', async () => {
   for (const width of [1512, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, colorScheme: 'dark' });
     try {
       await page.goto(`${baseUrl}/design/board-row/collision`, { waitUntil: 'networkidle' });
       const layout = await page.evaluate(() => {
         const avatar = document.querySelector('.matchup-slate__team--right .team-avatar');
-        const tag = document.querySelector('.matchup-slate__extras .matchup-slate__tag');
-        const move = document.querySelector('.matchup-slate__extras .league-movement-chip');
-        const rail = document.querySelector('.matchup-slate__extras');
+        const tag = document.querySelector('.matchup-slate__tag');
+        const move = document.querySelector('.matchup-slate__rail .matchup-slate__move');
+        const rail = document.querySelector('.matchup-slate__rail');
         const rect = (element) => {
           if (!element) return null;
           const { top, right, bottom, left, width, height } = element.getBoundingClientRect();
@@ -85,12 +85,10 @@ test('your-game row keeps the avatar and chip rail from intersecting at desktop 
       });
 
       assert.ok(layout.avatar, `missing right avatar at ${width}px`);
-      assert.ok(layout.tag, `missing YOUR GAME pill at ${width}px`);
+      assert.equal(layout.tag, null, `unexpected YOUR GAME pill still rendered at ${width}px`);
       assert.ok(layout.move, `missing movement chip at ${width}px`);
       assert.ok(layout.rail, `missing chip rail at ${width}px`);
-      assert.equal(overlaps(layout.avatar, layout.tag), false, `avatar overlaps YOUR GAME pill at ${width}px`);
       assert.equal(overlaps(layout.avatar, layout.move), false, `avatar overlaps movement chip at ${width}px`);
-      assert.equal(overlaps(layout.tag, layout.move), false, `chip rail items overlap each other at ${width}px`);
       assert.ok(layout.avatar.right <= layout.rail.left, `avatar bleeds into chip rail at ${width}px`);
     } finally {
       await page.close();

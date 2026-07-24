@@ -4,6 +4,7 @@ import { MOCK_MATCHUP } from './matchup';
 export interface LeagueFutureRow {
   rosterId?: number;
   teamName: string;
+  ownerName?: string;
   avatarUrl?: string | null;
   record: string;
   projRecord?: string;
@@ -22,14 +23,17 @@ export interface LeagueWeekMatchup {
   matchupId?: number;
   teamARosterId?: number;
   teamA: string;
+  teamAOwnerName?: string;
   teamAAvatarUrl?: string | null;
   teamARecord: string;
   teamAOdds: number;
   teamAWinProb?: number;
   teamAProjection?: number;
+  totalProjection?: number;
   teamAIsUser?: boolean;
   teamBRosterId?: number;
   teamB: string;
+  teamBOwnerName?: string;
   teamBAvatarUrl?: string | null;
   teamBRecord: string;
   teamBOdds: number;

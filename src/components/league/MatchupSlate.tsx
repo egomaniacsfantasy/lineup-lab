@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueWeekMatchup } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
-import { OddsChart } from '../charts/OddsChart';
-import { LeagueMovementChip } from './LeagueMovementChip';
+import { OddsChart, type OddsChartPoint, type OddsChartRangeOption } from '../charts/OddsChart';
 import { TeamAvatar } from './TeamAvatar';
 import './MatchupSlate.css';
 
@@ -26,6 +25,7 @@ type BoardTeam = {
   side: 'a' | 'b';
   rosterId?: number;
   name: string;
+  ownerName?: string;
   record: string;
   odds: number;
   winProb: number;
@@ -33,6 +33,12 @@ type BoardTeam = {
   avatarUrl?: string | null;
   isUser?: boolean;
 };
+
+const CHART_RANGES: OddsChartRangeOption[] = [
+  { id: 'week', label: 'Week', windowMs: 7 * 24 * 60 * 60 * 1000 },
+  { id: 'month', label: 'Month', windowMs: 30 * 24 * 60 * 60 * 1000 },
+  { id: 'season', label: 'Season' },
+];
 
 function impliedProbability(odds: number) {
   if (odds < 0) {
@@ -62,26 +68,22 @@ function historyFor(matchup: LeagueWeekMatchup, history: LineHistoryEntry[] | nu
   return entries.length > 1 ? entries : null;
 }
 
-function dayLabel(timestamp: number) {
-  return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+function dayKey(timestamp: number) {
+  return new Date(timestamp).toDateString();
 }
 
-function timeLabel(timestamp: number) {
-  return new Date(timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function valueForSide(point: RawMovement, side: 'a' | 'b') {
+  return side === 'a' ? point.a : point.b;
 }
 
 function closingByDay(points: RawMovement[]) {
   const byDay = new Map<string, RawMovement>();
   points.forEach((point) => {
-    const key = new Date(point.at).toDateString();
+    const key = dayKey(point.at);
     const current = byDay.get(key);
     if (!current || point.at > current.at) byDay.set(key, point);
   });
   return [...byDay.values()].sort((left, right) => left.at - right.at);
-}
-
-function valueForSide(point: RawMovement, side: 'a' | 'b') {
-  return side === 'a' ? point.a : point.b;
 }
 
 function movementSummary(points: RawMovement[] | null, leftSide: 'a' | 'b') {
@@ -89,36 +91,13 @@ function movementSummary(points: RawMovement[] | null, leftSide: 'a' | 'b') {
   const latest = points.at(-1);
   if (!latest) return null;
   const sameDay = points.filter(
-    (point) => new Date(point.at).toDateString() === new Date(latest.at).toDateString(),
+    (point) => dayKey(point.at) === dayKey(latest.at),
   );
   const open = sameDay[0];
   if (!open || sameDay.length < 2) return null;
-
-  const biggest = sameDay.reduce<{ point: RawMovement; move: number } | null>((current, point) => {
-    const move = valueForSide(point, leftSide) - valueForSide(open, leftSide);
-    if (!current || Math.abs(move) > Math.abs(current.move)) return { point, move };
-    return current;
-  }, null);
-
-  if (!biggest || !isMaterialMove(biggest.move)) return null;
-  return biggest;
-}
-
-function hasMaterialHistory(points: RawMovement[] | null, side: 'a' | 'b') {
-  if (!points || points.length < 2) return false;
-  const values = points.map((point) => valueForSide(point, side));
-  return isMaterialMove(Math.max(...values) - Math.min(...values));
-}
-
-function materialEvents(points: RawMovement[], side: 'a' | 'b') {
-  const events: { point: RawMovement; move: number }[] = [];
-  points.forEach((point, index) => {
-    const previous = points[index - 1];
-    if (!previous) return;
-    const move = valueForSide(point, side) - valueForSide(previous, side);
-    if (isMaterialMove(move)) events.push({ point, move });
-  });
-  return events;
+  const move = valueForSide(latest, leftSide) - valueForSide(open, leftSide);
+  if (!isMaterialMove(move)) return null;
+  return { point: latest, move };
 }
 
 function teamsFor(matchup: LeagueWeekMatchup) {
@@ -126,6 +105,7 @@ function teamsFor(matchup: LeagueWeekMatchup) {
     side: 'a',
     rosterId: matchup.teamARosterId,
     name: matchup.teamA,
+    ownerName: matchup.teamAOwnerName,
     record: matchup.teamARecord,
     odds: matchup.teamAOdds,
     winProb: matchup.teamAWinProb ?? impliedProbability(matchup.teamAOdds),
@@ -137,6 +117,7 @@ function teamsFor(matchup: LeagueWeekMatchup) {
     side: 'b',
     rosterId: matchup.teamBRosterId,
     name: matchup.teamB,
+    ownerName: matchup.teamBOwnerName,
     record: matchup.teamBRecord,
     odds: matchup.teamBOdds,
     winProb: matchup.teamBWinProb ?? impliedProbability(matchup.teamBOdds),
@@ -154,200 +135,256 @@ function teamsFor(matchup: LeagueWeekMatchup) {
   return teamA.winProb >= teamB.winProb ? { left: teamA, right: teamB } : { left: teamB, right: teamA };
 }
 
+function shortenTeamName(name: string) {
+  return name
+    .replace(/'s Team$/i, '')
+    .replace(/\bTeam$/i, '')
+    .trim();
+}
+
+function monogram(name: string) {
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length > 1) {
+    return parts.map((part) => part[0]).join('').slice(0, 3).toUpperCase();
+  }
+  return name.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
+}
+
+function boardDisplayName(name: string) {
+  if (name.length <= 18) return name;
+  const shortened = shortenTeamName(name);
+  if (shortened.length <= 16) return shortened;
+  return monogram(shortened);
+}
+
+function boardHandle(ownerName: string | undefined, record: string) {
+  if (ownerName) return `${ownerName.toUpperCase()} · ${record}`;
+  return record;
+}
+
+function formatPercent(value: number) {
+  if (value < 1) return '<1%';
+  if (value > 99) return '>99%';
+  return `${Math.round(value)}%`;
+}
+
+function probabilityDeltaRead(delta: number, rangeLabel: string) {
+  return {
+    text: `${delta > 0 ? '+' : ''}${delta.toFixed(1)}% this ${rangeLabel.toLowerCase()}`,
+    tone: delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral',
+  } as const;
+}
+
+function summaryText(openValue: number, currentValue: number) {
+  return `Open ${formatPercent(openValue)} → Now ${formatPercent(currentValue)}`;
+}
+
+function moveLabel(value: number) {
+  return `${value >= 0 ? '▲' : '▼'}${Math.abs(value).toFixed(1)}`;
+}
+
 export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupSlateProps) {
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const rows = useMemo(
     () =>
       matchups
         .map((matchup) => {
           const teams = teamsFor(matchup);
           const movement = historyFor(matchup, history);
+          const detailClosings = movement ? closingByDay(movement) : [];
           const summary = movementSummary(movement, teams.left.side);
+          const favorite = teams.left.winProb >= teams.right.winProb ? teams.left : teams.right;
           return {
             matchup,
             movement,
+            detailClosings,
             summary,
+            favorite,
+            rowKey: `${matchup.matchupId ?? teams.left.name}-${teams.right.name}`,
             ...teams,
           };
         })
         .sort((left, right) => {
           if (left.matchup.isUserGame !== right.matchup.isUserGame) return left.matchup.isUserGame ? -1 : 1;
-          return right.left.winProb - left.left.winProb;
+          return right.favorite.winProb - left.favorite.winProb;
         }),
-    [matchups, history],
+    [history, matchups],
   );
+
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(rows[0]?.rowKey ?? null);
+
+  useEffect(() => {
+    if (!rows.some((row) => row.rowKey === selectedRowKey)) {
+      setSelectedRowKey(rows[0]?.rowKey ?? null);
+    }
+  }, [rows, selectedRowKey]);
+
+  const selectedRow = rows.find((row) => row.rowKey === selectedRowKey) ?? rows[0] ?? null;
+  const biggestFavorite = rows.reduce<typeof rows[number] | null>((current, row) => {
+    if (!current || row.favorite.winProb > current.favorite.winProb) return row;
+    return current;
+  }, null);
+  const closestLine = rows.reduce<typeof rows[number] | null>((current, row) => {
+    const gap = Math.abs(row.left.winProb - 50);
+    if (!current || gap < Math.abs(current.left.winProb - 50)) return row;
+    return current;
+  }, null);
+  const highestTotal = rows.reduce<typeof rows[number] | null>((current, row) => {
+    const total = row.matchup.totalProjection ?? 0;
+    if (!current || total > (current.matchup.totalProjection ?? 0)) return row;
+    return current;
+  }, null);
+
+  const chartPoints = selectedRow?.detailClosings.map<OddsChartPoint>((point) => ({
+    x: point.at,
+    y: valueForSide(point, selectedRow.left.side),
+  })) ?? [];
+  const chartFooter = selectedRow?.summary
+    ? `${selectedRow.left.name} moved ${selectedRow.summary.move >= 0 ? 'up' : 'down'} ${Math.abs(selectedRow.summary.move).toFixed(1)} points on the latest board.`
+    : 'No material moves today.';
 
   return (
     <section aria-labelledby="matchup-slate-title" className="matchup-slate">
       <div className="matchup-slate__header">
-        <p className="matchup-slate__kicker">Week {currentWeek} matchups</p>
-        <h2 className="matchup-slate__title" id="matchup-slate-title">
-          This week's board
-        </h2>
+        <div>
+          <p className="matchup-slate__kicker">Week {currentWeek} matchups</p>
+          <h2 className="matchup-slate__title" id="matchup-slate-title">
+            This week's board
+          </h2>
+        </div>
+        <p className="matchup-slate__header-note">Moves today only show when the board shifted at least one point.</p>
       </div>
 
-      <div className="matchup-slate__rows">
-        {rows.map(({ matchup, left, right, movement, summary }) => {
-          const rowKey = `${matchup.matchupId ?? left.name}-${right.name}`;
-          const expanded = expandedKey === rowKey;
-          const leftFavored = left.winProb >= right.winProb;
-          const detailClosings = movement ? closingByDay(movement) : [];
-          const eventRows = movement ? materialEvents(movement, left.side) : [];
-          const showMovementDetail = hasMaterialHistory(movement, left.side) && detailClosings.length > 1;
-          const chartPoints = detailClosings.map((point) => ({
-            x: point.at,
-            y: valueForSide(point, left.side),
-            title: `${dayLabel(point.at)} close: ${left.name} ${valueForSide(point, left.side).toFixed(1)}%`,
-          }));
-
-          return (
-            <article
-              className={[
-                'matchup-slate__row',
-                matchup.isUserGame ? 'matchup-slate__row--user' : '',
-                expanded ? 'matchup-slate__row--expanded' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              key={rowKey}
-            >
-              <button
-                aria-expanded={expanded}
-                className="matchup-slate__row-button"
-                onClick={() => setExpandedKey(expanded ? null : rowKey)}
-                type="button"
-              >
-                <span className="matchup-slate__team matchup-slate__team--left">
-                  {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={left.avatarUrl} name={left.name} /> : null}
-                  <span className="matchup-slate__team-copy">
-                    <span
-                      className={[
-                        'matchup-slate__team-name',
-                        leftFavored ? 'matchup-slate__team-name--favored' : 'matchup-slate__team-name--dog',
-                      ].join(' ')}
-                      title={left.name}
-                    >
-                      {left.name}
+      <div className="matchup-slate__layout">
+        <div className="matchup-slate__board-shell">
+          <div className="matchup-slate__board-head" role="presentation">
+            <span>Matchup</span>
+            <span>Price</span>
+            <span>Win%</span>
+            <span>Board</span>
+            <span>Win%</span>
+            <span>Price</span>
+            <span>Rail</span>
+          </div>
+          <div className="matchup-slate__rows">
+            {rows.map(({ matchup, left, right, favorite, summary, rowKey }) => {
+              const selected = rowKey === selectedRow?.rowKey;
+              const leftFavored = favorite.side === left.side;
+              return (
+                <button
+                  aria-pressed={selected}
+                  className={[
+                    'matchup-slate__row-button',
+                    matchup.isUserGame ? 'matchup-slate__row-button--user' : '',
+                    selected ? 'matchup-slate__row-button--selected' : '',
+                  ].filter(Boolean).join(' ')}
+                  key={rowKey}
+                  onClick={() => setSelectedRowKey(rowKey)}
+                  type="button"
+                >
+                  <span className="matchup-slate__team matchup-slate__team--left">
+                    {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={left.avatarUrl} name={left.name} /> : null}
+                    <span className="matchup-slate__team-copy">
+                      <span className="matchup-slate__team-meta">{boardHandle(left.ownerName, left.record)}</span>
+                      <span className="matchup-slate__team-name" title={left.name}>{boardDisplayName(left.name)}</span>
                     </span>
-                    <span className="matchup-slate__record">{left.record}</span>
                   </span>
-                </span>
 
-                <span className="matchup-slate__moneyline">
-                  <span className={['matchup-slate__odds', leftFavored ? 'matchup-slate__odds--favored' : 'matchup-slate__odds--dog'].join(' ')}>
+                  <span className={['matchup-slate__moneyline', leftFavored ? 'matchup-slate__moneyline--favorite' : '', summary ? 'matchup-slate__moneyline--moving' : ''].filter(Boolean).join(' ')}>
                     {formatAmericanOdds(left.odds)}
                   </span>
-                </span>
 
-                <span className="matchup-slate__prob-number matchup-slate__prob-number--left">
-                  {left.winProb.toFixed(1)}%
-                </span>
+                  <span className="matchup-slate__prob-number matchup-slate__prob-number--left">
+                    {formatPercent(left.winProb)}
+                  </span>
 
-                <span className="matchup-slate__prob-track" aria-hidden="true">
-                  <span className="matchup-slate__prob-fill matchup-slate__prob-fill--left" style={{ width: `${left.winProb}%` }} />
-                </span>
+                  <span className="matchup-slate__prob-track" aria-hidden="true">
+                    <span className="matchup-slate__prob-fill" style={{ width: `${left.winProb}%` }} />
+                  </span>
 
-                <span className="matchup-slate__prob-number matchup-slate__prob-number--right">
-                  {right.winProb.toFixed(1)}%
-                </span>
+                  <span className="matchup-slate__prob-number matchup-slate__prob-number--right">
+                    {formatPercent(right.winProb)}
+                  </span>
 
-                <span className="matchup-slate__moneyline matchup-slate__moneyline--right">
-                  <span className={['matchup-slate__odds', !leftFavored ? 'matchup-slate__odds--favored' : 'matchup-slate__odds--dog'].join(' ')}>
+                  <span className={['matchup-slate__moneyline matchup-slate__moneyline--right', !leftFavored ? 'matchup-slate__moneyline--favorite' : '', summary ? 'matchup-slate__moneyline--moving' : ''].filter(Boolean).join(' ')}>
                     {formatAmericanOdds(right.odds)}
                   </span>
-                </span>
 
-                <span className="matchup-slate__team matchup-slate__team--right">
-                  <span className="matchup-slate__team-copy">
-                    <span
-                      className={[
-                        'matchup-slate__team-name',
-                        !leftFavored ? 'matchup-slate__team-name--favored' : 'matchup-slate__team-name--dog',
-                      ].join(' ')}
-                      title={right.name}
-                    >
-                      {right.name}
+                  <span className="matchup-slate__team matchup-slate__team--right">
+                    <span className="matchup-slate__team-copy">
+                      <span className="matchup-slate__team-meta">{boardHandle(right.ownerName, right.record)}</span>
+                      <span className="matchup-slate__team-name" title={right.name}>{boardDisplayName(right.name)}</span>
                     </span>
-                    <span className="matchup-slate__record">{right.record}</span>
+                    {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={right.avatarUrl} name={right.name} /> : null}
                   </span>
-                  {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={right.avatarUrl} name={right.name} /> : null}
-                </span>
 
-                <span className="matchup-slate__extras">
-                  {matchup.isUserGame ? <span className="matchup-slate__tag">YOUR GAME</span> : null}
-                  {summary ? (
-                    <LeagueMovementChip className="matchup-slate__move-chip" move={summary.move} timeframe="today" />
-                  ) : null}
-                </span>
-              </button>
+                  <span className="matchup-slate__rail">
+                    {summary ? <span className="matchup-slate__move">{moveLabel(summary.move)}</span> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-              {expanded ? (
-                <div className="matchup-slate__detail">
-                  {left.projection != null || right.projection != null ? (
-                    <div className="matchup-slate__detail-line">
-                      <span>Projected points</span>
-                      <span>
-                        {left.name} {left.projection?.toFixed(1) ?? 'N/A'} · {right.name} {right.projection?.toFixed(1) ?? 'N/A'}
-                      </span>
-                    </div>
-                  ) : null}
+        <aside className="matchup-slate__aside">
+          <section className="matchup-slate__glance">
+            <span className="matchup-slate__glance-title">The week at a glance</span>
+            {biggestFavorite ? (
+              <div className="matchup-slate__glance-row">
+                <span>Biggest favorite</span>
+                <strong>{biggestFavorite.favorite.name} · {formatPercent(biggestFavorite.favorite.winProb)}</strong>
+              </div>
+            ) : null}
+            {closestLine ? (
+              <div className="matchup-slate__glance-row">
+                <span>Closest line</span>
+                <strong>{closestLine.left.name} vs {closestLine.right.name} · {Math.abs(closestLine.left.winProb - 50).toFixed(1)} pts</strong>
+              </div>
+            ) : null}
+            {highestTotal?.matchup.totalProjection != null ? (
+              <div className="matchup-slate__glance-row">
+                <span>Highest total</span>
+                <strong>{highestTotal.matchup.totalProjection.toFixed(1)} pts</strong>
+              </div>
+            ) : null}
+          </section>
 
-                  {showMovementDetail ? (
-                    <>
-                      <div className="matchup-slate__detail-chart">
-                        <span className="matchup-slate__detail-axis matchup-slate__detail-axis--top">100%</span>
-                        <span className="matchup-slate__detail-axis matchup-slate__detail-axis--mid">50%</span>
-                        <span className="matchup-slate__detail-axis matchup-slate__detail-axis--bottom">0%</span>
-                        <OddsChart
-                          ariaLabel={`${left.name} closing win probability`}
-                          gridLineClassName="matchup-slate__movement-grid"
-                          maxY={100}
-                          minY={0}
-                          series={[
-                            {
-                              id: `movement-${rowKey}`,
-                              className: 'matchup-slate__movement-line',
-                              dotClassName: 'matchup-slate__movement-dot',
-                              points: chartPoints,
-                            },
-                          ]}
-                          svgClassName="matchup-slate__detail-chart-svg"
-                          yTicks={[0, 50, 100]}
-                        />
-                        <span className="matchup-slate__x-labels">
-                          {detailClosings.map((point) => (
-                            <span key={`label-${rowKey}-${point.at}`}>{dayLabel(point.at)}</span>
-                          ))}
-                        </span>
-                      </div>
-                      <details className="matchup-slate__events">
-                        <summary>Reprice history</summary>
-                        {eventRows.length > 0 ? (
-                          <div className="matchup-slate__event-list">
-                            {eventRows.map(({ point, move }) => (
-                              <div className="matchup-slate__event-row" key={`event-${rowKey}-${point.at}`}>
-                                <span>{dayLabel(point.at)} {timeLabel(point.at)}</span>
-                                <span>
-                                  {left.name} {move >= 0 ? '+' : ''}
-                                  {move.toFixed(1)}
-                                </span>
-                                <span>{point.trigger}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="matchup-slate__movement-note">No material reprices.</p>
-                        )}
-                      </details>
-                    </>
-                  ) : (
-                    <p className="matchup-slate__movement-note">The line hasn't moved.</p>
-                  )}
+          {selectedRow ? (
+            <section className="matchup-slate__detail">
+              <div className="matchup-slate__detail-head">
+                <span className="matchup-slate__detail-kicker">Selected matchup</span>
+                <strong>{selectedRow.left.name} vs {selectedRow.right.name}</strong>
+              </div>
+              {(selectedRow.left.projection != null || selectedRow.right.projection != null) ? (
+                <div className="matchup-slate__detail-line">
+                  <span>Projected points</span>
+                  <span>{selectedRow.left.projection?.toFixed(1) ?? 'N/A'} · {selectedRow.right.projection?.toFixed(1) ?? 'N/A'}</span>
                 </div>
               ) : null}
-            </article>
-          );
-        })}
+              {chartPoints.length > 1 ? (
+                <OddsChart
+                  caption="Held values between reprices. Tap the row to compare another game."
+                  className="matchup-slate__chart"
+                  defaultRangeId="week"
+                  deltaFormatter={probabilityDeltaRead}
+                  footer={chartFooter}
+                  hero={{
+                    id: `${selectedRow.rowKey}-hero`,
+                    name: selectedRow.left.name,
+                    points: chartPoints,
+                  }}
+                  rangeOptions={CHART_RANGES}
+                  showHeroEndpoint={false}
+                  summaryFormatter={summaryText}
+                  title="Line movement"
+                  valueFormatter={formatPercent}
+                />
+              ) : (
+                <p className="matchup-slate__movement-note">This chart lights up after the board reprices more than once.</p>
+              )}
+            </section>
+          ) : null}
+        </aside>
       </div>
     </section>
   );

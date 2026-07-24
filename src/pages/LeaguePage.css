@@ -1,6 +1,6 @@
 .league-page {
   width: 100%;
-  max-width: 1040px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: clamp(16px, 3vw, 28px);
   display: grid;

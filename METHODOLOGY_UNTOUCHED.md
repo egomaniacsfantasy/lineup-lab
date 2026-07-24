@@ -22,6 +22,8 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Market page composition and builder idle-state treatment
 - League board right-rail alignment guard
 - Futures hierarchy and chart-legibility pass
+- Shared chart-system rebuild across Futures, League board drill-in, and Schedule pace
+- League This week board v2 layout with docked right rail and fixed numeric columns
 - Regression guards and documentation
 
 ## What This Pass Did Not Change
@@ -52,9 +54,17 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `src/pages/TradePage.css`
 - `test/noTradeMath.test.mjs`
 - `HANDOFF_NOTES.md`
+- `src/components/charts/OddsChart.tsx`
+- `src/components/charts/OddsChart.css`
 - `src/components/league/MatchupSlate.css`
+- `src/components/league/MatchupSlate.tsx`
 - `src/components/league/LeagueFutures.tsx`
 - `src/components/league/LeagueFutures.css`
+- `src/components/season/ScheduleGrid.tsx`
+- `src/components/season/ScheduleGrid.css`
+- `src/pages/LeaguePage.css`
+- `src/adapters/connectedLeague.ts`
+- `src/mocks/league.ts`
 - `src/components/league/LeagueMovementChip.tsx`
 - `src/components/league/LeagueMovementChip.css`
 - `test/matchupSlateAlignment.test.mjs`
@@ -82,11 +92,19 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Futures board and chart:
   - Table rows still consume `LeaguePricing.futures`
   - Quiet movement text is derived only from existing `LineHistoryEntry.titleProb` / `playoffProb` histories already returned to the page
+  - The shared chart samples day-closing points from existing `LineHistoryEntry.titleProb` / `playoffProb` values only
+  - Range pills only filter to real sampled points already in the payload. No interpolation or fabricated midpoints are introduced
   - Endpoint tag repeats the same team identity and current price already shown by the selected futures row
 - League This week board:
-  - The fixed chip rail changes layout only
-  - Row prices, win percentages, and movement summaries still render from existing board/history view-model fields in engine order
-  - The July 23 board-row fix only changes grid allocation, truncation behavior, and dev-only screenshot coverage
+  - Team owner handles now read from `bootstrap.teams[].ownerName` through `toWeekMatchups(...)`
+  - Board rows still render from existing board/history view-model fields in engine order
+  - The board rail's `Highest total` card reads the existing priced matchup total through `PricedSide.total -> LeagueWeekMatchup.totalProjection`
+  - The drill-in chart samples only real `LineHistoryEntry.lines[].sides[rosterId].winProbability` points, bucketed to day-closing display points with no interpolation
+  - The July 24 board v2 pass only changes grid allocation, name presentation, and row drill-in layout
+- Schedule pace chart:
+  - Continues from the existing schedule view-model already built from priced weekly schedule items
+  - This pass only changed scrub behavior, axis labeling, and presentation
+  - The chart does not invent weekly probabilities or change schedule ordering
 - Design fixtures:
   - `src/dev/designFixtures.ts` mirrors payload shapes for browser capture only
   - Fixtures never replace server methodology in connected-league runtime
@@ -97,4 +115,4 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `src/utils/noTradeMath.ts` brands the only allowed frontend delta transform for engine-provided odds pairs.
 - `test/noTradeMath.test.mjs` now also locks the Deals module away from the retired scan copy/path and the removed `Why this trade?` trigger.
 - `test/matchupSlateAlignment.test.mjs` locks the League This week board to a fixed chip rail on desktop and tablet widths so `YOUR GAME` never shifts row alignment.
-- `test/matchupSlateBoardRowRegression.test.mjs` launches the dev-only board-row fixture and checks that the right avatar never overlaps the fixed chip rail, while long left and right team names share width evenly before ellipsis kicks in.
+- `test/matchupSlateBoardRowRegression.test.mjs` launches the dev-only board-row fixture and checks that the right avatar never overlaps the fixed rail after the pill removal, while long left and right team names share width evenly before truncation pressure would appear.
