@@ -23,19 +23,15 @@ import {
   type TradeTraits,
 } from '../services/leagueApi';
 import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
-import type { LeagueBootstrap, MarketMover } from '../services/leagueApi';
+import type { LeagueBootstrap } from '../services/leagueApi';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
-import { formatAcceptanceRead } from '../utils/acceptanceLingo';
 import {
-  marketMoverPlayerIds,
-  marketMoverSignature,
   samePositionOneForOneTrade,
   tradeSignature,
 } from '../utils/tradeMarket';
 import {
   acceptanceGaugeLabel,
   applyTradeDisplayPolicy,
-  lowAcceptanceTag,
 } from '../utils/tradeSuggestionDisplay';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
 import { signedDeltaClass } from '../utils/deltaTone';
@@ -53,15 +49,9 @@ import {
   NEUTRAL_READ,
 } from '../utils/tradeTraits';
 import {
-  primaryTradePosition,
   tradeSideFromIds,
 } from '../utils/tradeDisplay';
-import { oddsPairDelta } from '../utils/noTradeMath';
 import './TradePage.css';
-
-function laneIds(primary?: string[], fallback?: string) {
-  return primary?.length ? primary : fallback ? [fallback] : [];
-}
 
 type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
@@ -96,15 +86,13 @@ function signedPct(value: number) {
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
 }
 
-function formatGeneratedAt(value?: number) {
-  if (!value) return null;
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
+function deltaTone(value: number): 'positive' | 'negative' | 'neutral' {
+  if (value > 0) return 'positive';
+  if (value < 0) return 'negative';
+  return 'neutral';
 }
 
-function formatClockTime(value?: number | null) {
+function formatGeneratedAt(value?: number) {
   if (!value) return null;
   return new Intl.DateTimeFormat(undefined, {
     hour: 'numeric',
@@ -141,59 +129,6 @@ function rosterRows(bootstrap: LeagueBootstrap, rosterId: number) {
   return [...starters, ...bench]
     .map((id) => ({ id, player: bootstrap.players[id], isStarter: starterSet.has(id) }))
     .filter((row) => row.player);
-}
-
-function laneBelongsToLeague(
-  lane: MarketMover,
-  bootstrap: LeagueBootstrap,
-  leagueId: string,
-) {
-  if (lane.leagueId && lane.leagueId !== leagueId) return false;
-  const partner = lane.partnerRosterId == null
-    ? null
-    : bootstrap.teams.find((team) => team.rosterId === lane.partnerRosterId);
-  if (!partner) return false;
-
-  const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
-  const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
-  if (givePlayerIds.length === 0 || getPlayerIds.length === 0) return false;
-
-  const userTeam = bootstrap.teams.find((team) => team.isUser);
-  if (!userTeam) return false;
-  return (
-    givePlayerIds.every((id) => userTeam.players.includes(id)) &&
-    getPlayerIds.every((id) => partner.players.includes(id))
-  );
-}
-
-function tradeLanesForLeague(
-  pricing: ReturnType<typeof useLeagueConnection>['pricing'],
-  bootstrap: LeagueBootstrap | null,
-  leagueId: string | null,
-) {
-  if (!pricing?.available || !bootstrap || !leagueId) return [];
-  const candidateLanes = (pricing.movers ?? [])
-    .filter((mover) => mover.kind === 'trade' && laneBelongsToLeague(mover, bootstrap, leagueId))
-    .filter((mover) => !samePositionOneForOneTrade(mover, bootstrap.players));
-  const { visible, longShotFallback } = applyTradeDisplayPolicy(candidateLanes);
-  return visible
-    .map((lane) => ({
-      lane,
-      signature: marketMoverSignature(leagueId, lane),
-      lowAcceptanceTag: lowAcceptanceTag(
-        lane.acceptanceProbability,
-        longShotFallback === lane,
-      ),
-    }))
-    .filter(
-      (
-        entry,
-      ): entry is {
-        lane: MarketMover;
-        signature: string;
-        lowAcceptanceTag: string | null;
-      } => Boolean(entry.signature),
-    );
 }
 
 function DismissToast({
@@ -326,7 +261,7 @@ function ReadSlider({
 }
 
 function TradeDealsView() {
-  const { bootstrap, stored, pricing, isLoading, error, marketScan, scanMarket } =
+  const { bootstrap, stored, pricing, isLoading, error } =
     useLeagueConnection();
   const [params, setParams] = useSearchParams();
   const builderRef = useRef<HTMLElement | null>(null);
@@ -359,18 +294,16 @@ function TradeDealsView() {
   const [readSourceLabel, setReadSourceLabel] = useState('neutral file');
   const [scoutingFile, setScoutingFile] = useState<ManagerFile | null>(null);
   const [showRead, setShowRead] = useState(false);
-  const [marketManagerFilter, setMarketManagerFilter] = useState<number | 'all'>('all');
+  const [marketManagerFilter, setMarketManagerFilter] = useState<number | null>(null);
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
+  const [managerSuggestionDirectory, setManagerSuggestionDirectory] = useState<TradeSuggestion[]>([]);
   const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
   const [managerSuggestionsError, setManagerSuggestionsError] = useState<string | null>(null);
   const [managerSuggestionsUpdatedAt, setManagerSuggestionsUpdatedAt] = useState<number | null>(null);
   const [partnerMenuOpen, setPartnerMenuOpen] = useState(false);
   const [isEditingTrade, setIsEditingTrade] = useState(true);
-  const [openLaneWhy, setOpenLaneWhy] = useState<string | null>(null);
   const [showAllMarketCards, setShowAllMarketCards] = useState(false);
-  const [scanNotice, setScanNotice] = useState<string | null>(null);
-  const [scanClock, setScanClock] = useState(() => Date.now());
   const verdictRef = useRef<HTMLElement | null>(null);
   const selectedPartner = useMemo(
     () => partners.find((team) => team.rosterId === partnerRosterId) ?? null,
@@ -382,26 +315,16 @@ function TradeDealsView() {
   const currentWeek = pricing?.week ?? bootstrap?.week ?? null;
   const { dismissedSignatures, dismiss, undo, restoreAll, pendingUndoSignature } =
     useDismissedTradeSuggestions(stored?.leagueId ?? null, currentWeek);
-  const laneEntries = useMemo(
-    () => tradeLanesForLeague(pricing, bootstrap, stored?.leagueId ?? null),
-    [bootstrap, pricing, stored?.leagueId],
+  const availableManagerIds = useMemo(
+    () => [...new Set(managerSuggestionDirectory.map((suggestion) => suggestion.partnerRosterId))],
+    [managerSuggestionDirectory],
   );
-  const lanes = useMemo(
-    () => laneEntries.filter((entry) => !dismissedSignatures.has(entry.signature)),
-    [dismissedSignatures, laneEntries],
-  );
-  const filteredLanes = useMemo(
-    () => {
-      if (!bootstrap) return [];
-      return lanes.filter((entry) => {
-        if (marketPositionFilter === 'all') return true;
-        return normalizeMarketPosition(primaryTradePosition(entry.lane, bootstrap.players)) === marketPositionFilter;
-      });
-    },
-    [bootstrap, lanes, marketPositionFilter],
+  const availableMarketManagers = useMemo(
+    () => partners.filter((team) => availableManagerIds.includes(team.rosterId)),
+    [availableManagerIds, partners],
   );
   const managerSuggestionEntries = useMemo(() => {
-    if (!stored || !bootstrap || marketManagerFilter === 'all') return [];
+    if (!stored || !bootstrap || marketManagerFilter == null) return [];
 
     const targeted = managerSuggestions
       .filter((suggestion) => suggestion.partnerRosterId === marketManagerFilter)
@@ -439,16 +362,8 @@ function TradeDealsView() {
     const positionFiltered = targeted.filter(
       (entry) => marketPositionFilter === 'all' || entry.position === marketPositionFilter,
     );
-    const { visible, longShotFallback } = applyTradeDisplayPolicy(positionFiltered);
-    return visible
-      .filter((entry) => !dismissedSignatures.has(entry.signature))
-      .map((entry) => ({
-        ...entry,
-        lowAcceptanceTag: lowAcceptanceTag(
-          entry.acceptanceProbability,
-          longShotFallback === entry,
-        ),
-      }));
+    const { visible } = applyTradeDisplayPolicy(positionFiltered);
+    return visible.filter((entry) => !dismissedSignatures.has(entry.signature));
   }, [
     bootstrap,
     dismissedSignatures,
@@ -459,44 +374,48 @@ function TradeDealsView() {
     relationship,
     stored,
   ]);
-  const showingManagerMarket = marketManagerFilter !== 'all';
+  const showingManagerMarket = marketManagerFilter != null;
   const visibleManagerSuggestions = showAllMarketCards
     ? managerSuggestionEntries
     : managerSuggestionEntries.slice(0, MAX_VISIBLE_MARKET_CARDS);
-  const visibleFilteredLanes = showAllMarketCards
-    ? filteredLanes
-    : filteredLanes.slice(0, MAX_VISIBLE_MARKET_CARDS);
-  // Manager-first: nothing shows until a manager is picked. The market grid
-  // only ever renders the per-manager suggestions (full 10k-sim), never lanes.
   const visibleMarketCount = showingManagerMarket ? managerSuggestionEntries.length : 0;
   const hiddenMarketCount = showingManagerMarket
     ? managerSuggestionEntries.length - visibleManagerSuggestions.length
-    : filteredLanes.length - visibleFilteredLanes.length;
+    : 0;
 
   useEffect(() => {
     setShowAllMarketCards(false);
   }, [marketManagerFilter, marketPositionFilter]);
 
   useEffect(() => {
-    if (
-      !marketScan.lastScannedAt ||
-      Date.now() - marketScan.lastScannedAt >= marketScan.cooldownMs
-    ) {
+    if (!stored) {
+      setManagerSuggestionDirectory([]);
       return undefined;
     }
-    const timer = window.setInterval(() => setScanClock(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [marketScan.cooldownMs, marketScan.lastScannedAt]);
 
-  const scanCoolingDown =
-    marketScan.lastScannedAt != null &&
-    scanClock - marketScan.lastScannedAt < marketScan.cooldownMs;
-  const scanButtonLabel = scanCoolingDown && marketScan.lastScannedAt
-    ? `Scanned at ${formatClockTime(marketScan.lastScannedAt)}`
-    : 'Scan the market';
+    let cancelled = false;
+    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId })
+      .then((response) => {
+        if (cancelled) return;
+        if (!response.available) {
+          setManagerSuggestionDirectory([]);
+          return;
+        }
+        setManagerSuggestionDirectory(response.suggestions ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setManagerSuggestionDirectory([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [stored]);
 
   useEffect(() => {
-    if (!stored || marketManagerFilter === 'all') {
+    if (!stored || marketManagerFilter == null) {
+      setManagerSuggestions([]);
+      setManagerSuggestionsUpdatedAt(null);
       setManagerSuggestionsError(null);
       setManagerSuggestionsLoading(false);
       return undefined;
@@ -505,11 +424,15 @@ function TradeDealsView() {
     let cancelled = false;
     setManagerSuggestionsLoading(true);
     setManagerSuggestionsError(null);
-    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId })
+    fetchTradeSuggestions(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId: marketManagerFilter,
+    })
       .then((response) => {
         if (cancelled) return;
         if (!response.available) {
           setManagerSuggestionsError(response.reason ?? 'Could not price manager trades right now.');
+          setManagerSuggestions([]);
           return;
         }
         setManagerSuggestions(response.suggestions ?? []);
@@ -800,23 +723,6 @@ function TradeDealsView() {
     resetOutputs();
   };
 
-  const loadLane = (lane: MarketMover) => {
-    const { givePlayerIds, getPlayerIds } = marketMoverPlayerIds(lane);
-    if (lane.partnerRosterId == null || givePlayerIds.length === 0 || getPlayerIds.length === 0) return;
-    setPartnerRosterId(lane.partnerRosterId);
-    setGive(givePlayerIds);
-    setGetIds(getPlayerIds);
-    resetOutputs();
-    setParams({
-      view: 'deals',
-      leagueId: stored.leagueId,
-      managerRosterId: String(lane.partnerRosterId),
-      give: givePlayerIds.join(','),
-      get: getPlayerIds.join(','),
-    }, { replace: true });
-    window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
-  };
-
   const loadSuggestedTrade = (suggestion: TradeSuggestion) => {
     const givePlayerIds = suggestion.give.map((asset) => asset.id);
     const getPlayerIds = suggestion.get.map((asset) => asset.id);
@@ -834,31 +740,7 @@ function TradeDealsView() {
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   };
 
-  const laneWhy = (lane: MarketMover) => {
-    const parts = [];
-    if (lane.valueGain != null) {
-      parts.push(`Your starters move ${signedPct(lane.valueGain).replace('%', ' pts/wk')}.`);
-    }
-    if (lane.partnerGain != null) {
-      parts.push(`Their starters move ${signedPct(lane.partnerGain).replace('%', ' pts/wk')}.`);
-    }
-    if (lane.acceptanceProbability != null) {
-      const partnerName = partners.find((team) => team.rosterId === lane.partnerRosterId)?.teamName;
-      const acceptanceRead = formatAcceptanceRead(lane.acceptanceProbability);
-      if (acceptanceRead) {
-        parts.push(`${partnerName ?? `Roster ${lane.partnerRosterId ?? '?'}`} acceptance read: ${acceptanceRead}.`);
-      }
-    }
-    if (lane.acceptanceReason) {
-      parts.push(lane.acceptanceReason);
-    }
-    return parts.join(' ');
-  };
-
-  const dismissLane = (signature: string) => {
-    dismiss(signature);
-    setScanNotice(null);
-  };
+  const dismissLane = (signature: string) => dismiss(signature);
 
   const runPricing = async () => {
     if (partnerRosterId == null || give.length === 0 || getIds.length === 0) return;
@@ -881,20 +763,6 @@ function TradeDealsView() {
       setIsPricing(false);
       setIsEditingTrade(false);
     }
-  };
-
-  const handleScanMarket = async () => {
-    if (!stored || !bootstrap || marketScan.isScanning || scanCoolingDown) return;
-    const visibleBefore = new Set(lanes.map((entry) => entry.signature));
-    const nextPricing = await scanMarket();
-    const nextEntries = tradeLanesForLeague(nextPricing, bootstrap, stored.leagueId);
-    const nextVisible = nextEntries.filter((entry) => !dismissedSignatures.has(entry.signature));
-    const hasFreshVisibleTrade = nextVisible.some((entry) => !visibleBefore.has(entry.signature));
-    setScanNotice(
-      hasFreshVisibleTrade
-        ? null
-        : 'No new deals on the board. The market moves when lineups do.',
-    );
   };
 
   const tradeSideOrEmpty = (label: string, ids: string[]) =>
@@ -1006,20 +874,15 @@ function TradeDealsView() {
     resetOutputs();
   };
 
-  const applyMarketManagerFilter = (rosterId: number | 'all') => {
+  const applyMarketManagerFilter = (rosterId: number) => {
     if (isPricing || counterLoading) return;
     setMarketManagerFilter(rosterId);
-    setOpenLaneWhy(null);
-    if (rosterId === 'all') {
-      setShowRead(false);
-      return;
-    }
     choosePartner(rosterId);
   };
 
   const marketLoaderLabel = showingManagerMarket
     ? `Simulating trades with ${partners.find((team) => team.rosterId === marketManagerFilter)?.teamName ?? 'this manager'}`
-    : 'Scanning the market';
+    : 'Simulating trades';
 
   const renderTeamAvatar = (team: NonNullable<typeof selectedPartner>) => (
     <span className="trade-cc__team-avatar" aria-hidden="true">
@@ -1050,7 +913,7 @@ function TradeDealsView() {
       </button>
       {partnerMenuOpen ? (
         <div className="trade-cc__partner-options" role="listbox" aria-label="Pick manager">
-          {partners.map((team) => (
+          {availableMarketManagers.map((team) => (
             <button
               aria-selected={partnerRosterId === team.rosterId}
               className={[
@@ -1085,29 +948,16 @@ function TradeDealsView() {
             <p className="trade-cc__finder-sub">
               Pick a manager. The book simulates trades with them and ranks by title gain times chance they accept.
             </p>
-            {scanNotice ? <p className="trade-cc__finder-note">{scanNotice}</p> : null}
-            {showingManagerMarket && managerSuggestionsError ? (
+            {managerSuggestionsError && showingManagerMarket ? (
               <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
             ) : null}
           </div>
-          {marketScan.isScanning ? (
-            <SimulationLoader label="Scanning the market" size="compact" variant="scan" />
-          ) : (
-            <button
-              className="trade-cc__scan-btn"
-              disabled={scanCoolingDown}
-              onClick={() => void handleScanMarket()}
-              type="button"
-            >
-              {scanButtonLabel}
-            </button>
-          )}
         </div>
         <div className="trade-cc__filter-stack">
           <div className="trade-cc__filter-row">
             <span className="trade-cc__filter-label">Managers</span>
             <div className="trade-cc__filter-chips">
-              {partners.map((team) => (
+              {availableMarketManagers.map((team) => (
                 <button
                   aria-pressed={marketManagerFilter === team.rosterId}
                   className={[
@@ -1127,7 +977,7 @@ function TradeDealsView() {
             <button
               aria-expanded={showRead}
               className="trade-cc__partner-read trade-cc__partner-read--inline"
-              disabled={marketManagerFilter === 'all' || isPricing || counterLoading}
+              disabled={marketManagerFilter == null || isPricing || counterLoading}
               onClick={() => setShowRead((current) => !current)}
               type="button"
             >
@@ -1156,7 +1006,7 @@ function TradeDealsView() {
           </div>
         </div>
 
-        {showRead && selectedPartner && marketManagerFilter !== 'all' ? (
+        {showRead && selectedPartner && marketManagerFilter != null ? (
           <ManagerReadCard
             friendliness={friendliness}
             leagueId={stored.leagueId}
@@ -1190,131 +1040,38 @@ function TradeDealsView() {
                 managerSuggestionsLoading && showingManagerMarket ? 'trade-cc__market-grid--stale' : '',
               ].filter(Boolean).join(' ')}
             >
-              {showingManagerMarket
-                ? visibleManagerSuggestions.map((entry) => {
-                  const getPlayerIds = entry.suggestion.get.map((asset) => asset.id);
-                  const givePlayerIds = entry.suggestion.give.map((asset) => asset.id);
-                  const partner = partners.find((team) => team.rosterId === entry.suggestion.partnerRosterId);
-                  const acceptanceRead = acceptanceGaugeLabel(entry.acceptanceProbability);
-                  const laneKey = `finder-${entry.suggestion.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
-                  const whyOpen = openLaneWhy === laneKey;
-                  return (
-                    <TradeCard
-                      acceptanceLabel={acceptanceRead}
-                      acceptanceProbability={entry.acceptanceProbability}
-                      dismissLabel="Dismiss this suggested trade"
-                      footer={whyOpen ? (
-                        <div className="trade-cc__lane-rationale" onClick={(event) => event.stopPropagation()}>
-                          <p>
-                            {partner?.teamName ?? entry.suggestion.partnerName} gains {signedPct(entry.suggestion.partnerDelta)} title equity
-                            if this hits. Acceptance read: {acceptanceRead}.
-                          </p>
-                          <button
-                            className="trade-cc__lane-open"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              loadSuggestedTrade(entry.suggestion);
-                            }}
-                            type="button"
-                          >
-                            Open in Market →
-                          </button>
-                        </div>
-                      ) : null}
-                      generatedAt={formatGeneratedAt(managerSuggestionsUpdatedAt ?? undefined)}
-                      getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
-                      impactLine={[
-                        `your title ${signedPct(entry.suggestion.youDelta)}`,
-                        `them ${signedPct(entry.suggestion.partnerDelta)}`,
-                      ].join(' · ')}
-                      key={entry.signature}
-                      onClick={() => loadSuggestedTrade(entry.suggestion)}
-                      onDismiss={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        dismissLane(entry.signature);
-                      }}
-                      partnerLine={partner?.teamName ?? entry.suggestion.partnerName}
-                      sendSide={tradeSideFromIds('You send', givePlayerIds, bootstrap.players)}
-                      valueLabel={`${signedPct(entry.suggestion.youDelta)} title`}
-                      whyOpen={whyOpen}
-                      whyTrigger={
-                        <button
-                          aria-expanded={whyOpen}
-                          className="trade-cc__lane-why"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setOpenLaneWhy((current) => (current === laneKey ? null : laneKey));
-                          }}
-                          type="button"
-                        >
-                          Why this trade?
-                        </button>
-                      }
-                    />
-                  );
-                  })
-                : visibleFilteredLanes.map(({ lane, signature, lowAcceptanceTag: laneTag }) => {
-                  const getPlayerIds = laneIds(lane.getPlayerIds, lane.getPlayerId);
-                  const givePlayerIds = laneIds(lane.givePlayerIds, lane.givePlayerId);
-                  const partner = partners.find((team) => team.rosterId === lane.partnerRosterId);
-                  const acceptance = lane.acceptanceProbability ?? 50;
-                  const acceptanceRead = acceptanceGaugeLabel(acceptance);
-                  const laneKey = `lane-${lane.partnerRosterId}-${givePlayerIds.join(',')}-${getPlayerIds.join(',')}`;
-                  const whyOpen = openLaneWhy === laneKey;
-                  const generated = formatGeneratedAt(lane.pricedAt ?? pricing?.computedAt);
-                  return (
-                    <TradeCard
-                      acceptanceLabel={acceptanceRead}
-                      acceptanceProbability={acceptance}
-                      dismissLabel="Dismiss this suggested trade"
-                      footer={whyOpen ? (
-                        <div className="trade-cc__lane-rationale" onClick={(event) => event.stopPropagation()}>
-                          <p>{laneWhy(lane)}</p>
-                          <button
-                            className="trade-cc__lane-open"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              loadLane(lane);
-                            }}
-                            type="button"
-                          >
-                            Open in Market →
-                          </button>
-                        </div>
-                      ) : null}
-                      generatedAt={generated}
-                      getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
-                      impactLine={[
-                        `title ${signedPct(oddsPairDelta(lane.titleOddsBefore, lane.titleOddsAfter))}`,
-                        lane.valueGain != null ? `lineup ${signedPct(lane.valueGain).replace('%', ' pts/wk')}` : null,
-                      ].filter(Boolean).join(' · ')}
-                      key={laneKey}
-                      onClick={() => loadLane(lane)}
-                      onDismiss={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        dismissLane(signature);
-                      }}
-                      partnerLine={laneTag ? `${partner?.teamName ?? 'Manager'} · ${laneTag}` : partner?.teamName ?? 'Manager'}
-                      sendSide={tradeSideFromIds('You send', givePlayerIds, bootstrap.players)}
-                      whyOpen={whyOpen}
-                      whyTrigger={
-                        <button
-                          aria-expanded={whyOpen}
-                          className="trade-cc__lane-why"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setOpenLaneWhy((current) => (current === laneKey ? null : laneKey));
-                          }}
-                          type="button"
-                        >
-                          Why this trade?
-                        </button>
-                      }
-                    />
-                  );
-                  })}
+              {visibleManagerSuggestions.map((entry) => {
+                const getPlayerIds = entry.suggestion.get.map((asset) => asset.id);
+                const givePlayerIds = entry.suggestion.give.map((asset) => asset.id);
+                const partner = partners.find((team) => team.rosterId === entry.suggestion.partnerRosterId);
+                const acceptanceRead = acceptanceGaugeLabel(entry.acceptanceProbability);
+                return (
+                  <TradeCard
+                    acceptanceLabel={acceptanceRead}
+                    acceptanceProbability={entry.acceptanceProbability}
+                    dismissLabel="Dismiss this suggested trade"
+                    generatedAt={formatGeneratedAt(managerSuggestionsUpdatedAt ?? undefined)}
+                    getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
+                    impactRows={[
+                      {
+                        label: 'Title',
+                        value: signedPct(entry.suggestion.youDelta),
+                        tone: deltaTone(entry.suggestion.youDelta),
+                        emphasis: 'primary',
+                      },
+                    ]}
+                    key={entry.signature}
+                    onClick={() => loadSuggestedTrade(entry.suggestion)}
+                    onDismiss={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      dismissLane(entry.signature);
+                    }}
+                    partnerLine={partner?.teamName ?? entry.suggestion.partnerName}
+                    sendSide={tradeSideFromIds('You send', givePlayerIds, bootstrap.players)}
+                  />
+                );
+              })}
             </div>
             {hiddenMarketCount > 0 ? (
               <button
@@ -1331,8 +1088,8 @@ function TradeDealsView() {
         ) : (
           <p className="trade-cc__empty-lane">
             {showingManagerMarket
-              ? 'No priced deals cleared the board for this manager yet. Try another manager or widen the position filter.'
-              : 'Pick a manager above to see the trades that most improve your title odds with them.'}
+              ? `The book found no deals with ${selectedPartner?.teamName ?? 'this manager'} this week.`
+              : 'Pick a manager above to see the book\'s deals.'}
           </p>
         )}
         {dismissedSignatures.size > 0 ? (

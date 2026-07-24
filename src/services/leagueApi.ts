@@ -677,7 +677,10 @@ export interface TradeSuggestions {
   suggestions?: TradeSuggestion[];
   debug?: { enumerated: number; scanned: number; resimmed: number; positive: number; ms: number };
 }
-export function fetchTradeSuggestions(leagueId: string, body: { userId: string }): Promise<TradeSuggestions> {
+export function fetchTradeSuggestions(
+  leagueId: string,
+  body: { userId: string; partnerRosterId?: number | null; position?: 'QB' | 'RB' | 'WR' | 'TE' | null },
+): Promise<TradeSuggestions> {
   return get<TradeSuggestions>(`/api/league/${leagueId}/trade-suggestions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

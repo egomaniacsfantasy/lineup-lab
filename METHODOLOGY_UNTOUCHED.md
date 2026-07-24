@@ -50,6 +50,8 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `src/components/trade-display/TradeDisplay.css`
 - `src/pages/TradePage.tsx`
 - `src/pages/TradePage.css`
+- `test/noTradeMath.test.mjs`
+- `HANDOFF_NOTES.md`
 - `src/components/league/MatchupSlate.css`
 - `src/components/league/LeagueFutures.tsx`
 - `src/components/league/LeagueFutures.css`
@@ -71,6 +73,12 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Matchup market digest:
   - Rows still consume `LeaguePricing.movers`
   - Acceptance labels, before/after prices, and `pts/wk` copy remain payload-driven display reads
+- Market deals suggestions:
+  - Manager chips are now seeded from `/trade-suggestions -> suggestions[].partnerRosterId`
+  - Suggestion card partner name reads from `TradeSuggestion.partnerName` with the synced roster name as display fallback
+  - Suggestion card `Title` row reads directly from `TradeSuggestion.youDelta`
+  - `Playoffs` and `This week` lines are intentionally absent because `/trade-suggestions` does not currently provide those per-suggestion deltas
+  - The `generated at h:mm` stamp remains display-only from the fetch completion time for the current suggestions response
 - Futures board and chart:
   - Table rows still consume `LeaguePricing.futures`
   - Quiet movement text is derived only from existing `LineHistoryEntry.titleProb` / `playoffProb` histories already returned to the page
@@ -87,5 +95,6 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 
 - `test/noTradeMath.test.mjs` locks TradePage to the branded `oddsPairDelta` display helper instead of inline probability math.
 - `src/utils/noTradeMath.ts` brands the only allowed frontend delta transform for engine-provided odds pairs.
+- `test/noTradeMath.test.mjs` now also locks the Deals module away from the retired scan copy/path and the removed `Why this trade?` trigger.
 - `test/matchupSlateAlignment.test.mjs` locks the League This week board to a fixed chip rail on desktop and tablet widths so `YOUR GAME` never shifts row alignment.
 - `test/matchupSlateBoardRowRegression.test.mjs` launches the dev-only board-row fixture and checks that the right avatar never overlaps the fixed chip rail, while long left and right team names share width evenly before ellipsis kicks in.

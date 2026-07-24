@@ -237,14 +237,13 @@
   display: grid;
   justify-items: stretch;
   align-content: start;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   padding: 2px 0 0 14px;
   border-left: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
 }
 
 .trade-display__partner,
-.trade-display__impact,
 .trade-display__generated,
 .trade-display__footer,
 .trade-display__details {
@@ -260,9 +259,62 @@
   line-height: 1.3;
 }
 
+.trade-display__impact,
+.trade-display__impact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
 .trade-display__impact {
   text-align: left;
   line-height: 1.4;
+}
+
+.trade-display__impact-row--primary {
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-display__impact-row--secondary {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.trade-display__impact-label,
+.trade-display__impact-value {
+  min-width: 0;
+}
+
+.trade-display__impact-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trade-display__impact-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trade-display__impact-row--positive .trade-display__impact-value {
+  color: var(--green);
+}
+
+.trade-display__impact-row--negative .trade-display__impact-value {
+  color: var(--red);
+}
+
+.trade-display__impact-row--primary .trade-display__impact-label,
+.trade-display__impact-row--primary .trade-display__impact-value {
+  color: inherit;
 }
 
 .trade-display__value {
@@ -320,6 +372,8 @@
 .trade-display__generated {
   display: inline-flex;
   align-items: center;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .trade-display__details {

@@ -3,11 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
-test('TradePage routes display-only odds deltas through the no-trade-math guard', async () => {
+test('TradePage keeps the Deals module free of inline odds math and retired scan UI', async () => {
   const source = await fs.readFile(path.resolve('src/pages/TradePage.tsx'), 'utf8');
-  assert.match(source, /from '\.\.\/utils\/noTradeMath'/);
-  assert.match(source, /oddsPairDelta\(lane\.titleOddsBefore, lane\.titleOddsAfter\)/);
   assert.doesNotMatch(source, /impliedProbability\(/);
+  assert.doesNotMatch(source, /Scan the market/);
+  assert.doesNotMatch(source, /Why this trade\?/);
+  assert.match(source, /Pick a manager above to see the book\\'s deals\./);
 });
 
 test('no-trade-math guard stays branded and scoped to display-only odds pairs', async () => {

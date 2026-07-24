@@ -40,6 +40,12 @@ interface TradeLayoutProps {
   tone?: 'compact' | 'rich';
   partnerLine?: string | null;
   impactLine?: string | null;
+  impactRows?: Array<{
+    label: string;
+    value: string;
+    tone?: 'positive' | 'negative' | 'neutral';
+    emphasis?: 'primary' | 'secondary';
+  }>;
   valueLabel?: string | null;
   acceptanceProbability?: number | null;
   acceptanceLabel?: string | null;
@@ -150,6 +156,7 @@ function TradeLayout({
   tone = 'compact',
   partnerLine = null,
   impactLine = null,
+  impactRows = [],
   valueLabel = null,
   acceptanceProbability = null,
   acceptanceLabel = null,
@@ -204,13 +211,36 @@ function TradeLayout({
 
         <div className="trade-display__rail">
           {partnerLine ? <span className="trade-display__partner">{partnerLine}</span> : null}
-          {impactLine ? <span className="trade-display__impact">{impactLine}</span> : null}
-          {valueLabel ? <span className="trade-display__value">{valueLabel}</span> : null}
+          {impactRows.length > 0
+            ? impactRows.map((row) => (
+              <span
+                className={[
+                  'trade-display__impact-row',
+                  row.emphasis === 'primary'
+                    ? 'trade-display__impact-row--primary'
+                    : 'trade-display__impact-row--secondary',
+                  row.tone === 'positive'
+                    ? 'trade-display__impact-row--positive'
+                    : row.tone === 'negative'
+                      ? 'trade-display__impact-row--negative'
+                      : '',
+                ].filter(Boolean).join(' ')}
+                key={`${row.label}-${row.value}`}
+              >
+                <span className="trade-display__impact-label">{row.label}</span>
+                <span className="trade-display__impact-value">{row.value}</span>
+              </span>
+              ))
+            : impactLine
+              ? <span className="trade-display__impact">{impactLine}</span>
+              : null}
+          {valueLabel && impactRows.length === 0 ? <span className="trade-display__value">{valueLabel}</span> : null}
           <TradeAcceptanceChip label={acceptanceLabel} probability={acceptanceProbability} />
+          {generatedAt ? <span className="trade-display__generated">generated at {generatedAt}</span> : null}
         </div>
       </div>
 
-      {(whyTrigger || generatedAt || footer) ? (
+      {(whyTrigger || footer) ? (
         <div className="trade-display__footer">
           <div className="trade-display__footer-meta">
             {whyTrigger ? (
@@ -218,7 +248,6 @@ function TradeLayout({
                 {whyTrigger}
               </span>
             ) : null}
-            {generatedAt ? <span className="trade-display__generated">generated at {generatedAt}</span> : null}
           </div>
           {footer ? (
             <div

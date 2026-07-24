@@ -28,3 +28,28 @@
 
 - `DINK` is behaving as the deliberate unmanaged-roster edge-case fixture.
 - The new scouting UI treats those vacant rosters as `No file. Unmanaged team.` instead of inventing persona data.
+
+## Market suggestions payload gap
+
+- Current `/trade-suggestions` payload shape is still the light lane contract:
+  ```json
+  {
+    "available": true,
+    "suggestions": [
+      {
+        "partnerRosterId": 2,
+        "partnerName": "Hermes Express",
+        "give": [{ "id": "t-mclaurin", "name": "Terry McLaurin" }],
+        "get": [{ "id": "d-london", "name": "Drake London" }],
+        "youDelta": 2.1,
+        "partnerDelta": -1.2
+      }
+    ],
+    "debug": { "enumerated": 18, "scanned": 18, "resimmed": 6, "positive": 3, "ms": 382 }
+  }
+  ```
+- Missing per-suggestion fields for the Deals card right rail:
+  - your playoff-odds delta
+  - your current-week matchup win-probability delta
+- Request for Franco's side:
+  - add those two per-suggestion deltas directly to `/trade-suggestions` so the Deals rail can render `Playoffs` and `This week` without client derivation or per-card `/trade-analyze` fan-out
