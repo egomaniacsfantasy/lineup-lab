@@ -14,6 +14,7 @@ const collisionMatchups: LeagueWeekMatchup[] = [
     matchupId: 801,
     teamARosterId: 1,
     teamA: "Andre's Death Dealers",
+    teamAOwnerName: 'AndreVL',
     teamAAvatarUrl: null,
     teamARecord: '7-5',
     teamAOdds: -148,
@@ -21,7 +22,8 @@ const collisionMatchups: LeagueWeekMatchup[] = [
     teamAProjection: 147.4,
     teamAIsUser: true,
     teamBRosterId: 2,
-    teamB: 'Poseidon Waves',
+    teamB: "FantasyGodCasta's Team",
+    teamBOwnerName: 'FantasyGodCasta',
     teamBAvatarUrl: null,
     teamBRecord: '8-4',
     teamBOdds: 126,
@@ -72,6 +74,7 @@ const truncationMatchups: LeagueWeekMatchup[] = [
     matchupId: 9902,
     teamARosterId: 3,
     teamA: "lukewilliams340's Team",
+    teamAOwnerName: 'lukewilliams340',
     teamAAvatarUrl: null,
     teamARecord: '6-6',
     teamAOdds: -118,
@@ -80,6 +83,7 @@ const truncationMatchups: LeagueWeekMatchup[] = [
     teamAIsUser: false,
     teamBRosterId: 4,
     teamB: "FantasyGodCasta's Team",
+    teamBOwnerName: 'FantasyGodCasta',
     teamBAvatarUrl: null,
     teamBRecord: '5-7',
     teamBOdds: 102,
@@ -103,7 +107,7 @@ export function DesignBoardRowPage() {
   return (
     <div
       style={{
-        width: 'min(100%, 1120px)',
+        width: 'min(100%, 1320px)',
         margin: '0 auto',
         padding: '24px 16px 80px',
         display: 'grid',

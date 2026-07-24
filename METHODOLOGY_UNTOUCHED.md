@@ -36,6 +36,7 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Board + Projections merge into one `Board` surface with `Board` and `Sheet` views
 - Legacy board math quarantined into one frozen module instead of being extended
 - Labs-only Keep / Trade / Cut prompt with a local queue only
+- League polish pass for board row presentation, shared chart interaction, futures movement hierarchy, and schedule chart readability
 
 ## What This Pass Did Not Change
 
@@ -72,6 +73,8 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `src/components/league/LeagueFutures.tsx`
 - `src/components/league/LeagueFutures.css`
 - `src/components/season/ScheduleGrid.tsx`
+- `src/pages/DesignBoardRowPage.tsx`
+- `src/utils/leagueMovement.ts`
 - `src/components/season/ScheduleGrid.css`
 - `src/pages/LeaguePage.css`
 - `src/adapters/connectedLeague.ts`
@@ -138,10 +141,23 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
   - The board rail's `Highest total` card reads the existing priced matchup total through `PricedSide.total -> LeagueWeekMatchup.totalProjection`
   - The drill-in chart samples only real `LineHistoryEntry.lines[].sides[rosterId].winProbability` points, bucketed to day-closing display points with no interpolation
   - The July 24 board v2 pass only changes grid allocation, name presentation, and row drill-in layout
+  - The July 24 polish pass adds display-only team-name tiering:
+    - `LeagueWeekMatchup.teamA / teamB` -> board row display name (full, shortened suffix-free form, or monogram)
+    - `LeagueWeekMatchup.teamAOwnerName / teamBOwnerName` plus existing record string -> board row owner meta line
+  - Board movement text remains sourced from existing `LineHistoryEntry.lines[].sides[rosterId].winProbability`; the new footer copy only changes how the latest-threshold note is phrased
 - Schedule pace chart:
   - Continues from the existing schedule view-model already built from priced weekly schedule items
-  - This pass only changed scrub behavior, axis labeling, and presentation
+  - This pass only changed scrub behavior, axis labeling, rounding display, and presentation
   - The chart does not invent weekly probabilities or change schedule ordering
+- Shared chart system:
+  - `OddsChart` still consumes only caller-provided point series and optional band series
+  - The July 24 polish pass adds display-only behavior:
+    - range filtering now includes the last real point before the range cutoff so held-value step charts do not fabricate a left-edge jump
+    - scrub activation, snap-to-previous-point behavior, and tick de-collision are all presentation-only reads over existing point arrays
+    - `displayValueForDelta(...)` lets a surface derive the delta chip from the same rounded display values already shown in the hero header. No new number enters the UI from this hook
+- Futures board and chart:
+  - Quiet movement still reads only from existing `LineHistoryEntry.titleProb` / `playoffProb` history
+  - The July 24 polish pass only splits that existing movement label into its own fixed display column and removes the per-row timeframe suffix from the rendered text
 - Design fixtures:
   - `src/dev/designFixtures.ts` mirrors payload shapes for browser capture only
   - Fixtures never replace server methodology in connected-league runtime

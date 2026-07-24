@@ -259,6 +259,46 @@ Ship call:
 
 - Yes. This is the first Futures chart in the repo that feels like a live market chart instead of a historical diagram.
 
+## League Tab Polish Pass (July 24, 2026)
+
+### Loop 1 review
+
+Before:
+
+![League board before polish](artifacts/design-shots/chart-bible-loop3/league-board.png)
+![Futures before polish](artifacts/design-shots/chart-bible-loop3/league-futures.png)
+![Schedule before polish](artifacts/design-shots/chart-bible-loop3/league-schedule.png)
+
+Critique:
+
+- The chart system had the right visual language, but the scrub interaction was effectively dead on desktop. The charts looked interactive and then did nothing on hover, which reads as broken immediately.
+- The board row still had hidden fragility. Long right-side names and handle lines were surviving mostly because the fixture was not stressing the actual column squeeze hard enough.
+- The board note and chart footer language were talking about different windows. One chart could show a weekly delta while the footer still sounded like a week-flat state.
+- Futures had the right hierarchy in spirit, but the movement chip still shared a cell with the price, so row rhythm depended on whether that one extra line existed.
+- The pace chart was more legible than the old version, but the headline still repeated the same value in too many places and the heat-strip midpoint was muddier than the rest of the system.
+
+### Loop 2 review
+
+After:
+
+![League board after polish](artifacts/design-shots/league-polish-2026-07-24/league-board.png)
+![Futures after polish](artifacts/design-shots/league-polish-2026-07-24/league-futures.png)
+![Schedule after polish](artifacts/design-shots/league-polish-2026-07-24/league-schedule.png)
+
+What changed:
+
+- Restored scrub on all three charts through the shared `OddsChart` primitive: hover now snaps to real points, the header updates live, the wash and date label appear, and the chart drops back to live state on leave.
+- Tightened y-axis tick generation so the charts stop printing awkward raw bounds and instead land on stable whole-number ticks with the semantic anchor preserved.
+- Made the delta chip honor displayed rounding, not hidden raw precision, so the headline value and delta finally agree with each other.
+- Fixed the board row by making the short-form naming rules stricter before CSS overflow ever has to step in. Team names now tier down intentionally, owner lines drop the record when needed, and the right lockup no longer collapses under the avatar.
+- Removed the leaked internal board labels, moved the movement-threshold note back into the board surface, and corrected the drill-in footer so it no longer contradicts the visible weekly delta.
+- Split Futures movement into its own quiet fixed column, which keeps the price column aligned and restores the "price first, move second" hierarchy.
+- Simplified the pace chart header to one clear subject line, kept the one-decimal pace value as the hero, and pushed the heat strip toward a darker neutral midpoint so the book-end reds and greens read cleaner.
+
+Ship call:
+
+- Yes. This pass feels like polish rather than a rewrite, which is the right outcome: the League surfaces now behave the way they already looked like they should.
+
 ### League board v2
 
 ![League board loop 1](artifacts/design-shots/chart-bible-loop1/league-board.png)

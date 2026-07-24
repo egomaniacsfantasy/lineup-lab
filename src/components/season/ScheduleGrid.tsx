@@ -31,9 +31,9 @@ const PACE_RANGES: OddsChartRangeOption[] = [{ id: 'season', label: 'Season' }];
 
 function heatColor(winProb: number) {
   const t = Math.max(0, Math.min(1, winProb / 100));
-  const red = [168, 70, 70];
-  const neutral = [43, 46, 53];
-  const green = [58, 150, 115];
+  const red = [171, 74, 81];
+  const neutral = [24, 27, 31];
+  const green = [63, 158, 122];
   const start = t <= 0.5 ? red : neutral;
   const end = t <= 0.5 ? neutral : green;
   const mix = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
@@ -76,19 +76,16 @@ function heatTakeaway(items: ScheduleGridItem[]) {
   return `Softest: Week ${softest.week} ${formatWinProb(softest)} · toughest: Week ${toughest.week} ${formatWinProb(toughest)}.`;
 }
 
-function paceHeadline(delta: number) {
-  if (Math.abs(delta) < 0.05) return 'Even with .500 pace';
-  return `${Math.abs(delta).toFixed(1)} wins ${delta > 0 ? 'ahead of' : 'behind'} .500 pace`;
-}
-
 function paceValue(delta: number) {
-  return `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
+  const rounded = Math.abs(delta) < 0.05 ? 0 : Number(delta.toFixed(1));
+  return `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}`;
 }
 
 function paceDeltaRead(delta: number, rangeLabel: string) {
+  const rounded = Math.abs(delta) < 0.05 ? 0 : Number(delta.toFixed(1));
   return {
-    text: `${delta >= 0 ? '+' : ''}${delta.toFixed(1)} wins this ${rangeLabel.toLowerCase()}`,
-    tone: delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral',
+    text: `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)} wins this ${rangeLabel.toLowerCase()}`,
+    tone: rounded > 0 ? 'positive' : rounded < 0 ? 'negative' : 'neutral',
   } as const;
 }
 
@@ -143,7 +140,6 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
   const jumpToWeek = (week: number) => {
     rowRefs.current[week]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   };
-  const currentDelta = deltaRows.at(-1)?.delta ?? 0;
 
   return (
     <section aria-labelledby="schedule-grid-title" className="schedule-grid">
@@ -200,11 +196,12 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
             className="schedule-grid__pace-chart"
             defaultRangeId="season"
             deltaFormatter={paceDeltaRead}
+            displayValueForDelta={(value) => Number(value.toFixed(1))}
             domainMode="delta"
             footer={wormTakeaway}
             hero={{
               id: 'pace-line',
-              name: paceHeadline(currentDelta),
+              name: 'Against .500 pace',
               points: deltaPoints,
             }}
             heroFillMode="zero"

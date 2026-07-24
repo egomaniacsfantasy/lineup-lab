@@ -6,5 +6,5 @@ export function isMaterialMove(move: number) {
 
 export function formatMovementLabel(move: number, timeframe: string) {
   const arrow = move >= 0 ? '▲' : '▼';
-  return `${arrow} ${Math.abs(move).toFixed(1)} ${timeframe}`;
+  return timeframe ? `${arrow} ${Math.abs(move).toFixed(1)} ${timeframe}` : `${arrow} ${Math.abs(move).toFixed(1)}`;
 }

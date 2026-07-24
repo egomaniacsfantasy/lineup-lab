@@ -151,14 +151,21 @@ function monogram(name: string) {
 }
 
 function boardDisplayName(name: string) {
-  if (name.length <= 18) return name;
   const shortened = shortenTeamName(name);
-  if (shortened.length <= 16) return shortened;
+  if (name.length <= 18) return name;
+  if (shortened !== name && shortened.length <= 18) return shortened;
+  if (name.length <= 22 && shortened === name) return name;
+  if (shortened.length <= 22) return shortened;
   return monogram(shortened);
 }
 
 function boardHandle(ownerName: string | undefined, record: string) {
-  if (ownerName) return `${ownerName.toUpperCase()} · ${record}`;
+  if (ownerName) {
+    const owner = ownerName.toUpperCase();
+    const full = `${owner} · ${record}`;
+    if (full.length <= 18) return full;
+    if (owner.length <= 18) return owner;
+  }
   return record;
 }
 
@@ -239,8 +246,10 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
     y: valueForSide(point, selectedRow.left.side),
   })) ?? [];
   const chartFooter = selectedRow?.summary
-    ? `${selectedRow.left.name} moved ${selectedRow.summary.move >= 0 ? 'up' : 'down'} ${Math.abs(selectedRow.summary.move).toFixed(1)} points on the latest board.`
-    : 'No material moves today.';
+    ? `${selectedRow.left.name} moved ${selectedRow.summary.move >= 0 ? 'up' : 'down'} ${Math.abs(selectedRow.summary.move).toFixed(1)} points since the week opened.`
+    : chartPoints.length > 1
+      ? 'The latest reprice stayed inside the one-point move threshold.'
+      : 'No material moves yet this week.';
 
   return (
     <section aria-labelledby="matchup-slate-title" className="matchup-slate">
@@ -251,7 +260,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             This week's board
           </h2>
         </div>
-        <p className="matchup-slate__header-note">Moves today only show when the board shifted at least one point.</p>
       </div>
 
       <div className="matchup-slate__layout">
@@ -260,10 +268,10 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             <span>Matchup</span>
             <span>Price</span>
             <span>Win%</span>
-            <span>Board</span>
+            <span>Line</span>
             <span>Win%</span>
             <span>Price</span>
-            <span>Rail</span>
+            <span>Move</span>
           </div>
           <div className="matchup-slate__rows">
             {rows.map(({ matchup, left, right, favorite, summary, rowKey }) => {
@@ -324,6 +332,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
               );
             })}
           </div>
+          <div className="matchup-slate__board-note">Moves this week only show once the board shifts at least one point.</div>
         </div>
 
         <aside className="matchup-slate__aside">
@@ -367,6 +376,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                   className="matchup-slate__chart"
                   defaultRangeId="week"
                   deltaFormatter={probabilityDeltaRead}
+                  displayValueForDelta={(value) => Math.round(Math.max(0, Math.min(100, value)))}
                   footer={chartFooter}
                   hero={{
                     id: `${selectedRow.rowKey}-hero`,

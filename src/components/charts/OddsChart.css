@@ -140,6 +140,7 @@
   min-height: 238px;
   padding: 2px 0 24px;
   touch-action: pan-y;
+  cursor: crosshair;
 }
 
 .odds-chart__plot--scrubbing {
@@ -165,6 +166,7 @@
 
 .odds-chart__band {
   stroke: none;
+  opacity: 0.9;
 }
 
 .odds-chart__line {
@@ -214,7 +216,7 @@
   top: 8px;
   right: 0;
   bottom: 24px;
-  background: linear-gradient(90deg, rgba(13, 15, 17, 0.05), rgba(13, 15, 17, 0.28));
+  background: linear-gradient(90deg, rgba(13, 15, 17, 0.03), rgba(13, 15, 17, 0.26));
 }
 
 .odds-chart__scrub-line {

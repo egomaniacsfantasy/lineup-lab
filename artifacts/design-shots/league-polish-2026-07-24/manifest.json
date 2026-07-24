@@ -1,0 +1,62 @@
+[
+  {
+    "name": "matchup-cold",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/matchup-cold.png"
+  },
+  {
+    "name": "matchup-empty",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/matchup-empty.png"
+  },
+  {
+    "name": "matchup-live-expanded",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/matchup-live-expanded.png"
+  },
+  {
+    "name": "market-default",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/market-default.png"
+  },
+  {
+    "name": "market-manager-apollo",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/market-manager-apollo.png"
+  },
+  {
+    "name": "market-verdict-1for1",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/market-verdict-1for1.png"
+  },
+  {
+    "name": "market-verdict-3for1",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/market-verdict-3for1.png"
+  },
+  {
+    "name": "league-board",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/league-board.png"
+  },
+  {
+    "name": "league-board-expanded",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/league-board-expanded.png"
+  },
+  {
+    "name": "league-futures",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/league-futures.png"
+  },
+  {
+    "name": "league-futures-compare",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/league-futures-compare.png"
+  },
+  {
+    "name": "league-schedule",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/league-schedule.png"
+  },
+  {
+    "name": "board-default",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/board-default.png"
+  },
+  {
+    "name": "board-expanded",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/board-expanded.png"
+  },
+  {
+    "name": "board-sheet",
+    "file": "/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/league-polish-2026-07-24/board-sheet.png"
+  }
+]

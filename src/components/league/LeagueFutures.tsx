@@ -241,6 +241,7 @@ export function LeagueFutures({
           <span>Avg seed</span>
           <span>Playoff %</span>
           <span>{isPlayoffMarket ? 'Playoff price' : 'Title price'}</span>
+          <span>Move</span>
         </div>
         {futures.map((team, index) => {
           const teamSeries = historyTeams.find((row) => row.team.rosterId === team.rosterId)?.series ?? [];
@@ -293,8 +294,10 @@ export function LeagueFutures({
                   <span className={['league-futures__odds', team.isUser ? 'league-futures__odds--selected' : ''].filter(Boolean).join(' ')}>
                     {formatAmericanOdds(odds)}
                   </span>
+                </span>
+                <span className="league-futures__move-cell" role="cell">
                   {move != null ? (
-                    <LeagueMovementChip className="league-futures__move-chip" move={move} timeframe="this week" variant="quiet" />
+                    <LeagueMovementChip className="league-futures__move-chip" move={move} timeframe="" variant="quiet" />
                   ) : null}
                 </span>
               </button>
@@ -322,6 +325,7 @@ export function LeagueFutures({
               : null}
             defaultRangeId="month"
             deltaFormatter={probabilityDeltaRead}
+            displayValueForDelta={(value) => Math.round(Math.max(0, Math.min(100, value)))}
             footer={footerText}
             hero={{
               id: 'user-history',

@@ -71,6 +71,8 @@ test('your-game row keeps the avatar outside the fixed rail even after the pill 
         const tag = document.querySelector('.matchup-slate__tag');
         const move = document.querySelector('.matchup-slate__rail .matchup-slate__move');
         const rail = document.querySelector('.matchup-slate__rail');
+        const rightName = document.querySelector('.matchup-slate__team--right .matchup-slate__team-name');
+        const rightMeta = document.querySelector('.matchup-slate__team--right .matchup-slate__team-meta');
         const rect = (element) => {
           if (!element) return null;
           const { top, right, bottom, left, width, height } = element.getBoundingClientRect();
@@ -81,6 +83,14 @@ test('your-game row keeps the avatar outside the fixed rail even after the pill 
           tag: rect(tag),
           move: rect(move),
           rail: rect(rail),
+          rightName: rect(rightName),
+          rightMeta: rightMeta
+            ? {
+                clientWidth: rightMeta.clientWidth,
+                scrollWidth: rightMeta.scrollWidth,
+                text: rightMeta.textContent,
+              }
+            : null,
         };
       });
 
@@ -88,8 +98,15 @@ test('your-game row keeps the avatar outside the fixed rail even after the pill 
       assert.equal(layout.tag, null, `unexpected YOUR GAME pill still rendered at ${width}px`);
       assert.ok(layout.move, `missing movement chip at ${width}px`);
       assert.ok(layout.rail, `missing chip rail at ${width}px`);
+      assert.ok(layout.rightName, `missing right team name at ${width}px`);
+      assert.ok(layout.rightMeta, `missing right team meta at ${width}px`);
       assert.equal(overlaps(layout.avatar, layout.move), false, `avatar overlaps movement chip at ${width}px`);
+      assert.equal(overlaps(layout.avatar, layout.rightName), false, `avatar overlaps right team name at ${width}px`);
       assert.ok(layout.avatar.right <= layout.rail.left, `avatar bleeds into chip rail at ${width}px`);
+      assert.ok(
+        layout.rightMeta.scrollWidth <= layout.rightMeta.clientWidth,
+        `right handle line clips before the grid runs out of space at ${width}px`,
+      );
     } finally {
       await page.close();
     }

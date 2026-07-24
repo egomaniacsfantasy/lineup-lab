@@ -72,6 +72,7 @@ interface OddsChartProps {
   showHeroEndpoint?: boolean;
   showComparisonEndpoint?: boolean;
   heroFillMode?: 'floor' | 'zero' | 'none';
+  displayValueForDelta?: (value: number) => number;
 }
 
 const DEFAULT_RANGES: OddsChartRangeOption[] = [{ id: 'season', label: 'Season' }];
@@ -169,7 +170,13 @@ function filterPointsForRange(
 ) {
   if (range.windowMs == null) return points;
   const cutoff = latestX - range.windowMs;
-  return points.filter((point) => point.x >= cutoff);
+  const visible = points.filter((point) => point.x >= cutoff);
+  if (visible.length === 0) return points.slice(-1);
+  const firstVisibleIndex = points.findIndex((point) => point.x >= cutoff);
+  if (firstVisibleIndex > 0) {
+    return [points[firstVisibleIndex - 1], ...visible];
+  }
+  return visible;
 }
 
 function filterBandForRange(
@@ -179,7 +186,13 @@ function filterBandForRange(
 ) {
   if (range.windowMs == null) return points;
   const cutoff = latestX - range.windowMs;
-  return points.filter((point) => point.x >= cutoff);
+  const visible = points.filter((point) => point.x >= cutoff);
+  if (visible.length === 0) return points.slice(-1);
+  const firstVisibleIndex = points.findIndex((point) => point.x >= cutoff);
+  if (firstVisibleIndex > 0) {
+    return [points[firstVisibleIndex - 1], ...visible];
+  }
+  return visible;
 }
 
 function materializedRanges(
@@ -220,14 +233,55 @@ function defaultXAxisLabels(points: OddsChartPoint[]) {
 }
 
 function probabilityTicks(minY: number, maxY: number) {
-  const midpoint = (minY + maxY) / 2;
-  const ticks = [minY, midpoint, maxY];
-  if (minY < 50 && maxY > 50) ticks.push(50);
-  return uniqueNumbers(ticks);
+  const span = Math.max(1, maxY - minY);
+  const step = span <= 14 ? 4 : span <= 24 ? 5 : span <= 48 ? 10 : 25;
+  const ticks = new Set<number>();
+  const start = Math.ceil(minY / step) * step;
+  for (let value = start; value <= maxY + 0.001; value += step) {
+    ticks.add(value);
+  }
+  if (minY < 50 && maxY > 50) ticks.add(50);
+  if (Math.abs(minY) < 0.001) ticks.add(0);
+  if (Math.abs(maxY - 100) < 0.001) ticks.add(100);
+  const resolved = uniqueNumbers([...ticks]).filter((value) => value >= minY - 0.001 && value <= maxY + 0.001);
+  return resolved.length > 0 ? resolved : uniqueNumbers([minY, maxY]);
 }
 
 function deltaTicks(minY: number, maxY: number, referenceValue: number) {
-  return uniqueNumbers([minY, referenceValue, maxY]);
+  const span = Math.max(0.2, maxY - minY);
+  const step = span <= 2.5 ? 0.5 : span <= 5 ? 1 : span <= 10 ? 2 : 5;
+  const ticks = new Set<number>();
+  const start = Math.ceil(minY / step) * step;
+  for (let value = start; value <= maxY + 0.0001; value += step) {
+    ticks.add(Number(value.toFixed(2)));
+  }
+  ticks.add(referenceValue);
+  const resolved = uniqueNumbers([...ticks]).filter((value) => value >= minY - 0.001 && value <= maxY + 0.001);
+  return resolved.length > 0 ? resolved : uniqueNumbers([minY, referenceValue, maxY]);
+}
+
+function filterTicksBySpacing(
+  ticks: number[],
+  bounds: ReturnType<typeof chartBounds>,
+  preferredAnchor: number,
+  minSpacing = 14,
+) {
+  const prioritized = ticks
+    .slice()
+    .sort((left, right) => {
+      const leftAnchor = Math.abs(left - preferredAnchor);
+      const rightAnchor = Math.abs(right - preferredAnchor);
+      if (leftAnchor !== rightAnchor) return leftAnchor - rightAnchor;
+      return right - left;
+    });
+  const kept: number[] = [];
+  prioritized.forEach((tick) => {
+    const y = yCoord(tick, bounds);
+    if (kept.every((existing) => Math.abs(yCoord(existing, bounds) - y) >= minSpacing)) {
+      kept.push(tick);
+    }
+  });
+  return kept.sort((left, right) => left - right);
 }
 
 function stepPoints(points: OddsChartPoint[], bounds: ReturnType<typeof chartBounds>) {
@@ -348,11 +402,14 @@ export function OddsChart({
   showHeroEndpoint = true,
   showComparisonEndpoint = true,
   heroFillMode = domainMode === 'delta' ? 'zero' : 'floor',
+  displayValueForDelta = (value) => value,
 }: OddsChartProps) {
   const chartId = useId();
   const chartRef = useRef<HTMLDivElement | null>(null);
   const touchHoldRef = useRef<number | null>(null);
   const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const touchLastXRef = useRef(0);
   const [selectedRangeId, setSelectedRangeId] = useState(defaultRangeId ?? rangeOptions?.at(-1)?.id ?? 'season');
   const [scrubClientX, setScrubClientX] = useState<number | null>(null);
 
@@ -385,6 +442,7 @@ export function OddsChart({
   const ticks = domainMode === 'probability'
     ? probabilityTicks(bounds.minY, bounds.maxY)
     : deltaTicks(bounds.minY, bounds.maxY, resolvedReferenceValue);
+  const visibleTicks = filterTicksBySpacing(ticks, bounds, resolvedReferenceValue);
   const idleHeroPoint = visibleHero.at(-1) ?? null;
   const openHeroPoint = visibleHero[0] ?? idleHeroPoint;
   const idleComparisonPoint = visibleComparison.at(-1) ?? null;
@@ -403,7 +461,9 @@ export function OddsChart({
     ? snapPoint(visibleComparison, activeHeroPoint.x)
     : idleComparisonPoint;
 
-  const deltaValue = activeHeroPoint && openHeroPoint ? activeHeroPoint.y - openHeroPoint.y : 0;
+  const deltaValue = activeHeroPoint && openHeroPoint
+    ? displayValueForDelta(activeHeroPoint.y) - displayValueForDelta(openHeroPoint.y)
+    : 0;
   const deltaRead = Math.abs(deltaValue) < flatThreshold
     ? { text: flatText, tone: 'neutral' as const }
     : deltaFormatter(deltaValue, activeRange.label);
@@ -443,7 +503,9 @@ export function OddsChart({
   ) => {
     if (!chartRef.current) return;
     if (activateImmediately) {
-      event.currentTarget.setPointerCapture(event.pointerId);
+      if (event.pointerType !== 'mouse') {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
       setScrubClientX(event.clientX);
     }
   };
@@ -451,9 +513,11 @@ export function OddsChart({
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'touch') {
       touchStartXRef.current = event.clientX;
+      touchStartYRef.current = event.clientY;
+      touchLastXRef.current = event.clientX;
       clearTouchHold();
       touchHoldRef.current = window.setTimeout(() => {
-        setScrubClientX(event.clientX);
+        setScrubClientX(touchLastXRef.current);
       }, 180);
       return;
     }
@@ -461,21 +525,43 @@ export function OddsChart({
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === 'touch' && scrubClientX == null) {
-      const distance = Math.abs(event.clientX - touchStartXRef.current);
-      if (distance > 10) {
-        clearTouchHold();
-        setScrubClientX(event.clientX);
+    if (event.pointerType === 'touch') {
+      touchLastXRef.current = event.clientX;
+      if (scrubClientX == null) {
+        const horizontalDistance = Math.abs(event.clientX - touchStartXRef.current);
+        const verticalDistance = Math.abs(event.clientY - touchStartYRef.current);
+        if (verticalDistance > 8 && verticalDistance > horizontalDistance) {
+          clearTouchHold();
+          return;
+        }
+        if (horizontalDistance > 10) {
+          clearTouchHold();
+        }
+        return;
       }
+      setScrubClientX(event.clientX);
       return;
     }
-    if (scrubClientX != null) {
+    setScrubClientX(event.clientX);
+  };
+
+  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') {
+      endScrub();
+      return;
+    }
+    if (chartRef.current?.matches(':hover')) {
       setScrubClientX(event.clientX);
+    } else {
+      setScrubClientX(null);
     }
   };
 
-  const handlePointerLeave = () => {
-    if (scrubClientX != null) endScrub();
+  const handlePointerLeave = (event: ReactPointerEvent<HTMLDivElement>) => {
+    clearTouchHold();
+    if (event.pointerType !== 'touch' || scrubClientX != null) {
+      setScrubClientX(null);
+    }
   };
 
   const scrubLineLeft = activeHeroPoint ? `${xCoord(activeHeroPoint.x, bounds)}%` : null;
@@ -536,7 +622,7 @@ export function OddsChart({
         onPointerDown={handlePointerDown}
         onPointerLeave={handlePointerLeave}
         onPointerMove={handlePointerMove}
-        onPointerUp={endScrub}
+        onPointerUp={handlePointerUp}
         ref={chartRef}
       >
         <svg
@@ -557,12 +643,12 @@ export function OddsChart({
               <stop offset="100%" stopColor="rgba(255, 92, 77, 0.18)" />
             </linearGradient>
             <linearGradient id={bandGradientId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="rgba(244, 245, 242, 0.1)" />
-              <stop offset="100%" stopColor="rgba(244, 245, 242, 0.06)" />
+              <stop offset="0%" stopColor="rgba(244, 245, 242, 0.08)" />
+              <stop offset="100%" stopColor="rgba(244, 245, 242, 0.03)" />
             </linearGradient>
           </defs>
 
-          {ticks.map((tick) => (
+          {visibleTicks.map((tick) => (
             <line
               className={[
                 'odds-chart__grid',
@@ -601,7 +687,7 @@ export function OddsChart({
         </svg>
 
         <div className="odds-chart__y-axis" aria-hidden="true">
-          {ticks
+          {visibleTicks
             .slice()
             .reverse()
             .map((tick) => (
