@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 const LABS_EVENT = 'og:labs-flags';
 const DYNASTY_TRADES_KEY = 'og.labs.dynasty-trades-experimental';
+const PLAYER_VOTES_KEY = 'og.labs.player-votes';
 
 function acceptanceKey(leagueId: string) {
   return `og.scouting.acceptance.${leagueId}`;
@@ -22,6 +23,23 @@ export function readDynastyTradesExperimental() {
   } catch {
     return true;
   }
+}
+
+export function readPlayerVotesEnabled() {
+  try {
+    return parseBoolean(window.localStorage.getItem(PLAYER_VOTES_KEY), false);
+  } catch {
+    return false;
+  }
+}
+
+export function writePlayerVotesEnabled(value: boolean) {
+  try {
+    window.localStorage.setItem(PLAYER_VOTES_KEY, value ? '1' : '0');
+  } catch {
+    // ignore storage failures
+  }
+  emitFlagChange(PLAYER_VOTES_KEY, value);
 }
 
 export function writeDynastyTradesExperimental(value: boolean) {
@@ -86,6 +104,11 @@ function useFlagValue(key: string, initial: boolean) {
 
 export function useDynastyTradesExperimental() {
   const [value] = useFlagValue(DYNASTY_TRADES_KEY, readDynastyTradesExperimental());
+  return value;
+}
+
+export function usePlayerVotesEnabled() {
+  const [value] = useFlagValue(PLAYER_VOTES_KEY, readPlayerVotesEnabled());
   return value;
 }
 

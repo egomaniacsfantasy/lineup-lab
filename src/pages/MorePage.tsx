@@ -4,7 +4,11 @@ import { LeagueSettings } from '../components/league/LeagueSettings';
 import { WelcomeCard } from '../components/onboarding/WelcomeCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
-import { useDynastyTradesExperimental, writeDynastyTradesExperimental } from '../hooks/useLabsFlags';
+import {
+  useDynastyTradesExperimental,
+  usePlayerVotesEnabled,
+  writeDynastyTradesExperimental,
+} from '../hooks/useLabsFlags';
 import { toLeagueConnection } from '../adapters/connectedLeague';
 import { PROVIDER_LABEL } from '../utils/provider';
 import './MorePage.css';
@@ -16,6 +20,7 @@ export function MorePage() {
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
   const navigate = useNavigate();
   const dynastyTradesExperimental = useDynastyTradesExperimental();
+  const playerVotesEnabled = usePlayerVotesEnabled();
   const isOwner =
     user?.app_metadata?.role === 'owner' ||
     user?.user_metadata?.role === 'owner' ||
@@ -39,9 +44,9 @@ export function MorePage() {
       path: '/draft',
     },
     {
-      title: 'Projections',
-      body: 'Player projection table and agreement columns.',
-      path: '/projections',
+      title: 'Board · Sheet view',
+      body: 'Player board plus the power-user spreadsheet view.',
+      path: '/rankings?view=sheet',
     },
     ...(isOwner
       ? [
@@ -143,6 +148,17 @@ export function MorePage() {
             <span />
           </button>
         </div>
+        {playerVotesEnabled ? (
+          <Link className="more-page__card" to="/rankings?labs=player-votes">
+            <div>
+              <h3 className="more-page__card-title">Player votes</h3>
+              <p className="more-page__card-body">
+                Dark-launched Keep / Trade / Cut prompt. Votes queue locally and do not touch Franco&apos;s pipeline.
+              </p>
+            </div>
+            <span className="more-page__card-cta">Open</span>
+          </Link>
+        ) : null}
       </section>
       {bootstrap ? (
         <section className="more-page__section">

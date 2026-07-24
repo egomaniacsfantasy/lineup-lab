@@ -299,3 +299,54 @@ What changed:
 Ship call:
 
 - Yes. It now reads as a pace chart in wins, not as a recycled probability sparkline.
+
+---
+
+## Board + Sheet Merge (July 24, 2026)
+
+### Board view, loop 1
+
+![Board merge loop 1](artifacts/design-shots/board-merge-loop1/board-expanded.png)
+
+Critique:
+
+- The merge itself was real, which mattered more than polish at this stage, but the expanded player card still felt too much like a utility slab inside a decent board row.
+- The first loop also exposed the payload join bug immediately: the stat strip was blank for players who absolutely should have had season stat detail, which meant the new surface was not honestly wired yet.
+- The row rhythm was strong enough to keep, but the card was still more "form + boxes" than premium board detail.
+
+### Board view, loop 2
+
+![Board merge loop 2](artifacts/design-shots/board-merge-loop2/board-expanded.png)
+
+What changed:
+
+- Fixed the Board-to-Projections join by falling back from player id to exact `position + name` when the two payloads identify the same player differently.
+- Kept the board row itself quiet and scan-first, while the expand card now carries real stat pills, a real next-opponent line, and the friendly rating slider.
+- Preserved the one loud number rule: adjusted value still dominates, and the rest of the card supports it instead of competing with it.
+
+Ship call:
+
+- Yes. The card is still denser than a marketing surface, but it now reads like a serious fantasy board detail panel instead of an exposed tool panel.
+
+### Sheet view, loop 1
+
+![Sheet merge loop 1](artifacts/design-shots/board-merge-loop1/board-sheet.png)
+
+Critique:
+
+- This was a productive failure. The screenshot being stuck on `Loading Board…` proved the harness was not actually waiting for the Sheet surface, so any claim that the merge had been reviewed would have been dishonest.
+- The route itself was fine; the capture contract was wrong.
+
+### Sheet view, loop 2
+
+![Sheet merge loop 2](artifacts/design-shots/board-merge-loop2/board-sheet.png)
+
+What changed:
+
+- Updated the harness to wait for the Sheet table itself instead of sleeping and hoping the route would be ready.
+- The Sheet now reads like a tamed spreadsheet: one sticky player column, one core numeric rhythm, presets instead of checkbox soup, and the rapid-entry affordance pushed into its rightful power-user corner.
+- Added the `pick a position above` note for non-simple presets when `Overall` is active, so the table is explicit about why position stats are not shown yet.
+
+Ship call:
+
+- Yes. It now behaves like a serious companion view to the Board, not like the old Projections tab dropped unchanged into a new route.

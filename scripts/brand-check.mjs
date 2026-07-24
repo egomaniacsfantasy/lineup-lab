@@ -23,6 +23,11 @@ const TARGETS = [
   'src/utils/tradeSuggestionDisplay.ts',
   'src/utils/deltaTone.ts',
   'src/utils/lineupRow.ts',
+  'src/pages/MyBoardPage.tsx',
+  'src/pages/MyBoardPage.css',
+  'src/pages/MorePage.tsx',
+  'src/components/layout/AppHeader.tsx',
+  'src/components/layout/BottomTabBar.tsx',
 ];
 const DISALLOWED_DASHES = /[—–]/;
 const DISALLOWED_COLORS = [
@@ -31,6 +36,7 @@ const DISALLOWED_COLORS = [
   /rgb\s*\(\s*245\s*,\s*158\s*,\s*11\s*\)/gi,
   /(?<![-\w])amber-[\w-]+\b/gi,
 ];
+const DISALLOWED_BOARD_JARGON = [/\bVOR\b/g, /\bFP\b/g, /Agreement-weighted/g, /Baseline:/g];
 
 function lineNumberAt(text, index) {
   return text.slice(0, index).split('\n').length;
@@ -93,6 +99,50 @@ function checkRawColors(file, sourceText, issues) {
   }
 }
 
+function checkBoardJargon(file, sourceText, issues) {
+  const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, true);
+  const visit = (node) => {
+    if (
+      ts.isStringLiteral(node)
+      || ts.isNoSubstitutionTemplateLiteral(node)
+      || ts.isJsxText(node)
+    ) {
+      const value = node.getText(sourceFile).slice(1, -1);
+      for (const pattern of DISALLOWED_BOARD_JARGON) {
+        pattern.lastIndex = 0;
+        const match = pattern.exec(value);
+        if (match?.index != null) {
+          pushIssue(
+            issues,
+            file,
+            lineNumberAt(sourceText, node.getStart(sourceFile) + match.index),
+            `contains blocked board jargon "${match[0]}"`,
+          );
+        }
+      }
+    }
+    if (ts.isTemplateExpression(node)) {
+      const segments = [node.head, ...node.templateSpans.map((span) => span.literal)];
+      for (const segment of segments) {
+        for (const pattern of DISALLOWED_BOARD_JARGON) {
+          pattern.lastIndex = 0;
+          const match = pattern.exec(segment.text);
+          if (match?.index != null) {
+            pushIssue(
+              issues,
+              file,
+              lineNumberAt(sourceText, segment.getStart(sourceFile) + match.index),
+              `contains blocked board jargon "${match[0]}"`,
+            );
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+}
+
 const files = TARGETS.map((target) => path.join(ROOT, target));
 const issues = [];
 
@@ -100,6 +150,9 @@ for (const file of files) {
   const sourceText = await fs.readFile(file, 'utf8');
   if (file.endsWith('.ts') || file.endsWith('.tsx')) {
     checkTsTextNodes(file, sourceText, issues);
+    if (file.includes('MyBoardPage') || file.includes('MorePage')) {
+      checkBoardJargon(file, sourceText, issues);
+    }
   }
   checkRawColors(file, sourceText, issues);
 }

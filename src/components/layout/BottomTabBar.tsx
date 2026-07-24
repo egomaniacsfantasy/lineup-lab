@@ -46,18 +46,6 @@ const BASE_TABS = [
     ),
   },
   {
-    label: 'Proj',
-    path: '/projections',
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M4 16V4M4 16h12" />
-        <rect x="6.5" y="10" width="2.4" height="4" rx="0.5" />
-        <rect x="10.3" y="7" width="2.4" height="7" rx="0.5" />
-        <rect x="14.1" y="4.5" width="2.4" height="9.5" rx="0.5" />
-      </svg>
-    ),
-  },
-  {
     label: 'More',
     path: '/more',
     icon: (

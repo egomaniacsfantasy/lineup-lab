@@ -53,3 +53,49 @@
   - your current-week matchup win-probability delta
 - Request for Franco's side:
   - add those two per-suggestion deltas directly to `/trade-suggestions` so the Deals rail can render `Playoffs` and `This week` without client derivation or per-card `/trade-analyze` fan-out
+
+## Board adjusted-value payload gap
+
+- The merged `Board` surface still has one frozen legacy exception: the headline `Adjusted value` number and Board ordering are coming from the pre-existing client-side computation that used to live inline in `MyBoardPage.tsx`.
+- That logic is now quarantined in `src/pages/legacyAdjustedValue.ts` with an explicit frozen comment and no extensions.
+- Request for Franco's side:
+  - expose `adjustedValue` per player directly on `/api/rankings`
+  - keep the existing ranking payload fields alongside it
+- UI contract on our side:
+  - the merged Board page is ready to prefer a payload `adjustedValue` field immediately
+  - the legacy module can be deleted the same day that field lands
+
+## Board trend payload gap
+
+- The new Board rows were designed with a quiet trend slot, but the UI is shipping without a trend chip because the current payloads do not provide player-level board movement history.
+- Missing field request:
+  - a player-level board-history or trend delta field on `/api/rankings` or a companion endpoint
+- Constraint held on the frontend:
+  - no board movement was derived, approximated, or inferred from unrelated numbers
+
+## Player votes lab handoff
+
+- The KTC-style prompt is dark-launched behind `og.labs.player-votes`.
+- Votes queue locally only in `localStorage["og.playerVotes.queue"]`.
+- Current queued shape:
+  ```json
+  {
+    "at": "2026-07-24T14:05:00.000Z",
+    "keep": "9509",
+    "keepName": "Bijan Robinson",
+    "trade": "4035",
+    "tradeName": "Ja'Marr Chase",
+    "cut": "11672",
+    "cutName": "Puka Nacua",
+    "trio": ["9509", "4035", "11672"]
+  }
+  ```
+- Proposed event interpretation for Franco's side:
+  - ordered triple -> three pairwise facts
+  - `keep > trade`
+  - `keep > cut`
+  - `trade > cut`
+- Open question that stays on Franco's side:
+  - if and how comparative vote facts should convert into his agreement inputs or a separate crowd signal
+- Research note for why this exists:
+  - comparative judgment tends to outperform absolute rating scales in crowd-ranking literature, which is why the UI explores it without touching the live agreement pipeline yet

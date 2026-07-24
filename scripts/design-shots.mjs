@@ -159,6 +159,25 @@ try {
     await page.waitForTimeout(800);
   });
 
+  await capture('board-default', async (page) => {
+    await page.goto('http://127.0.0.1:4173/design/board', { waitUntil: 'domcontentloaded' });
+    await page.locator('.board-page__row').first().waitFor({ state: 'visible' });
+    await page.waitForTimeout(250);
+  });
+
+  await capture('board-expanded', async (page) => {
+    await page.goto('http://127.0.0.1:4173/design/board', { waitUntil: 'domcontentloaded' });
+    await page.locator('.board-page__row-button').first().waitFor({ state: 'visible' });
+    await page.locator('.board-page__row-button').first().click();
+    await page.waitForTimeout(300);
+  });
+
+  await capture('board-sheet', async (page) => {
+    await page.goto('http://127.0.0.1:4173/design/board?view=sheet&pos=WR', { waitUntil: 'domcontentloaded' });
+    await page.locator('.board-page__table').waitFor({ state: 'visible' });
+    await page.waitForTimeout(250);
+  });
+
   await browser.close();
   await writeFile(path.join(outputDir, 'manifest.json'), `${JSON.stringify(shots, null, 2)}\n`, 'utf8');
   console.log(`Saved ${shots.length} design shots to ${outputDir}`);

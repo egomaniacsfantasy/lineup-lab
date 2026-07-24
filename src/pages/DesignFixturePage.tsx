@@ -4,6 +4,7 @@ import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { connectionForDesignScene, type DesignScene } from '../dev/designFixtures';
 import { LeaguePage } from './LeaguePage';
 import { MatchupPage } from './MatchupPage';
+import { MyBoardPage } from './MyBoardPage';
 import { TradePage } from './TradePage';
 
 const SCENES: Record<DesignScene, ReactElement> = {
@@ -12,6 +13,7 @@ const SCENES: Record<DesignScene, ReactElement> = {
   'matchup-live': <MatchupPage />,
   market: <TradePage />,
   league: <LeaguePage />,
+  board: <MyBoardPage />,
 };
 
 function isDesignScene(value: string | undefined): value is DesignScene {

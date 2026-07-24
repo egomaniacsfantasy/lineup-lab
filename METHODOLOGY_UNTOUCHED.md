@@ -2,6 +2,14 @@
 
 This rebuild pass was constrained by one rule: frontend presentation changed, pricing methodology did not.
 
+## Legacy Exception
+
+- A pre-existing client-side adjusted-value computation was found in the old `MyBoardPage.tsx`.
+- It has been moved, untouched, into `src/pages/legacyAdjustedValue.ts` under a frozen comment block:
+  - `LEGACY CLIENT-SIDE COMPUTATION — violates the display-verbatim rule, predates it. Frozen. Delete when /api/rankings exposes adjustedValue. Do not extend.`
+- The merged Board surface still renders that exact legacy headline number and ordering so the live feature does not regress before Franco exposes a server-side `adjustedValue` field.
+- No new client-side valuation math was added around it.
+
 ## Constitution
 
 - Frontend surfaces do not compute a trade metric.
@@ -25,6 +33,9 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Shared chart-system rebuild across Futures, League board drill-in, and Schedule pace
 - League This week board v2 layout with docked right rail and fixed numeric columns
 - Regression guards and documentation
+- Board + Projections merge into one `Board` surface with `Board` and `Sheet` views
+- Legacy board math quarantined into one frozen module instead of being extended
+- Labs-only Keep / Trade / Cut prompt with a local queue only
 
 ## What This Pass Did Not Change
 
@@ -70,6 +81,15 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `test/matchupSlateAlignment.test.mjs`
 - `test/matchupSlateBoardRowRegression.test.mjs`
 - `DESIGN_PASS.md`
+- `src/pages/MyBoardPage.tsx`
+- `src/pages/MyBoardPage.css`
+- `src/pages/legacyAdjustedValue.ts`
+- `src/pages/MorePage.tsx`
+- `src/components/layout/AppHeader.tsx`
+- `src/components/layout/BottomTabBar.tsx`
+- `src/hooks/useLabsFlags.ts`
+- `scripts/brand-check.mjs`
+- `test/boardMergeRoutes.test.mjs`
 
 ## Payload Map Additions
 
@@ -95,6 +115,23 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
   - The shared chart samples day-closing points from existing `LineHistoryEntry.titleProb` / `playoffProb` values only
   - Range pills only filter to real sampled points already in the payload. No interpolation or fabricated midpoints are introduced
   - Endpoint tag repeats the same team identity and current price already shown by the selected futures row
+- Board + Sheet merge:
+  - The merged Board list still starts from `/api/rankings -> rankings[]`
+  - Board and Sheet headline values still use the existing ranking payload fields:
+    - `BoardRow.seasonTotal` -> `Proj pts`
+    - `BoardRow.floor` -> `Floor`
+    - `BoardRow.ceiling` -> `Ceiling`
+    - `BoardRow.tier` -> rendered tier bars and the Sheet `Tier` column
+    - `BoardRow.mean` -> Sheet `Avg week`
+  - The expanded player card's stat strip reads only from `/api/projections -> players[].season`
+  - The expanded player card's next-opponent line reads only from `/api/projections -> players[].weekly[]`
+  - The Board view intentionally renders no trend chip because neither `/api/rankings` nor `/api/projections` currently provides a player-level board-movement field
+  - The Sheet `Your rating` column and the player-card slider both write through the existing Supabase `olympus_agreement` save path and still trigger `/api/projections/refresh-adjusted`
+  - The merged surface prefers a direct `/api/rankings` player-id join, then falls back to exact `position + name` matching only to connect existing payloads for display
+- Player votes lab:
+  - The prompt is gated by `og.labs.player-votes`
+  - Votes are stored locally only in `localStorage["og.playerVotes.queue"]`
+  - No vote writes hit a server route, Supabase table, engine input, or projection pipeline
 - League This week board:
   - Team owner handles now read from `bootstrap.teams[].ownerName` through `toWeekMatchups(...)`
   - Board rows still render from existing board/history view-model fields in engine order
@@ -116,3 +153,4 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `test/noTradeMath.test.mjs` now also locks the Deals module away from the retired scan copy/path and the removed `Why this trade?` trigger.
 - `test/matchupSlateAlignment.test.mjs` locks the League This week board to a fixed chip rail on desktop and tablet widths so `YOUR GAME` never shifts row alignment.
 - `test/matchupSlateBoardRowRegression.test.mjs` launches the dev-only board-row fixture and checks that the right avatar never overlaps the fixed rail after the pill removal, while long left and right team names share width evenly before truncation pressure would appear.
+- `test/boardMergeRoutes.test.mjs` locks the nav merge: no standalone Projections tab, `/projections` redirects to `Board · Sheet`, and the More-page tool card points at the merged surface.

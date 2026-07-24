@@ -55,7 +55,6 @@ export function AppHeader() {
         { label: 'League', path: '/league' },
         ...(hideTrade ? [] : [{ label: 'Market', path: '/market', badge: showExperimentalMarketTag ? 'experimental' : null }]),
         { label: 'Board', path: '/rankings' },
-        { label: 'Projections', path: '/projections' },
         { label: 'More', path: '/more' },
       ]
     : [{ label: 'Connect', path: '/connect' }];

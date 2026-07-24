@@ -17,7 +17,8 @@ export type DesignScene =
   | 'matchup'
   | 'matchup-live'
   | 'market'
-  | 'league';
+  | 'league'
+  | 'board';
 
 const FIXTURE_IDS = {
   'matchup-cold': 'og-design-matchup-cold',
@@ -25,6 +26,7 @@ const FIXTURE_IDS = {
   'matchup-live': 'og-design-matchup-live',
   market: 'og-design-market-live',
   league: 'og-design-league-live',
+  board: 'og-design-league-live',
 } as const;
 
 const FIXTURE_SCENE_BY_ID = new Map<string, DesignScene>(
