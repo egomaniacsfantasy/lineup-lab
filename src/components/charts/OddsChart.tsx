@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { TeamAvatar } from '../league/TeamAvatar';
+import { displayedDelta } from '../../utils/displayDelta';
 import './OddsChart.css';
 
 export interface OddsChartPoint {
@@ -396,7 +397,7 @@ export function OddsChart({
   xTickFormatter = defaultDateFormatter,
   yTickFormatter = defaultYAxisFormatter,
   domainMode = 'probability',
-  flatText = "The line hasn't moved since open.",
+  flatText = '0.0 vs open',
   flatThreshold = domainMode === 'probability' ? 1 : 0.15,
   referenceValue = domainMode === 'probability' ? 50 : 0,
   showHeroEndpoint = true,
@@ -462,7 +463,7 @@ export function OddsChart({
     : idleComparisonPoint;
 
   const deltaValue = activeHeroPoint && openHeroPoint
-    ? displayValueForDelta(activeHeroPoint.y) - displayValueForDelta(openHeroPoint.y)
+    ? displayedDelta(openHeroPoint.y, activeHeroPoint.y, { mapValue: displayValueForDelta })
     : 0;
   const deltaRead = Math.abs(deltaValue) < flatThreshold
     ? { text: flatText, tone: 'neutral' as const }
@@ -480,6 +481,9 @@ export function OddsChart({
       ? -10
       : 0;
   const scrubActive = scrubClientX != null && activeHeroPoint != null;
+  const bandFadeStart = visibleBand.length > 0 ? xCoord(visibleBand[0].x, bounds) : PLOT.left;
+  const bandFadeInStart = Math.max(PLOT.left, bandFadeStart - 2);
+  const bandFadeInEnd = Math.min(PLOT.right, bandFadeStart + 3);
 
   const heroGradientId = `${chartId}-hero-fill`;
   const deltaGradientId = `${chartId}-delta-fill`;
@@ -642,9 +646,10 @@ export function OddsChart({
               <stop offset={`${clamp(((resolvedReferenceValue - bounds.minY) / Math.max(1, bounds.maxY - bounds.minY)) * 100, 0, 100)}%`} stopColor="rgba(255, 92, 77, 0.18)" />
               <stop offset="100%" stopColor="rgba(255, 92, 77, 0.18)" />
             </linearGradient>
-            <linearGradient id={bandGradientId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="rgba(244, 245, 242, 0.08)" />
-              <stop offset="100%" stopColor="rgba(244, 245, 242, 0.03)" />
+            <linearGradient id={bandGradientId} x1="0" x2="1" y1="0" y2="0">
+              <stop offset={`${bandFadeInStart}%`} stopColor="rgba(244, 245, 242, 0)" />
+              <stop offset={`${bandFadeInEnd}%`} stopColor="rgba(244, 245, 242, 0.08)" />
+              <stop offset="100%" stopColor="rgba(244, 245, 242, 0.08)" />
             </linearGradient>
           </defs>
 

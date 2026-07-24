@@ -188,7 +188,7 @@ export function LeagueFutures({
   const envelope = envelopePoints(historyTeams);
   const footerText = userTeam
     ? comparisonTakeaway(userTeam, comparisonTeam, userHistory?.series, comparisonHistory?.series)
-    : 'This chart builds as the league reprices.';
+    : 'This chart builds as the league updates.';
 
   return (
     <section aria-labelledby="league-futures-title" className="league-futures">
@@ -344,7 +344,7 @@ export function LeagueFutures({
           />
         ) : (
           <p className="league-futures__empty-note">
-            This chart builds as the league reprices. Check back after a few updates.
+            This chart builds as the league updates. Check back after a few more days.
           </p>
         )}
       </div>

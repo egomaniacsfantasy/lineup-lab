@@ -53,7 +53,6 @@
 }
 
 .board-page__view-toggle,
-.board-page__preset-row,
 .board-page__rapid-switch {
   display: inline-flex;
   align-items: stretch;
@@ -66,7 +65,6 @@
 
 .board-page__view-pill,
 .board-page__chip,
-.board-page__preset-pill,
 .board-page__rapid-mode {
   border: 0;
   border-radius: 999px;
@@ -86,7 +84,6 @@
 
 .board-page__view-pill--active,
 .board-page__chip--active,
-.board-page__preset-pill--active,
 .board-page__rapid-mode--active,
 .vote-panel__action--active,
 .vote-panel__submit {
@@ -183,9 +180,9 @@
 
 .board-page__row-button {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) max-content 76px;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   width: 100%;
   padding: 16px 18px;
   border: 0;
@@ -266,7 +263,19 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 3px;
+  padding-left: 18px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.board-page__value-label,
+.board-card__value-label {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .board-page__headline,
@@ -284,10 +293,6 @@
   font-family: var(--font-num);
   font-size: 12px;
   text-align: right;
-}
-
-.board-page__trend {
-  min-height: 18px;
 }
 
 .board-card {
@@ -309,15 +314,47 @@
 
 .board-card__hero {
   align-items: flex-start;
+  justify-content: space-between;
+}
+
+.board-card__hero--full {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content auto;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.board-card__identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
 }
 
 .board-card__hero-copy {
   flex: 1;
 }
 
+.board-card__close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: #0b0d0f;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.board-card--embedded {
+  padding-top: 16px;
+}
+
 .board-card__summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
   margin-top: 18px;
 }
@@ -535,28 +572,9 @@
 .board-page__sheet-toolbar {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   margin-bottom: 14px;
-}
-
-.board-page__preset-pill {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 112px;
-  padding: 10px 14px;
-}
-
-.board-page__preset-pill span {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.board-page__preset-pill small {
-  font-size: 11px;
-  opacity: 0.78;
 }
 
 .board-page__rapid-trigger {
@@ -580,13 +598,6 @@
   border: 1px solid rgba(232, 84, 29, 0.18);
   border-radius: 14px;
   background: rgba(232, 84, 29, 0.04);
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 12px;
-}
-
-.board-page__preset-note {
-  margin: -4px 0 14px;
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: 12px;
@@ -662,6 +673,7 @@
 .board-page__rating-value,
 .board-page__rating-input {
   display: inline-flex;
+  align-items: center;
   justify-content: center;
   width: 72px;
   padding: 7px 8px;
@@ -675,6 +687,11 @@
 .board-page__rating-input {
   border: 1px solid var(--border-subtle);
   text-align: center;
+}
+
+.board-page__rating-button {
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
 }
 
 .board-page__rating-input.is-up,
@@ -829,7 +846,6 @@
   .board-page__hero,
   .board-page__filter-bar,
   .board-page__sheet-toolbar,
-  .board-card__hero,
   .board-card__rating-head,
   .board-card__rating-actions,
   .vote-panel__head,
@@ -845,10 +861,8 @@
   .board-page__value,
   .board-card__hero-value {
     align-items: flex-start;
-  }
-
-  .board-page__trend {
-    display: none;
+    padding-left: 0;
+    border-left: 0;
   }
 
   .board-card__summary,
@@ -857,6 +871,10 @@
   }
 
   .board-card__slider-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .board-card__hero--full {
     grid-template-columns: 1fr;
   }
 }

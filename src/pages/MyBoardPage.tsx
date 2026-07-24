@@ -3,6 +3,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
 } from 'react';
@@ -24,7 +25,6 @@ type Row = Record<string, unknown>;
 type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
 type BoardPosition = 'ALL' | Position;
 type BoardView = 'board' | 'sheet';
-type SheetPreset = 'simple' | 'standard' | 'deep';
 type SavingState = 'saving' | 'ok' | 'err';
 
 interface ProjectionPlayer {
@@ -75,13 +75,6 @@ const VIEW_OPTIONS: Array<{ key: BoardView; label: string }> = [
   { key: 'board', label: 'Board' },
   { key: 'sheet', label: 'Sheet' },
 ];
-const SHEET_PRESETS: Array<{ key: SheetPreset; label: string; blurb: string }> = [
-  { key: 'simple', label: 'Simple', blurb: 'Proj pts, range, rating' },
-  { key: 'standard', label: 'Standard', blurb: 'Add position stats' },
-  { key: 'deep', label: 'Deep', blurb: 'Add depth, tier, weekly mean' },
-];
-
-const SHEET_PRESET_KEY = 'og.board.sheetPreset';
 const PLAYER_VOTES_QUEUE_KEY = 'og.playerVotes.queue';
 
 const POSITION_STAT_COLUMNS: Record<Position, StatColumn[]> = {
@@ -128,23 +121,6 @@ const POSITION_STAT_COLUMNS: Record<Position, StatColumn[]> = {
     { key: 'pred_ya', label: 'Yards allowed' },
   ],
 };
-
-function readSheetPreset(): SheetPreset {
-  try {
-    const stored = window.localStorage.getItem(SHEET_PRESET_KEY);
-    return stored === 'standard' || stored === 'deep' ? stored : 'simple';
-  } catch {
-    return 'simple';
-  }
-}
-
-function writeSheetPreset(value: SheetPreset) {
-  try {
-    window.localStorage.setItem(SHEET_PRESET_KEY, value);
-  } catch {
-    // ignore storage failures
-  }
-}
 
 function readPlayerVoteQueue(): PlayerVoteQueueEntry[] {
   try {
@@ -265,10 +241,8 @@ function toneClass(value: string | null | undefined) {
   return 'is-even';
 }
 
-function columnCountForPreset(preset: SheetPreset, statsCount: number) {
-  if (preset === 'simple') return 7;
-  if (preset === 'standard') return 7 + statsCount;
-  return 10 + statsCount;
+function columnCountForSheet(statsCount: number) {
+  return 7 + statsCount;
 }
 
 export function MyBoardPage() {
@@ -279,7 +253,7 @@ export function MyBoardPage() {
   const [projectionData, setProjectionData] = useState<ProjectionDataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
-  const [sheetPreset, setSheetPreset] = useState<SheetPreset>(readSheetPreset);
+  const [ratingFocusPlayerId, setRatingFocusPlayerId] = useState<string | null>(null);
   const [sheetEditing, setSheetEditing] = useState(false);
   const [rapidEntryEnabled, setRapidEntryEnabled] = useState(true);
   const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
@@ -300,10 +274,6 @@ export function MyBoardPage() {
   const numTeams = bootstrap?.league.totalTeams ?? 12;
   const sheetStatColumns =
     activePosition === 'ALL' ? [] : POSITION_STAT_COLUMNS[activePosition as Position];
-
-  useEffect(() => {
-    writeSheetPreset(sheetPreset);
-  }, [sheetPreset]);
 
   useEffect(() => {
     setVoteQueue(readPlayerVoteQueue());
@@ -458,7 +428,10 @@ export function MyBoardPage() {
     if (openPlayerId && !visibleRows.some((row) => row.board.playerId === openPlayerId)) {
       setOpenPlayerId(null);
     }
-  }, [openPlayerId, visibleRows]);
+    if (ratingFocusPlayerId && !visibleRows.some((row) => row.board.playerId === ratingFocusPlayerId)) {
+      setRatingFocusPlayerId(null);
+    }
+  }, [openPlayerId, ratingFocusPlayerId, visibleRows]);
 
   function updateSearchParam(next: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams);
@@ -471,6 +444,16 @@ export function MyBoardPage() {
 
   function readRating(playerId: string) {
     return agreeSaved[playerId] ?? '';
+  }
+
+  function toggleOpenPlayer(playerId: string) {
+    setRatingFocusPlayerId(null);
+    setOpenPlayerId((current) => (current === playerId ? null : playerId));
+  }
+
+  function openPlayerRating(playerId: string) {
+    setOpenPlayerId(playerId);
+    setRatingFocusPlayerId(playerId);
   }
 
   async function commitAgreementValue(player: MergedBoardPlayer, nextValue: string) {
@@ -720,49 +703,53 @@ export function MyBoardPage() {
                   </div>
                 ) : null}
                 <article className={['board-page__row', isOpen ? 'board-page__row--open' : ''].filter(Boolean).join(' ')}>
-                  <button
-                    aria-expanded={isOpen}
-                    className="board-page__row-button"
-                    onClick={() => setOpenPlayerId(isOpen ? null : player.board.playerId)}
-                    type="button"
-                  >
-                    <div className="board-page__identity">
-                      <span className="board-page__rank">{index + 1}</span>
-                      <PlayerHeadshot
-                        className="board-page__headshot"
-                        fallbackClassName="board-page__headshot-fallback"
-                        imageClassName="board-page__headshot-image"
-                        player={boardPlayer(player.board, bootstrap?.players)}
-                      />
-                      <span className="board-page__identity-copy">
-                        <span className="board-page__name">{player.board.name}</span>
-                        <span className="board-page__meta">
-                          {player.board.position} · {player.board.team}
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="board-page__value">
-                      <span className="board-page__headline">{fmtNumber(player.adjustedValue)}</span>
-                      <span className="board-page__subline">
-                        {player.vor >= 0 ? '+' : ''}
-                        {fmtNumber(player.vor)} vs waiver-level starter · {fmtNumber(player.board.seasonTotal)} proj pts
-                      </span>
-                    </div>
-
-                    <div className="board-page__trend" aria-hidden="true" />
-                  </button>
-
                   {isOpen ? (
                     <BoardPlayerCard
                       currentWeek={bootstrap?.week ?? null}
+                      focusRatingControl={ratingFocusPlayerId === player.board.playerId}
+                      mode="standalone"
+                      onClose={() => setOpenPlayerId(null)}
                       player={player}
                       rating={readRating(player.board.playerId)}
+                      rank={index + 1}
                       saveMessage={saveMessages[player.board.playerId] ?? ''}
                       savingState={saving[player.board.playerId]}
                       onCommit={(value) => void commitAgreementValue(player, String(value))}
+                      onRatingFocusHandled={() => setRatingFocusPlayerId(null)}
                     />
-                  ) : null}
+                  ) : (
+                    <button
+                      aria-expanded={false}
+                      className="board-page__row-button"
+                      onClick={() => toggleOpenPlayer(player.board.playerId)}
+                      type="button"
+                    >
+                      <div className="board-page__identity">
+                        <span className="board-page__rank">{index + 1}</span>
+                        <PlayerHeadshot
+                          className="board-page__headshot"
+                          fallbackClassName="board-page__headshot-fallback"
+                          imageClassName="board-page__headshot-image"
+                          player={boardPlayer(player.board, bootstrap?.players)}
+                        />
+                        <span className="board-page__identity-copy">
+                          <span className="board-page__name">{player.board.name}</span>
+                          <span className="board-page__meta">
+                            {player.board.position} · {player.board.team}
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="board-page__value">
+                        <span className="board-page__value-label">Value</span>
+                        <span className="board-page__headline">{fmtNumber(player.adjustedValue)}</span>
+                        <span className="board-page__subline">
+                          {player.vor >= 0 ? '+' : ''}
+                          {fmtNumber(player.vor)} vs waiver-level starter · {fmtNumber(player.board.seasonTotal)} proj pts
+                        </span>
+                      </div>
+                    </button>
+                  )}
                 </article>
               </Fragment>
             );
@@ -774,27 +761,6 @@ export function MyBoardPage() {
       ) : (
         <section className="board-page__sheet" aria-label="Sheet view">
           <div className="board-page__sheet-toolbar">
-            <div className="board-page__preset-row" role="tablist" aria-label="Sheet presets">
-              {SHEET_PRESETS.map((preset) => (
-                <button
-                  aria-selected={sheetPreset === preset.key}
-                  className={[
-                    'board-page__preset-pill',
-                    sheetPreset === preset.key ? 'board-page__preset-pill--active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  key={preset.key}
-                  onClick={() => setSheetPreset(preset.key)}
-                  role="tab"
-                  type="button"
-                >
-                  <span>{preset.label}</span>
-                  <small>{preset.blurb}</small>
-                </button>
-              ))}
-            </div>
-
             <div className="board-page__sheet-actions">
               <button
                 className={[
@@ -817,12 +783,6 @@ export function MyBoardPage() {
               </button>
             </div>
           </div>
-
-          {activePosition === 'ALL' && sheetPreset !== 'simple' ? (
-            <p className="board-page__preset-note">
-              Pick a position above to reveal the stat columns for that group.
-            </p>
-          ) : null}
 
           {sheetEditing ? (
             <div className="board-page__rapid-note" role="note">
@@ -863,20 +823,11 @@ export function MyBoardPage() {
                   <th className="board-page__th board-page__th--num">Proj pts</th>
                   <th className="board-page__th board-page__th--num">Floor</th>
                   <th className="board-page__th board-page__th--num">Ceiling</th>
-                  {sheetPreset !== 'simple'
-                    ? sheetStatColumns.map((column) => (
-                        <th className="board-page__th board-page__th--num" key={column.key}>
-                          {column.label}
-                        </th>
-                      ))
-                    : null}
-                  {sheetPreset === 'deep' ? (
-                    <>
-                      <th className="board-page__th board-page__th--num">Avg week</th>
-                      <th className="board-page__th board-page__th--num">Tier</th>
-                      <th className="board-page__th board-page__th--num">Depth</th>
-                    </>
-                  ) : null}
+                  {sheetStatColumns.map((column) => (
+                    <th className="board-page__th board-page__th--num" key={column.key}>
+                      {column.label}
+                    </th>
+                  ))}
                   <th className="board-page__th board-page__th--num">Your rating</th>
                 </tr>
               </thead>
@@ -888,7 +839,7 @@ export function MyBoardPage() {
                     <Fragment key={player.board.playerId}>
                       <tr
                         className={['board-page__table-row', isOpen ? 'board-page__table-row--open' : ''].filter(Boolean).join(' ')}
-                        onClick={() => setOpenPlayerId(isOpen ? null : player.board.playerId)}
+                        onClick={() => toggleOpenPlayer(player.board.playerId)}
                       >
                         <td className="board-page__td board-page__td--rank">{index + 1}</td>
                         <td className="board-page__td board-page__td--sticky">
@@ -913,20 +864,11 @@ export function MyBoardPage() {
                         <td className="board-page__td board-page__td--num">{fmtNumber(player.board.seasonTotal)}</td>
                         <td className="board-page__td board-page__td--num">{fmtNumber(player.board.floor)}</td>
                         <td className="board-page__td board-page__td--num">{fmtNumber(player.board.ceiling)}</td>
-                        {sheetPreset !== 'simple'
-                          ? sheetStatColumns.map((column) => (
-                              <td className="board-page__td board-page__td--num" key={column.key}>
-                                {statValue(player.projection?.season[column.key])}
-                              </td>
-                            ))
-                          : null}
-                        {sheetPreset === 'deep' ? (
-                          <>
-                            <td className="board-page__td board-page__td--num">{fmtNumber(player.board.mean, 1)}</td>
-                            <td className="board-page__td board-page__td--num">{player.board.tier ?? '-'}</td>
-                            <td className="board-page__td board-page__td--num">{player.projection?.depthRank ?? '-'}</td>
-                          </>
-                        ) : null}
+                        {sheetStatColumns.map((column) => (
+                          <td className="board-page__td board-page__td--num" key={column.key}>
+                            {statValue(player.projection?.season[column.key])}
+                          </td>
+                        ))}
                         <td
                           className="board-page__td board-page__td--num"
                           onClick={(event) => event.stopPropagation()}
@@ -952,9 +894,19 @@ export function MyBoardPage() {
                               placeholder="50"
                             />
                           ) : (
-                            <span className={['board-page__rating-value', toneClass(rating)].filter(Boolean).join(' ')}>
+                            <button
+                              aria-label={`Rate ${player.board.name}`}
+                              className={[
+                                'board-page__rating-value',
+                                'board-page__rating-button',
+                                toneClass(rating),
+                              ].filter(Boolean).join(' ')}
+                              onClick={() => openPlayerRating(player.board.playerId)}
+                              title="Rate him"
+                              type="button"
+                            >
                               {rating || '-'}
-                            </span>
+                            </button>
                           )}
                         </td>
                       </tr>
@@ -962,15 +914,20 @@ export function MyBoardPage() {
                         <tr className="board-page__detail-row">
                           <td
                             className="board-page__detail-cell"
-                            colSpan={columnCountForPreset(sheetPreset, sheetStatColumns.length)}
+                            colSpan={columnCountForSheet(sheetStatColumns.length)}
                           >
                             <BoardPlayerCard
                               currentWeek={bootstrap?.week ?? null}
+                              focusRatingControl={ratingFocusPlayerId === player.board.playerId}
+                              mode="embedded"
+                              onClose={() => setOpenPlayerId(null)}
                               player={player}
                               rating={rating}
+                              rank={index + 1}
                               saveMessage={saveMessages[player.board.playerId] ?? ''}
                               savingState={saving[player.board.playerId]}
                               onCommit={(value) => void commitAgreementValue(player, String(value))}
+                              onRatingFocusHandled={() => setRatingFocusPlayerId(null)}
                             />
                           </td>
                         </tr>
@@ -982,7 +939,7 @@ export function MyBoardPage() {
                   <tr>
                     <td
                       className="board-page__empty-cell"
-                      colSpan={columnCountForPreset(sheetPreset, sheetStatColumns.length)}
+                      colSpan={columnCountForSheet(sheetStatColumns.length)}
                     >
                       No players match this filter.
                     </td>
@@ -1004,6 +961,11 @@ function BoardPlayerCard({
   saveMessage,
   onCommit,
   currentWeek,
+  mode,
+  rank,
+  onClose,
+  focusRatingControl = false,
+  onRatingFocusHandled,
 }: {
   player: MergedBoardPlayer;
   rating: string;
@@ -1011,9 +973,16 @@ function BoardPlayerCard({
   saveMessage: string;
   onCommit: (value: number) => void;
   currentWeek: number | null;
+  mode: 'standalone' | 'embedded';
+  rank: number;
+  onClose: () => void;
+  focusRatingControl?: boolean;
+  onRatingFocusHandled?: () => void;
 }) {
   const savedValue = rating === '' ? 50 : clampRating(Number(rating));
   const [draftValue, setDraftValue] = useState(savedValue);
+  const ratingRef = useRef<HTMLDivElement | null>(null);
+  const sliderRef = useRef<HTMLInputElement | null>(null);
   const projection = player.projection;
   const matchup = nextMatchup(projection, currentWeek);
   const stats = POSITION_STAT_COLUMNS[player.board.position as Position];
@@ -1022,42 +991,64 @@ function BoardPlayerCard({
     setDraftValue(savedValue);
   }, [player.board.playerId, savedValue]);
 
+  useEffect(() => {
+    if (!focusRatingControl) return;
+    ratingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    sliderRef.current?.focus({ preventScroll: true });
+    onRatingFocusHandled?.();
+  }, [focusRatingControl, onRatingFocusHandled]);
+
   const floor = player.board.floor ?? 0;
   const ceiling = player.board.ceiling ?? 0;
   const total = player.board.seasonTotal ?? 0;
   const rangeSpan = Math.max(1, ceiling - floor);
   const marker = Math.min(100, Math.max(0, ((total - floor) / rangeSpan) * 100));
+  const tier = tierLabel(player.board.tier);
 
   return (
-    <div className="board-card">
-      <div className="board-card__hero">
-        <PlayerHeadshot
-          className="board-card__shot"
-          fallbackClassName="board-card__shot-fallback"
-          imageClassName="board-card__shot-image"
-          player={boardPlayer(player.board)}
-        />
-        <div className="board-card__hero-copy">
-          <p className="board-card__name">{player.board.name}</p>
-          <p className="board-card__meta">
-            {player.board.position} · {player.board.team}
-            {matchup ? (
-              <>
-                {' '}
-                · Week {String(matchup.week ?? '-')} {Number(matchup.game_location) === 1 ? 'vs' : '@'}{' '}
-                {String(matchup.opponent ?? '-')}
-              </>
-            ) : null}
-          </p>
+    <div className={['board-card', mode === 'embedded' ? 'board-card--embedded' : ''].filter(Boolean).join(' ')}>
+      {mode === 'standalone' ? (
+        <div className="board-card__hero board-card__hero--full">
+          <div className="board-card__identity">
+            <span className="board-page__rank">{rank}</span>
+            <PlayerHeadshot
+              className="board-card__shot"
+              fallbackClassName="board-card__shot-fallback"
+              imageClassName="board-card__shot-image"
+              player={boardPlayer(player.board)}
+            />
+            <div className="board-card__hero-copy">
+              <p className="board-card__name">{player.board.name}</p>
+              <p className="board-card__meta">
+                {player.board.position} · {player.board.team}
+                {matchup ? (
+                  <>
+                    {' '}
+                    · Week {String(matchup.week ?? '-')} {Number(matchup.game_location) === 1 ? 'vs' : '@'}{' '}
+                    {String(matchup.opponent ?? '-')}
+                  </>
+                ) : null}
+              </p>
+            </div>
+          </div>
+          <div className="board-card__hero-value">
+            <span className="board-card__value-label">Value</span>
+            <span className="board-card__headline">{fmtNumber(player.adjustedValue)}</span>
+            <span className="board-card__subline">
+              {player.vor >= 0 ? '+' : ''}
+              {fmtNumber(player.vor)} vs waiver-level starter
+            </span>
+          </div>
+          <button
+            aria-label={`Collapse ${player.board.name}`}
+            className="board-card__close"
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
         </div>
-        <div className="board-card__hero-value">
-          <span className="board-card__headline">{fmtNumber(player.adjustedValue)}</span>
-          <span className="board-card__subline">
-            {player.vor >= 0 ? '+' : ''}
-            {fmtNumber(player.vor)} vs waiver-level starter
-          </span>
-        </div>
-      </div>
+      ) : null}
 
       <div className="board-card__summary">
         <div className="board-card__stat">
@@ -1072,10 +1063,12 @@ function BoardPlayerCard({
           <span className="board-card__stat-label">Ceiling</span>
           <span className="board-card__stat-value">{fmtNumber(player.board.ceiling)}</span>
         </div>
-        <div className="board-card__stat">
-          <span className="board-card__stat-label">Tier</span>
-          <span className="board-card__stat-value">{tierLabel(player.board.tier) ?? '-'}</span>
-        </div>
+        {tier ? (
+          <div className="board-card__stat">
+            <span className="board-card__stat-label">Tier</span>
+            <span className="board-card__stat-value">{tier}</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="board-card__range">
@@ -1100,7 +1093,7 @@ function BoardPlayerCard({
         ))}
       </div>
 
-      <div className="board-card__rating">
+      <div className="board-card__rating" ref={ratingRef}>
         <div className="board-card__rating-head">
           <div>
             <p className="board-card__rating-label">Your rating</p>
@@ -1115,6 +1108,7 @@ function BoardPlayerCard({
             <span className="board-card__slider-notch" aria-hidden="true" />
             <input
               className="board-card__slider"
+              ref={sliderRef}
               max={100}
               min={0}
               onChange={(event) => setDraftValue(clampRating(Number(event.target.value)))}

@@ -151,11 +151,9 @@ function monogram(name: string) {
 }
 
 function boardDisplayName(name: string) {
+  if (name.length <= 24) return name;
   const shortened = shortenTeamName(name);
-  if (name.length <= 18) return name;
-  if (shortened !== name && shortened.length <= 18) return shortened;
-  if (name.length <= 22 && shortened === name) return name;
-  if (shortened.length <= 22) return shortened;
+  if (shortened.length <= 24) return shortened;
   return monogram(shortened);
 }
 
@@ -248,7 +246,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
   const chartFooter = selectedRow?.summary
     ? `${selectedRow.left.name} moved ${selectedRow.summary.move >= 0 ? 'up' : 'down'} ${Math.abs(selectedRow.summary.move).toFixed(1)} points since the week opened.`
     : chartPoints.length > 1
-      ? 'The latest reprice stayed inside the one-point move threshold.'
+      ? 'No real movement today.'
       : 'No material moves yet this week.';
 
   return (
@@ -372,7 +370,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
               ) : null}
               {chartPoints.length > 1 ? (
                 <OddsChart
-                  caption="Held values between reprices. Tap the row to compare another game."
+                  caption="Held values between updates. Tap the row to compare another game."
                   className="matchup-slate__chart"
                   defaultRangeId="week"
                   deltaFormatter={probabilityDeltaRead}
@@ -390,7 +388,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                   valueFormatter={formatPercent}
                 />
               ) : (
-                <p className="matchup-slate__movement-note">This chart lights up after the board reprices more than once.</p>
+                <p className="matchup-slate__movement-note">This chart lights up after a couple of line updates.</p>
               )}
             </section>
           ) : null}

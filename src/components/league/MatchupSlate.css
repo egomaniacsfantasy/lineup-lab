@@ -330,8 +330,9 @@
 
 @media (min-width: 1200px) {
   .matchup-slate__layout {
-    grid-template-columns: minmax(0, 840px) minmax(360px, 400px);
+    grid-template-columns: minmax(0, 1000px) minmax(280px, 304px);
     align-items: start;
+    gap: 12px;
   }
 }
 

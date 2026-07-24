@@ -296,7 +296,6 @@ function TradeDealsView() {
   const [showRead, setShowRead] = useState(false);
   const [marketManagerFilter, setMarketManagerFilter] = useState<number | null>(null);
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
-  const [managerSuggestionDirectory, setManagerSuggestionDirectory] = useState<TradeSuggestion[]>([]);
   const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
   const [managerSuggestionsError, setManagerSuggestionsError] = useState<string | null>(null);
@@ -315,14 +314,6 @@ function TradeDealsView() {
   const currentWeek = pricing?.week ?? bootstrap?.week ?? null;
   const { dismissedSignatures, dismiss, undo, restoreAll, pendingUndoSignature } =
     useDismissedTradeSuggestions(stored?.leagueId ?? null, currentWeek);
-  const availableManagerIds = useMemo(
-    () => [...new Set(managerSuggestionDirectory.map((suggestion) => suggestion.partnerRosterId))],
-    [managerSuggestionDirectory],
-  );
-  const availableMarketManagers = useMemo(
-    () => partners.filter((team) => availableManagerIds.includes(team.rosterId)),
-    [availableManagerIds, partners],
-  );
   const managerSuggestionEntries = useMemo(() => {
     if (!stored || !bootstrap || marketManagerFilter == null) return [];
 
@@ -386,31 +377,6 @@ function TradeDealsView() {
   useEffect(() => {
     setShowAllMarketCards(false);
   }, [marketManagerFilter, marketPositionFilter]);
-
-  useEffect(() => {
-    if (!stored) {
-      setManagerSuggestionDirectory([]);
-      return undefined;
-    }
-
-    let cancelled = false;
-    fetchTradeSuggestions(stored.leagueId, { userId: stored.userId })
-      .then((response) => {
-        if (cancelled) return;
-        if (!response.available) {
-          setManagerSuggestionDirectory([]);
-          return;
-        }
-        setManagerSuggestionDirectory(response.suggestions ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setManagerSuggestionDirectory([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [stored]);
 
   useEffect(() => {
     if (!stored || marketManagerFilter == null) {
@@ -913,7 +879,7 @@ function TradeDealsView() {
       </button>
       {partnerMenuOpen ? (
         <div className="trade-cc__partner-options" role="listbox" aria-label="Pick manager">
-          {availableMarketManagers.map((team) => (
+          {partners.map((team) => (
             <button
               aria-selected={partnerRosterId === team.rosterId}
               className={[
@@ -957,7 +923,7 @@ function TradeDealsView() {
           <div className="trade-cc__filter-row">
             <span className="trade-cc__filter-label">Managers</span>
             <div className="trade-cc__filter-chips">
-              {availableMarketManagers.map((team) => (
+              {partners.map((team) => (
                 <button
                   aria-pressed={marketManagerFilter === team.rosterId}
                   className={[

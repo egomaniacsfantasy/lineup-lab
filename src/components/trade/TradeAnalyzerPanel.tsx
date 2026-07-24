@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { type TradeAnalysis, type TradeSideDelta } from '../../services/leagueApi';
 import { formatAcceptanceSentence, getAcceptanceLingo } from '../../utils/acceptanceLingo';
 import { acceptanceProbability } from '../../utils/tradeAcceptance';
+import { displayedDelta, displayedValue } from '../../utils/displayDelta';
 
 /**
  * Season-simulation impact for the trade being built in the Deals "Build a
@@ -162,7 +163,7 @@ function Delta({ v, pct = false }: { v: number; pct?: boolean }) {
 }
 
 function displayedMetric(value: number) {
-  return Number(value.toFixed(1));
+  return displayedValue(value);
 }
 
 function SideCard({ side }: { side: TradeSideDelta }) {
@@ -181,7 +182,7 @@ function SideCard({ side }: { side: TradeSideDelta }) {
         (() => {
           const before = displayedMetric(r.b);
           const after = displayedMetric(r.a);
-          const displayedDelta = displayedMetric(after - before);
+          const rowDelta = displayedDelta(r.b, r.a);
           return (
             <div
               key={r.label}
@@ -196,7 +197,7 @@ function SideCard({ side }: { side: TradeSideDelta }) {
                 <span aria-hidden="true">→</span>
                 <span>{after.toFixed(1)}{r.pct ? '%' : ''}</span>
                 <span className="trade-analyzer-panel__delta-chip">
-                  <Delta v={displayedDelta} pct={r.pct} />
+                  <Delta v={rowDelta} pct={r.pct} />
                 </span>
               </span>
             </div>

@@ -31,9 +31,9 @@ const PACE_RANGES: OddsChartRangeOption[] = [{ id: 'season', label: 'Season' }];
 
 function heatColor(winProb: number) {
   const t = Math.max(0, Math.min(1, winProb / 100));
-  const red = [171, 74, 81];
-  const neutral = [24, 27, 31];
-  const green = [63, 158, 122];
+  const red = [176, 76, 86];
+  const neutral = [16, 18, 21];
+  const green = [58, 162, 120];
   const start = t <= 0.5 ? red : neutral;
   const end = t <= 0.5 ? neutral : green;
   const mix = t <= 0.5 ? t * 2 : (t - 0.5) * 2;

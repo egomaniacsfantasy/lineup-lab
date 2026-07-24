@@ -54,6 +54,19 @@
 - Request for Franco's side:
   - add those two per-suggestion deltas directly to `/trade-suggestions` so the Deals rail can render `Playoffs` and `This week` without client derivation or per-card `/trade-analyze` fan-out
 
+## Matchup optimality contradiction, resolved display-side
+
+- The July 24, 2026 audit caught a contradiction on Matchup:
+  - hero strip: `Your lineup is already the best play`
+  - bench rows: visible moneyline improvements for bench starters
+- Root cause on the frontend:
+  - the hero strip was gated by the stricter starter-row urgency helper
+  - the bench rows were showing any positive best-fit line move
+  - both reads were using the same priced lineup view, but the page was applying two different display thresholds
+- Frontend fix:
+  - the hero `biggest edge` / `optimal` state now keys off the best positive bench-driven line move, so the page can no longer say `optimal` while a positive bench move is visible elsewhere on the same screen
+- No engine handoff is needed here because this was not a disagreement between two server payloads
+
 ## Board adjusted-value payload gap
 
 - The merged `Board` surface still has one frozen legacy exception: the headline `Adjusted value` number and Board ordering are coming from the pre-existing client-side computation that used to live inline in `MyBoardPage.tsx`.

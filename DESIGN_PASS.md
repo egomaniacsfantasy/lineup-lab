@@ -259,6 +259,88 @@ Ship call:
 
 - Yes. This is the first Futures chart in the repo that feels like a live market chart instead of a historical diagram.
 
+## Post-Audit Fixes (July 24, 2026)
+
+Before:
+
+- See `ODDS_GODS_ADVERSARIAL_AUDIT_2026-07-24.md` for the audit screenshots and failure notes that triggered this pass.
+
+### Market manager flow
+
+After:
+
+![Market manager flow after](artifacts/design-shots/post-audit-2026-07-24/market-manager-apollo.png)
+
+Critique:
+
+- The manager rail is back, which fixes the dead-end the audit found immediately.
+- The manager choice now feels like the obvious first action because the chips are present and the card lane responds cleanly.
+- The card still shows only `Title`, which is correct until the suggestions payload carries playoff and this-week deltas.
+
+What changed:
+
+- Stopped hiding the manager chips behind the broad suggestions directory response.
+- Kept the targeted `/trade-suggestions` fetch as the only source of result cards, so empty-per-manager states stay honest.
+- Verified visually that the right rail still only renders payload-sourced `Title` plus acceptance and the generated-at stamp.
+
+### Board and Sheet merge cleanup
+
+After:
+
+![Board expanded after audit](artifacts/design-shots/post-audit-2026-07-24/board-expanded.png)
+![Board sheet after audit](artifacts/design-shots/post-audit-2026-07-24/board-sheet.png)
+
+Critique:
+
+- The Board expansion no longer double-renders the same player, which was the biggest interaction glitch on this surface.
+- The value block is closer to the identity block and finally reads like one row instead of two disconnected halves.
+- Sheet is calmer without presets. The position filter already does the density work, so the table now reads as one stable tool instead of three competing modes.
+
+What changed:
+
+- The open Board row now transforms into the full player card instead of stacking the old row above it.
+- The Sheet detail card drops the repeated identity hero and lets the row itself carry rank, name, and value.
+- The Sheet `Your rating` cell is now the entry point into the slider when not in rapid mode.
+- Empty tier values no longer render a bare dash.
+
+### League This Week + charts
+
+After:
+
+![League board after audit](artifacts/design-shots/post-audit-2026-07-24/league-board.png)
+![Futures compare after audit](artifacts/design-shots/post-audit-2026-07-24/league-futures-compare.png)
+![Schedule after audit](artifacts/design-shots/post-audit-2026-07-24/league-schedule.png)
+
+Critique:
+
+- The This Week board is using the desktop space better now. The long names fit in the stress rows without breaking the fixed-column rule.
+- The drill-in chart footer and caption now sound like product copy instead of instrumentation.
+- The Futures band is quieter and the scrub header is more stable, though the fixture data is subtle enough that this is a refinement pass, not a dramatic redraw.
+- Schedule now reads correctly at a glance: the heat strip passes through a neutral dark midpoint, and the pace fill is visibly red below zero and green above.
+
+What changed:
+
+- Rebalanced the wide layout so spare width goes to the board before any name-shortening tier kicks in.
+- Kept the fixed numeric board columns and rail widths intact while widening the desktop board shell itself.
+- Stabilized the chart header slots so scrubbing no longer reflows the value, delta chip, and `Open → Now` line.
+- Changed the flat movement copy to `No real movement today.` and removed leftover `reprice` language from user-facing chart text.
+
+### Matchup contradiction
+
+Critique:
+
+- The audit was right: the page could say `Your lineup is already the best play` while the bench rows still showed a better moneyline for a bench starter.
+- This was not a server disagreement. It was a frontend threshold mismatch: the hero strip only looked at "swap" urgency, while the bench rows showed any positive priced upgrade.
+
+What changed:
+
+- The hero `biggest edge` / `optimal` state now keys off the best positive bench-driven line move, not only the stricter row-level urgency threshold.
+- The page no longer asserts `optimal` while a positive bench move is visible elsewhere on the same screen.
+
+Ship call:
+
+- Yes. The audit's broken flows are fixed, the repeated delta bug is now structural instead of surface-by-surface, and the docs now match what the Friday, July 24, 2026 screenshots actually show.
+
 ## League Tab Polish Pass (July 24, 2026)
 
 ### Loop 1 review

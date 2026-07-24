@@ -1,4 +1,5 @@
 import { impliedProbability } from './formatOdds';
+import { displayedDelta } from './displayDelta';
 
 declare const noTradeMathBrand: unique symbol;
 
@@ -9,5 +10,5 @@ export type TradeDisplayDelta = number & {
 };
 
 export function oddsPairDelta(before: number, after: number): TradeDisplayDelta {
-  return (impliedProbability(after) - impliedProbability(before)) as TradeDisplayDelta;
+  return displayedDelta(before, after, { mapValue: impliedProbability }) as TradeDisplayDelta;
 }

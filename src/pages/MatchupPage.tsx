@@ -23,6 +23,7 @@ import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { formatAmericanOdds, impliedProbability } from '../utils/formatOdds';
 import { oddsPairDelta } from '../utils/noTradeMath';
+import { formatSignedDisplayedDeltaValue } from '../utils/displayDelta';
 import {
   formatDisplayedWinProbabilityDelta,
   getDisplayedWinProbabilityDelta,
@@ -39,7 +40,7 @@ import {
   roundTo,
   winProbabilityToMoneyline,
 } from '../utils/lineupComparison';
-import { evaluateStarterRoster, getTopSwapEvaluation } from '../utils/starterEvaluation';
+import { evaluateStarterRoster } from '../utils/starterEvaluation';
 import {
   acceptanceGaugeLabel,
   applyTradeDisplayPolicy,
@@ -145,8 +146,7 @@ function counterpartyLabel(name: string | null | undefined, rosterId: number | n
 }
 
 function formatSignedPercent(value: number) {
-  const rounded = roundTo(value);
-  return `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}%`;
+  return formatSignedDisplayedDeltaValue(roundTo(value));
 }
 
 /**
@@ -967,6 +967,7 @@ interface MatchupLiveProps {
   lineMovement?: { from: number; to: number; at: number } | null;
   scoringNote?: string | null;
   unpricedStarterCount?: number;
+  unpricedStarterNames?: string[];
   seasonLabel?: string;
   movers?: PricedMover[];
   suggestionsFetching?: boolean;
@@ -1040,7 +1041,7 @@ function MatchupSuggestionStatus({
     return (
       <span className="matchup-page__repricing">
         <span className="matchup-page__repricing-dot" aria-hidden="true" />
-        repricing...
+        updating...
       </span>
     );
   }
@@ -1098,6 +1099,7 @@ function MatchupLive({
   lineMovement = null,
   scoringNote = null,
   unpricedStarterCount = 0,
+  unpricedStarterNames = [],
   seasonLabel,
   movers = [],
   suggestionsFetching = false,
@@ -1181,8 +1183,11 @@ function MatchupLive({
     () => evaluateStarterRoster(engine.baselineRoster, engine.baselineLine.yours),
     [engine.baselineLine.yours, engine.baselineRoster],
   );
-  const topSwapEvaluation = useMemo(
-    () => getTopSwapEvaluation(starterEvaluations),
+  const topPositiveEvaluation = useMemo(
+    () =>
+      starterEvaluations
+        .filter((evaluation) => evaluation.bestBenchAlternative && evaluation.delta > 0)
+        .sort((left, right) => right.delta - left.delta)[0] ?? null,
     [starterEvaluations],
   );
   const [isCompareMode, setIsCompareMode] = useState(false);
@@ -1235,22 +1240,25 @@ function MatchupLive({
       )[0] ?? null,
     [],
   );
-  const biggestSwing = topSwapEvaluation?.bestBenchAlternative
+  // The hero card must agree with the bench rows: any positive bench-driven
+  // line move means the lineup is not fully optimal, even if the move stays
+  // below the tighter "swap" threshold used for row-level urgency.
+  const biggestSwing = topPositiveEvaluation?.bestBenchAlternative
     ? {
-        slotIndex: topSwapEvaluation.slotIndex,
-        starter: topSwapEvaluation.currentStarter,
-        alternativeIndex: topSwapEvaluation.alternativeIndex,
-        alternative: topSwapEvaluation.bestBenchAlternative.player,
-        beforeLine: engine.getOptionLine(topSwapEvaluation.slotIndex, null),
+        slotIndex: topPositiveEvaluation.slotIndex,
+        starter: topPositiveEvaluation.currentStarter,
+        alternativeIndex: topPositiveEvaluation.alternativeIndex,
+        alternative: topPositiveEvaluation.bestBenchAlternative.player,
+        beforeLine: engine.getOptionLine(topPositiveEvaluation.slotIndex, null),
         afterLine: engine.getOptionLine(
-          topSwapEvaluation.slotIndex,
-          topSwapEvaluation.alternativeIndex,
+          topPositiveEvaluation.slotIndex,
+          topPositiveEvaluation.alternativeIndex,
         ),
         delta: getDisplayedWinProbabilityDelta(
-          engine.getOptionLine(topSwapEvaluation.slotIndex, null),
+          engine.getOptionLine(topPositiveEvaluation.slotIndex, null),
           engine.getOptionLine(
-            topSwapEvaluation.slotIndex,
-            topSwapEvaluation.alternativeIndex,
+            topPositiveEvaluation.slotIndex,
+            topPositiveEvaluation.alternativeIndex,
           ),
         ),
       }
@@ -1279,14 +1287,14 @@ function MatchupLive({
     marketRows.length === 0;
 
   useEffect(() => {
-    if (!topSwapEvaluation?.bestBenchAlternative) {
+    if (!topPositiveEvaluation?.bestBenchAlternative) {
       return;
     }
 
     setStoredCascadeScenarioLabel(
-      `Start ${topSwapEvaluation.bestBenchAlternative.player.shortName}`,
+      `Start ${topPositiveEvaluation.bestBenchAlternative.player.shortName}`,
     );
-  }, [topSwapEvaluation]);
+  }, [topPositiveEvaluation]);
 
   const exposureTiming = useMemo(
     () => buildExposureWindows(engine.roster, gameContextSource),
@@ -1370,7 +1378,7 @@ function MatchupLive({
 
   const handleResetBoardToFranco = () => {
     const confirmed = window.confirm(
-      'Reset your board to Franco? Your matchup will reprice on the baseline rankings.',
+      'Reset your board to Franco? Your matchup will refresh on the baseline rankings.',
     );
     if (!confirmed) return;
     resetBoardToFranco();
@@ -1853,9 +1861,9 @@ function MatchupLive({
         {scoringNote ? <SeasonalNotice>{scoringNote}</SeasonalNotice> : null}
         {unpricedStarterCount > 0 ? (
           <SeasonalNotice>
-            {unpricedStarterCount} of your starters{' '}
-            {unpricedStarterCount === 1 ? 'is' : 'are'} outside the projection
-            sheet, so recommendations are limited.
+            {unpricedStarterCount === 1 && unpricedStarterNames[0]
+              ? `${unpricedStarterNames[0]} isn't on the projection sheet yet, so recommendations are limited.`
+              : `${unpricedStarterCount} of your starters are outside the projection sheet, so recommendations are limited.`}
           </SeasonalNotice>
         ) : null}
         {lineMovement ? (
@@ -2714,6 +2722,16 @@ export function MatchupPage() {
                   String(bootstrap.teams.find((team) => team.isUser)?.rosterId) === rosterId,
                 )?.[1]?.unpricedStarters.length ?? 0)
             : 0
+        }
+        unpricedStarterNames={
+          pricing?.available && bootstrap
+            ? (pricing.lines
+                ?.flatMap((line) => Object.entries(line.sides))
+                .find(([rosterId]) =>
+                  String(bootstrap.teams.find((team) => team.isUser)?.rosterId) === rosterId,
+                )?.[1]?.unpricedStarters ?? [])
+                .map((playerId) => bootstrap.players[playerId]?.name ?? playerId)
+            : []
         }
       />
       <DismissToast onUndo={undo} visible={pendingUndoSignature != null} />
