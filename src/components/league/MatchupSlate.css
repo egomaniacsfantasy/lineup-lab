@@ -64,11 +64,11 @@
   display: grid;
   grid-template-columns:
     minmax(0, 1fr)
-    66px
+    64px
     46px
     var(--matchup-slate-bar-width)
     46px
-    66px
+    64px
     minmax(0, 1fr)
     var(--matchup-slate-rail-width);
   align-items: center;
@@ -174,12 +174,14 @@
 .matchup-slate__team-name {
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
+  line-height: 0.96;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
 }
 
 .matchup-slate__team .team-avatar {
@@ -252,12 +254,14 @@
 }
 
 .matchup-slate__aside {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
 .matchup-slate__glance,
-.matchup-slate__detail {
+.matchup-slate__detail,
+.matchup-slate__feed {
   display: grid;
   gap: 10px;
   padding: 16px;
@@ -266,6 +270,7 @@
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 26%),
     color-mix(in srgb, var(--bg-surface) 95%, transparent);
+  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
 }
 
 .matchup-slate__glance-title,
@@ -289,7 +294,8 @@
 
 .matchup-slate__glance-row strong,
 .matchup-slate__detail-head strong,
-.matchup-slate__detail-line span:last-child {
+.matchup-slate__detail-line span:last-child,
+.matchup-slate__feed-row strong {
   color: var(--text-primary);
 }
 
@@ -317,6 +323,33 @@
   padding-top: 4px;
 }
 
+.matchup-slate__feed {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.matchup-slate__feed-body {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.matchup-slate__feed-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 12px 11px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-inset) 82%, transparent);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 @keyframes matchup-slate-price-glow {
   0% {
     color: var(--amber-bright);
@@ -330,9 +363,15 @@
 
 @media (min-width: 1200px) {
   .matchup-slate__layout {
-    grid-template-columns: minmax(0, 1000px) minmax(280px, 304px);
+    grid-template-columns: minmax(0, 1fr) 384px;
     align-items: start;
-    gap: 12px;
+    gap: 16px;
+  }
+
+  .matchup-slate__aside {
+    position: sticky;
+    top: 64px;
+    height: calc(100dvh - 64px);
   }
 }
 

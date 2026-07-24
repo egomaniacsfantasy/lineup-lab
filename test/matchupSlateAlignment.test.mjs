@@ -12,7 +12,7 @@ test('This week board keeps fixed numeric columns and a reserved movement rail o
   );
   assert.match(
     css,
-    /\.matchup-slate__board-head,\s*\.matchup-slate__row-button\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*66px\s*46px\s*var\(--matchup-slate-bar-width\)\s*46px\s*66px\s*minmax\(0,\s*1fr\)\s*var\(--matchup-slate-rail-width\);/,
+    /\.matchup-slate__board-head,\s*\.matchup-slate__row-button\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*64px\s*46px\s*var\(--matchup-slate-bar-width\)\s*46px\s*64px\s*minmax\(0,\s*1fr\)\s*var\(--matchup-slate-rail-width\);/,
   );
   assert.match(
     css,

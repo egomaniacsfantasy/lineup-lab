@@ -35,6 +35,7 @@ import {
 } from '../utils/tradeSuggestionDisplay';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
 import { signedDeltaClass } from '../utils/deltaTone';
+import { formatAmericanOdds } from '../utils/formatOdds';
 import {
   useDynastyTradesExperimental,
   useScoutingAffectsAcceptance,
@@ -107,6 +108,10 @@ function initials(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'TM';
+}
+
+function recordText(record: { wins: number; losses: number; ties?: number }) {
+  return record.ties ? `${record.wins}-${record.losses}-${record.ties}` : `${record.wins}-${record.losses}`;
 }
 
 const NEUTRAL_TRADE_TRAITS: TradeTraits = {
@@ -308,6 +313,10 @@ function TradeDealsView() {
     () => partners.find((team) => team.rosterId === partnerRosterId) ?? null,
     [partnerRosterId, partners],
   );
+  const futuresByRoster = useMemo(
+    () => new Map((pricing?.futures ?? []).map((future) => [future.rosterId, future])),
+    [pricing?.futures],
+  );
   const scoutingAffectsAcceptance = useScoutingAffectsAcceptance(stored?.leagueId);
   const dynastyTradesExperimental = useDynastyTradesExperimental();
 
@@ -373,6 +382,9 @@ function TradeDealsView() {
   const hiddenMarketCount = showingManagerMarket
     ? managerSuggestionEntries.length - visibleManagerSuggestions.length
     : 0;
+  const managerFacts = showingManagerMarket
+    ? `${partners.length} managers priced · ${visibleMarketCount} deals found`
+    : `${partners.length} managers ready for sims`;
 
   useEffect(() => {
     setShowAllMarketCards(false);
@@ -910,10 +922,14 @@ function TradeDealsView() {
       <section className="trade-cc__finder">
         <div className="trade-cc__finder-head">
           <div>
-            <h2 className="trade-cc__section-label trade-cc__section-label--market">THE MARKET</h2>
+            <div className="trade-cc__market-kicker">
+              <span className="trade-cc__live-pulse" aria-hidden="true" />
+              <h2 className="trade-cc__section-label trade-cc__section-label--market">THE MARKET</h2>
+            </div>
             <p className="trade-cc__finder-sub">
               Pick a manager. The book simulates trades with them and ranks by title gain times chance they accept.
             </p>
+            <p className="trade-cc__finder-facts">{managerFacts}</p>
             {managerSuggestionsError && showingManagerMarket ? (
               <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
             ) : null}
@@ -922,21 +938,33 @@ function TradeDealsView() {
         <div className="trade-cc__filter-stack">
           <div className="trade-cc__filter-row">
             <span className="trade-cc__filter-label">Managers</span>
-            <div className="trade-cc__filter-chips">
+            <div className="trade-cc__manager-grid">
               {partners.map((team) => (
                 <button
                   aria-pressed={marketManagerFilter === team.rosterId}
                   className={[
-                    'trade-cc__filter-chip',
-                    'trade-cc__filter-chip--manager',
-                    marketManagerFilter === team.rosterId ? 'trade-cc__filter-chip--active' : '',
+                    'trade-cc__manager-card',
+                    marketManagerFilter === team.rosterId ? 'trade-cc__manager-card--active' : '',
                   ].filter(Boolean).join(' ')}
                   key={`market-manager-${team.rosterId}`}
                   onClick={() => applyMarketManagerFilter(team.rosterId)}
                   type="button"
                 >
-                  {renderTeamAvatar(team)}
-                  <span>{team.teamName}</span>
+                  <span className="trade-cc__manager-card-top">
+                    {renderTeamAvatar(team)}
+                    <span className="trade-cc__manager-card-copy">
+                      <span className="trade-cc__manager-card-name">{team.teamName}</span>
+                      <span className="trade-cc__manager-card-meta">{recordText(team.record)}</span>
+                    </span>
+                  </span>
+                  <span className="trade-cc__manager-card-bottom">
+                    <span className="trade-cc__manager-card-stat-label">Title price</span>
+                    <strong className="trade-cc__manager-card-stat-value">
+                      {futuresByRoster.get(team.rosterId)?.championOdds != null
+                        ? formatAmericanOdds(futuresByRoster.get(team.rosterId)!.championOdds)
+                        : 'Off board'}
+                    </strong>
+                  </span>
                 </button>
               ))}
             </div>

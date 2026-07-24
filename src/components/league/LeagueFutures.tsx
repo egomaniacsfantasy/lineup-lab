@@ -310,7 +310,8 @@ export function LeagueFutures({
         {userHistory ? (
           <OddsChart
             band={envelope.length > 1 ? { id: 'league-envelope', points: envelope } : null}
-            caption="Gray band = league range. Tap a team above to compare."
+            bandLabel="League range"
+            caption="Tap a team above to compare."
             className="league-futures__chart"
             comparison={comparisonHistory
               ? {

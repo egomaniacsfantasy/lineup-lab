@@ -1,5 +1,15 @@
 # Handoff Notes
 
+## Rating loop questions for Franco
+
+- Question 1, scope:
+  - the rapid-entry copy says ratings `save to this account only` and `apply across all formats`, but live verification earlier showed a player rated in one league as `-` in another league view
+  - are agreement ratings account-global or league-scoped?
+  - the UI needs one truth here, and the copy must match it exactly
+- Question 2, recompute latency:
+  - after a rating save, should `adjustedValue` recompute synchronously on the next fetch, or on a schedule / async worker?
+  - the frontend now refetches honestly and can show `Recalculating…`, but it should not invent whether the new value ought to land immediately
+
 ## Dynasty trades override
 
 - The Market gate is now reopened for dynasty leagues behind `More -> Labs -> Dynasty trades (experimental)`.
@@ -88,6 +98,11 @@
   - a player-level board-history or trend delta field on `/api/rankings` or a companion endpoint
 - Constraint held on the frontend:
   - no board movement was derived, approximated, or inferred from unrelated numbers
+
+## Rating loop verification note
+
+- The July 24, 2026 rating-loop pass used a dev-only rerender harness and a local seeded overlay to verify interaction states and the Matchup provenance chip.
+- No persistent live agreement test ratings were intentionally left behind during this verification pass.
 
 ## Player votes lab handoff
 

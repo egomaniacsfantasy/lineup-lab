@@ -65,7 +65,8 @@ test('your-game row keeps the avatar outside the fixed rail even after the pill 
   for (const width of [1512, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, colorScheme: 'dark' });
     try {
-      await page.goto(`${baseUrl}/design/board-row/collision`, { waitUntil: 'networkidle' });
+      await page.goto(`${baseUrl}/design/board-row/collision`, { waitUntil: 'domcontentloaded' });
+      await page.locator('.matchup-slate__row-button').first().waitFor({ state: 'visible' });
       const layout = await page.evaluate(() => {
         const avatar = document.querySelector('.matchup-slate__team--right .team-avatar');
         const tag = document.querySelector('.matchup-slate__tag');
@@ -117,7 +118,8 @@ test('left and right lockups share width and the right-side stress name fits bef
   for (const width of [1512, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, colorScheme: 'dark' });
     try {
-      await page.goto(`${baseUrl}/design/board-row/truncation`, { waitUntil: 'networkidle' });
+      await page.goto(`${baseUrl}/design/board-row/truncation`, { waitUntil: 'domcontentloaded' });
+      await page.locator('.matchup-slate__row-button').first().waitFor({ state: 'visible' });
       const layout = await page.evaluate(() => {
         const leftLockup = document.querySelector('.matchup-slate__team--left');
         const rightLockup = document.querySelector('.matchup-slate__team--right');

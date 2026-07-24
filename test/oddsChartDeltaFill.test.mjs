@@ -96,7 +96,8 @@ test.after(async () => {
 test('all-negative pace fixture renders no green fill pixels', async () => {
   const page = await browser.newPage({ viewport: { width: 960, height: 720 }, colorScheme: 'dark' });
   try {
-    await page.goto(`${baseUrl}/design/chart/pace-negative`, { waitUntil: 'networkidle' });
+    await page.goto(`${baseUrl}/design/chart/pace-negative`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.design-chart-page__chart--fill-test .odds-chart__plot').waitFor({ state: 'visible' });
     const counts = await page.evaluate(() => ({
       positive: document.querySelectorAll('.odds-chart__area--delta-positive').length,
       negative: document.querySelectorAll('.odds-chart__area--delta-negative').length,
@@ -114,7 +115,8 @@ test('all-negative pace fixture renders no green fill pixels', async () => {
 test('all-positive pace fixture renders no red fill pixels', async () => {
   const page = await browser.newPage({ viewport: { width: 960, height: 720 }, colorScheme: 'dark' });
   try {
-    await page.goto(`${baseUrl}/design/chart/pace-positive`, { waitUntil: 'networkidle' });
+    await page.goto(`${baseUrl}/design/chart/pace-positive`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.design-chart-page__chart--fill-test .odds-chart__plot').waitFor({ state: 'visible' });
     const counts = await page.evaluate(() => ({
       positive: document.querySelectorAll('.odds-chart__area--delta-positive').length,
       negative: document.querySelectorAll('.odds-chart__area--delta-negative').length,

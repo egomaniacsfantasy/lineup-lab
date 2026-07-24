@@ -53,6 +53,7 @@ interface OddsChartDeltaRead {
 interface OddsChartProps {
   title: string;
   caption?: string;
+  bandLabel?: string | null;
   footer?: ReactNode;
   className?: string;
   hero: OddsChartSeries;
@@ -486,6 +487,7 @@ function shortCodeFor(label: string, fallback?: string) {
 export function OddsChart({
   title,
   caption,
+  bandLabel = null,
   footer = null,
   className = '',
   hero,
@@ -700,7 +702,7 @@ export function OddsChart({
       <div className="odds-chart__topline">
         <div className="odds-chart__headline">
           <span className="odds-chart__title">{title}</span>
-          {caption ? <span className="odds-chart__caption">{caption}</span> : null}
+          {caption ? <span className="odds-chart__caption" title={typeof caption === 'string' ? caption : undefined}>{caption}</span> : null}
         </div>
         {resolvedRanges.length > 1 ? (
           <div className="odds-chart__ranges" role="group" aria-label="Chart range">
@@ -809,7 +811,7 @@ export function OddsChart({
                   className="odds-chart__area odds-chart__area--delta-positive"
                   d={pathData}
                   data-tone="positive"
-                  fill="rgba(52, 210, 123, 0.18)"
+                  fill="rgba(0, 184, 102, 0.18)"
                   key={`positive-area-${index}`}
                 />
               ))}
@@ -847,6 +849,10 @@ export function OddsChart({
               </span>
             ))}
         </div>
+
+        {!scrubActive && bandLabel && band && visibleBand.length > 1 ? (
+          <span className="odds-chart__band-label">{bandLabel}</span>
+        ) : null}
 
         {scrubActive && scrubLineLeft ? (
           <>

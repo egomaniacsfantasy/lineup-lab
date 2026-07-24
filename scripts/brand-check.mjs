@@ -11,6 +11,14 @@ const TARGETS = [
   'src/pages/TradePage.css',
   'src/pages/MatchupPage.tsx',
   'src/pages/MatchupPage.css',
+  'src/pages/LeaguePage.tsx',
+  'src/pages/LeaguePage.css',
+  'src/components/league/MatchupSlate.tsx',
+  'src/components/league/MatchupSlate.css',
+  'src/components/league/LeagueFutures.tsx',
+  'src/components/league/LeagueFutures.css',
+  'src/components/charts/OddsChart.tsx',
+  'src/components/charts/OddsChart.css',
   'src/components/trade-display/TradeDisplay.tsx',
   'src/components/trade-display/TradeDisplay.css',
   'src/components/trade/TradeAnalyzerPanel.tsx',
@@ -33,7 +41,9 @@ const DISALLOWED_DASHES = /[—–]/;
 const DISALLOWED_COLORS = [
   /#f59e0b/gi,
   /#b87d18/gi,
+  /#c9a227/gi,
   /rgb\s*\(\s*245\s*,\s*158\s*,\s*11\s*\)/gi,
+  /rgb\s*\(\s*201\s*,\s*162\s*,\s*39\s*\)/gi,
   /(?<![-\w])amber-[\w-]+\b/gi,
 ];
 const DISALLOWED_BOARD_JARGON = [/\bVOR\b/g, /\bFP\b/g, /Agreement-weighted/g, /Baseline:/g];

@@ -2,9 +2,9 @@
   /* ── Backgrounds ── */
   --bg: #0d0f11;
   --bg-deep: #08090b;
-  --bg-surface: #15181b;
-  --bg-surface-soft: #1d2125;
-  --bg-raised: #1d2125;
+  --bg-surface: #16120f;
+  --bg-surface-soft: #1a1512;
+  --bg-raised: #211915;
   --bg-inset: #0b0d0f;
   --bg-overlay: rgba(7, 8, 10, 0.78);
   --bg-positive: #11271b;
@@ -33,6 +33,7 @@
   --green: #34d27b;
   --red: #ff5c4d;
   --gold: #c9a227;
+  --color-trophy: #f0b421;
 
   /* ── Typography ── */
   --font-display: "Staatliches", "Arial Narrow", sans-serif;
@@ -106,16 +107,16 @@
   /* ── Shadows ── */
   --shadow-card: 0 12px 36px rgba(0, 0, 0, 0.34);
   --shadow-elevated: 0 22px 60px rgba(0, 0, 0, 0.44);
-  --shadow-glow-amber: 0 0 0 1px var(--border-subtle);
+  --shadow-glow-amber: 0 0 12px rgba(232, 84, 29, 0.22);
   --shadow-soft-edge: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
 
   /* ── Glass Effect ── */
-  --glass-bg: #15181b;
-  --glass-border: #2a2f34;
+  --glass-bg: #16120f;
+  --glass-border: #2f2822;
   --glass-blur: 0px;
 
   /* ── Borders ── */
-  --border-subtle: #2a2f34;
+  --border-subtle: #2f2822;
   --border-strong: rgba(232, 84, 29, 0.38);
 
   /* ── Focus ── */

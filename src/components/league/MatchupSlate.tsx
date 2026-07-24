@@ -34,6 +34,13 @@ type BoardTeam = {
   isUser?: boolean;
 };
 
+type MatchupFeedItem = {
+  key: string;
+  eyebrow: string;
+  headline: string;
+  detail: string;
+};
+
 const CHART_RANGES: OddsChartRangeOption[] = [
   { id: 'week', label: 'Week', windowMs: 7 * 24 * 60 * 60 * 1000 },
   { id: 'month', label: 'Month', windowMs: 30 * 24 * 60 * 60 * 1000 },
@@ -135,26 +142,8 @@ function teamsFor(matchup: LeagueWeekMatchup) {
   return teamA.winProb >= teamB.winProb ? { left: teamA, right: teamB } : { left: teamB, right: teamA };
 }
 
-function shortenTeamName(name: string) {
-  return name
-    .replace(/'s Team$/i, '')
-    .replace(/\bTeam$/i, '')
-    .trim();
-}
-
-function monogram(name: string) {
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length > 1) {
-    return parts.map((part) => part[0]).join('').slice(0, 3).toUpperCase();
-  }
-  return name.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
-}
-
 function boardDisplayName(name: string) {
-  if (name.length <= 24) return name;
-  const shortened = shortenTeamName(name);
-  if (shortened.length <= 24) return shortened;
-  return monogram(shortened);
+  return name;
 }
 
 function boardHandle(ownerName: string | undefined, record: string) {
@@ -186,6 +175,23 @@ function summaryText(openValue: number, currentValue: number) {
 
 function moveLabel(value: number) {
   return `${value >= 0 ? '▲' : '▼'}${Math.abs(value).toFixed(1)}`;
+}
+
+function activityFeed(rows: Array<{
+  rowKey: string;
+  left: BoardTeam;
+  right: BoardTeam;
+  summary: { point: RawMovement; move: number } | null;
+}>) {
+  return rows
+    .filter((row) => row.summary)
+    .map((row) => ({
+      key: row.rowKey,
+      eyebrow: 'Reprice',
+      headline: `${row.left.name} ${formatPercent(row.left.winProb)}`,
+      detail: `${row.left.name} vs ${row.right.name} · ${moveLabel(row.summary!.move)} today`,
+    }))
+    .slice(0, 8) satisfies MatchupFeedItem[];
 }
 
 export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupSlateProps) {
@@ -243,6 +249,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
     x: point.at,
     y: valueForSide(point, selectedRow.left.side),
   })) ?? [];
+  const feedItems = activityFeed(rows);
   const chartFooter = selectedRow?.summary
     ? `${selectedRow.left.name} moved ${selectedRow.summary.move >= 0 ? 'up' : 'down'} ${Math.abs(selectedRow.summary.move).toFixed(1)} points since the week opened.`
     : chartPoints.length > 1
@@ -334,6 +341,43 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
         </div>
 
         <aside className="matchup-slate__aside">
+          {selectedRow ? (
+            <section className="matchup-slate__detail">
+              <div className="matchup-slate__detail-head">
+                <span className="matchup-slate__detail-kicker">Selected matchup</span>
+                <strong>{selectedRow.left.name} vs {selectedRow.right.name}</strong>
+              </div>
+              {(selectedRow.left.projection != null || selectedRow.right.projection != null) ? (
+                <div className="matchup-slate__detail-line">
+                  <span>Projected points</span>
+                  <span>{selectedRow.left.projection?.toFixed(1) ?? 'N/A'} · {selectedRow.right.projection?.toFixed(1) ?? 'N/A'}</span>
+                </div>
+              ) : null}
+              {chartPoints.length > 1 ? (
+                <OddsChart
+                  caption="Held between updates."
+                  className="matchup-slate__chart"
+                  defaultRangeId="week"
+                  deltaFormatter={probabilityDeltaRead}
+                  displayValueForDelta={(value) => Math.round(Math.max(0, Math.min(100, value)))}
+                  footer={chartFooter}
+                  hero={{
+                    id: `${selectedRow.rowKey}-hero`,
+                    name: selectedRow.left.name,
+                    points: chartPoints,
+                  }}
+                  rangeOptions={CHART_RANGES}
+                  showHeroEndpoint={false}
+                  summaryFormatter={summaryText}
+                  title="Line movement"
+                  valueFormatter={formatPercent}
+                />
+              ) : (
+                <p className="matchup-slate__movement-note">This chart lights up after a couple of line updates.</p>
+              )}
+            </section>
+          ) : null}
+
           <section className="matchup-slate__glance">
             <span className="matchup-slate__glance-title">The week at a glance</span>
             {biggestFavorite ? (
@@ -356,42 +400,22 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             ) : null}
           </section>
 
-          {selectedRow ? (
-            <section className="matchup-slate__detail">
-              <div className="matchup-slate__detail-head">
-                <span className="matchup-slate__detail-kicker">Selected matchup</span>
-                <strong>{selectedRow.left.name} vs {selectedRow.right.name}</strong>
-              </div>
-              {(selectedRow.left.projection != null || selectedRow.right.projection != null) ? (
-                <div className="matchup-slate__detail-line">
-                  <span>Projected points</span>
-                  <span>{selectedRow.left.projection?.toFixed(1) ?? 'N/A'} · {selectedRow.right.projection?.toFixed(1) ?? 'N/A'}</span>
-                </div>
-              ) : null}
-              {chartPoints.length > 1 ? (
-                <OddsChart
-                  caption="Held values between updates. Tap the row to compare another game."
-                  className="matchup-slate__chart"
-                  defaultRangeId="week"
-                  deltaFormatter={probabilityDeltaRead}
-                  displayValueForDelta={(value) => Math.round(Math.max(0, Math.min(100, value)))}
-                  footer={chartFooter}
-                  hero={{
-                    id: `${selectedRow.rowKey}-hero`,
-                    name: selectedRow.left.name,
-                    points: chartPoints,
-                  }}
-                  rangeOptions={CHART_RANGES}
-                  showHeroEndpoint={false}
-                  summaryFormatter={summaryText}
-                  title="Line movement"
-                  valueFormatter={formatPercent}
-                />
+          <section className="matchup-slate__feed">
+            <span className="matchup-slate__glance-title">Activity</span>
+            <div className="matchup-slate__feed-body">
+              {feedItems.length > 0 ? (
+                feedItems.map((item) => (
+                  <article className="matchup-slate__feed-row" key={item.key}>
+                    <span className="matchup-slate__detail-kicker">{item.eyebrow}</span>
+                    <strong>{item.headline}</strong>
+                    <span>{item.detail}</span>
+                  </article>
+                ))
               ) : (
-                <p className="matchup-slate__movement-note">This chart lights up after a couple of line updates.</p>
+                <p className="matchup-slate__movement-note">The feed fills as the board reprices and real movement clears the one-point threshold.</p>
               )}
-            </section>
-          ) : null}
+            </div>
+          </section>
         </aside>
       </div>
     </section>

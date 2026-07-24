@@ -38,6 +38,8 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Labs-only Keep / Trade / Cut prompt with a local queue only
 - League polish pass for board row presentation, shared chart interaction, futures movement hierarchy, and schedule chart readability
 - Post-audit frontend fixes for Market manager selection, Matchup optimal-state display consistency, shared displayed-delta formatting, and Board/Sheet cleanup
+- Rating-loop frontend fixes for Board search, agreement save feedback, refetch-on-save display, and display-only `My calls` artifacts
+- Composition and energy pass for Matchup, League, and Market page framing, plus a public-Sleeper H2H strip and elastic activity rails
 
 ## What This Pass Did Not Change
 
@@ -56,6 +58,7 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `src/pages/DesignBoardRowPage.tsx`
 - `src/pages/DesignChartPage.tsx`
 - `src/pages/DesignChartPage.css`
+- `src/services/headToHead.ts`
 - `src/App.tsx`
 - `src/services/leagueApi.ts`
 - `src/styles/tokens.css`
@@ -100,6 +103,8 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `src/utils/displayDelta.ts`
 - `test/displayDelta.test.mjs`
 - `test/oddsChartDeltaFill.test.mjs`
+- `src/pages/DesignBoardLoopPage.tsx`
+- `test/boardInteractionLoop.test.mjs`
 
 ## Payload Map Additions
 
@@ -116,8 +121,33 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Matchup market digest:
   - Rows still consume `LeaguePricing.movers`
   - Acceptance labels, before/after prices, and `pts/wk` copy remain payload-driven display reads
+- Matchup slot-by-slot board:
+  - Starter identities still read from the existing matchup engine roster arrays:
+    - `engine.roster[]`
+    - `matchup.opponentTeam.roster[]`
+  - Slot edge chips render only the difference of the two displayed starter projections:
+    - `RosterSlot.projection - opponent RosterSlot.projection`
+  - No win%, odds, or score math is derived in this board
+- Matchup head-to-head strip:
+  - Source is the public Sleeper API only, fetched client-side through `src/services/headToHead.ts`
+  - Reads:
+    - `/v1/league/:id`
+    - `/v1/league/:id/rosters`
+    - `/v1/league/:id/matchups/:week`
+    - the `previous_league_id` chain for prior seasons
+  - Rendered facts:
+    - all-time record
+    - current streak
+    - average score line
+    - last-eight result timeline
+  - No engine field or client-side projection math feeds this strip
+- Matchup activity rail:
+  - Reprice items read only from existing `lineHistory[] -> lines[] -> sides[rosterId].winProbability`
+  - Market items read only from existing `LeaguePricing.movers`
+  - The feed is chronological presentation only, not a ranked model
 - Market deals suggestions:
-  - Manager chips are now seeded from `bootstrap.teams.filter((team) => !team.isUser)`
+  - Manager selection cards are seeded from `bootstrap.teams.filter((team) => !team.isUser)`
+  - Each manager card title price reads directly from `LeaguePricing.futures[].championOdds` matched by `rosterId`
   - Suggestion card partner name reads from `TradeSuggestion.partnerName` with the synced roster name as display fallback
   - Suggestion card `Your title` row reads directly from `TradeSuggestion.youDelta`
   - Suggestion card quiet `them` row reads directly from `TradeSuggestion.partnerDelta`
@@ -129,6 +159,7 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
   - The shared chart samples day-closing points from existing `LineHistoryEntry.titleProb` / `playoffProb` values only
   - Range pills only filter to real sampled points already in the payload. No interpolation or fabricated midpoints are introduced
   - Endpoint tag repeats the same team identity and current price already shown by the selected futures row
+  - The new in-plot `League range` label is presentation only over the same existing envelope band points
 - Board + Sheet merge:
   - The merged Board list still starts from `/api/rankings -> rankings[]`
   - Board and Sheet headline values still use the existing ranking payload fields:
@@ -140,11 +171,20 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
   - The expanded player card's next-opponent line reads only from `/api/projections -> players[].weekly[]`
   - The Board view intentionally renders no trend chip because neither `/api/rankings` nor `/api/projections` currently provides a player-level board-movement field
   - The Sheet `Your rating` column and the player-card slider both write through the existing Supabase `olympus_agreement` save path and still trigger `/api/projections/refresh-adjusted`
+  - The July 24 rating-loop pass keeps that exact save path but now also scopes reads to the signed-in user through `olympus_agreement.user_id`, so the saved value shown after reload is still the same persisted field the existing write path updates
   - The merged surface prefers a direct `/api/rankings` player-id join, then falls back to exact `position + name` matching only to connect existing payloads for display
   - The July 24 post-audit pass removes the Sheet presets only at the presentation layer. No payload fields or save paths changed
   - The July 24 post-audit pass changes row expansion only at the presentation layer:
     - Board rows now swap into the expanded card instead of repeating the collapsed row above it
     - Sheet rows keep the table row as the header and open the detail card beneath it without repeating player identity
+  - The July 24 rating-loop pass adds display-only Board artifacts on top of those same stored agreement values:
+    - `olympus_agreement.score` -> Board row `YOU ▲` / `YOU ▼` marker whenever the persisted rating is above or below the existing aligned baseline of `50`
+    - `olympus_agreement.score` -> `My calls (N)` count and filter, where `N` is the number of loaded players whose persisted rating is not `50`
+    - `olympus_agreement.score` -> player-card `Your rating: X` summary copy and the saved-value chip after reload
+  - The July 24 rating-loop pass does not preview or derive a future Board value client-side:
+    - after a confirmed save, the page refetches the existing Board payload and only then highlights the row if the returned `adjustedValue` or visible rank actually changed
+    - until that payload change arrives, the UI may show `Recalculating…` rather than claiming a number movement it has not received
+  - The Board search box now keeps an in-progress local draft while the URL query param syncs behind it. This is input-state protection only, not a new data source
 - Player votes lab:
   - The prompt is gated by `og.labs.player-votes`
   - Votes are stored locally only in `localStorage["og.playerVotes.queue"]`
@@ -156,8 +196,8 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
   - The drill-in chart samples only real `LineHistoryEntry.lines[].sides[rosterId].winProbability` points, bucketed to day-closing display points with no interpolation
   - The July 24 board v2 pass only changes grid allocation, name presentation, and row drill-in layout
   - The July 24 post-audit pass keeps the same fixed board columns and rail widths while reallocating spare desktop width to the board shell before any team-name shortening tier engages
-  - The July 24 polish pass adds display-only team-name tiering:
-    - `LeagueWeekMatchup.teamA / teamB` -> board row display name (full, shortened suffix-free form, or monogram)
+  - The July 24 composition pass keeps the same fixed board columns and rail widths while moving the team-name line to a true two-line stack:
+    - `LeagueWeekMatchup.teamA / teamB` -> board row display name
     - `LeagueWeekMatchup.teamAOwnerName / teamBOwnerName` plus existing record string -> board row owner meta line
   - Board movement text remains sourced from existing `LineHistoryEntry.lines[].sides[rosterId].winProbability`; the new footer copy only changes how the latest-threshold note is phrased
 - Schedule pace chart:
@@ -192,3 +232,6 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `test/boardMergeRoutes.test.mjs` locks the nav merge: no standalone Projections tab, `/projections` redirects to `Board · Sheet`, and the More-page tool card points at the merged surface.
 - `test/displayDelta.test.mjs` locks the shared displayed-delta rule so the rendered delta always equals the difference of the rounded displayed endpoints.
 - `test/oddsChartDeltaFill.test.mjs` launches the synthetic chart fixtures and samples rendered fill pixels so all-negative pace charts cannot leak green fill and all-positive pace charts cannot leak red fill.
+- `test/boardInteractionLoop.test.mjs` launches the dev-only Board rerender harness and locks the two regression paths from the July 24 rating-loop audit:
+  - a realistic-speed typed search string must survive rerenders intact
+  - a committed slider rating must survive rerenders and keep the confirmed saved value visible

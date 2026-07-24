@@ -24,3 +24,15 @@
   opacity: 0;
   stroke: transparent;
 }
+
+.design-chart-page__chart--fill-test .odds-chart__plot {
+  background: #000;
+}
+
+.design-chart-page__chart--fill-test .odds-chart__area--delta-positive {
+  fill: rgba(0, 220, 120, 1) !important;
+}
+
+.design-chart-page__chart--fill-test .odds-chart__area--delta-negative {
+  fill: rgba(220, 68, 68, 1) !important;
+}

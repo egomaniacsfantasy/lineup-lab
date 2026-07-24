@@ -219,6 +219,97 @@ Critique:
 - The strongest improvements are the Matchup empty-state compaction, the Market composition rhythm, the fixed rail on the League board, and the calmer Futures hierarchy.
 - I would ship these surfaces to strangers.
 
+## Composition And Energy Pass (July 24, 2026)
+
+### Harness note
+
+- Re-ran `npm run design:shots -- --label=composition-2026-07-24`.
+- That run produced fresh Matchup and Market-opening artifacts, then stalled before the later League and Board captures completed.
+- Fresh artifacts captured for this pass:
+  - `artifacts/design-shots/composition-2026-07-24/matchup-cold.png`
+  - `artifacts/design-shots/composition-2026-07-24/matchup-empty.png`
+  - `artifacts/design-shots/composition-2026-07-24/matchup-live-expanded.png`
+  - `artifacts/design-shots/composition-2026-07-24/market-default.png`
+- League, Futures, Schedule, and deeper Market states were verified against the working harness shots already in `artifacts/design-shots/post-audit-2026-07-24` while this pass was implemented. The partial rerun is being called out here on purpose.
+
+### Matchup
+
+Before:
+
+![Matchup cold before](/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/composition-2026-07-24/matchup-cold.png)
+
+Critique:
+
+- The page still read like a tall stack of competent modules instead of a designed front page.
+- The new rail work existed in pieces, but the composition still left too much of the page feeling interchangeable with any other tab.
+- The most important object on the screen should have been the matchup itself. Instead, the old single-column lineup treatment still made the page feel like a tool, not an event.
+
+After:
+
+![Matchup live after](/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/composition-2026-07-24/matchup-live-expanded.png)
+![Matchup empty after](/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/composition-2026-07-24/matchup-empty.png)
+
+What changed:
+
+- Reframed the page into a real main-plus-rail canvas with the hero up top, the mirrored slot-by-slot board as the depth anchor, a 2-up insight row, and an elastic right rail.
+- Replaced the old toggled single-column lineup with a mirrored starter board, so the matchup explains itself in one glance and the page cannot collapse into the upside-down-L void.
+- Added the public-Sleeper H2H strip and a live activity feed without touching any engine math.
+- Warmed the surfaces, tightened section eyebrows, and let the orange accent carry meaning instead of sitting on the page as garnish.
+
+Ship call:
+
+- Yes. This is the first Matchup layout in the repo that feels like the product’s front page instead of a collection of modules.
+
+### Market
+
+Before:
+
+![Market before](/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/post-audit-2026-07-24/market-default.png)
+
+Critique:
+
+- The manager-picking step still looked like filter setup, not the main action of the page.
+- The functionality was strong, but the visual reward for choosing a manager was weak, which made the killer feature feel ordinary.
+
+After:
+
+![Market after](/Users/andrevlahakis/Documents/lineup-lab/artifacts/design-shots/composition-2026-07-24/market-default.png)
+
+What changed:
+
+- Promoted manager selection into a shelf of large cards with title prices, a live market header, and a strong orange-selected state.
+- Kept the data contract strict: every displayed count or price is still payload-sourced, and the missing playoff/this-week impact rows remain absent rather than invented.
+- Warmed the card stack and the trade-card rails so the page now has a clear energy center.
+
+Ship call:
+
+- Yes, with one follow-up already noted in handoff: if Franco later exposes richer per-manager or per-suggestion fields, the layout now has obvious slots waiting for them.
+
+### League
+
+Critique:
+
+- The board itself was structurally good, but the page still needed a more elastic right side and a clearer line-movement read.
+- The league-range treatment had improved, but it still benefited from a stronger in-chart label than caption copy alone.
+
+What changed:
+
+- Tightened the selected matchup rail into a fixed-width sticky panel with glance and activity modules below it, so the page obeys the same no-void law as Matchup.
+- Labeled the futures range band in the chart itself, not only in supporting copy.
+- Kept the board’s fixed numeric rails intact while switching the team-name line to a true two-line stack, so long names use vertical space before they clip.
+
+Ship call:
+
+- Yes. The board still scans like a board, but it now feels more intentional and less like a table parked beside leftovers.
+
+### Shared Energy
+
+What changed:
+
+- Warmed the surface palette through tokens instead of page-local overrides.
+- Added the scoped trophy token `--color-trophy` and extended `brand-check` so the exception is explicit and guardrailed.
+- Tightened chart headers, added an in-plot band label, and cleaned up the Market trade rails so the app reads as one system rather than separate prompt passes.
+
 ---
 
 ## Chart Bible + Board v2 (July 24, 2026)
@@ -258,6 +349,54 @@ What changed:
 Ship call:
 
 - Yes. This is the first Futures chart in the repo that feels like a live market chart instead of a historical diagram.
+
+---
+
+## Rating Loop Repair (July 24, 2026)
+
+Verification note:
+
+- This pass used a dev-only rerender harness for the Board interaction loop so the proof states were deterministic and no persistent live agreement ratings had to be left behind.
+- The Matchup provenance capture uses the same design fixture with a seeded local overlay, which is the real source that drives the `PRICED ON YOUR BOARD` chip.
+
+### Loop 1, saved rating state
+
+![Board rating saved](artifacts/design-shots/2026-07-24-rating-loop/board-rating-saved.png)
+
+Critique:
+
+- The important failure here used to be honesty, not color. The old state could snap back to `50`, keep the row unchanged, then still celebrate a save.
+- This repaired state is better because the saved value is the loud fact: the slider, the number chip, and the confirmation line all agree on `80`.
+- The row-level `YOU ▲` marker makes the save legible outside the control itself, which is what the old toast language was gesturing at without showing.
+
+### Loop 2, `My calls` artifact
+
+![Board My calls](artifacts/design-shots/2026-07-24-rating-loop/board-rating-my-calls.png)
+
+Critique:
+
+- The board needed an address for `your board`, not just another success sentence. The filter chip does that without inventing any number.
+- Keeping `My calls (1)` in the same filter bank works because it reads like a scope change, not a second mode.
+- This would have failed if the chip were present but the row gave no visible evidence of the user's influence. The `YOU ▲` marker keeps the artifact concrete.
+
+### Matchup provenance
+
+![Matchup priced on your board](artifacts/design-shots/2026-07-24-rating-loop/matchup-priced-on-your-board.png)
+
+Critique:
+
+- This chip matters because it closes the loop publicly: the book is telling you when the current line is being priced off your board instead of Franco's untouched baseline.
+- The small orange chip reads clearly without overpowering the live-line state beside it, which keeps provenance informative rather than promotional.
+
+What changed:
+
+- Board search now keeps a local draft while URL state syncs behind it, so full-speed typing survives background rerenders.
+- Rating saves only celebrate confirmed changed writes, then refetch the board payload and show either row movement or an honest `Recalculating…` state.
+- The board now exposes user influence as a display artifact through `YOU ▲` / `YOU ▼` markers and a `My calls (N)` filter instead of only through toast copy.
+
+Ship call:
+
+- Yes. The interaction loop now tells the truth, holds onto user input under rerender pressure, and gives `your board` a visible artifact in the product.
 
 ## Post-Audit Fixes (July 24, 2026)
 
