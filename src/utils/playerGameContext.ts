@@ -174,6 +174,8 @@ export function buildExposureWindows(roster: RosterSlot[], source: GameContextSo
     if (!context.contextAvailable) {
       return { contextAvailable: false as const, windows: [] };
     }
+    // Bye starters have no kickoff and never lock; a "BYE" window is noise.
+    if (context.bye) continue;
 
     const [dayPart, ...timeParts] = context.kickoff.split(' ');
     const dayLabel = dayPart.slice(0, 3).toUpperCase();

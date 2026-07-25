@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { usePlayerVotesEnabled } from '../hooks/useLabsFlags';
 import { fetchBoard, type BoardRow } from '../services/leagueApi';
+import { isMyCallValue, myCallLabel } from '../utils/myCalls';
 import { supabase } from '../services/supabase';
 import type { Player } from '../types';
 import { computeLegacyAdjustedValues } from './legacyAdjustedValue';
@@ -251,24 +252,6 @@ function toneClass(value: string | null | undefined) {
   if (num > 50) return 'is-up';
   if (num < 50) return 'is-down';
   return 'is-even';
-}
-
-function isMyCallValue(value: string | null | undefined) {
-  if (value == null || value === '') return false;
-  const num = Number(value);
-  return Number.isFinite(num) && num !== 50;
-}
-
-function myCallDirection(value: string | null | undefined) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num === 50) return null;
-  return num > 50 ? 'up' : 'down';
-}
-
-function myCallLabel(value: string | null | undefined) {
-  const direction = myCallDirection(value);
-  if (!direction) return null;
-  return direction === 'up' ? 'YOU ▲' : 'YOU ▼';
 }
 
 function ratingSummary(value: number) {

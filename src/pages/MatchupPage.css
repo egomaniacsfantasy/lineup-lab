@@ -114,10 +114,6 @@
   line-height: 1.45;
 }
 
-.matchup-page__meta-copy--downside {
-  margin-top: 10px;
-}
-
 .matchup-page__module-meta {
   display: flex;
   align-items: center;
@@ -551,8 +547,10 @@
 .matchup-page__edge-delta {
   flex: none;
   color: var(--green);
-  font-size: 32px;
+  font-family: var(--font-num);
+  font-size: 26px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   line-height: 1;
 }
@@ -679,9 +677,25 @@
 
 .matchup-page__edge-swap-card {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(190px, 0.85fr) auto;
+  grid-template-areas:
+    'players players'
+    'market delta';
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
+  gap: 14px 16px;
+}
+
+.matchup-page__edge-swap-players {
+  grid-area: players;
+}
+
+.matchup-page__edge-swap-market {
+  grid-area: market;
+}
+
+.matchup-page__edge-swap-card .matchup-page__edge-delta {
+  grid-area: delta;
+  align-self: end;
 }
 
 .matchup-page__edge-swap-players,
@@ -1669,12 +1683,12 @@
   /* Pin the two columns explicitly: the page renders a visually-hidden
      h1 sibling, and grid auto-placement would otherwise shove the story
      into the 400px rail column (story right, lineup wrapped below). */
-  .matchup-page__story {
+  .matchup-page--cold .matchup-page__story {
     grid-column: 1;
     grid-row: 1;
   }
 
-  .matchup-page__module--lineup-rail {
+  .matchup-page--cold .matchup-page__module--lineup-rail {
     grid-column: 2;
     grid-row: 1;
     position: sticky;
@@ -1685,11 +1699,16 @@
     align-self: start;
   }
 
-  .matchup-page {
+  /* only the cold-loading skeleton keeps the legacy two-column root; the
+     loaded page's single split lives on .matchup-page__frame */
+  .matchup-page--cold {
     grid-template-columns: minmax(0, 1fr) 400px;
     align-items: start;
     gap: 20px;
-    padding: 24px 32px 48px;
+  }
+
+  .matchup-page {
+    padding: 24px 24px 32px;
   }
 
   .matchup-page__compare-scrim {
@@ -2368,6 +2387,24 @@
   gap: 10px;
 }
 
+.matchup-page__rail-stat-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.matchup-page__rail-stat-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .matchup-page__rail-stat {
   display: grid;
   gap: 4px;
@@ -2403,14 +2440,32 @@
 
 @media (min-width: 1200px) {
   .matchup-page__frame {
-    grid-template-columns: minmax(0, 1fr) 384px;
+    grid-template-columns: minmax(640px, 1fr) 384px;
     align-items: start;
   }
 
   .matchup-page__rail {
     position: sticky;
-    top: 64px;
-    height: calc(100dvh - 64px);
+    /* the scroller's 80px header padding already insets the sticky
+       rectangle, so 16px here pins the rail 96px from the viewport top */
+    top: 16px;
+    height: calc(100dvh - 112px);
+  }
+
+  /* elastic rail: the activity feed absorbs leftover depth so the rail
+     never ends early against a long main column */
+  .matchup-page__module--rail-feed {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .matchup-page__module--rail-feed .matchup-page__activity-feed {
+    flex: 1;
+    align-content: start;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .matchup-page__insight-grid {
@@ -2426,6 +2481,10 @@
 
 @media (max-width: 430px) {
   .matchup-page__edge-swap-card {
+    grid-template-areas:
+      'players'
+      'market'
+      'delta';
     grid-template-columns: 1fr;
     gap: 12px;
   }

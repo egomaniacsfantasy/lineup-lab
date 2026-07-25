@@ -703,3 +703,67 @@ What changed:
 Ship call:
 
 - Yes. It now behaves like a serious companion view to the Board, not like the old Projections tab dropped unchanged into a new route.
+
+---
+
+# Design Pass: Frame rebuild + P0 fixes
+
+Date: July 25, 2026
+Prompt: `og-handoff-first-pass-2026-07-24`
+
+## Matchup frame (P0-A)
+
+### Before
+
+![Matchup before](artifacts/design-shots/before-pass/matchup-live-expanded.png)
+
+Critique:
+
+- The page root was still a legacy two-column grid (`minmax(0,1fr) 400px`) whose right column rendered nothing, so the whole app sat inside the LEFT 996px of a 1512px viewport with a black void down the right.
+- Inside that, `__frame` split again into 596px + 384px, so the slot table lived in a 596px slot: "J. Smith-Njigba"-class names wrapped across lines, metas truncated to "SEA · vs…".
+- The rail glance was a junk drawer: LIVE LINE duplicated the hero 500px away, BEST SLOT EDGE duplicated the edge chips, and "1 plays" was both a grammar bug and information-free.
+- The Biggest edge card was unreadable: names crushed to "T...." and the +3.2% delta overlapped the strikethrough odds pair.
+
+### After
+
+![Matchup after](artifacts/design-shots/after-wip/matchup-live.png)
+
+What changed:
+
+- The legacy two-column root is now scoped to the cold-loading skeleton only (`matchup-page--cold`). The loaded page has exactly one split: `.matchup-page__frame` at `minmax(640px,1fr) 384px`, centered in a 1480px wrapper.
+- Hero and notices moved inside the main column, so hero + slot table span the full fluid canvas. At 1512px each slot card gets ~480px: zero wrapped starter names, full metas ("KC · @ DEN · Sun 4:25 PM").
+- The rail is a true elastic rail: sticky (pins 96px from viewport top, verified by scripted scroll at 0/400/max), fixed modules on top, Activity feed as the flex closer with internal scroll and `align-content: start` so rows keep their natural height.
+- Glance rebuilt (P1-D): NEXT LOCK (share of projection locking, from the week-locks data), FIRST KICKOFF (earliest starter kickoff + who), TIGHTEST GAME (the closest other matchup on the board, both payload win%s). Each item hides when its data is absent; the module hides when all three are. The LIVE LINE/BEST SLOT EDGE/"1 plays" boxes are gone.
+- Biggest edge card restacked: players row full-width on top, win-probability move + meter below, delta pill in its own fixed slot (26px, tabular). No more overlap at 2-up width.
+
+Critique loop 2 (honest):
+
+- The glance's NEXT LOCK and FIRST KICKOFF can both read "Sun" for teams with no Thu/Fri players; semantically different (share vs. opener) but visually samey. Candidate refinement next pass.
+- Market digest cards in the fixture show broken-image fallbacks for placeholder players; real leagues render real headshots. Not chased this pass.
+- The design fixture's rail shows only two Activity items so the feed area under them is airy at very tall viewports; real leagues fill it and the internal scroll engages.
+
+## Board false-flag (P0-B)
+
+- Marker logic extracted to `src/utils/myCalls.ts`, the single source: chip renders ONLY for a saved rating ≠ 50; `Number('') < 50` false-flagging is now impossible and locked by tests (`test/myCalls.test.mjs`), including chip-count === My-calls-count and a source-scan that both board surfaces import the shared util and hand-roll nothing.
+- Controlled-input regressions (search keystrokes, slider persistence through rerenders) were already covered by `test/boardInteractionLoop.test.mjs`; both pass.
+
+## Market (P0-C + P1-F)
+
+![Market after](artifacts/design-shots/after-wip/market-default.png)
+
+- Scouting is gone: no sub-tab bar, no route, `?view=scouting` lands on Deals (verified: screenshot of the redirect renders identical Deals content). "Your read" and the persona data layer are intact.
+- "Your read" is docked in THE MARKET module header instead of floating mid-air.
+- MANAGERS / POSITION are now eyebrow labels above their rows, not side labels.
+- Manager card names wrap to two lines with a title tooltip instead of colliding with the price (DINK's "FANTASYGODCASTA'S TEAM" case).
+
+## Provenance chip (P1-E)
+
+![Provenance american](artifacts/design-shots/live-verify/provenance-american.png)
+![Provenance percent](artifacts/design-shots/live-verify/provenance-percent.png)
+
+- "PRICED ON YOUR BOARD" chip + "Franco ±X" baseline row verified rendering with a seeded overlay in BOTH odds formats (screenshots above). The Franco number is the server's `house: true` lines payload; nothing is computed client-side.
+
+## Ship call
+
+- Matchup frame, glance, edge card, Board markers, Market composition: yes.
+- Not claimed done: live-league (logged-in) verification of the rating save loop end-to-end and the H2H strip against 617 Dynasty; see FRONTEND_DRIFT.md for exactly what still needs Andre's session.

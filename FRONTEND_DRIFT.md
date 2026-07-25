@@ -145,3 +145,35 @@ Prompt: `Codex prompt — Rider v2: finish the rebuild under the methodology con
 
 - Public browser verification on July 14, 2026 was limited to `/demo`, which truthfully exercises the Matchup surface only. The signed-in League and Market routes remained auth-gated in the in-app browser session, so League board tightening, Dynasty Labs gating, and manager-finder live states were verified through source plus build/test rather than a signed-in browser run.
 - The demo path does not carry a personalized board overlay, so the override-only hero provenance state (`PRICED ON YOUR BOARD` plus Franco baseline row) remains source-verified in this pass rather than fully browser-proven.
+
+---
+
+Prompt: `og-handoff-first-pass-2026-07-24`
+
+## Findings
+
+| Area | Status | Note |
+| --- | --- | --- |
+| Matchup page frame | Fixed | Legacy two-column page root scoped to the cold skeleton; loaded page uses one centered `frame` split (fluid main + 384px sticky elastic rail). Slot table now spans the full canvas; no wrapped starter names at 1512px (verified by DOM probe). |
+| Week-at-a-glance | Fixed | LIVE LINE / BEST SLOT EDGE / "N plays" removed. Replaced with Next lock, First kickoff, Tightest game; every value is a payload/Sleeper-data field; items and module hide when data is absent. |
+| Biggest edge card | Fixed | Restacked grid areas; delta pill no longer overlaps the odds pair; player units get the full row. |
+| Board YOU chips | Fixed | Single shared util (`src/utils/myCalls.ts`); unrated/50 can never chip; marker-count === My-calls-count enforced by test. |
+| Market Scouting | Removed | Sub-tabs, route and page deleted; `?view=scouting` lands on Deals. Persona/scouting data layer and "Your read" kept. |
+| Market composition | Fixed | Eyebrow labels, docked "Your read", two-line clamped card names with tooltip. |
+| Bye lock windows | Fixed | `buildExposureWindows` skips bye starters; kills "locks Bye BYE · locks" summary junk and the "NEXT LOCK: BYE" glance case. |
+| Client-computed downside line | Removed (flag for Franco) | `MatchupPage` contained a pre-existing client-side probability fabrication: `winProbability - share * 0.35` converted to a moneyline and rendered as "A bad Thursday drops your line to X → Y". This is exactly the class of math the boundary doc forbids; no payload field backs it. The sentence and its computation are deleted. If the product wants a downside number, it must come from the engine as a payload field. |
+| Pricing, engine, API, server | Untouched | No valuation, Monte Carlo, route, or persistence code changed. `node --test server/engine/*.test.js *.test.mjs`: 12/12 pass. |
+
+## Honest gaps (need Andre's logged-in session)
+
+- Rating loop end-to-end against Supabase (drag → save toast → reload → Sheet YOUR RATING) is test-covered at the UI layer (`boardInteractionLoop`), but the full network round-trip was not exercised: the app is auth-gated and this pass had no credentials (correctly so).
+- H2H strip render check in 617 Dynasty (managed opponents): code-gated on `opponentTeam.managerKey` which bots lack; visual confirmation pending login.
+- Provenance chip verified with a seeded local overlay in both odds formats; the live check (real board override diverging board price from Franco price) needs a logged-in league.
+- In-league screenshots of Odds Frauds / DINK matchup pages: attempted headless; blocked by the auth gate (screenshots captured landed on the marketing page). Design-fixture and component-level verification stand in.
+
+## Ops notes (this machine) — ACTION NEEDED
+
+- ROOT CAUSE FOUND (confirmed by sampling a wedged server process): the repo sits in iCloud-synced `~/Documents`, iCloud has evicted 6,968 files in the repo to the cloud (`dataless` flag; includes `.claude/launch.json`, large parts of `.git/objects`, and `server/data/espn-creds.json`), and the materialization daemon is stuck, so any `open()` on an evicted file blocks FOREVER. This is why: `.claude/` hangs the shell, the local API server wedges mid-session (main thread sampled inside a kernel `open()` that never returns), and repo-wide greps/dev tools stall at random. `brctl download` was issued for the creds file and did not complete.
+- Fix on the machine (not from this pass): check iCloud Drive sync status / restart / disable "Optimize Mac Storage" for Documents, or move the repo out of iCloud-synced paths entirely. Until then the dev server can wedge whenever it touches an evicted file, and even `git` can hang on evicted objects.
+- Separate, lesser note: the reprice scheduler runs 60s after server boot and synchronously crunches every cached league; harness runs land faster right after boot or after `[reprice] done`.
+- `scripts/design-shots.mjs` "Apollo Archers" step was broken before this pass (exact-name match vs. card's full accessible name); fixed with a regex matcher. The full-suite after run is partial for this pass because of the iCloud wedge above; targeted after-shots live in `artifacts/design-shots/after-wip` and `live-verify`.

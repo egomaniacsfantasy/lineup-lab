@@ -5,7 +5,6 @@ import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeCard, TradeSide } from '../components/trade-display/TradeDisplay';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
-import { ScoutingView } from './market/ScoutingView.tsx';
 import '../components/trade/TradeAnalyzerPanel.css';
 import '../components/trade-display/TradeDisplay.css';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
@@ -934,6 +933,15 @@ function TradeDealsView() {
               <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
             ) : null}
           </div>
+          <button
+            aria-expanded={showRead}
+            className="trade-cc__partner-read trade-cc__partner-read--inline"
+            disabled={marketManagerFilter == null || isPricing || counterLoading}
+            onClick={() => setShowRead((current) => !current)}
+            type="button"
+          >
+            {showRead ? 'Hide read' : 'Your read'}
+          </button>
         </div>
         <div className="trade-cc__filter-stack">
           <div className="trade-cc__filter-row">
@@ -953,7 +961,9 @@ function TradeDealsView() {
                   <span className="trade-cc__manager-card-top">
                     {renderTeamAvatar(team)}
                     <span className="trade-cc__manager-card-copy">
-                      <span className="trade-cc__manager-card-name">{team.teamName}</span>
+                      <span className="trade-cc__manager-card-name" title={team.teamName}>
+                        {team.teamName}
+                      </span>
                       <span className="trade-cc__manager-card-meta">{recordText(team.record)}</span>
                     </span>
                   </span>
@@ -968,15 +978,6 @@ function TradeDealsView() {
                 </button>
               ))}
             </div>
-            <button
-              aria-expanded={showRead}
-              className="trade-cc__partner-read trade-cc__partner-read--inline"
-              disabled={marketManagerFilter == null || isPricing || counterLoading}
-              onClick={() => setShowRead((current) => !current)}
-              type="button"
-            >
-              {showRead ? 'Hide read' : 'Your read'}
-            </button>
           </div>
 
           <div className="trade-cc__filter-row">
@@ -1363,42 +1364,20 @@ function TradeDealsView() {
 
 export function TradePage() {
   const [params, setParams] = useSearchParams();
-  const { stored } = useLeagueConnection();
-  const view = params.get('view') === 'scouting' ? 'scouting' : 'deals';
 
-  const setView = (next: 'deals' | 'scouting') => {
-    const nextParams = new URLSearchParams(params);
-    nextParams.set('view', next);
-    if (stored?.leagueId) nextParams.set('leagueId', stored.leagueId);
-    setParams(nextParams, { replace: true });
-  };
+  // Scouting no longer exists as a page; old /market?view=scouting links land on Deals.
+  useEffect(() => {
+    if (params.get('view') != null) {
+      const nextParams = new URLSearchParams(params);
+      nextParams.delete('view');
+      setParams(nextParams, { replace: true });
+    }
+  }, [params, setParams]);
 
   return (
     <div className="market-page">
       <h1 className="visually-hidden">Market</h1>
-      <div className="market-page__view-tabs" role="tablist" aria-label="Market views">
-        {[
-          ['deals', 'Deals'],
-          ['scouting', 'Scouting'],
-        ].map(([key, label]) => (
-          <button
-            aria-selected={view === key}
-            className={[
-              'market-page__view-tab',
-              view === key ? 'market-page__view-tab--active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            key={key}
-            onClick={() => setView(key as 'deals' | 'scouting')}
-            role="tab"
-            type="button"
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {view === 'deals' ? <TradeDealsView /> : <ScoutingView />}
+      <TradeDealsView />
     </div>
   );
 }

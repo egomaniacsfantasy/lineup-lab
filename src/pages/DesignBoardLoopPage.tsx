@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BoardPlayerCard } from './MyBoardPage';
+import { myCallLabel } from '../utils/myCalls';
 
 const HARNESS_PLAYER = {
   adjustedValue: 57,
@@ -49,8 +50,7 @@ export function DesignBoardLoopPage() {
   const [savingState, setSavingState] = useState<'saving' | 'ok' | 'pending' | 'err' | undefined>(undefined);
   const [saveMessage, setSaveMessage] = useState('');
   const [rowMotionState, setRowMotionState] = useState<'moved' | 'recalculating' | null>(null);
-  const influenceChip =
-    Number(savedRating) > 50 ? 'YOU ▲' : Number(savedRating) < 50 ? 'YOU ▼' : null;
+  const influenceChip = myCallLabel(savedRating);
   const showRow = !myCallsOnly || influenceChip != null;
 
   useEffect(() => {

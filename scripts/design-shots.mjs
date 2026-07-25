@@ -116,7 +116,7 @@ try {
 
   await capture('market-manager-apollo', async (page) => {
     await page.goto('http://127.0.0.1:4173/design/market?view=deals', { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'Apollo Archers', exact: true }).click();
+    await page.getByRole('button', { name: /Apollo Archers/ }).click();
     await page.waitForTimeout(1500);
   });
 

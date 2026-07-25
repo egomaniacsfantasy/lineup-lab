@@ -40,6 +40,7 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - Post-audit frontend fixes for Market manager selection, Matchup optimal-state display consistency, shared displayed-delta formatting, and Board/Sheet cleanup
 - Rating-loop frontend fixes for Board search, agreement save feedback, refetch-on-save display, and display-only `My calls` artifacts
 - Composition and energy pass for Matchup, League, and Market page framing, plus a public-Sleeper H2H strip and elastic activity rails
+- Handoff first pass (2026-07-25): Matchup single-frame rebuild (legacy two-column root scoped to the cold skeleton), glance rebuild on payload-only items, Biggest-edge card restack, shared my-call marker util plus tests, Scouting page removal (data layer kept), Market composition fixes, bye-window exclusion from lock timing, and removal of the client-computed "downside line" sentence (a pre-existing frontend probability fabrication; deleted, not replaced)
 
 ## What This Pass Did Not Change
 
@@ -105,6 +106,13 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `test/oddsChartDeltaFill.test.mjs`
 - `src/pages/DesignBoardLoopPage.tsx`
 - `test/boardInteractionLoop.test.mjs`
+- `src/utils/myCalls.ts`
+- `test/myCalls.test.mjs`
+- `src/utils/playerGameContext.ts`
+- `src/pages/market/ScoutingView.tsx` (deleted)
+- `src/pages/market/ScoutingView.module.css` (deleted)
+- `FRONTEND_DRIFT.md`
+- `METHODOLOGY_UNTOUCHED.md`
 
 ## Payload Map Additions
 
@@ -130,6 +138,14 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
   - No win%, odds, or score math is derived in this board
 - Matchup head-to-head strip:
   - Source is the public Sleeper API only, fetched client-side through `src/services/headToHead.ts`
+- Matchup week-at-a-glance (2026-07-25 rebuild):
+  - `Next lock` -> `buildExposureWindows(...)` share + day label; timing data only (Sleeper schedule), no pricing
+  - `First kickoff` -> `getPlayerContext(starter).kickoff` + starter `shortName`; earliest-ISO selection, no numbers derived
+  - `Tightest game` -> latest `lineHistory` entry `line.sides[rosterId].winProbability` pairs, names from `bootstrap.teams`; the argmin pick is a display SELECTION of which already-priced matchup to surface (the gap itself is never rendered); both displayed win%s are payload values rounded
+  - Removed from this module: live line (hero dupe), best slot edge (edge-card dupe), "N plays" count
+- Matchup hero baseline row (pre-existing, verified this pass):
+  - `Franco ±X` -> `/lines?house=true` payload side (`moneyline`, `winProbability`); rendered through the same odds-format toggle, nothing recomputed
+- Removed rendering (2026-07-25): the lock panel's "A bad Thursday drops your line to X -> Y" sentence. Its `to` value was computed client-side (`winProbability - share * 0.35` -> moneyline conversion) and traced to no payload field. Deleted; if this number should exist it must ship from the engine.
   - Reads:
     - `/v1/league/:id`
     - `/v1/league/:id/rosters`

@@ -25,3 +25,6 @@ test-results
 *.sln
 *.sw?
 server/data/
+
+# test scratch output
+.tmp-tests

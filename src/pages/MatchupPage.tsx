@@ -41,7 +41,6 @@ import {
 } from '../utils/tradeMarket';
 import {
   roundTo,
-  winProbabilityToMoneyline,
 } from '../utils/lineupComparison';
 import { evaluateStarterRoster } from '../utils/starterEvaluation';
 import {
@@ -1109,7 +1108,7 @@ interface MatchupLiveProps {
 
 function MatchupColdLoading({ label }: { label: string }) {
   return (
-    <div className="matchup-page">
+    <div className="matchup-page matchup-page--cold">
       <h1 className="visually-hidden">Matchup</h1>
       <section className="matchup-page__story">
         <section className="matchup-page__module matchup-page__module--hero matchup-page__module--skeleton">
@@ -1480,25 +1479,6 @@ function MatchupLive({
     return () => window.clearTimeout(timer);
   }, [recapShareState]);
 
-  const downsideLine = useMemo(() => {
-    const nextWindow = exposureWindows[0];
-
-    if (!nextWindow) {
-      return null;
-    }
-
-    const droppedWinProbability = clamp(
-      roundTo(engine.activeLine.yours.winProbability - nextWindow.share * 0.35),
-      5,
-      95,
-    );
-
-    return {
-      from: engine.activeLine.yours.moneyline,
-      to: winProbabilityToMoneyline(droppedWinProbability),
-    };
-  }, [engine.activeLine.yours.moneyline, engine.activeLine.yours.winProbability, exposureWindows]);
-
   const benchRows = useMemo(
     () => buildBenchImpactRows(engine.bench, engine.baselineRoster, engine.getOptionLine),
     [engine.baselineRoster, engine.bench, engine.getOptionLine],
@@ -1690,6 +1670,51 @@ function MatchupLive({
     [bootstrap?.matchups, lineHistory, matchup.yourTeam.teamName, movers, userRosterId],
   );
 
+  const firstKickoff = useMemo(() => {
+    let best: { iso: string; label: string; playerName: string } | null = null;
+    for (const slot of engine.roster) {
+      if (!slot.starter) continue;
+      const context = getPlayerContext(slot.starter, gameContextSource);
+      if (!context.contextAvailable || context.bye || !context.kickoffIso) continue;
+      if (!best || context.kickoffIso < best.iso) {
+        best = { iso: context.kickoffIso, label: context.kickoff, playerName: slot.starter.shortName };
+      }
+    }
+    return best;
+  }, [engine.roster, gameContextSource]);
+
+  /* Display selection only: picks which already-priced matchup to surface.
+     Both win probabilities shown are engine payload values, untouched. */
+  const tightestGame = useMemo(() => {
+    if (!bootstrap || !lineHistory?.length) return null;
+    const latest = lineHistory[lineHistory.length - 1];
+    if (!latest) return null;
+    const yourMatchupId = bootstrap.matchups.find((item) => item.rosterId === userRosterId)?.matchupId;
+    const teamNameFor = (rosterId: string) =>
+      bootstrap.teams.find((team) => String(team.rosterId) === rosterId)?.teamName ?? null;
+    let best: { gap: number; sides: Array<{ name: string; winProbability: number }> } | null = null;
+    for (const line of latest.lines) {
+      if (yourMatchupId != null && line.matchupId === yourMatchupId) continue;
+      const entries = Object.entries(line.sides);
+      if (entries.length < 2) continue;
+      const [[rosterA, sideA], [rosterB, sideB]] = entries;
+      const nameA = teamNameFor(rosterA);
+      const nameB = teamNameFor(rosterB);
+      if (!nameA || !nameB) continue;
+      const gap = Math.abs(sideA.winProbability - sideB.winProbability);
+      if (!best || gap < best.gap) {
+        best = {
+          gap,
+          sides: [
+            { name: nameA, winProbability: sideA.winProbability },
+            { name: nameB, winProbability: sideB.winProbability },
+          ],
+        };
+      }
+    }
+    return best?.sides ?? null;
+  }, [bootstrap, lineHistory, userRosterId]);
+
   const removePick = (playerId: string) => {
     setCompareSelection((current) => current.filter((candidate) => candidate.id !== playerId));
   };
@@ -1840,7 +1865,8 @@ function MatchupLive({
         visible={engine.lastChangeDelta !== 0}
       />
 
-      <section className="matchup-page__story">
+      <div className="matchup-page__frame">
+        <section className="matchup-page__main">
         {isPreview ? (
           <div className="matchup-page__preview-banner" role="status">
             <span className="matchup-page__preview-dot" aria-hidden="true" />
@@ -2074,8 +2100,6 @@ function MatchupLive({
           </SeasonalNotice>
         ) : null}
       {seasonLabel ? <SeasonalNotice>{seasonLabel}</SeasonalNotice> : null}
-        <div className="matchup-page__frame">
-          <section className="matchup-page__main">
             <section className="matchup-page__module matchup-page__module--slot-board">
               <div className="matchup-page__module-row matchup-page__module-row--lineup">
                 <div>
@@ -2454,18 +2478,6 @@ function MatchupLive({
                       ))}
                     </div>
 
-                    {downsideLine ? (
-                      <p className="matchup-page__meta-copy matchup-page__meta-copy--downside">
-                        A bad {exposureWindows[0]?.dayLabel === 'THU' ? 'Thursday' : 'early window'} drops your line to{' '}
-                        <span className="matchup-page__inline-number">
-                          <span className="matchup-page__price-old">{formatAmericanOdds(downsideLine.from)}</span>{' '}
-                          <span className="matchup-page__price-new matchup-page__price-new--down">
-                            {formatAmericanOdds(downsideLine.to)}
-                          </span>
-                        </span>
-                        . Sunday decides it.
-                      </p>
-                    ) : null}
                   </div>
                 ) : null}
               </section>
@@ -2536,25 +2548,46 @@ function MatchupLive({
               )}
             </section>
 
-            <section className="matchup-page__module matchup-page__module--rail-glance">
-              <div className="matchup-page__module-row">
-                <h2 className="matchup-page__module-title">The week at a glance</h2>
-              </div>
-              <div className="matchup-page__rail-stats">
-                <div className="matchup-page__rail-stat">
-                  <span className="matchup-page__edge-line-label">Live line</span>
-                  <strong>{formatDisplayedOdds(engine.activeLine.yours.moneyline, engine.activeLine.yours.winProbability)}</strong>
+            {(exposureTiming.contextAvailable && exposureWindows[0]) || firstKickoff || tightestGame ? (
+              <section className="matchup-page__module matchup-page__module--rail-glance">
+                <div className="matchup-page__module-row">
+                  <h2 className="matchup-page__module-title">The week at a glance</h2>
                 </div>
-                <div className="matchup-page__rail-stat">
-                  <span className="matchup-page__edge-line-label">Best slot edge</span>
-                  <strong>{biggestSwing ? formatSignedPercent(biggestSwing.delta) : 'Optimal'}</strong>
+                <div className="matchup-page__rail-stats">
+                  {exposureTiming.contextAvailable && exposureWindows[0] ? (
+                    <div className="matchup-page__rail-stat">
+                      <span className="matchup-page__edge-line-label">Next lock</span>
+                      <strong>{exposureWindows[0].dayLabel}</strong>
+                      <span className="matchup-page__meta-copy">
+                        {exposureWindows[0].share}% of your projection
+                      </span>
+                    </div>
+                  ) : null}
+                  {firstKickoff ? (
+                    <div className="matchup-page__rail-stat">
+                      <span className="matchup-page__edge-line-label">First kickoff</span>
+                      <strong>{firstKickoff.label}</strong>
+                      <span className="matchup-page__meta-copy">
+                        {firstKickoff.playerName} opens your week
+                      </span>
+                    </div>
+                  ) : null}
+                  {tightestGame ? (
+                    <div className="matchup-page__rail-stat">
+                      <span className="matchup-page__edge-line-label">Tightest game</span>
+                      {tightestGame.map((side) => (
+                        <span className="matchup-page__rail-stat-line" key={side.name}>
+                          <span className="matchup-page__rail-stat-name">{side.name}</span>
+                          <span className="matchup-page__inline-number">
+                            {Math.round(side.winProbability)}%
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="matchup-page__rail-stat">
-                  <span className="matchup-page__edge-line-label">On the board</span>
-                  <strong>{marketRows.length} plays</strong>
-                </div>
-              </div>
-            </section>
+              </section>
+            ) : null}
 
             <section className="matchup-page__module matchup-page__module--rail-feed">
               <div className="matchup-page__module-row">
@@ -2575,8 +2608,7 @@ function MatchupLive({
               </div>
             </section>
           </aside>
-        </div>
-      </section>
+      </div>
 
       {isCompareMode && !compareModalPlayers && !compareBoardPlayers ? (
         <div aria-label="Start or sit slip" className="matchup-page__slip" role="region">
