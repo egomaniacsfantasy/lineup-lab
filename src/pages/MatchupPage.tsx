@@ -1468,6 +1468,10 @@ function MatchupLive({
     const endNote = sundayWindow && sundayWindow.key !== nextWindow.key
       ? 'Sunday decides it'
       : 'Next window decides it';
+    // No projections for the week yet, so there is no share to quote.
+    if (nextWindow.share <= 0) {
+      return `Your week starts ${prettyDay(nextWindow.dayLabel)} ${lockTime} · ${endNote}`;
+    }
     return `${nextWindow.share}% of your projection locks ${prettyDay(nextWindow.dayLabel)} ${lockTime} · ${endNote}`;
   }, [exposureWindows]);
   useEffect(() => {
@@ -2558,9 +2562,11 @@ function MatchupLive({
                     <div className="matchup-page__rail-stat">
                       <span className="matchup-page__edge-line-label">Next lock</span>
                       <strong>{exposureWindows[0].dayLabel}</strong>
-                      <span className="matchup-page__meta-copy">
-                        {exposureWindows[0].share}% of your projection
-                      </span>
+                      {exposureWindows[0].share > 0 ? (
+                        <span className="matchup-page__meta-copy">
+                          {exposureWindows[0].share}% of your projection
+                        </span>
+                      ) : null}
                     </div>
                   ) : null}
                   {firstKickoff ? (

@@ -215,7 +215,9 @@ export function buildExposureWindows(roster: RosterSlot[], source: GameContextSo
 
       return {
         ...window,
-        share: Math.round((window.projection / totalProjection) * 100),
+        // Before projections exist for the week every starter is 0.0, so the
+        // total is 0 and the ratio would be NaN.
+        share: totalProjection > 0 ? Math.round((window.projection / totalProjection) * 100) : 0,
         detail:
           window.players.length === 1
             ? `${window.detail} · locks ${window.lockLabel}`
