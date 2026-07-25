@@ -1186,6 +1186,11 @@
   outline-color: rgba(232, 84, 29, 0.6);
 }
 
+/* Not a pairing the book can price against your current pick. */
+.matchup-page__lineup-row--muted {
+  opacity: 0.32;
+}
+
 .matchup-page__lineup-row--selected {
   margin-inline: -8px;
   padding-inline: 8px;
@@ -2190,9 +2195,11 @@
   text-align: right;
 }
 
+/* The edge chip gets a reserved column on both sides so the projection
+   column lands on the same x in every row, chip or no chip. */
 .matchup-page__slot-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) 52px 46px;
   align-items: center;
   gap: 10px;
   min-height: 60px;
@@ -2221,8 +2228,71 @@
 }
 
 .matchup-page__slot-card--right {
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: 46px 52px minmax(0, 1fr) auto;
   text-align: right;
+}
+
+.matchup-page__slot-chip-slot {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.matchup-page__slot-card--right .matchup-page__slot-chip-slot {
+  justify-content: flex-start;
+}
+
+/* Your side leads: live accent on your numbers, opponent reads as
+   reference material so the eye lands on your lineup first. */
+.matchup-page__slot-card--opponent {
+  border-color: color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  background: color-mix(in srgb, var(--bg-inset) 46%, transparent);
+  cursor: default;
+}
+
+.matchup-page__slot-card--opponent .matchup-page__slot-projection {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.matchup-page__slot-card--opponent .matchup-page__row-name {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.matchup-page__slot-card--opponent:hover {
+  border-color: color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Only rows where you actually have a bench option are interactive. */
+.matchup-page__slot-card--decision {
+  cursor: pointer;
+}
+
+.matchup-page__slot-card:disabled {
+  cursor: default;
+}
+
+.matchup-page__slot-card--picked {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px var(--amber) inset;
+}
+
+.matchup-page__slot-card--muted {
+  opacity: 0.34;
+}
+
+.matchup-page__slot-options {
+  display: block;
+  margin-top: 3px;
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: none;
 }
 
 .matchup-page__slot-center {
@@ -2387,6 +2457,86 @@
   gap: 10px;
 }
 
+/* The call: the one actionable start/sit decision, top of the rail. */
+.matchup-page__module--rail-call {
+  border-color: rgba(232, 84, 29, 0.24);
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(232, 84, 29, 0.1), transparent 56%),
+    var(--bg-surface);
+}
+
+.matchup-page__rail-call-swap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.matchup-page__rail-call-market {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-inset) 78%, transparent);
+}
+
+.matchup-page__rail-call-values {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-page__rail-call-values .matchup-page__edge-delta {
+  margin-left: auto;
+  font-size: 19px;
+}
+
+.matchup-page__rail-call-clean {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.matchup-page__risk-list {
+  display: grid;
+  gap: 8px;
+}
+
+.matchup-page__risk-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-inset) 72%, transparent);
+}
+
+.matchup-page__risk-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.matchup-page__risk-status {
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .matchup-page__rail-stat-line {
   display: flex;
   align-items: baseline;
@@ -2468,8 +2618,10 @@
     overflow-y: auto;
   }
 
+  /* The start/sit call now lives in the rail, so the digest is the only
+     occupant here and takes the full canvas rather than half of it. */
   .matchup-page__insight-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

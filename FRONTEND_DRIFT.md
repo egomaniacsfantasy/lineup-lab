@@ -171,6 +171,23 @@ Prompt: `og-handoff-first-pass-2026-07-24`
 - Provenance chip verified with a seeded local overlay in both odds formats; the live check (real board override diverging board price from Franco price) needs a logged-in league.
 - In-league screenshots of Odds Frauds / DINK matchup pages: attempted headless; blocked by the auth gate (screenshots captured landed on the marketing page). Design-fixture and component-level verification stand in.
 
+---
+
+Prompt: `og-frontend-sweep-2026-07-25`
+
+## Findings
+
+| Area | Status | Note |
+| --- | --- | --- |
+| Matchup rail order | Fixed | Rail now leads with the start/sit call, then the injury watch list, then Line movement, then the Activity feed as the elastic closer. "The week at a glance" removed. |
+| Slot projection alignment | Fixed | The edge chip rendered only on the winning side, so the projection column shifted x per row. Chip now has a reserved fixed column on both sides. |
+| Team hierarchy | Fixed | Your projections keep the accent; opponent side is muted and non-interactive. Also reduces accent coverage toward the brand's 5 to 15% rule. |
+| Compare eligibility | Fixed | Comparable pairs now derive from the engine's own per-slot `alternatives`, so a QB cannot be weighed against an RB unless a slot accepts both. No position rules invented client-side. |
+| Optimal empty state | Removed | "The book has no plays for you" strip beneath the starters is gone; the rail's call module owns that state. |
+| Market card density | Fixed | Manager cards shrunk from 54px avatars / 30px display type to 30px / 15px, so a full league fits in one or two rows. |
+| **Client-side comparison fabricator** | **Flag for Franco, now unreachable from the slot table** | `buildSyntheticComparison` in `src/hooks/useMatchupEngine.ts` invents win probabilities client-side (`getSyntheticDelta`, `getSyntheticWinProbabilities`, `buildSyntheticLine`) whenever two players share no slot. It is pre-existing, not from this pass. It was the code powering the illogical QB-vs-RB comparisons. Gating the UI to engine-eligible pairs means the slot table and bench can no longer reach it, but **the function still exists and is still wired as the fallback in `compareAnyTwoPlayers`**. It was deliberately NOT deleted: that is a call for Franco, and removing it could change behaviour on surfaces this pass did not audit. Recommend he either delete it or replace it with an engine call. |
+| Pricing, engine, API, server | Untouched | No valuation, Monte Carlo, route, or persistence code changed. Engine tests 12/12. |
+
 ## Ops notes (this machine) — PARTIALLY RESOLVED
 
 - ROOT CAUSE (confirmed by sampling a wedged server process, then by controlled test): the repo sits in iCloud-synced `~/Documents`, iCloud had evicted ~6,968 repo files to the cloud (`dataless` flag; includes `.claude/launch.json`, large parts of `.git/objects`, and `server/data/espn-creds.json`), and the CloudDocs materialization daemon (`bird`) was wedged, so any `open()` on an evicted file blocked FOREVER in uninterruptible I/O. Symptoms explained: `.claude/` hung the shell for hours, the local API server wedged mid-session (main thread sampled inside a kernel `open()` that never returns), repo greps stalled, and `git fetch` hung indefinitely.

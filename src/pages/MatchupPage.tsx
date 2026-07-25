@@ -1314,6 +1314,7 @@ function MatchupLive({
     [starterEvaluations],
   );
   const [isCompareMode, setIsCompareMode] = useState(false);
+  const [isBenchOpen, setIsBenchOpen] = useState(false);
   const [isBoardPopoverOpen, setIsBoardPopoverOpen] = useState(false);
   const [compareSelection, setCompareSelection] = useState<Player[]>([]);
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
@@ -1439,11 +1440,6 @@ function MatchupLive({
     return [...nonTradeMovers, ...taggedTrades].slice(0, 3);
   }, [movers, tradeMovers]);
   const showSuggestionSkeletons = isConnected && suggestionsFetching && !suggestionsResolved;
-  const showMergedEmptySuggestions =
-    isConnected &&
-    !showSuggestionSkeletons &&
-    !biggestSwing &&
-    marketRows.length === 0;
 
   useEffect(() => {
     if (!topPositiveEvaluation?.bestBenchAlternative) {
@@ -1531,7 +1527,42 @@ function MatchupLive({
 
   const MAX_COMPARE = 2;
 
+  /* Which pairs the book can actually price. The engine hands each of your
+     slots the bench players eligible to fill it (`alternatives`); opponent
+     slots get none. So a pair is comparable only when one player starts a
+     slot and the other is listed as an option for that same slot. This is
+     the engine's own eligibility data, not a position rule invented here,
+     and it is what keeps a QB from being weighed against an RB in a league
+     with no slot that accepts both. */
+  const comparableWith = (player: Player) => {
+    const ids = new Set<string>();
+    engine.roster.forEach((slot) => {
+      if (slot.starter.id === player.id) {
+        slot.alternatives.forEach((alternative) => ids.add(alternative.player.id));
+        return;
+      }
+      if (slot.alternatives.some((alternative) => alternative.player.id === player.id)) {
+        ids.add(slot.starter.id);
+      }
+    });
+    return ids;
+  };
+
+  const activePick = compareSelection[0] ?? null;
+  const eligiblePartnerIds = useMemo(
+    () => (activePick ? comparableWith(activePick) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activePick, engine.roster],
+  );
+
+  const canPick = (player: Player) => {
+    if (!activePick) return comparableWith(player).size > 0;
+    if (activePick.id === player.id) return true;
+    return eligiblePartnerIds?.has(player.id) ?? false;
+  };
+
   const handleComparePick = (player: Player) => {
+    if (!canPick(player)) return;
     setIsCompareMode(true);
     const current = compareSelection;
     const next = current.some((candidate) => candidate.id === player.id)
@@ -1674,50 +1705,25 @@ function MatchupLive({
     [bootstrap?.matchups, lineHistory, matchup.yourTeam.teamName, movers, userRosterId],
   );
 
-  const firstKickoff = useMemo(() => {
-    let best: { iso: string; label: string; playerName: string } | null = null;
-    for (const slot of engine.roster) {
-      if (!slot.starter) continue;
-      const context = getPlayerContext(slot.starter, gameContextSource);
-      if (!context.contextAvailable || context.bye || !context.kickoffIso) continue;
-      if (!best || context.kickoffIso < best.iso) {
-        best = { iso: context.kickoffIso, label: context.kickoff, playerName: slot.starter.shortName };
-      }
-    }
-    return best;
-  }, [engine.roster, gameContextSource]);
-
-  /* Display selection only: picks which already-priced matchup to surface.
-     Both win probabilities shown are engine payload values, untouched. */
-  const tightestGame = useMemo(() => {
-    if (!bootstrap || !lineHistory?.length) return null;
-    const latest = lineHistory[lineHistory.length - 1];
-    if (!latest) return null;
-    const yourMatchupId = bootstrap.matchups.find((item) => item.rosterId === userRosterId)?.matchupId;
-    const teamNameFor = (rosterId: string) =>
-      bootstrap.teams.find((team) => String(team.rosterId) === rosterId)?.teamName ?? null;
-    let best: { gap: number; sides: Array<{ name: string; winProbability: number }> } | null = null;
-    for (const line of latest.lines) {
-      if (yourMatchupId != null && line.matchupId === yourMatchupId) continue;
-      const entries = Object.entries(line.sides);
-      if (entries.length < 2) continue;
-      const [[rosterA, sideA], [rosterB, sideB]] = entries;
-      const nameA = teamNameFor(rosterA);
-      const nameB = teamNameFor(rosterB);
-      if (!nameA || !nameB) continue;
-      const gap = Math.abs(sideA.winProbability - sideB.winProbability);
-      if (!best || gap < best.gap) {
-        best = {
-          gap,
-          sides: [
-            { name: nameA, winProbability: sideA.winProbability },
-            { name: nameB, winProbability: sideB.winProbability },
-          ],
+  /* Your starters carrying an injury tag, straight from the payload's
+     injuryStatus. Display only: nothing here re-weights a projection. */
+  const riskyStarters = useMemo(() => {
+    const healthy = ['active', 'healthy'];
+    return engine.roster
+      .filter((slot) => {
+        const status = slot.starter.injuryStatus?.toLowerCase();
+        return Boolean(status) && !healthy.includes(status as string);
+      })
+      .map((slot) => {
+        const context = getPlayerContext(slot.starter, gameContextSource);
+        const kickoff = context.contextAvailable && !context.bye ? context.kickoff : null;
+        return {
+          player: slot.starter,
+          status: slot.starter.injuryStatus as string,
+          meta: [slot.starter.team, kickoff].filter(Boolean).join(' · '),
         };
-      }
-    }
-    return best?.sides ?? null;
-  }, [bootstrap, lineHistory, userRosterId]);
+      });
+  }, [engine.roster, gameContextSource]);
 
   const removePick = (playerId: string) => {
     setCompareSelection((current) => current.filter((candidate) => candidate.id !== playerId));
@@ -1732,17 +1738,22 @@ function MatchupLive({
   };
 
   const firstPick = compareSelection[0];
-  const compareHint =
-    !isCompareMode || compareSelection.length === 0
-      ? 'Tap two players to compare'
-      : `Now tap another player to weigh against ${firstPick.shortName}.`;
+  const decisionSlotCount = engine.roster.filter((slot) => slot.alternatives.length > 0).length;
+  const compareHint = (() => {
+    if (firstPick) {
+      const options = eligiblePartnerIds?.size ?? 0;
+      return options === 1
+        ? `One bench option for ${firstPick.shortName}. Pick it to price the swap.`
+        : `Now pick one of the ${options} bench options for ${firstPick.shortName}.`;
+    }
+    if (decisionSlotCount === 0) {
+      return 'No bench options this week. Every slot is the only play you have.';
+    }
+    return `Tap a starter to weigh it against your bench. ${decisionSlotCount} ${decisionSlotCount === 1 ? 'slot has' : 'slots have'} options.`;
+  })();
 
   const eligibleCount =
-    compareSelection.length >= 1
-      ? [...engine.roster.map((slot) => slot.starter), ...engine.bench.map((b) => b.player)].filter(
-          (p) => !compareSelection.some((c) => c.id === p.id),
-        ).length
-      : null;
+    compareSelection.length >= 1 ? eligiblePartnerIds?.size ?? 0 : null;
 
   const lineupMetaFor = (player: Player, extra?: string | null) => {
     const context = getPlayerContext(player, gameContextSource);
@@ -1793,14 +1804,17 @@ function MatchupLive({
     );
     const isLineupSlot = tone === 'starter';
     const showSlotLabel = isLineupSlot;
+    const pickable = canPick(player);
+    const muted = Boolean(activePick) && !selected && !pickable;
 
     return (
       <div
         className={[
           'matchup-page__lineup-row',
           tone === 'bench' ? 'matchup-page__lineup-row--bench' : '',
-          isCompareMode ? 'matchup-page__lineup-row--pickable' : '',
+          isCompareMode && pickable ? 'matchup-page__lineup-row--pickable' : '',
           selected ? 'matchup-page__lineup-row--selected' : '',
+          muted ? 'matchup-page__lineup-row--muted' : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -1814,8 +1828,9 @@ function MatchupLive({
           ]
             .filter(Boolean)
             .join(' ')}
-          // Tapping any player IS the start/sit flow: it picks them and
-          // shows who you can weigh them against.
+          disabled={!pickable}
+          // Tapping a player IS the start/sit flow: it picks them and shows
+          // the bench options the book can actually price against them.
           onClick={() => handleComparePick(player)}
           type="button"
         >
@@ -2123,71 +2138,108 @@ function MatchupLive({
                   {matchup.opponentTeam.teamName}
                 </div>
 
-                {slotComparisonRows.map((row) => (
-                  <Fragment key={row.key}>
-                    <button
-                      className={[
-                        'matchup-page__slot-card',
-                        row.edgeDelta > 0 ? 'matchup-page__slot-card--winner' : '',
-                      ].filter(Boolean).join(' ')}
-                      onClick={() => row.yourSlot && handleComparePick(row.yourSlot.starter)}
-                      type="button"
-                    >
-                      {row.yourSlot ? (
-                        <>
-                          <PlayerHeadshot
-                            className="matchup-page__slot-headshot matchup-page__slot-headshot--user"
-                            fallbackClassName="matchup-page__headshot-fallback"
-                            imageClassName="matchup-page__headshot-image"
-                            player={row.yourSlot.starter}
-                          />
-                          <span className="matchup-page__slot-copy">
-                            <span className="matchup-page__row-name">{row.yourSlot.starter.shortName}</span>
-                            <span className="matchup-page__row-secondary">{lineupMetaFor(row.yourSlot.starter)}</span>
-                          </span>
-                          <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection)}</span>
-                          {row.edgeDelta > 0 ? <span className="matchup-page__slot-edge-chip">+{row.edgeDelta.toFixed(1)}</span> : null}
-                        </>
-                      ) : (
-                        <span className="matchup-page__slot-empty">No starter</span>
-                      )}
-                    </button>
+                {slotComparisonRows.map((row) => {
+                  const starter = row.yourSlot?.starter ?? null;
+                  const optionCount = row.yourSlot?.alternatives.length ?? 0;
+                  const isSelected = starter
+                    ? compareSelection.some((candidate) => candidate.id === starter.id)
+                    : false;
+                  const isPickable = starter ? canPick(starter) : false;
+                  const isMuted = Boolean(activePick) && !isSelected && !isPickable;
 
-                    <div className="matchup-page__slot-center">{row.slotLabel}</div>
+                  return (
+                    <Fragment key={row.key}>
+                      <button
+                        aria-pressed={isSelected}
+                        className={[
+                          'matchup-page__slot-card',
+                          row.edgeDelta > 0 ? 'matchup-page__slot-card--winner' : '',
+                          optionCount > 0 ? 'matchup-page__slot-card--decision' : '',
+                          isSelected ? 'matchup-page__slot-card--picked' : '',
+                          isMuted ? 'matchup-page__slot-card--muted' : '',
+                        ].filter(Boolean).join(' ')}
+                        disabled={!isPickable}
+                        onClick={() => starter && handleComparePick(starter)}
+                        type="button"
+                      >
+                        {row.yourSlot ? (
+                          <>
+                            <PlayerHeadshot
+                              className="matchup-page__slot-headshot matchup-page__slot-headshot--user"
+                              fallbackClassName="matchup-page__headshot-fallback"
+                              imageClassName="matchup-page__headshot-image"
+                              player={row.yourSlot.starter}
+                            />
+                            <span className="matchup-page__slot-copy">
+                              <span className="matchup-page__row-name">{row.yourSlot.starter.shortName}</span>
+                              <span className="matchup-page__row-secondary">{lineupMetaFor(row.yourSlot.starter)}</span>
+                            </span>
+                            <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection)}</span>
+                            <span className="matchup-page__slot-chip-slot">
+                              {row.edgeDelta > 0 ? (
+                                <span className="matchup-page__slot-edge-chip">+{row.edgeDelta.toFixed(1)}</span>
+                              ) : null}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="matchup-page__slot-empty">No starter</span>
+                        )}
+                      </button>
 
-                    <button
-                      className={[
-                        'matchup-page__slot-card',
-                        'matchup-page__slot-card--right',
-                        row.edgeDelta < 0 ? 'matchup-page__slot-card--winner' : '',
-                      ].filter(Boolean).join(' ')}
-                      onClick={() => row.opponentSlot && handleComparePick(row.opponentSlot.starter)}
-                      type="button"
-                    >
-                      {row.opponentSlot ? (
-                        <>
-                          {row.edgeDelta < 0 ? <span className="matchup-page__slot-edge-chip">+{Math.abs(row.edgeDelta).toFixed(1)}</span> : null}
-                          <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection)}</span>
-                          <span className="matchup-page__slot-copy matchup-page__slot-copy--right">
-                            <span className="matchup-page__row-name">{row.opponentSlot.starter.shortName}</span>
-                            <span className="matchup-page__row-secondary">{lineupMetaFor(row.opponentSlot.starter)}</span>
+                      <div className="matchup-page__slot-center">
+                        <span>{row.slotLabel}</span>
+                        {optionCount > 0 ? (
+                          <span className="matchup-page__slot-options">
+                            {optionCount} {optionCount === 1 ? 'option' : 'options'}
                           </span>
-                          <PlayerHeadshot
-                            className="matchup-page__slot-headshot matchup-page__slot-headshot--opp"
-                            fallbackClassName="matchup-page__headshot-fallback"
-                            imageClassName="matchup-page__headshot-image"
-                            player={row.opponentSlot.starter}
-                          />
-                        </>
-                      ) : (
-                        <span className="matchup-page__slot-empty">No starter</span>
-                      )}
-                    </button>
-                  </Fragment>
-                ))}
+                        ) : null}
+                      </div>
+
+                      <div
+                        className={[
+                          'matchup-page__slot-card',
+                          'matchup-page__slot-card--right',
+                          'matchup-page__slot-card--opponent',
+                          row.edgeDelta < 0 ? 'matchup-page__slot-card--winner' : '',
+                          activePick ? 'matchup-page__slot-card--muted' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
+                        {row.opponentSlot ? (
+                          <>
+                            <span className="matchup-page__slot-chip-slot">
+                              {row.edgeDelta < 0 ? (
+                                <span className="matchup-page__slot-edge-chip">+{Math.abs(row.edgeDelta).toFixed(1)}</span>
+                              ) : null}
+                            </span>
+                            <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection)}</span>
+                            <span className="matchup-page__slot-copy matchup-page__slot-copy--right">
+                              <span className="matchup-page__row-name">{row.opponentSlot.starter.shortName}</span>
+                              <span className="matchup-page__row-secondary">{lineupMetaFor(row.opponentSlot.starter)}</span>
+                            </span>
+                            <PlayerHeadshot
+                              className="matchup-page__slot-headshot matchup-page__slot-headshot--opp"
+                              fallbackClassName="matchup-page__headshot-fallback"
+                              imageClassName="matchup-page__headshot-image"
+                              player={row.opponentSlot.starter}
+                            />
+                          </>
+                        ) : (
+                          <span className="matchup-page__slot-empty">No starter</span>
+                        )}
+                      </div>
+                    </Fragment>
+                  );
+                })}
               </div>
 
-              <details className="matchup-page__bench-drawer">
+              {/* Picking a starter is only useful if you can see the bench
+                  option it can be weighed against, so the drawer opens with
+                  the pick instead of leaving the answer hidden. */}
+              <details
+                className="matchup-page__bench-drawer"
+                onToggle={(event) => setIsBenchOpen(event.currentTarget.open)}
+                open={isBenchOpen || Boolean(activePick)}
+              >
                 <summary className="matchup-page__bench-summary">
                   Bench · {benchRows.length} vs {matchup.opponentTeam.bench?.length ?? 0}
                 </summary>
@@ -2211,12 +2263,11 @@ function MatchupLive({
 
                   <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
                     {(matchup.opponentTeam.bench ?? []).map((benchRow) => (
-                      <div className="matchup-page__lineup-row matchup-page__lineup-row--bench" key={`opp-bench-${benchRow.player.id}`}>
-                        <button
-                          className="matchup-page__lineup-hitbox matchup-page__lineup-hitbox--no-slot"
-                          onClick={() => handleComparePick(benchRow.player)}
-                          type="button"
-                        >
+                      <div
+                        className="matchup-page__lineup-row matchup-page__lineup-row--bench matchup-page__lineup-row--static"
+                        key={`opp-bench-${benchRow.player.id}`}
+                      >
+                        <span className="matchup-page__lineup-hitbox matchup-page__lineup-hitbox--no-slot">
                           <span className="matchup-page__lineup-player">
                             <PlayerChip player={benchRow.player} showPosition size="sm" />
                             <span className="matchup-page__lineup-copy">
@@ -2225,7 +2276,7 @@ function MatchupLive({
                             </span>
                           </span>
                           <span className="matchup-page__projection">{formatProjection(benchRow.projection)}</span>
-                        </button>
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -2236,99 +2287,7 @@ function MatchupLive({
             {headToHead ? <HeadToHeadStrip summary={headToHead} /> : null}
 
             <div className="matchup-page__insight-grid">
-              {showMergedEmptySuggestions ? (
-                <MatchupSuggestionEmpty
-                  copy="The book has no plays for you. Lineup optimal. Nothing on waivers beats what you'd already stream."
-                  meta={suggestionsAsOf ? `as of ${suggestionsAsOf}` : null}
-                />
-              ) : biggestSwing ? (
-                <section className="matchup-page__module">
-                  <div className="matchup-page__module-row">
-                    <h2 className="matchup-page__module-title">Biggest edge</h2>
-                    <div className="matchup-page__module-meta">
-                      <span className="matchup-page__signal matchup-page__signal--up">Swap</span>
-                      <MatchupSuggestionStatus
-                        asOf={suggestionsAsOf}
-                        isFetching={suggestionsFetching}
-                        isStale={suggestionsStale}
-                      />
-                    </div>
-                  </div>
-                  <div className="matchup-page__edge-swap-card">
-                    <div className="matchup-page__edge-swap-players">
-                      <MarketPlayerUnit label="Out" players={[biggestSwing.starter]} />
-                      <span aria-hidden="true" className="matchup-page__edge-swap-arrow">→</span>
-                      <MarketPlayerUnit label="In" players={[biggestSwing.alternative]} tone="accent" />
-                    </div>
-                    <div className="matchup-page__edge-swap-market">
-                      <div className="matchup-page__edge-line-copy">
-                        <span className="matchup-page__edge-line-label">Win probability</span>
-                        <span className="matchup-page__edge-line-values">
-                          <span className="matchup-page__price-old">{biggestEdgeDisplay?.beforePrimary}</span>
-                          <span aria-hidden="true">→</span>
-                          <span className="matchup-page__price-new matchup-page__price-new--up">
-                            {biggestEdgeDisplay?.afterPrimary}
-                          </span>
-                        </span>
-                        <span className="matchup-page__edge-line-secondary">
-                          {biggestEdgeDisplay?.beforeSecondary} to {biggestEdgeDisplay?.afterSecondary}
-                        </span>
-                      </div>
-                      <span
-                        aria-hidden="true"
-                        className="matchup-page__edge-meter"
-                        style={biggestEdgeDisplay?.meterStyle}
-                      >
-                        <span className="matchup-page__edge-meter-range" />
-                        <span className="matchup-page__edge-meter-dot matchup-page__edge-meter-dot--before" />
-                        <span className="matchup-page__edge-meter-dot matchup-page__edge-meter-dot--after" />
-                      </span>
-                    </div>
-                    <span className="matchup-page__edge-delta matchup-page__edge-delta--up">
-                      {formatSignedPercent(biggestSwing.delta)}
-                    </span>
-                  </div>
-                  <div className="matchup-page__edge-actions">
-                    <button className="matchup-page__row-action" onClick={inspectBiggestEdge} type="button">
-                      Inspect why
-                    </button>
-                    <button
-                      className="matchup-page__row-action"
-                      onClick={() => engine.selectPlayer(biggestSwing.slotIndex, biggestSwing.alternativeIndex)}
-                      type="button"
-                    >
-                      Preview
-                    </button>
-                    {stored ? (
-                      officialUrl ? (
-                        <a
-                          className="matchup-page__text-link"
-                          href={officialUrl}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          {stored.provider === 'espn' ? 'Open in ESPN ↗' : 'Open Sleeper ↗'}
-                        </a>
-                      ) : (
-                        <span className="matchup-page__text-link">
-                          {stored.provider === 'espn' ? 'Open in ESPN' : 'Open Sleeper'}
-                        </span>
-                      )
-                    ) : null}
-                  </div>
-                </section>
-              ) : isConnected ? (
-                showSuggestionSkeletons ? (
-                  <MatchupSuggestionSkeleton mode="edge" title="Biggest edge" subtitle="swap" />
-                ) : (
-                  <MatchupSuggestionEmpty
-                    copy="Your lineup is already the best play."
-                    meta={suggestionsAsOf ? `as of ${suggestionsAsOf}` : null}
-                  />
-                )
-              ) : null}
-
-              {!showMergedEmptySuggestions && isConnected ? (
+              {isConnected ? (
                 marketRows.length > 0 ? (
                   <section className="matchup-page__module">
                     <div className="matchup-page__module-row">
@@ -2514,6 +2473,95 @@ function MatchupLive({
           </section>
 
           <aside className="matchup-page__rail">
+            {biggestSwing ? (
+              <section className="matchup-page__module matchup-page__module--rail-call">
+                <div className="matchup-page__module-row">
+                  <h2 className="matchup-page__module-title">The call</h2>
+                  <div className="matchup-page__module-meta">
+                    <MatchupSuggestionStatus
+                      asOf={suggestionsAsOf}
+                      isFetching={suggestionsFetching}
+                      isStale={suggestionsStale}
+                    />
+                  </div>
+                </div>
+                <div className="matchup-page__rail-call-swap">
+                  <MarketPlayerUnit label="Sit" players={[biggestSwing.starter]} />
+                  <span aria-hidden="true" className="matchup-page__edge-swap-arrow">→</span>
+                  <MarketPlayerUnit label="Start" players={[biggestSwing.alternative]} tone="accent" />
+                </div>
+                <div className="matchup-page__rail-call-market">
+                  <span className="matchup-page__edge-line-label">Win probability</span>
+                  <span className="matchup-page__rail-call-values">
+                    <span className="matchup-page__price-old">{biggestEdgeDisplay?.beforePrimary}</span>
+                    <span aria-hidden="true">→</span>
+                    <span className="matchup-page__price-new matchup-page__price-new--up">
+                      {biggestEdgeDisplay?.afterPrimary}
+                    </span>
+                    <span className="matchup-page__edge-delta matchup-page__edge-delta--up">
+                      {formatSignedPercent(biggestSwing.delta)}
+                    </span>
+                  </span>
+                </div>
+                <div className="matchup-page__edge-actions">
+                  <button className="matchup-page__row-action" onClick={inspectBiggestEdge} type="button">
+                    Inspect why
+                  </button>
+                  <button
+                    className="matchup-page__row-action"
+                    onClick={() => engine.selectPlayer(biggestSwing.slotIndex, biggestSwing.alternativeIndex)}
+                    type="button"
+                  >
+                    Preview
+                  </button>
+                  {stored && officialUrl ? (
+                    <a
+                      className="matchup-page__text-link"
+                      href={officialUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {stored.provider === 'espn' ? 'Open in ESPN ↗' : 'Open Sleeper ↗'}
+                    </a>
+                  ) : null}
+                </div>
+              </section>
+            ) : isConnected && showSuggestionSkeletons ? (
+              <MatchupSuggestionSkeleton mode="edge" title="The call" subtitle="start or sit" />
+            ) : isConnected ? (
+              <section className="matchup-page__module matchup-page__module--rail-call">
+                <div className="matchup-page__module-row">
+                  <h2 className="matchup-page__module-title">The call</h2>
+                </div>
+                <p className="matchup-page__rail-call-clean">
+                  Your lineup is already the best play.
+                </p>
+              </section>
+            ) : null}
+
+            {riskyStarters.length > 0 ? (
+              <section className="matchup-page__module matchup-page__module--rail-risk">
+                <div className="matchup-page__module-row">
+                  <h2 className="matchup-page__module-title">Watch list</h2>
+                  <span className="matchup-page__edge-line-label">
+                    {riskyStarters.length} of your starters
+                  </span>
+                </div>
+                <div className="matchup-page__risk-list">
+                  {riskyStarters.map((entry) => (
+                    <div className="matchup-page__risk-row" key={entry.player.id}>
+                      <PlayerChip player={entry.player} showPosition size="sm" />
+                      <span className="matchup-page__risk-copy">
+                        <span className="matchup-page__row-name">{entry.player.shortName}</span>
+                        <span className="matchup-page__row-secondary">{entry.meta}</span>
+                      </span>
+                      <span className="matchup-page__risk-status">{entry.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
             <section className="matchup-page__module matchup-page__module--rail-chart">
               {matchupHistorySeries.length > 1 ? (
                 <OddsChart
@@ -2551,49 +2599,6 @@ function MatchupLive({
                 </div>
               )}
             </section>
-
-            {(exposureTiming.contextAvailable && exposureWindows[0]) || firstKickoff || tightestGame ? (
-              <section className="matchup-page__module matchup-page__module--rail-glance">
-                <div className="matchup-page__module-row">
-                  <h2 className="matchup-page__module-title">The week at a glance</h2>
-                </div>
-                <div className="matchup-page__rail-stats">
-                  {exposureTiming.contextAvailable && exposureWindows[0] ? (
-                    <div className="matchup-page__rail-stat">
-                      <span className="matchup-page__edge-line-label">Next lock</span>
-                      <strong>{exposureWindows[0].dayLabel}</strong>
-                      {exposureWindows[0].share > 0 ? (
-                        <span className="matchup-page__meta-copy">
-                          {exposureWindows[0].share}% of your projection
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {firstKickoff ? (
-                    <div className="matchup-page__rail-stat">
-                      <span className="matchup-page__edge-line-label">First kickoff</span>
-                      <strong>{firstKickoff.label}</strong>
-                      <span className="matchup-page__meta-copy">
-                        {firstKickoff.playerName} opens your week
-                      </span>
-                    </div>
-                  ) : null}
-                  {tightestGame ? (
-                    <div className="matchup-page__rail-stat">
-                      <span className="matchup-page__edge-line-label">Tightest game</span>
-                      {tightestGame.map((side) => (
-                        <span className="matchup-page__rail-stat-line" key={side.name}>
-                          <span className="matchup-page__rail-stat-name">{side.name}</span>
-                          <span className="matchup-page__inline-number">
-                            {Math.round(side.winProbability)}%
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </section>
-            ) : null}
 
             <section className="matchup-page__module matchup-page__module--rail-feed">
               <div className="matchup-page__module-row">

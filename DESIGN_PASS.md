@@ -767,3 +767,51 @@ Critique loop 2 (honest):
 
 - Matchup frame, glance, edge card, Board markers, Market composition: yes.
 - Not claimed done: live-league (logged-in) verification of the rating save loop end-to-end and the H2H strip against 617 Dynasty; see FRONTEND_DRIFT.md for exactly what still needs Andre's session.
+
+---
+
+# Design Pass: Matchup value sweep
+
+Date: July 25, 2026
+Prompt: `og-frontend-sweep-2026-07-25`
+
+## Rail: from passive to actionable
+
+The rail led with Line movement (a chart that says "no real movement yet" most of the week) and ended with Activity. The one genuinely actionable thing on the page, the start/sit call, was buried in the main column below the slot table.
+
+Rail is now ordered by what you can act on:
+
+1. **The call** (top): the recommended sit/start with the win-probability move, the delta, Inspect why / Preview, and a link out to Sleeper or ESPN to actually make the change. Renamed from "Biggest edge" because the module answers a question rather than labelling a metric.
+2. **Watch list**: your starters carrying an injury tag, with team and kickoff. Only renders when you have one. This is the widget that replaced "The week at a glance" and it earns its slot: it is per-user, changes week to week, and duplicates nothing else on the page.
+3. **Line movement**: demoted, kept.
+4. **Activity**: the elastic feed closer, per the rail law.
+
+"The week at a glance" is gone. Its three items were either duplicates or weakly useful; the owner's read was that it did not carry its weight, and re-reading them cold, that was right.
+
+## Slot table
+
+- **Alignment**: the real defect was not left-vs-right, it was that the edge chip only rendered when a side was winning, so the projection column jumped horizontally row to row. The chip now has a reserved fixed column on both sides, so every projection lands on the same x. Verified across all nine rows.
+- **Hierarchy**: your projections keep the live orange; the opponent's go muted with a flatter card. Your lineup reads first, the opponent reads as reference. This also pulls accent coverage back toward the 5 to 15% brand rule, which the two-orange-columns version blew past.
+- **Opponent is no longer interactive.** Selecting an opponent player was never a start/sit decision you could act on.
+
+## Compare logic
+
+The old rule was "tap any two players." That let you weigh a QB against an RB in a league with no slot that accepts both, and the resulting number came from `buildSyntheticComparison`, a client-side fabricator (see FRONTEND_DRIFT).
+
+The new rule uses the engine's own eligibility data: each of your slots carries the bench players the server says can fill it (`alternatives`). A pair is comparable only when one player starts a slot and the other is listed as an option for that same slot. No position table is invented in the frontend.
+
+Effects:
+- Only starters with real bench options are tappable; the slot gutter shows "N options" so you can see where decisions exist before tapping.
+- Picking a starter dims every player that cannot be weighed against it, opponent side included.
+- The bench drawer opens on pick, so the eligible option is visible instead of hidden behind a collapsed summary.
+- Hint copy states how many slots have options, then how many options the pick has.
+
+## Market
+
+Manager cards were oversized: 54px avatars and 30px display type carrying one number each, so nine managers filled a screen and said almost nothing. Cards are now ~196px wide with 30px avatars and 15px names, so a full league fits in one or two rows and the picker stops being the whole page.
+
+## Honest gaps
+
+- The Market is denser but still not *richer*. The owner's note was that it feels dead, and shrinking it does not by itself add value; what would is per-manager signal (their needs, their tendencies, what they have that you want) surfaced before you click. That needs payload work and a design round of its own, and I did not do it this pass.
+- The area under the trade builder is still short of the uncapped-closer law at tall viewports.
+- Compare eligibility is verified against the design fixture. The live-league case (auth-gated) is unverified, as with prior passes.
