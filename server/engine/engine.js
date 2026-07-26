@@ -1677,7 +1677,19 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
  * Δ championship %. The client applies the acceptance model (its per-manager
  * friendliness/relationship sliders) and ranks by expected gain = yourΔc × P(accept).
  */
-export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null } = {}) {
+// Trade acceptance — MUST stay in sync with src/utils/tradeAcceptance.ts (the
+// Build-a-Trade analyzer uses that exact function). Probability the partner
+// accepts, from THEIR title-odds gain and your read of them (friendliness /
+// relationship, 0–10, neutral = 5). Keeping this identical is what makes the
+// market ranking's accept % match the number you see in the analyzer.
+const ACCEPT_BAR0 = 0.6, ACCEPT_K_FRIEND = 0.10, ACCEPT_K_REL = 0.05, ACCEPT_SPREAD = 1.5;
+function acceptanceProbability(theirDeltaTitle, friendliness = 5, relationship = 5) {
+  const threshold = ACCEPT_BAR0 - ACCEPT_K_FRIEND * (friendliness - 5) - ACCEPT_K_REL * (relationship - 5);
+  const z = (theirDeltaTitle - threshold) / ACCEPT_SPREAD;
+  return Math.max(3, Math.min(97, Math.round((1 / (1 + Math.exp(-z))) * 100)));
+}
+
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, readsByRoster = {} } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -1883,7 +1895,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     simmed += 1;
     if (simmed % 4 === 0) await yieldToLoop();
     if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
-    const accept = acceptEstimate(theirValueDelta, valueGapOf(c.give, c.get));
+    const read = readsByRoster[c.partner.rosterId] ?? {};
+    const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
   }
 
@@ -1898,7 +1911,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
     if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
-    const accept = acceptEstimate(theirValueDelta, valueGapOf(c.give, c.get));
+    const read = readsByRoster[c.partner.rosterId] ?? {};
+    const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     suggestions.push({
       partnerRosterId: c.partner.rosterId,
       partnerName: c.partner.teamName,

@@ -168,10 +168,12 @@ function displayedMetric(value: number) {
 
 function SideCard({ side }: { side: TradeSideDelta }) {
   const rows = [
-    { label: 'Championship', b: side.before.titleProb, a: side.after.titleProb, d: side.delta.titleProb, pct: true },
-    { label: 'Make playoffs', b: side.before.playoffProb, a: side.after.playoffProb, d: side.delta.playoffProb, pct: true },
-    { label: 'Expected wins', b: side.before.expWins, a: side.after.expWins, d: side.delta.expWins, pct: false },
-    { label: 'Avg seed', b: side.before.avgSeed, a: side.after.avgSeed, d: side.delta.avgSeed, pct: false },
+    { label: 'Championship', b: side.before.titleProb, a: side.after.titleProb, d: side.delta.titleProb, pct: true, lowerIsBetter: false },
+    { label: 'Make playoffs', b: side.before.playoffProb, a: side.after.playoffProb, d: side.delta.playoffProb, pct: true, lowerIsBetter: false },
+    { label: 'Expected wins', b: side.before.expWins, a: side.after.expWins, d: side.delta.expWins, pct: false, lowerIsBetter: false },
+    // Avg seed: LOWER is better (the #1 seed beats the #6), so a drop is an
+    // improvement — invert the chip so it reads green/+ when the seed goes down.
+    { label: 'Avg seed', b: side.before.avgSeed, a: side.after.avgSeed, d: side.delta.avgSeed, pct: false, lowerIsBetter: true },
   ];
   return (
     <div className="trade-analyzer-panel__card">
@@ -197,7 +199,7 @@ function SideCard({ side }: { side: TradeSideDelta }) {
                 <span aria-hidden="true">→</span>
                 <span>{after.toFixed(1)}{r.pct ? '%' : ''}</span>
                 <span className="trade-analyzer-panel__delta-chip">
-                  <Delta v={rowDelta} pct={r.pct} />
+                  <Delta v={r.lowerIsBetter ? -rowDelta : rowDelta} pct={r.pct} />
                 </span>
               </span>
             </div>

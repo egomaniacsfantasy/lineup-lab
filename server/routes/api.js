@@ -864,8 +864,14 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     // Include the deploy commit so a new deploy never serves finder numbers that
     // disagree with the (live) analyzer running the newer code.
     const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
-    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${version}:${overlay ? 'ov' : 'base'}:${build}`;
-    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position }));
+    // Your saved "read" per manager (friendliness/relationship) drives the accept %,
+    // exactly like the Build-a-Trade analyzer. The client sends the reads it has;
+    // absent, the scan falls back to neutral (5/5) = an un-scouted read.
+    const readsByRoster = req.body?.readsByRoster ?? {};
+    const readsSig = Object.entries(readsByRoster).sort()
+      .map(([k, v]) => `${k}.${v?.friendliness ?? ''}.${v?.relationship ?? ''}`).join('_');
+    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${version}:${overlay ? 'ov' : 'base'}:${build}:${readsSig}`;
+    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position, readsByRoster }));
     res.json(result);
   } catch (error) {
     next(error);
