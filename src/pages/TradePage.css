@@ -273,11 +273,11 @@
 
 .trade-cc__filter-stack {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   margin-bottom: 18px;
-  padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
-  border-radius: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 28%),
     color-mix(in srgb, var(--bg-inset) 78%, transparent);
@@ -305,20 +305,22 @@
 
 .trade-cc__manager-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 8px;
 }
 
 .trade-cc__manager-card {
   display: grid;
-  gap: 7px;
-  align-content: start;
-  padding: 12px 13px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 34%),
-    color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 78px;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border-top-color: rgba(232, 84, 29, 0.14);
+  border-radius: 16px;
+  /* Warm card surface per the brand, not flat near-black on near-black. */
+  background: linear-gradient(180deg, #1a1512, #16120f);
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
@@ -326,20 +328,36 @@
     border-color var(--transition-fast),
     box-shadow var(--transition-fast),
     transform var(--transition-fast),
-    background-color var(--transition-fast),
-    color var(--transition-fast);
+    background var(--transition-fast);
+}
+
+.trade-cc__manager-card-id {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* The price is the hook: display face, tabular, the largest thing in the row. */
+.trade-cc__manager-card-price {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  min-width: 96px;
 }
 
 .trade-cc__manager-card:hover {
-  border-color: var(--amber);
-  box-shadow: 0 0 12px rgba(232, 84, 29, 0.25);
+  border-color: rgba(232, 84, 29, 0.55);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
   transform: translateY(-1px);
 }
 
 .trade-cc__manager-card--active {
   border-color: var(--amber);
-  background: var(--amber);
-  color: var(--bg-deep);
+  border-top-color: var(--amber);
+  background: linear-gradient(180deg, rgba(232, 84, 29, 0.22), rgba(232, 84, 29, 0.1));
+  box-shadow: inset 0 0 0 1px rgba(232, 84, 29, 0.35);
 }
 
 /* Each card answers "why call this guy?" before you click: who they own
@@ -361,10 +379,10 @@
 
 .trade-cc__manager-card-roster-names {
   overflow: hidden;
-  color: currentColor;
+  color: var(--text-soft);
   font-family: var(--font-ui);
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -396,20 +414,17 @@
 }
 
 .trade-cc__manager-card-name {
-  display: -webkit-box;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  color: currentColor;
+  color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 17px;
   letter-spacing: 0.03em;
-  line-height: 1.05;
-  overflow-wrap: anywhere;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trade-cc__manager-card-meta,
-.trade-cc__manager-card-stat-label,
 .trade-cc__finder-facts {
   color: color-mix(in srgb, currentColor 64%, transparent);
   font-family: var(--font-ui);
@@ -420,49 +435,44 @@
 }
 
 .trade-cc__manager-card-stat-label {
-  display: grid;
-  color: color-mix(in srgb, currentColor 58%, transparent);
+  color: var(--ink-3);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
 }
 
-/* Hover flips the label into the action so every card sells the tap. */
-.trade-cc__manager-card-stat-default,
-.trade-cc__manager-card-cta {
-  grid-area: 1 / 1;
-  transition: opacity 100ms ease;
-}
-
+/* Hover reveals the action rather than printing a button on every row:
+   the DraftKings widget study found per-card CTAs added cognitive load. */
 .trade-cc__manager-card-cta {
   color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   opacity: 0;
+  text-transform: uppercase;
+  transition: opacity 120ms ease;
   white-space: nowrap;
 }
 
 .trade-cc__manager-card:hover .trade-cc__manager-card-cta,
-.trade-cc__manager-card:focus-visible .trade-cc__manager-card-cta {
+.trade-cc__manager-card:focus-visible .trade-cc__manager-card-cta,
+.trade-cc__manager-card--active .trade-cc__manager-card-cta {
   opacity: 1;
 }
 
-.trade-cc__manager-card:hover .trade-cc__manager-card-stat-default,
-.trade-cc__manager-card:focus-visible .trade-cc__manager-card-stat-default {
-  opacity: 0;
-}
-
-.trade-cc__manager-card--active .trade-cc__manager-card-cta {
-  color: inherit;
-}
-
 .trade-cc__manager-card-stat-value {
-  color: currentColor;
-  font-family: var(--font-num);
-  font-size: 16px;
+  color: var(--amber-bright);
+  font-family: var(--font-display);
+  font-size: 27px;
+  line-height: 1;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .trade-cc__manager-card .trade-cc__team-avatar {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
   background: color-mix(in srgb, var(--bg-inset) 88%, transparent);
 }

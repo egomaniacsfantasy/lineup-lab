@@ -1000,3 +1000,54 @@ not cover them; depth is a headcount.
   RotoTrade) but no published UX comparisons of feed-versus-picker patterns,
   so the direction above is reasoned from our own payload constraints rather
   than borrowed.
+
+---
+
+# Design Pass: Trade finder as a price board
+
+Date: July 25, 2026
+
+Interaction model unchanged by request: you still pick one manager and the
+book scans that manager. This was a visual rebuild only.
+
+## Research
+
+- DraftKings sportsbook widget case study (dayscottdesign.com): a "Bet Now"
+  button on every card created redundancy and cognitive load; replacing it
+  with a hover-revealed CTA gave "subtle emphasis to the call to action" and
+  the widget carried roughly 1.5M monthly interactions. Their conclusion,
+  that thoughtful patterns rather than feature maximisation drive
+  engagement, argued for removing chrome here rather than adding badges.
+- Sports-betting UX writing (prometteursolutions, oddsassist) is consistent
+  on one point: odds must be the easiest thing on the screen to find, and
+  layout should make moving between markets quick.
+- Sleeper's redesign notes treat the player card as the thing to get right,
+  aiming to be "the standard for player information".
+
+## What was wrong
+
+1. Three nested frames: module box, then a bordered filter-stack box, then
+   the cards. Two of the three carried no information.
+2. The title price, the one number the whole product is built on, was set at
+   16px in the numeral face with a grey uppercase label, visually below the
+   team name.
+3. Cards were flat near-black on near-black, ignoring the brand's warm
+   orange-tinted card surface and its 1px accent top border.
+4. Every card was the same shape and weight with no anatomy, so nine of them
+   read as wallpaper.
+
+## What changed
+
+- The filter-stack frame is gone. Cards sit directly on the module.
+- Cards became board rows: identity on the left (40px avatar, team name in
+  the display face, record and thin position, headliners underneath), price
+  on the right in its own aligned column.
+- The price is now the hero: 27px display face in accent orange, with a
+  small "Title" label above it.
+- Warm surface per brand, `linear-gradient(180deg, #1a1512, #16120f)` with an
+  `rgba(232,84,29,0.14)` top border.
+- Hover lifts the row, warms the border and reveals FIND TRADES, per the
+  DraftKings finding. Selected state is an orange wash with an inset ring
+  rather than the old solid-orange fill that inverted all the text.
+
+Verified: `finder-v4.png`, `finder-v4-hover.png`.

@@ -1051,40 +1051,36 @@ function TradeDealsView() {
                   onClick={() => applyMarketManagerFilter(team.rosterId)}
                   type="button"
                 >
-                  <span className="trade-cc__manager-card-top">
+                  <span className="trade-cc__manager-card-id">
                     {renderTeamAvatar(team)}
                     <span className="trade-cc__manager-card-copy">
                       <span className="trade-cc__manager-card-name" title={team.teamName}>
                         {team.teamName}
                       </span>
-                      <span className="trade-cc__manager-card-meta">{recordText(team.record)}</span>
+                      <span className="trade-cc__manager-card-meta">
+                        {recordText(team.record)}
+                        {managerProfiles.get(team.rosterId)?.thin ? (
+                          <>
+                            {' · thin at '}
+                            {managerProfiles.get(team.rosterId)!.thin}
+                          </>
+                        ) : null}
+                      </span>
+                      {managerProfiles.get(team.rosterId)?.headliners.length ? (
+                        <span className="trade-cc__manager-card-roster-names">
+                          {managerProfiles.get(team.rosterId)!.headliners.join(', ')}
+                        </span>
+                      ) : null}
                     </span>
                   </span>
-                  {managerProfiles.get(team.rosterId)?.headliners.length ? (
-                    <span className="trade-cc__manager-card-roster">
-                      <span className="trade-cc__manager-card-roster-label">Their best</span>
-                      <span className="trade-cc__manager-card-roster-names">
-                        {managerProfiles.get(team.rosterId)!.headliners.join(', ')}
-                      </span>
-                    </span>
-                  ) : null}
-                  {managerProfiles.get(team.rosterId)?.thin ? (
-                    <span className="trade-cc__manager-card-thin">
-                      Thinnest at {managerProfiles.get(team.rosterId)!.thin}
-                      {' · '}
-                      {managerProfiles.get(team.rosterId)!.counts[managerProfiles.get(team.rosterId)!.thin as string]} deep
-                    </span>
-                  ) : null}
-                  <span className="trade-cc__manager-card-bottom">
-                    <span className="trade-cc__manager-card-stat-label">
-                      <span className="trade-cc__manager-card-stat-default">Title price</span>
-                      <span aria-hidden="true" className="trade-cc__manager-card-cta">Find trades ▸</span>
-                    </span>
+                  <span className="trade-cc__manager-card-price">
+                    <span className="trade-cc__manager-card-stat-label">Title</span>
                     <strong className="trade-cc__manager-card-stat-value">
                       {futuresByRoster.get(team.rosterId)?.championOdds != null
                         ? formatAmericanOdds(futuresByRoster.get(team.rosterId)!.championOdds)
                         : 'Off board'}
                     </strong>
+                    <span aria-hidden="true" className="trade-cc__manager-card-cta">Find trades ▸</span>
                   </span>
                 </button>
               ))}
