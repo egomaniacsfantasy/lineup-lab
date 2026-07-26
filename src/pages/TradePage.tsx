@@ -1161,7 +1161,10 @@ function TradeDealsView() {
             </div>
             <div className="trade-cc__deal-strip-grid">
               <TradeSide dense side={tradeSideOrEmpty('You send', give)} tone="send" />
-              <span className="trade-cc__deal-strip-arrow" aria-hidden="true">⇄</span>
+              <span className="trade-cc__deal-strip-arrow" aria-hidden="true">
+                <span className="trade-display__eyebrow trade-cc__deal-strip-arrow-spacer">&nbsp;</span>
+                <span className="trade-cc__deal-strip-arrow-glyph">⇄</span>
+              </span>
               <TradeSide dense side={tradeSideOrEmpty('You get', getIds)} tone="get" />
             </div>
           </div>

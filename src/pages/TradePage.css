@@ -628,12 +628,26 @@
   gap: 18px;
 }
 
+/* Aligned by mirroring the sides rather than nudged with a magic padding:
+   an invisible eyebrow reserves the label's height and the glyph centres on
+   the 42px asset row beneath it, so it stays put at any size. */
 .trade-cc__deal-strip-arrow {
+  display: grid;
+  gap: 6px;
   color: var(--ink-3);
-  font-family: var(--font-display);
-  font-size: clamp(28px, 3vw, 40px);
+}
+
+.trade-cc__deal-strip-arrow-spacer {
+  visibility: hidden;
+}
+
+.trade-cc__deal-strip-arrow-glyph {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  font-family: var(--font-ui);
+  font-size: 17px;
   line-height: 1;
-  padding-top: 34px;
 }
 
 .trade-cc__deal-strip-partner {
@@ -2532,7 +2546,10 @@
 
   .trade-cc__deal-strip-arrow {
     justify-self: center;
-    padding-top: 0;
+  }
+
+  .trade-cc__deal-strip-arrow-spacer {
+    display: none;
   }
 
   .trade-cc__verdict-stamp {
