@@ -185,7 +185,7 @@ Prompt: `og-frontend-sweep-2026-07-25`
 | Compare eligibility | Fixed | Comparable pairs now derive from the engine's own per-slot `alternatives`, so a QB cannot be weighed against an RB unless a slot accepts both. No position rules invented client-side. |
 | Optimal empty state | Removed | "The book has no plays for you" strip beneath the starters is gone; the rail's call module owns that state. |
 | Market card density | Fixed | Manager cards shrunk from 54px avatars / 30px display type to 30px / 15px, so a full league fits in one or two rows. |
-| **Client-side comparison fabricator** | **Flag for Franco, now unreachable from the slot table** | `buildSyntheticComparison` in `src/hooks/useMatchupEngine.ts` invents win probabilities client-side (`getSyntheticDelta`, `getSyntheticWinProbabilities`, `buildSyntheticLine`) whenever two players share no slot. It is pre-existing, not from this pass. It was the code powering the illogical QB-vs-RB comparisons. Gating the UI to engine-eligible pairs means the slot table and bench can no longer reach it, but **the function still exists and is still wired as the fallback in `compareAnyTwoPlayers`**. It was deliberately NOT deleted: that is a call for Franco, and removing it could change behaviour on surfaces this pass did not audit. Recommend he either delete it or replace it with an engine call. |
+| **Client-side comparison fabricator** | **RESOLVED 2026-07-25** | `buildSyntheticComparison` in `src/hooks/useMatchupEngine.ts` invents win probabilities client-side (`getSyntheticDelta`, `getSyntheticWinProbabilities`, `buildSyntheticLine`) whenever two players share no slot. It is pre-existing, not from this pass. It was the code powering the illogical QB-vs-RB comparisons. Gating the UI to engine-eligible pairs means the slot table and bench can no longer reach it, but **the function still exists and is still wired as the fallback in `compareAnyTwoPlayers`**. It was deliberately NOT deleted: that is a call for Franco, and removing it could change behaviour on surfaces this pass did not audit. Recommend he either delete it or replace it with an engine call. |
 | Pricing, engine, API, server | Untouched | No valuation, Monte Carlo, route, or persistence code changed. Engine tests 12/12. |
 
 ## Ops notes (this machine) — PARTIALLY RESOLVED
@@ -198,3 +198,21 @@ Prompt: `og-frontend-sweep-2026-07-25`
 - Git consequence seen this pass: the local repo's history diverged because upstream `daee2f9` was rewritten to `4c07e4d` (identical tree). With `.git` objects unreadable, fetch/rebase could not complete in-place, so this pass's commit was replayed onto a clean clone and pushed from there. The in-place repo still holds the superseded local commit; reconcile with `git fetch && git reset --hard origin/main` once materialization completes (content is already identical to `main`, so nothing is lost).
 - Separate, lesser note: the reprice scheduler runs 60s after server boot and synchronously crunches every cached league; harness runs land faster right after boot or after `[reprice] done`.
 - `scripts/design-shots.mjs` "Apollo Archers" step was broken before this pass (exact-name match vs. card's full accessible name); fixed with a regex matcher. The full-suite after run is partial for this pass because of the iCloud wedge above; targeted after-shots live in `artifacts/design-shots/after-wip` and `live-verify`.
+
+## 2026-07-25 — synthetic comparison removed for real
+
+Earlier this session the invented-win-probability path was made unreachable
+from the slot table but left in the tree. Opening comparison back up to any
+two of your players would have made it reachable again, so it is now gone:
+`getSyntheticDelta`, `getSyntheticWinProbabilities`, `buildSyntheticLine`
+and their moneyline/win-prob clamps are deleted.
+
+`buildSyntheticComparison` remains only as the no-shared-slot branch, and it
+no longer prices anything: it returns the baseline line on both sides with a
+zero delta and `slotIndex: -1`. The compare sheet already treated -1 as "not
+a swap" and falls back to comparing projections, so two starters now read
+"+5.4 pts · projection gap" instead of a fabricated win-probability swing.
+
+Net effect: comparing any two of your players is allowed again, and no
+comparison anywhere in the app can produce a probability the engine did not
+supply.

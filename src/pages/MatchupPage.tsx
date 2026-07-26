@@ -1467,11 +1467,11 @@ function MatchupLive({
     [activePick, engine.roster],
   );
 
-  const canPick = (player: Player) => {
-    if (!activePick) return comparableWith(player).size > 0;
-    if (activePick.id === player.id) return true;
-    return eligiblePartnerIds?.has(player.id) ?? false;
-  };
+  /* Any two of your own players can be weighed against each other: lineups
+     are fluid, and deciding which of two starters gives up a spot is a real
+     call. Pairs that share a slot get the priced swap; the rest get a
+     straight projection comparison, never an invented number. */
+  const canPick = (_player: Player) => true;
 
   const handleComparePick = (player: Player) => {
     if (!canPick(player)) return;
@@ -1649,14 +1649,14 @@ function MatchupLive({
   const compareHint = (() => {
     if (firstPick) {
       const options = eligiblePartnerIds?.size ?? 0;
-      return options === 1
-        ? `One bench option for ${firstPick.shortName}. Pick it to price the swap.`
-        : `Now pick one of the ${options} bench options for ${firstPick.shortName}.`;
+      return options > 0
+        ? `Now pick anyone to weigh against ${firstPick.shortName}. ${options} bench ${options === 1 ? 'option' : 'options'} can swap straight in.`
+        : `Now pick anyone to weigh against ${firstPick.shortName}.`;
     }
     if (decisionSlotCount === 0) {
       return 'No bench options this week. Every slot is the only play you have.';
     }
-    return 'Tap a starter to see your bench options.';
+    return 'Tap any two of your players to compare them.';
   })();
 
   const eligibleCount =
@@ -1712,7 +1712,7 @@ function MatchupLive({
     const isLineupSlot = tone === 'starter';
     const showSlotLabel = isLineupSlot;
     const pickable = canPick(player);
-    const muted = Boolean(activePick) && !selected && !pickable;
+    const muted = false;
 
     return (
       <div
@@ -2010,7 +2010,7 @@ function MatchupLive({
                     ? compareSelection.some((candidate) => candidate.id === starter.id)
                     : false;
                   const isPickable = starter ? canPick(starter) : false;
-                  const isMuted = Boolean(activePick) && !isSelected && !isPickable;
+                  const isMuted = false;
                   const youLead = row.edgeDelta > 0;
 
                   return (
