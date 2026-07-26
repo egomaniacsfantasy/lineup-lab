@@ -819,8 +819,8 @@ export function MyBoardPage() {
               role="tab"
               title={
                 option.key === 'consensus'
-                  ? 'Agreement-weighted numbers: what drives futures, matchups and trades'
-                  : 'Your raw combined-file model projections, before any agreement tilt'
+                  ? 'The numbers the book prices futures, matchups and trades on'
+                  : 'The model on its own, before any admin ratings move it'
               }
               type="button"
             >
