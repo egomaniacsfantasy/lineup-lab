@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -16,6 +17,13 @@ import { isAgreementAdmin } from '../utils/admin';
 import { toPlayer } from '../adapters/connectedLeague';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { fetchBoard, type BoardRow } from '../services/leagueApi';
+import {
+  tiltFromConsensus,
+  adjustFP,
+  adjustStat,
+  scaleBound,
+  type TiltScoring,
+} from '../services/agreementTilt';
 import type { Player } from '../types';
 import { computeLegacyAdjustedValues } from './legacyAdjustedValue';
 import './MyBoardPage.css';
@@ -35,6 +43,9 @@ interface ProjectionPlayer {
   ceiling: number | null;
   season: Row;
   weekly: Row[];
+  // Agreement consensus across the admin raters (avg 0-100, n voters). Drives the
+  // Consensus-view tilt; null when nobody has rated this player.
+  consensus?: { avg: number; n: number } | null;
 }
 
 interface ProjectionDataset {
@@ -49,6 +60,26 @@ interface MergedBoardPlayer {
   projection: ProjectionPlayer | null;
   adjustedValue: number;
   vor: number;
+  // Consensus tilt applied to this player's numbers: 0 in Model view (raw
+  // combined-file), tiltFromConsensus(avg) in Consensus view.
+  delta: number;
+}
+
+type BoardValueView = 'consensus' | 'model';
+
+/** Map the league scoring family to the tilt module's reception-weight suffix. */
+function tiltSuffix(scoringFamily: string | undefined): TiltScoring {
+  if (scoringFamily === 'half-ppr') return '_half';
+  if (scoringFamily === 'standard') return '_nonppr';
+  return '';
+}
+
+/** A displayed stat, tilted by the player's consensus delta. Returns the value
+ *  unchanged when it can't be tilted (delta 0 / missing), so formatting is
+ *  identical to the untilted path. */
+function tiltStat(pos: string, key: string, value: unknown, delta: number): unknown {
+  if (!delta || value == null || !Number.isFinite(Number(value))) return value;
+  return adjustStat(pos, key, value, delta);
 }
 
 interface StatColumn {
@@ -264,25 +295,33 @@ function WeeklyProjectionStrip({
   scoring,
   currentWeek,
   playoffWeekStart,
+  delta = 0,
 }: {
   projection: ProjectionPlayer | null;
   fallbackWeekly: Record<string, number> | null | undefined;
   scoring: string | undefined;
   currentWeek: number | null;
   playoffWeekStart: number | null;
+  delta?: number;
 }) {
   const [openWeek, setOpenWeek] = useState<number | null>(null);
   const fields = WEEKLY_SCORING_FIELDS[scoring ?? 'ppr'] ?? WEEKLY_SCORING_FIELDS.ppr;
+  const suf = tiltSuffix(scoring);
+  const pos = projection?.position ?? 'RB';
 
   const byWeek = new Map<number, WeekColumn>();
   for (const row of projection?.weekly ?? []) {
     const week = num(row.week);
     if (week == null) continue;
+    // Consensus tilt lands on the week's stats and re-scores the weekly point;
+    // floor/ceiling scale by the same proportion. delta 0 = raw model.
+    const rawPts = num(row[fields.pts]);
+    const pts = delta ? num(adjustFP(pos, rawPts, row, suf, 'weekly', delta)) : rawPts;
     byWeek.set(week, {
       week,
-      pts: num(row[fields.pts]),
-      floor: num(row[fields.floor]),
-      ceiling: num(row[fields.ceiling]),
+      pts,
+      floor: delta ? num(scaleBound(num(row[fields.floor]), rawPts, pts)) : num(row[fields.floor]),
+      ceiling: delta ? num(scaleBound(num(row[fields.ceiling]), rawPts, pts)) : num(row[fields.ceiling]),
       opponent: typeof row.opponent === 'string' ? row.opponent : null,
       home: row.game_location == null ? null : Number(row.game_location) === 1,
     });
@@ -422,7 +461,11 @@ export function MyBoardPage() {
   const query = searchParams.get('q') ?? '';
   const [searchDraft, setSearchDraft] = useState(query);
   const deferredQuery = useDeferredValue(searchDraft.trim().toLowerCase());
+  // Consensus = the agreement-weighted numbers that drive pricing/futures/trades;
+  // Model = the raw combined-file projections. Defaults to Consensus.
+  const [boardView, setBoardView] = useState<BoardValueView>('consensus');
   const scoring = bootstrap?.league.scoringFamily;
+  const tiltScoring = tiltSuffix(scoring);
   const numTeams = bootstrap?.league.totalTeams ?? 12;
   const sheetStatColumns =
     activePosition === 'ALL' ? [] : POSITION_STAT_COLUMNS[activePosition as Position];
@@ -517,30 +560,61 @@ export function MyBoardPage() {
     [projectionData],
   );
 
-  const legacyValues = useMemo(
-    () =>
-      board
-        ? computeLegacyAdjustedValues(board, numTeams, bootstrap?.league.rosterPositions)
-        : new Map<string, { adjustedValue: number; vor: number }>(),
-    [board, bootstrap?.league.rosterPositions, numTeams],
-  );
-
-  const mergedRows = useMemo(() => {
-    if (!board) return [];
-    return board.map((row) => {
+  // Per-player consensus tilt lookup: 0 in Model view, tiltFromConsensus(avg) in
+  // Consensus view. avg comes from the admin agreement raters (via /api/projections).
+  const deltaForRow = useCallback(
+    (row: BoardRow): { delta: number; projection: ProjectionPlayer | null } => {
       const projection =
         projectionById.get(row.playerId)
         ?? projectionByIdentity.get(`${row.position}::${row.name}`)
         ?? null;
+      const delta = boardView === 'model' ? 0 : tiltFromConsensus(projection?.consensus?.avg ?? null);
+      return { delta, projection };
+    },
+    [projectionById, projectionByIdentity, boardView],
+  );
+
+  // The board is fetched as raw model (model=1). In Consensus view we apply the
+  // SAME agreement tilt the pricing engine uses — stat-by-stat, cascaded into the
+  // season point/floor/ceiling — so the board's Consensus numbers match what
+  // simulates futures/matchups/trades. VOR/value then derive from the tilted set.
+  const tiltedBoard = useMemo(() => {
+    if (!board) return [] as BoardRow[];
+    return board.map((row) => {
+      const { delta, projection } = deltaForRow(row);
+      if (!delta || !projection) return row;
+      const total = adjustFP(row.position, row.seasonTotal, projection.season ?? {}, tiltScoring, 'season', delta);
+      if (total == null || !Number.isFinite(total)) return row;
+      return {
+        ...row,
+        seasonTotal: total,
+        floor: scaleBound(row.floor, row.seasonTotal, total) ?? row.floor,
+        ceiling: scaleBound(row.ceiling, row.seasonTotal, total) ?? row.ceiling,
+      };
+    });
+  }, [board, deltaForRow, tiltScoring]);
+
+  const legacyValues = useMemo(
+    () =>
+      tiltedBoard.length
+        ? computeLegacyAdjustedValues(tiltedBoard, numTeams, bootstrap?.league.rosterPositions)
+        : new Map<string, { adjustedValue: number; vor: number }>(),
+    [tiltedBoard, bootstrap?.league.rosterPositions, numTeams],
+  );
+
+  const mergedRows = useMemo(() => {
+    return tiltedBoard.map((row) => {
+      const { delta, projection } = deltaForRow(row);
       const legacy = legacyValues.get(row.playerId) ?? { adjustedValue: 0, vor: 0 };
       return {
         board: row,
         projection,
         adjustedValue: legacy.adjustedValue,
         vor: legacy.vor,
+        delta,
       } satisfies MergedBoardPlayer;
     });
-  }, [board, legacyValues, projectionById, projectionByIdentity]);
+  }, [tiltedBoard, legacyValues, deltaForRow]);
 
   const visibleRows = useMemo(() => {
     const filtered = mergedRows.filter((row) => {
@@ -697,6 +771,33 @@ export function MyBoardPage() {
           <p className="board-page__freshness">
             Updated {formatUpdatedDate(projectionData.updatedAt)} · {board.length} players
           </p>
+        </div>
+        <div className="board-page__view-toggle" role="tablist" aria-label="Projection source">
+          {([
+            { key: 'consensus', label: 'Consensus' },
+            { key: 'model', label: 'Original model' },
+          ] as Array<{ key: BoardValueView; label: string }>).map((option) => (
+            <button
+              aria-selected={boardView === option.key}
+              className={[
+                'board-page__view-pill',
+                boardView === option.key ? 'board-page__view-pill--active' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              key={option.key}
+              onClick={() => setBoardView(option.key)}
+              role="tab"
+              title={
+                option.key === 'consensus'
+                  ? 'Agreement-weighted numbers: what drives futures, matchups and trades'
+                  : 'Your raw combined-file model projections, before any agreement tilt'
+              }
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
         <div className="board-page__view-toggle" role="tablist" aria-label="Row density">
           {VIEW_OPTIONS.map((option) => (
@@ -923,7 +1024,7 @@ export function MyBoardPage() {
                         <td className="board-page__td board-page__td--num">{fmtNumber(player.board.ceiling)}</td>
                         {sheetStatColumns.map((column) => (
                           <td className="board-page__td board-page__td--num" key={column.key}>
-                            {statValue(player.projection?.season[column.key])}
+                            {statValue(tiltStat(player.board.position, column.key, player.projection?.season[column.key], player.delta))}
                           </td>
                         ))}
                       </tr>
@@ -1160,6 +1261,7 @@ export function BoardPlayerCard({
 
       <WeeklyProjectionStrip
         currentWeek={currentWeek}
+        delta={player.delta}
         fallbackWeekly={player.board.weekly}
         playoffWeekStart={playoffWeekStart}
         projection={player.projection}
@@ -1172,7 +1274,7 @@ export function BoardPlayerCard({
         {stats.map((stat) => (
           <div className="board-card__pill" key={stat.key} role="listitem">
             <span className="board-card__pill-label">{stat.label}</span>
-            <span className="board-card__pill-value">{statValue(projection?.season[stat.key])}</span>
+            <span className="board-card__pill-value">{statValue(tiltStat(player.board.position, stat.key, projection?.season[stat.key], player.delta))}</span>
           </div>
         ))}
       </div>
