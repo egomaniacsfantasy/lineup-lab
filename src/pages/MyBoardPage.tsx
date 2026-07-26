@@ -227,94 +227,165 @@ function nextMatchup(projection: ProjectionPlayer | null, currentWeek: number | 
   return sorted[0] ?? null;
 }
 
+/* Franco publishes a floor, a point projection and a ceiling for every week,
+   in each scoring format. Pick the fields the league actually scores; nothing
+   is derived here. */
+const WEEKLY_SCORING_FIELDS: Record<string, { pts: string; floor: string; ceiling: string }> = {
+  ppr: { pts: 'fantasy_pts', floor: 'fantasy_pts_floor', ceiling: 'fantasy_pts_ceiling' },
+  'half-ppr': { pts: 'fantasy_pts_half', floor: 'fantasy_pts_floor_half', ceiling: 'fantasy_pts_ceiling_half' },
+  standard: { pts: 'fantasy_pts_nonppr', floor: 'fantasy_pts_floor_nonppr', ceiling: 'fantasy_pts_ceiling_nonppr' },
+};
+
+type WeekColumn = {
+  week: number;
+  pts: number | null;
+  floor: number | null;
+  ceiling: number | null;
+  opponent: string | null;
+  home: boolean | null;
+};
+
+function num(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /**
- * Franco's week-by-week projection for one player. `board.weekly` arrives
- * keyed by week and already scoring-adjusted, so this only reads and scales
- * for bar height. Weeks absent from the payload are byes.
+ * Franco's week-by-week projection for one player: each week is a floor to
+ * ceiling range with his point projection marked inside it. Weeks missing
+ * from the payload are byes. Display only; bars scale to the player's own
+ * highest ceiling and no value is derived.
  */
 function WeeklyProjectionStrip({
-  weekly,
+  projection,
+  fallbackWeekly,
+  scoring,
   currentWeek,
   playoffWeekStart,
 }: {
-  weekly: Record<string, number> | null | undefined;
+  projection: ProjectionPlayer | null;
+  fallbackWeekly: Record<string, number> | null | undefined;
+  scoring: string | undefined;
   currentWeek: number | null;
   playoffWeekStart: number | null;
 }) {
-  const weeks = Object.keys(weekly ?? {})
-    .map(Number)
-    .filter((week) => Number.isFinite(week))
-    .sort((left, right) => left - right);
-  if (weeks.length === 0) return null;
+  const [openWeek, setOpenWeek] = useState<number | null>(null);
+  const fields = WEEKLY_SCORING_FIELDS[scoring ?? 'ppr'] ?? WEEKLY_SCORING_FIELDS.ppr;
 
-  const last = weeks[weeks.length - 1];
-  const values = weeks.map((week) => weekly![String(week)]);
-  const peak = Math.max(...values);
-  if (!(peak > 0)) return null;
-  const best = weeks[values.indexOf(peak)];
-  const low = Math.min(...values);
-  const worst = weeks[values.indexOf(low)];
-
-  const columns: Array<{ week: number; points: number | null }> = [];
-  for (let week = weeks[0]; week <= last; week += 1) {
-    const points = weekly![String(week)];
-    columns.push({ week, points: typeof points === 'number' ? points : null });
+  const byWeek = new Map<number, WeekColumn>();
+  for (const row of projection?.weekly ?? []) {
+    const week = num(row.week);
+    if (week == null) continue;
+    byWeek.set(week, {
+      week,
+      pts: num(row[fields.pts]),
+      floor: num(row[fields.floor]),
+      ceiling: num(row[fields.ceiling]),
+      opponent: typeof row.opponent === 'string' ? row.opponent : null,
+      home: row.game_location == null ? null : Number(row.game_location) === 1,
+    });
   }
-  const hasPlayoffWeeks =
-    playoffWeekStart != null && columns.some((column) => column.week >= playoffWeekStart);
+  // Leagues whose projection sheet has not landed still get the points curve
+  // the rankings endpoint returns.
+  if (byWeek.size === 0) {
+    for (const [key, value] of Object.entries(fallbackWeekly ?? {})) {
+      const week = Number(key);
+      if (!Number.isFinite(week)) continue;
+      byWeek.set(week, { week, pts: num(value), floor: null, ceiling: null, opponent: null, home: null });
+    }
+  }
+  if (byWeek.size === 0) return null;
+
+  const weeks = [...byWeek.keys()].sort((left, right) => left - right);
+  const first = weeks[0];
+  const last = weeks[weeks.length - 1];
+  const scale = Math.max(
+    ...weeks.map((week) => byWeek.get(week)!.ceiling ?? byWeek.get(week)!.pts ?? 0),
+  );
+  if (!(scale > 0)) return null;
+
+  const played = weeks.map((week) => byWeek.get(week)!).filter((column) => column.pts != null);
+  const best = played.reduce((top, column) => (column.pts! > top.pts! ? column : top), played[0]);
+  const worst = played.reduce((low, column) => (column.pts! < low.pts! ? column : low), played[0]);
+
+  const columns: WeekColumn[] = [];
+  for (let week = first; week <= last; week += 1) {
+    columns.push(byWeek.get(week) ?? { week, pts: null, floor: null, ceiling: null, opponent: null, home: null });
+  }
+  const hasPlayoffWeeks = playoffWeekStart != null && columns.some((c) => c.week >= playoffWeekStart);
+  const detail = openWeek == null ? null : byWeek.get(openWeek) ?? null;
+  const pct = (value: number) => `${Math.max(0, Math.min(100, (value / scale) * 100))}%`;
 
   return (
     <div className="board-card__weekly">
       <div className="board-card__weekly-head">
         <span className="board-card__stat-label">Week by week</span>
         <span className="board-card__weekly-legend">
-          Best wk {best} · {fmtNumber(peak)} · Worst wk {worst} · {fmtNumber(low)}
+          Floor to ceiling · best wk {best.week} · {fmtNumber(best.pts)} · worst wk {worst.week} · {fmtNumber(worst.pts)}
         </span>
       </div>
       <div className="board-card__weekly-bars">
         {columns.map((column) => {
-          const isBye = column.points == null;
+          const isBye = column.pts == null;
           const isPlayoff = playoffWeekStart != null && column.week >= playoffWeekStart;
           const isNow = currentWeek != null && column.week === currentWeek;
-          const isBest = !isBye && column.week === best;
-          const isWorst = !isBye && column.week === worst;
+          const isOpen = openWeek === column.week;
+          const floor = column.floor ?? column.pts ?? 0;
+          const ceiling = column.ceiling ?? column.pts ?? 0;
           return (
-            <div
+            <button
+              aria-label={
+                isBye
+                  ? `Week ${column.week}: bye week`
+                  : `Week ${column.week}: ${fmtNumber(column.pts)} points, floor ${fmtNumber(column.floor)}, ceiling ${fmtNumber(column.ceiling)}`
+              }
               className={[
                 'board-card__weekly-col',
                 isBye ? 'board-card__weekly-col--bye' : '',
                 isPlayoff ? 'board-card__weekly-col--playoff' : '',
                 isNow ? 'board-card__weekly-col--now' : '',
-                isBest ? 'board-card__weekly-col--best' : '',
-                isWorst ? 'board-card__weekly-col--worst' : '',
+                isOpen ? 'board-card__weekly-col--open' : '',
+                column.week === best.week && !isBye ? 'board-card__weekly-col--best' : '',
+                column.week === worst.week && !isBye ? 'board-card__weekly-col--worst' : '',
               ].filter(Boolean).join(' ')}
               key={column.week}
-              title={
-                isBye
-                  ? `Week ${column.week}: bye`
-                  : `Week ${column.week}: ${fmtNumber(column.points)} pts`
-              }
+              onClick={() => setOpenWeek(isOpen || isBye ? null : column.week)}
+              type="button"
             >
               <span className="board-card__weekly-track">
                 {isBye ? (
-                  <span className="board-card__weekly-bye" />
+                  <span className="board-card__weekly-bye">Bye</span>
                 ) : (
-                  <span
-                    className="board-card__weekly-bar"
-                    style={{ height: `${Math.max(4, (column.points! / peak) * 100)}%` }}
-                  />
+                  <>
+                    <span
+                      className="board-card__weekly-range"
+                      style={{ bottom: pct(floor), height: pct(Math.max(0, ceiling - floor)) }}
+                    />
+                    <span className="board-card__weekly-point" style={{ bottom: pct(column.pts!) }} />
+                  </>
                 )}
               </span>
               <span className="board-card__weekly-week">{column.week}</span>
-            </div>
+            </button>
           );
         })}
       </div>
-      {hasPlayoffWeeks ? (
-        <p className="board-card__weekly-note">
-          Shaded weeks are your league&apos;s playoffs.
+      {detail ? (
+        <p className="board-card__weekly-detail">
+          <strong>Week {detail.week}</strong>
+          {detail.opponent ? ` · ${detail.home === false ? '@' : 'vs'} ${detail.opponent}` : ''}
+          {' · '}
+          <span className="board-card__weekly-detail-pts">{fmtNumber(detail.pts, 1)}</span> proj
+          {detail.floor != null && detail.ceiling != null
+            ? ` · floor ${fmtNumber(detail.floor, 1)} · ceiling ${fmtNumber(detail.ceiling, 1)}`
+            : ''}
         </p>
-      ) : null}
+      ) : (
+        <p className="board-card__weekly-note">
+          Tap a week for its floor and ceiling.
+          {hasPlayoffWeeks ? ' Shaded weeks are your league\u2019s playoffs.' : ''}
+        </p>
+      )}
     </div>
   );
 }
@@ -658,6 +729,7 @@ export function MyBoardPage() {
                     <BoardPlayerCard
                       currentWeek={bootstrap?.week ?? null}
                       playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
+                      scoring={scoring}
                       mode="standalone"
                       onClose={() => setOpenPlayerId(null)}
                       player={player}
@@ -777,6 +849,7 @@ export function MyBoardPage() {
                             <BoardPlayerCard
                               currentWeek={bootstrap?.week ?? null}
                               playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
+                              scoring={scoring}
                               mode="embedded"
                               onClose={() => setOpenPlayerId(null)}
                               player={player}
@@ -811,6 +884,7 @@ export function BoardPlayerCard({
   player,
   currentWeek,
   playoffWeekStart = null,
+  scoring,
   mode,
   rank,
   onClose,
@@ -818,6 +892,7 @@ export function BoardPlayerCard({
   player: MergedBoardPlayer;
   currentWeek: number | null;
   playoffWeekStart?: number | null;
+  scoring?: string;
   mode: 'standalone' | 'embedded';
   rank: number;
   onClose: () => void;
@@ -916,8 +991,10 @@ export function BoardPlayerCard({
 
       <WeeklyProjectionStrip
         currentWeek={currentWeek}
+        fallbackWeekly={player.board.weekly}
         playoffWeekStart={playoffWeekStart}
-        weekly={player.board.weekly}
+        projection={player.projection}
+        scoring={scoring}
       />
 
       <div className="board-card__stat-strip" role="list" aria-label="Player stat summary">

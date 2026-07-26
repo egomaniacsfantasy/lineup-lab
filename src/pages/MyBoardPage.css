@@ -531,8 +531,8 @@
   transform: translate(-50%, -50%);
 }
 
-/* Week-by-week projection: Franco's per-week points, bars scaled to the
-   player's own peak so the shape of the season reads at a glance. */
+/* Week-by-week: each column is Franco's floor-to-ceiling range with his
+   point projection marked inside it, scaled to the player's own ceiling. */
 .board-card__weekly {
   display: grid;
   gap: 8px;
@@ -559,7 +559,7 @@
   grid-auto-columns: minmax(0, 1fr);
   align-items: end;
   gap: 3px;
-  height: 74px;
+  height: 92px;
 }
 
 .board-card__weekly-col {
@@ -568,48 +568,84 @@
   gap: 4px;
   height: 100%;
   min-width: 0;
-}
-
-.board-card__weekly-track {
-  display: flex;
-  align-items: flex-end;
-  height: 100%;
-  border-radius: 4px;
-}
-
-/* Shade the whole column, not the track: a full-height bar would cover a
-   track-only tint and the playoff weeks would read as unmarked. */
-.board-card__weekly-col--playoff {
+  padding: 0;
+  border: 0;
   border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+
+.board-card__weekly-col--playoff {
   background: rgba(232, 84, 29, 0.1);
   box-shadow: inset 0 0 0 1px rgba(232, 84, 29, 0.14);
 }
 
-.board-card__weekly-bar {
-  width: 100%;
+.board-card__weekly-col--open {
+  background: rgba(232, 84, 29, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(232, 84, 29, 0.45);
+}
+
+.board-card__weekly-track {
+  position: relative;
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-inset) 60%, transparent);
+}
+
+.board-card__weekly-range {
+  position: absolute;
+  left: 50%;
+  width: 72%;
+  min-height: 2px;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--amber) 62%, transparent);
+  background: color-mix(in srgb, var(--amber) 42%, transparent);
+  transform: translateX(-50%);
 }
 
-.board-card__weekly-col--now .board-card__weekly-bar {
+/* The point projection inside the range. */
+.board-card__weekly-point {
+  position: absolute;
+  left: 50%;
+  width: 92%;
+  height: 2px;
+  border-radius: 2px;
   background: var(--amber-bright);
+  transform: translate(-50%, 50%);
 }
 
-/* A consistent player's bars are all near the same height, so the peak and
-   trough are marked rather than left to the eye. */
-.board-card__weekly-col--best .board-card__weekly-bar {
+.board-card__weekly-col--best .board-card__weekly-point {
   background: var(--green);
 }
 
-.board-card__weekly-col--worst .board-card__weekly-bar {
-  background: color-mix(in srgb, var(--red) 70%, transparent);
+.board-card__weekly-col--worst .board-card__weekly-point {
+  background: var(--red);
 }
 
+.board-card__weekly-col--now .board-card__weekly-range {
+  background: color-mix(in srgb, var(--amber) 68%, transparent);
+}
+
+/* Byes are labelled, not left as a mystery gap. */
 .board-card__weekly-bye {
-  width: 100%;
-  height: 3px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--border-subtle) 90%, transparent);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.board-card__weekly-col--bye {
+  cursor: default;
+}
+
+.board-card__weekly-col--bye .board-card__weekly-track {
+  background: color-mix(in srgb, var(--bg-inset) 32%, transparent);
 }
 
 .board-card__weekly-week {
@@ -625,11 +661,23 @@
   font-weight: 700;
 }
 
-.board-card__weekly-note {
+.board-card__weekly-note,
+.board-card__weekly-detail {
   margin: 0;
   color: var(--text-muted);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 11.5px;
+}
+
+.board-card__weekly-detail strong {
+  color: var(--text-primary);
+}
+
+.board-card__weekly-detail-pts {
+  color: var(--amber-bright);
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .board-card__stat-strip {
