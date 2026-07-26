@@ -1187,3 +1187,13 @@
 .board-card__rating-reset:hover {
   border-color: #e8541d;
 }
+
+/* Which column the table is ordered by, so a correct sort never reads as
+   arbitrary. */
+.board-page__th--sorted {
+  color: #ff8049;
+}
+
+.board-page__th--sorted::after {
+  content: ' ↓';
+}

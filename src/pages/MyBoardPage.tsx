@@ -75,6 +75,22 @@ const SORT_OPTIONS: Array<{ key: BoardSort; label: string }> = [
   { key: 'ceiling', label: 'Ceiling' },
 ];
 
+/* The headline follows the sort. Ranking a list by a number the row does not
+   display makes a correct ordering look scrambled, because the number the eye
+   lands on is not the one being sorted. */
+function headlineFor(sort: BoardSort, player: MergedBoardPlayer) {
+  switch (sort) {
+    case 'points':
+      return { label: 'Proj pts', value: player.board.seasonTotal };
+    case 'floor':
+      return { label: 'Floor', value: player.board.floor };
+    case 'ceiling':
+      return { label: 'Ceiling', value: player.board.ceiling };
+    default:
+      return { label: 'Value', value: player.adjustedValue };
+  }
+}
+
 function parseSort(raw: string | null): BoardSort {
   return SORT_OPTIONS.some((option) => option.key === raw) ? (raw as BoardSort) : 'board';
 }
@@ -816,11 +832,14 @@ export function MyBoardPage() {
                       </div>
 
                       <div className="board-page__value">
-                        <span className="board-page__value-label">Value</span>
-                        <span className="board-page__headline">{fmtNumber(player.adjustedValue)}</span>
+                        <span className="board-page__value-label">{headlineFor(activeSort, player).label}</span>
+                        <span className="board-page__headline">
+                          {fmtNumber(headlineFor(activeSort, player).value)}
+                        </span>
                         <span className="board-page__subline">
-                          {player.vor >= 0 ? '+' : ''}
-                          {fmtNumber(player.vor)} vs waiver-level starter · {fmtNumber(player.board.seasonTotal)} proj pts
+                          {activeSort === 'board'
+                            ? `${player.vor >= 0 ? '+' : ''}${fmtNumber(player.vor)} vs waiver-level starter · ${fmtNumber(player.board.seasonTotal)} proj pts`
+                            : `Value ${fmtNumber(player.adjustedValue)} · ${fmtNumber(player.board.seasonTotal)} proj pts`}
                         </span>
                       </div>
                     </button>
@@ -841,10 +860,23 @@ export function MyBoardPage() {
                 <tr>
                   <th className="board-page__th board-page__th--rank">#</th>
                   <th className="board-page__th board-page__th--sticky">Player</th>
-                  <th className="board-page__th board-page__th--num">Value</th>
-                  <th className="board-page__th board-page__th--num">Proj pts</th>
-                  <th className="board-page__th board-page__th--num">Floor</th>
-                  <th className="board-page__th board-page__th--num">Ceiling</th>
+                  {([
+                    ['board', 'Value'],
+                    ['points', 'Proj pts'],
+                    ['floor', 'Floor'],
+                    ['ceiling', 'Ceiling'],
+                  ] as Array<[BoardSort, string]>).map(([key, label]) => (
+                    <th
+                      className={[
+                        'board-page__th',
+                        'board-page__th--num',
+                        activeSort === key ? 'board-page__th--sorted' : '',
+                      ].filter(Boolean).join(' ')}
+                      key={key}
+                    >
+                      {label}
+                    </th>
+                  ))}
                   {sheetStatColumns.map((column) => (
                     <th className="board-page__th board-page__th--num" key={column.key}>
                       {column.label}
