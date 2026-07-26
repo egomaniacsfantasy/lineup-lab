@@ -11,11 +11,17 @@ import { BottomTabBar } from './BottomTabBar';
 import { PricingCurtain } from './PricingCurtain';
 import './AppShell.css';
 
-/* The prompt is not allowed to open the session. It waits until someone has
+/* Crowdsourced ranking is parked: we will not have the voter volume to make
+   it meaningful yet. The prompt, its queue and its selection logic all stay
+   in the tree, but nothing triggers them. Flip PROMPT_ENABLED to true to
+   bring it back.
+
+   The prompt is not allowed to open the session. It waits until someone has
    actually used the app for a while and has moved between screens, which
    means they finished whatever they came to do rather than being blocked on
    the way in. Combined with the once-a-day cap in canPromptForVote, a normal
    visit is never interrupted. */
+const PROMPT_ENABLED = false;
 const ENGAGED_MS = 75_000;
 const MIN_NAVIGATIONS = 2;
 
@@ -35,6 +41,7 @@ function useVotePromptTrigger() {
   }, []);
 
   useEffect(() => {
+    if (!PROMPT_ENABLED) return;
     if (open || !engaged || navigations < MIN_NAVIGATIONS) return;
     if (!canPromptForVote()) return;
     setOpen(true);

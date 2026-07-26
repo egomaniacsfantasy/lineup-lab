@@ -3,10 +3,12 @@ import { NavLink } from 'react-router-dom';
 import { useDynastyTradesExperimental } from '../../hooks/useLabsFlags';
 import { useSeasonMode } from '../../hooks/useSeasonMode';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { MOCK_MATCHUP } from '../../mocks';
 import type { ScoringFormat } from '../../types';
 import { PROVIDER_LABEL } from '../../utils/provider';
+import { isAgreementAdmin } from '../../utils/admin';
 import { Gloss } from '../ui/Gloss';
 import { AccountMenu } from './AccountMenu';
 import './AppHeader.css';
@@ -27,6 +29,8 @@ export function AppHeader() {
   const { mode, seasonState, season, nflWeek } = useSeasonMode();
   const { bootstrap, refresh, stored, isLoading, error } = useLeagueConnection();
   const { format, toggleFormat } = useOddsFormat();
+  const { user } = useAuth();
+  const isAdmin = isAgreementAdmin(user?.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isSynced = bootstrap !== null;
   const dynastyTradesExperimental = useDynastyTradesExperimental();
@@ -89,6 +93,11 @@ export function AppHeader() {
         </nav>
 
         <div className="app-header__actions">
+          {isAdmin ? (
+            <span className="app-header__admin" title="You can edit agreement values">
+              Admin
+            </span>
+          ) : null}
           <span
             className={[
               'app-header__status',

@@ -300,3 +300,21 @@
   color: var(--text-primary);
   border-color: var(--ink-3);
 }
+
+/* Unmistakable, but not shouting: only three accounts ever see it. */
+.app-header__admin {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  background: rgba(232, 84, 29, 0.18);
+  color: #ff8049;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

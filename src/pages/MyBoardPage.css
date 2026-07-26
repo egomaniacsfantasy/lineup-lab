@@ -1169,3 +1169,21 @@
   border-color: #e8541d;
   background: rgba(232, 84, 29, 0.2);
 }
+
+/* Agreement editor is admin-only, so it reads as a tool rather than a
+   primary affordance on the card. */
+.board-card__rating-reset {
+  padding: 7px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.board-card__rating-reset:hover {
+  border-color: #e8541d;
+}

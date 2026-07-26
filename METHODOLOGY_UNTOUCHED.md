@@ -327,3 +327,45 @@ NOT touched, deliberately, and left for Franco:
 - The labs-gated Player votes prompt (`?labs=player-votes`) is left in
   place: it is hidden behind a flag and is the crowdsourced-voting
   direction rather than personal rankings. Say the word and it goes too.
+
+---
+
+## 2026-07-25 — Agreement editing restricted to three admins
+
+Crowdsourced ranking is parked for lack of voter volume. The prompt, its
+queue and its selection logic stay in the tree behind `PROMPT_ENABLED =
+false` in `AppShell.tsx`; nothing triggers them and the board entry point is
+gone.
+
+Agreement editing is restored for three accounts only, by email allowlist in
+`src/utils/admin.ts`: andrevlahakis@gmail.com, lukejwilliams28@gmail.com,
+francocasta200@gmail.com. An ADMIN pill shows in the header for those
+accounts. The board card shows the 0 to 100 slider only for them.
+
+How the value travels, all pre-existing server behaviour:
+
+1. The client upserts `{ user_id, position, player, score }` into
+   `olympus_agreement`.
+2. It pings `POST /api/projections/refresh-adjusted`, which calls
+   `invalidateAdjusted()` so the board and pricing recompute in seconds
+   rather than waiting for the lazy refresh.
+3. `server/projections/adjusted.js` `loadConsensus()` reads the table with NO
+   user filter and averages every row per player, then `agreementTilt`
+   applies that consensus to per-week means and floor/ceiling. That output is
+   described in its own header as "the single source of truth for
+   pricing/simulation".
+
+Consequences worth stating plainly:
+
+- Edits are GLOBAL, not personal. A score set by any collaborator moves the
+  numbers every user sees.
+- Values are AVERAGED across collaborators. If Andre sets 80 and Luke sets
+  60 on the same player, the model sees 70. Neither overrides the other.
+- Any pre-existing rows from other user ids still count toward that average.
+  Franco may want to audit the table for rows outside the three admin ids.
+
+SECURITY LIMIT: the allowlist is a UI gate. It controls what the app renders,
+not what the database accepts, so it is not protection. Enforcement needs a
+row-level-security policy on `olympus_agreement` restricting writes to those
+three user ids. That is server side and Franco's call. Until it exists,
+assume any authenticated user could write agreement rows directly.

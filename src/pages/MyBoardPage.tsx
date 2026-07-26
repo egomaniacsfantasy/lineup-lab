@@ -10,6 +10,9 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { RankingMechanic } from '../components/rankings/RankingMechanic';
 import { PlayerVotePrompt } from '../components/votes/PlayerVotePrompt';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../services/supabase';
+import { isAgreementAdmin } from '../utils/admin';
 import { toPlayer } from '../adapters/connectedLeague';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { fetchBoard, type BoardRow } from '../services/leagueApi';
@@ -130,6 +133,20 @@ function statValue(value: unknown, digits = 0) {
   const num = Number(value);
   if (!Number.isFinite(num)) return '-';
   return digits > 0 ? num.toFixed(digits) : Math.round(num).toString();
+}
+
+function clampRating(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function ratingSummary(value: number) {
+  if (value > 50) return `Agreement ${value} · lifts him vs Franco's number.`;
+  if (value < 50) return `Agreement ${value} · pushes him down vs Franco's number.`;
+  return `Agreement ${value} · aligned with Franco's number.`;
+}
+
+function saveConfirmation(value: number) {
+  return `Saved ${value}. The board reprices in a few seconds.`;
 }
 
 function scoringLabel(scoring: string | undefined) {
@@ -374,8 +391,15 @@ export function MyBoardPage() {
   const [projectionData, setProjectionData] = useState<ProjectionDataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
-  const [reloadToken] = useState(0);
+  const [reloadToken, setReloadToken] = useState(0);
   const [voteOpen, setVoteOpen] = useState(false);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const isAdmin = isAgreementAdmin(user?.email);
+  const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
+  const [saveMessages, setSaveMessages] = useState<Record<string, string>>({});
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const activeView = parseView(searchParams.get('view'));
   const activePosition = parsePosition(searchParams.get('pos'));
   const activeSort = parseSort(searchParams.get('sort'));
@@ -429,6 +453,34 @@ export function MyBoardPage() {
       alive = false;
     };
   }, [reloadToken]);
+
+  /* Only admins edit agreement, so only admins need their saved values. The
+     server averages every collaborator's row per player; this shows yours. */
+  useEffect(() => {
+    if (!isAdmin || !userId) {
+      setAgreeSaved({});
+      return undefined;
+    }
+    let alive = true;
+    supabase
+      .from('olympus_agreement')
+      .select('position, player, score')
+      .eq('user_id', userId)
+      .then(({ data, error: loadError }) => {
+        if (!alive || loadError || !data || !board) return;
+        const byIdentity = new Map<string, string>();
+        for (const row of data) byIdentity.set(`${row.position}::${row.player}`, String(row.score));
+        const next: Record<string, string> = {};
+        for (const row of board) {
+          const hit = byIdentity.get(`${row.position}::${row.name}`);
+          if (hit != null) next[row.playerId] = hit;
+        }
+        setAgreeSaved(next);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [board, isAdmin, userId]);
 
   const projectionById = useMemo(
     () =>
@@ -528,6 +580,62 @@ export function MyBoardPage() {
     }, { replace: true });
   }
 
+  function readRating(playerId: string) {
+    return agreeSaved[playerId] ?? '';
+  }
+
+  /* Writes this admin's agreement score, then pings the server so the
+     agreement-weighted board and pricing recompute in seconds. The value is
+     stored and averaged server side; nothing is computed here. */
+  async function commitAgreementValue(player: MergedBoardPlayer, nextValue: string) {
+    if (!isAdmin) return;
+    const id = player.board.playerId;
+    const normalized = String(clampRating(Number(nextValue)));
+    if (readRating(id) === normalized) return;
+
+    setSaving((current) => ({ ...current, [id]: 'saving' }));
+    setSaveErrors((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+
+    if (!userId) {
+      setSaving((current) => ({ ...current, [id]: 'err' }));
+      setSaveErrors((current) => ({ ...current, [id]: 'Log in to save agreement.' }));
+      return;
+    }
+
+    const { error: writeError } = await supabase.from('olympus_agreement').upsert(
+      {
+        user_id: userId,
+        position: player.board.position,
+        player: player.board.name,
+        score: Number(normalized),
+      },
+      { onConflict: 'user_id,position,player' },
+    );
+
+    if (writeError) {
+      setSaving((current) => ({ ...current, [id]: 'err' }));
+      setSaveErrors((current) => ({ ...current, [id]: `Could not save: ${writeError.message}` }));
+      return;
+    }
+
+    setAgreeSaved((current) => ({ ...current, [id]: normalized }));
+    setSaving((current) => ({ ...current, [id]: 'ok' }));
+    setSaveMessages((current) => ({ ...current, [id]: saveConfirmation(Number(normalized)) }));
+    void fetch('/api/projections/refresh-adjusted', { method: 'POST' }).catch(() => null);
+    setReloadToken((current) => current + 1);
+    window.setTimeout(() => {
+      setSaveMessages((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+    }, 2400);
+  }
+
   function toggleOpenPlayer(playerId: string) {
     setOpenPlayerId((current) => (current === playerId ? null : playerId));
   }
@@ -614,13 +722,6 @@ export function MyBoardPage() {
           ))}
         </div>
         <div className="board-page__filter-tools">
-          <button
-            className="board-page__vote-cta"
-            onClick={() => setVoteOpen(true)}
-            type="button"
-          >
-            Rank three
-          </button>
           <label className="board-page__sort">
             <span className="board-page__sort-label">Sort</span>
             <select
@@ -674,6 +775,13 @@ export function MyBoardPage() {
                 >
                   {isOpen ? (
                     <BoardPlayerCard
+                      admin={isAdmin ? {
+                        rating: readRating(player.board.playerId),
+                        savingState: saving[player.board.playerId],
+                        saveMessage: saveMessages[player.board.playerId] ?? '',
+                        saveError: saveErrors[player.board.playerId] ?? '',
+                        onCommit: (value: number) => void commitAgreementValue(player, String(value)),
+                      } : null}
                       currentWeek={bootstrap?.week ?? null}
                       playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
                       scoring={scoring}
@@ -794,6 +902,13 @@ export function MyBoardPage() {
                             colSpan={columnCountForSheet(sheetStatColumns.length)}
                           >
                             <BoardPlayerCard
+                              admin={isAdmin ? {
+                                rating: readRating(player.board.playerId),
+                                savingState: saving[player.board.playerId],
+                                saveMessage: saveMessages[player.board.playerId] ?? '',
+                                saveError: saveErrors[player.board.playerId] ?? '',
+                                onCommit: (value: number) => void commitAgreementValue(player, String(value)),
+                              } : null}
                               currentWeek={bootstrap?.week ?? null}
                               playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
                               scoring={scoring}
@@ -827,6 +942,73 @@ export function MyBoardPage() {
   );
 }
 
+/** Agreement is the collaborators' dial on Franco's number: 50 is aligned,
+ *  higher lifts him, lower pushes him down. The server averages every
+ *  collaborator's value and reweights the board from it. */
+function AgreementEditor({
+  rating,
+  savingState,
+  saveMessage,
+  saveError,
+  onCommit,
+}: {
+  rating: string;
+  savingState: 'saving' | 'ok' | 'err' | undefined;
+  saveMessage: string;
+  saveError: string;
+  onCommit: (value: number) => void;
+}) {
+  const saved = rating === '' ? 50 : clampRating(Number(rating));
+  const [draft, setDraft] = useState(saved);
+  useEffect(() => {
+    if (savingState === 'saving') return;
+    setDraft(saved);
+  }, [saved, savingState]);
+
+  return (
+    <div className="board-card__rating">
+      <div className="board-card__rating-head">
+        <div>
+          <p className="board-card__rating-label">Agreement · admin</p>
+          <p className="board-card__rating-copy">{ratingSummary(draft)}</p>
+        </div>
+        <span className="board-card__rating-chip">{draft}</span>
+      </div>
+      <div className="board-card__slider-wrap">
+        <span className="board-card__slider-end">Much lower</span>
+        <input
+          aria-label="Agreement score"
+          className="board-card__slider"
+          max={100}
+          min={0}
+          onChange={(event) => setDraft(clampRating(Number(event.currentTarget.value)))}
+          onMouseUp={(event) => onCommit(clampRating(Number(event.currentTarget.value)))}
+          onKeyUp={(event) => onCommit(clampRating(Number(event.currentTarget.value)))}
+          onTouchEnd={(event) => onCommit(clampRating(Number(event.currentTarget.value)))}
+          type="range"
+          value={draft}
+        />
+        <span className="board-card__slider-end">Much higher</span>
+      </div>
+      <div className="board-card__rating-actions">
+        <button
+          className="board-card__rating-reset"
+          onClick={() => {
+            setDraft(50);
+            onCommit(50);
+          }}
+          type="button"
+        >
+          Reset to 50
+        </button>
+        {savingState === 'saving' ? <span className="board-card__save-note">Saving…</span> : null}
+        {saveMessage ? <span className="board-card__save-note board-card__save-note--ok">{saveMessage}</span> : null}
+        {saveError ? <span className="board-card__save-note board-card__save-note--error">{saveError}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 export function BoardPlayerCard({
   player,
   currentWeek,
@@ -835,6 +1017,7 @@ export function BoardPlayerCard({
   mode,
   rank,
   onClose,
+  admin,
 }: {
   player: MergedBoardPlayer;
   currentWeek: number | null;
@@ -843,6 +1026,13 @@ export function BoardPlayerCard({
   mode: 'standalone' | 'embedded';
   rank: number;
   onClose: () => void;
+  admin?: {
+    rating: string;
+    savingState: 'saving' | 'ok' | 'err' | undefined;
+    saveMessage: string;
+    saveError: string;
+    onCommit: (value: number) => void;
+  } | null;
 }) {
   const projection = player.projection;
   const matchup = nextMatchup(projection, currentWeek);
@@ -943,6 +1133,8 @@ export function BoardPlayerCard({
         projection={player.projection}
         scoring={scoring}
       />
+
+      {admin ? <AgreementEditor {...admin} /> : null}
 
       <div className="board-card__stat-strip" role="list" aria-label="Player stat summary">
         {stats.map((stat) => (
