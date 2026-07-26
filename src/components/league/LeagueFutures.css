@@ -132,6 +132,12 @@
   outline-offset: -2px;
 }
 
+/* Numeric headers were left-aligned while their values were right-aligned,
+   so no column read as a column. */
+.league-futures__row--head > span:not(:first-child) {
+  text-align: right;
+}
+
 .league-futures__row--head {
   min-height: auto;
   background: color-mix(in srgb, var(--bg-surface-soft) 68%, transparent);
@@ -206,8 +212,10 @@
 
 .league-futures__cell {
   color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 800;
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 

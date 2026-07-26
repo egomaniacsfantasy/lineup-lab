@@ -157,11 +157,9 @@ function DismissToast({
 /** Your private read on a manager: two subjective sliders that feed the trade
  *  acceptance model. Saved per manager and loaded into every trade with them. */
 function ManagerReadCard({
-  leagueId,
   name,
   friendliness,
   relationship,
-  scoutingOn,
   suggestedRead,
   suggestedReceipt,
   source,
@@ -170,11 +168,9 @@ function ManagerReadCard({
   onChange,
   onReset,
 }: {
-  leagueId: string;
   name: string;
   friendliness: number;
   relationship: number;
-  scoutingOn: boolean;
   suggestedRead: { friendliness: number; relationship: number };
   suggestedReceipt: { friendliness: string; relationship: string };
   source: 'neutral' | 'scouted' | 'override';
@@ -186,20 +182,6 @@ function ManagerReadCard({
   return (
     <div className="trade-cc__read-card">
       <p className="trade-cc__read-title">Your read on {name}</p>
-      <label className="trade-cc__read-toggle">
-        <span>Scouting affects acceptance odds</span>
-        <button
-          aria-pressed={scoutingOn}
-          className={[
-            'trade-cc__read-toggle-btn',
-            scoutingOn ? 'trade-cc__read-toggle-btn--on' : '',
-          ].filter(Boolean).join(' ')}
-          onClick={() => writeScoutingAffectsAcceptance(leagueId, !scoutingOn)}
-          type="button"
-        >
-          <span />
-        </button>
-      </label>
       <ReadSlider
         label="Trade-friendliness"
         hint="0 = stubborn hoarder · 10 = wheeler-dealer"
@@ -219,9 +201,7 @@ function ManagerReadCard({
       <p className="trade-cc__read-note">
         Only nudges the acceptance odds, never the championship numbers. {source === 'override'
           ? 'Your override is active.'
-          : scoutingOn
-            ? `Scouted default is active (${sourceLabel}).`
-            : 'Scouting is off, so the file stays neutral.'}
+          : `Reading from ${sourceLabel}.`}
       </p>
       <p className="trade-cc__read-note">{suggestedReason}</p>
       {source === 'override' ? (
@@ -382,9 +362,6 @@ function TradeDealsView() {
   const hiddenMarketCount = showingManagerMarket
     ? managerSuggestionEntries.length - visibleManagerSuggestions.length
     : 0;
-  const managerFacts = showingManagerMarket
-    ? `${partners.length} managers priced · ${visibleMarketCount} deals found`
-    : `${partners.length} managers taking calls`;
 
   useEffect(() => {
     setShowAllMarketCards(false);
@@ -961,9 +938,8 @@ function TradeDealsView() {
             </div>
             <h2 className="trade-cc__title">Find a trade.</h2>
             <p className="trade-cc__finder-sub">
-              Pick a manager. The book finds deals they&apos;d actually take.
+              Pick a manager and the book builds the deals they would actually say yes to.
             </p>
-            <p className="trade-cc__finder-facts">{managerFacts}</p>
             {managerSuggestionsError && showingManagerMarket ? (
               <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
             ) : null}
@@ -1050,12 +1026,10 @@ function TradeDealsView() {
         {showRead && selectedPartner && marketManagerFilter != null ? (
           <ManagerReadCard
             friendliness={friendliness}
-            leagueId={stored.leagueId}
             name={selectedPartner.teamName}
             onChange={updateRead}
             onReset={resetRead}
             relationship={relationship}
-            scoutingOn={scoutingAffectsAcceptance}
             source={readSource}
             sourceLabel={readSourceLabel}
             suggestedRead={suggestedRead}
@@ -1247,11 +1221,9 @@ function TradeDealsView() {
             </div>
             {partnerRosterId != null && showRead && !showingManagerMarket ? (
               <ManagerReadCard
-                leagueId={stored.leagueId}
                 name={partners.find((t) => t.rosterId === partnerRosterId)?.teamName ?? 'this manager'}
                 friendliness={friendliness}
                 relationship={relationship}
-                scoutingOn={scoutingAffectsAcceptance}
                 source={readSource}
                 sourceLabel={readSourceLabel}
                 suggestedRead={suggestedRead}
@@ -1400,8 +1372,6 @@ function TradeDealsView() {
             error={analysisError}
             friendliness={friendliness}
             relationship={relationship}
-            readSource={readSource}
-            readSourceLabel={readSourceLabel}
             showVerdict={false}
           />
         </section>

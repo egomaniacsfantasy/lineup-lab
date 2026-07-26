@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { type TradeAnalysis, type TradeSideDelta } from '../../services/leagueApi';
-import { formatAcceptanceSentence, getAcceptanceLingo } from '../../utils/acceptanceLingo';
+import { getAcceptanceLingo } from '../../utils/acceptanceLingo';
 import { acceptanceProbability } from '../../utils/tradeAcceptance';
 import { displayedDelta, displayedValue } from '../../utils/displayDelta';
 
@@ -13,16 +12,7 @@ import { displayedDelta, displayedValue } from '../../utils/displayDelta';
  * "Will they accept?" logistic; it never touches the championship numbers.
  */
 
-function joinNames(names: string[]) {
-  if (names.length <= 1) return names[0] ?? '';
-  if (names.length === 2) return `${names[0]} and ${names[1]}`;
-  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
-}
 
-function assumedDropLine(subject: string, names: string[]) {
-  if (names.length === 0) return null;
-  return `Sim assumes ${subject} drop ${joinNames(names)}.`;
-}
 
 // Verdict is purely YOUR championship change: "should I do this?".
 function verdict(youDeltaTitle: number) {
@@ -41,8 +31,7 @@ export function TradeAnalyzerPanel({
   error,
   friendliness,
   relationship,
-  readSource = 'neutral',
-  readSourceLabel = 'neutral file',
+  onEditRead,
   showVerdict = true,
 }: {
   analysis: TradeAnalysis | null;
@@ -50,11 +39,9 @@ export function TradeAnalyzerPanel({
   error: string | null;
   friendliness: number;
   relationship: number;
-  readSource?: 'neutral' | 'scouted' | 'override';
-  readSourceLabel?: string;
+  onEditRead?: () => void;
   showVerdict?: boolean;
 }) {
-  const [whyOpen, setWhyOpen] = useState(false);
 
   if (!analyzing && !error && !(analysis?.available && analysis.you && analysis.partner)) {
     return null;
@@ -66,22 +53,6 @@ export function TradeAnalyzerPanel({
   const acceptPct = ready ? acceptanceProbability(theirDelta, friendliness, relationship) : 0;
   const partnerName = ready ? analysis!.partner!.teamName : 'They';
   const acceptance = getAcceptanceLingo(acceptPct);
-  const sourceText =
-    readSource === 'override'
-      ? 'your override'
-      : readSource === 'scouted'
-        ? `scouted: ${readSourceLabel}`
-        : 'neutral file';
-  const whyLines = ready
-    ? [
-        `Your championship ${analysis!.you!.delta.titleProb > 0 ? '+' : ''}${analysis!.you!.delta.titleProb.toFixed(1)}%.`,
-        `Their championship ${theirDelta > 0 ? '+' : ''}${theirDelta.toFixed(1)}%.`,
-        formatAcceptanceSentence(acceptPct),
-        assumedDropLine('you', analysis!.drops?.you.map((drop) => drop.name) ?? []),
-        assumedDropLine(partnerName, analysis!.drops?.partner.map((drop) => drop.name) ?? []),
-      ].filter((line): line is string => Boolean(line))
-    : [];
-
   return (
     <div className="trade-analyzer-panel">
       {analyzing && !ready ? (
@@ -120,28 +91,17 @@ export function TradeAnalyzerPanel({
               <span className="trade-analyzer-panel__accept-pct">{acceptPct}%</span>
               <span className="trade-analyzer-panel__accept-band">{acceptance?.label ?? ''}</span>
             </div>
-            <p className="trade-analyzer-panel__accept-note">
-              Driven by their championship change (<Delta v={theirDelta} pct />), nudged by your read on{' '}
-              {partnerName} ({sourceText}; friendliness {friendliness}, relationship {relationship}).
-              Set that on their card above. It never changes the championship numbers.
-            </p>
             <button
-              aria-expanded={whyOpen}
-              className="trade-analyzer-panel__why-toggle"
-              onClick={() => setWhyOpen((current) => !current)}
+              className="trade-analyzer-panel__read-chip"
+              onClick={onEditRead}
               type="button"
             >
-              Why this trade?
+              <span className="trade-analyzer-panel__read-chip-label">{partnerName}&apos;s read</span>
+              <span className="trade-analyzer-panel__read-chip-values">
+                Friendly {friendliness} · Relationship {relationship}
+              </span>
+              <span aria-hidden="true" className="trade-analyzer-panel__read-chip-cue">Adjust</span>
             </button>
-            {whyOpen ? (
-              <div className="trade-analyzer-panel__why-details">
-                {whyLines.map((line) => (
-                  <p className="trade-analyzer-panel__why-line" key={line}>
-                    {line}
-                  </p>
-                ))}
-              </div>
-            ) : null}
           </div>
 
           <Results

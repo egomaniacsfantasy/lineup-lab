@@ -4,7 +4,7 @@ import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueWeekMatchup } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
-import { OddsChart, type OddsChartPoint, type OddsChartRangeOption } from '../charts/OddsChart';
+import { OddsChart, type OddsChartPoint } from '../charts/OddsChart';
 import { TeamAvatar } from './TeamAvatar';
 import './MatchupSlate.css';
 
@@ -34,11 +34,6 @@ type BoardTeam = {
   isUser?: boolean;
 };
 
-const CHART_RANGES: OddsChartRangeOption[] = [
-  { id: 'week', label: 'Week', windowMs: 7 * 24 * 60 * 60 * 1000 },
-  { id: 'month', label: 'Month', windowMs: 30 * 24 * 60 * 60 * 1000 },
-  { id: 'season', label: 'Season' },
-];
 
 function impliedProbability(odds: number) {
   if (odds < 0) {
@@ -341,7 +336,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                     name: selectedRow.left.name,
                     points: chartPoints,
                   }}
-                  rangeOptions={CHART_RANGES}
                   showHeroEndpoint={false}
                   summaryFormatter={summaryText}
                   title="Line movement"

@@ -862,7 +862,7 @@ export function OddsChart({
               className="odds-chart__scrub-dot odds-chart__scrub-dot--hero"
               style={{
                 left: `${xCoord(activeHeroPoint.x, bounds)}%`,
-                top: `${yCoord(activeHeroPoint.y, bounds)}%`,
+                ['--plot-y' as string]: `${yCoord(activeHeroPoint.y, bounds)}`,
               }}
             />
             {activeComparisonPoint ? (
@@ -870,7 +870,7 @@ export function OddsChart({
                 className="odds-chart__scrub-dot odds-chart__scrub-dot--compare"
                 style={{
                   left: `${xCoord(activeComparisonPoint.x, bounds)}%`,
-                  top: `${yCoord(activeComparisonPoint.y, bounds)}%`,
+                  ['--plot-y' as string]: `${yCoord(activeComparisonPoint.y, bounds)}`,
                 }}
               />
             ) : null}
@@ -887,7 +887,7 @@ export function OddsChart({
             className="odds-chart__beacon"
             style={{
               left: `${xCoord(idleHeroPoint.x, bounds)}%`,
-              top: `${yCoord(idleHeroPoint.y, bounds)}%`,
+              ['--plot-y' as string]: `${yCoord(idleHeroPoint.y, bounds)}`,
             }}
           />
         ) : null}

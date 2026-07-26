@@ -4,7 +4,7 @@ import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerChip } from '../components/player/PlayerChip';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeRow } from '../components/trade-display/TradeDisplay';
-import { OddsChart, type OddsChartPoint, type OddsChartRangeOption } from '../components/charts/OddsChart';
+import { OddsChart, type OddsChartPoint } from '../components/charts/OddsChart';
 import { Card, Chip } from '../components/ui/DesignPrimitives';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
@@ -109,11 +109,6 @@ const SUGGESTION_LOADING_MESSAGES = [
   'Running the league 10,000 times...',
 ];
 
-const MATCHUP_CHART_RANGES: OddsChartRangeOption[] = [
-  { id: 'week', label: 'Week', windowMs: 7 * 24 * 60 * 60 * 1000 },
-  { id: 'month', label: 'Month', windowMs: 30 * 24 * 60 * 60 * 1000 },
-  { id: 'season', label: 'Season' },
-];
 
 function formatAsOfTime(value: number | null | undefined) {
   if (!value) return null;
@@ -1653,7 +1648,7 @@ function MatchupLive({
     if (decisionSlotCount === 0) {
       return 'No bench options this week. Every slot is the only play you have.';
     }
-    return `Tap a starter to weigh it against your bench. ${decisionSlotCount} ${decisionSlotCount === 1 ? 'slot has' : 'slots have'} options.`;
+    return 'Tap a starter to see your bench options.';
   })();
 
   const eligibleCount =
@@ -1823,10 +1818,6 @@ function MatchupLive({
               <span className="matchup-page__preview-chip">Preview lineup</span>
             ) : null}
             <div className="matchup-page__hero-chips">
-              <span className="matchup-page__live-chip">
-                <span className="matchup-page__live-dot" aria-hidden="true" />
-                Live line
-              </span>
             </div>
           </div>
 
@@ -2113,7 +2104,7 @@ function MatchupLive({
                 open={isBenchOpen || Boolean(activePick)}
               >
                 <summary className="matchup-page__bench-summary">
-                  Bench · {benchRows.length} vs {matchup.opponentTeam.bench?.length ?? 0}
+                  Your bench · {benchRows.length}
                 </summary>
                 <div className="matchup-page__bench-columns">
                   <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
@@ -2458,7 +2449,6 @@ function MatchupLive({
                     ),
                     points: matchupHistorySeries,
                   }}
-                  rangeOptions={MATCHUP_CHART_RANGES}
                   summaryFormatter={probabilitySummary}
                   title="Line movement"
                   valueFormatter={formatPercent}
