@@ -60,12 +60,12 @@ interface MergedBoardPlayer {
   projection: ProjectionPlayer | null;
   adjustedValue: number;
   vor: number;
-  // Consensus tilt applied to this player's numbers: 0 in Model view (raw
-  // combined-file), tiltFromConsensus(avg) in Consensus view.
+  // Value rescaled 0-100 across the whole projected population (100 = best value
+  // in the league, 0 = worst).
+  scaledValue: number;
+  // Consensus agreement tilt applied to this player's numbers.
   delta: number;
 }
-
-type BoardValueView = 'consensus' | 'model';
 
 /** Map the league scoring family to the tilt module's reception-weight suffix. */
 function tiltSuffix(scoringFamily: string | undefined): TiltScoring {
@@ -118,7 +118,7 @@ function headlineFor(sort: BoardSort, player: MergedBoardPlayer) {
     case 'ceiling':
       return { label: 'Ceiling', value: player.board.ceiling };
     default:
-      return { label: 'Value', value: player.adjustedValue };
+      return { label: 'Value', value: player.scaledValue };
   }
 }
 
@@ -490,9 +490,6 @@ export function MyBoardPage() {
   const query = searchParams.get('q') ?? '';
   const [searchDraft, setSearchDraft] = useState(query);
   const deferredQuery = useDeferredValue(searchDraft.trim().toLowerCase());
-  // Consensus = the agreement-weighted numbers that drive pricing/futures/trades;
-  // Model = the raw combined-file projections. Defaults to Consensus.
-  const [boardView, setBoardView] = useState<BoardValueView>('consensus');
   const scoring = bootstrap?.league.scoringFamily;
   const tiltScoring = tiltSuffix(scoring);
   const numTeams = bootstrap?.league.totalTeams ?? 12;
@@ -589,18 +586,19 @@ export function MyBoardPage() {
     [projectionData],
   );
 
-  // Per-player consensus tilt lookup: 0 in Model view, tiltFromConsensus(avg) in
-  // Consensus view. avg comes from the admin agreement raters (via /api/projections).
+  // Per-player consensus tilt: tiltFromConsensus(avg), where avg is the admin
+  // agreement raters' score (via /api/projections). The board always shows the
+  // agreement-weighted numbers the book prices futures/matchups/trades on.
   const deltaForRow = useCallback(
     (row: BoardRow): { delta: number; projection: ProjectionPlayer | null } => {
       const projection =
         projectionById.get(row.playerId)
         ?? projectionByIdentity.get(`${row.position}::${row.name}`)
         ?? null;
-      const delta = boardView === 'model' ? 0 : tiltFromConsensus(projection?.consensus?.avg ?? null);
+      const delta = tiltFromConsensus(projection?.consensus?.avg ?? null);
       return { delta, projection };
     },
-    [projectionById, projectionByIdentity, boardView],
+    [projectionById, projectionByIdentity],
   );
 
   // The board is fetched as raw model (model=1). In Consensus view we apply the
@@ -632,17 +630,25 @@ export function MyBoardPage() {
   );
 
   const mergedRows = useMemo(() => {
-    return tiltedBoard.map((row) => {
+    const rows = tiltedBoard.map((row) => {
       const { delta, projection } = deltaForRow(row);
       const legacy = legacyValues.get(row.playerId) ?? { adjustedValue: 0, vor: 0 };
-      return {
-        board: row,
-        projection,
-        adjustedValue: legacy.adjustedValue,
-        vor: legacy.vor,
-        delta,
-      } satisfies MergedBoardPlayer;
+      return { board: row, projection, adjustedValue: legacy.adjustedValue, vor: legacy.vor, delta };
     });
+    // Rescale value 0-100 across the ENTIRE projected population: 100 = the best
+    // value in the league, 0 = the worst. Monotonic with adjustedValue, so the
+    // board's sort order is unchanged.
+    let min = Infinity;
+    let max = -Infinity;
+    for (const r of rows) {
+      if (r.adjustedValue < min) min = r.adjustedValue;
+      if (r.adjustedValue > max) max = r.adjustedValue;
+    }
+    const span = max - min;
+    return rows.map((r) => ({
+      ...r,
+      scaledValue: span > 0 ? Number((((r.adjustedValue - min) / span) * 100).toFixed(2)) : 100,
+    } satisfies MergedBoardPlayer));
   }, [tiltedBoard, legacyValues, deltaForRow]);
 
   const visibleRows = useMemo(() => {
@@ -801,33 +807,6 @@ export function MyBoardPage() {
             Updated {formatUpdatedDate(projectionData.updatedAt)} · {board.length} players
           </p>
         </div>
-        <div className="board-page__view-toggle" role="tablist" aria-label="Projection source">
-          {([
-            { key: 'consensus', label: 'Consensus' },
-            { key: 'model', label: 'Original model' },
-          ] as Array<{ key: BoardValueView; label: string }>).map((option) => (
-            <button
-              aria-selected={boardView === option.key}
-              className={[
-                'board-page__view-pill',
-                boardView === option.key ? 'board-page__view-pill--active' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-              key={option.key}
-              onClick={() => setBoardView(option.key)}
-              role="tab"
-              title={
-                option.key === 'consensus'
-                  ? 'The numbers the book prices futures, matchups and trades on'
-                  : 'The model on its own, before any admin ratings move it'
-              }
-              type="button"
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
         <div className="board-page__view-toggle" role="tablist" aria-label="Row density">
           {VIEW_OPTIONS.map((option) => (
             <button
@@ -968,8 +947,8 @@ export function MyBoardPage() {
                         </span>
                         <span className="board-page__subline">
                           {activeSort === 'board'
-                            ? `${player.vor >= 0 ? '+' : ''}${fmtNumber(player.vor)} vs waiver-level starter · ${fmtNumber(player.board.seasonTotal)} proj pts`
-                            : `Value ${fmtNumber(player.adjustedValue)} · ${fmtNumber(player.board.seasonTotal)} proj pts`}
+                            ? `${fmtNumber(player.board.seasonTotal)} proj pts`
+                            : `Value ${fmtNumber(player.scaledValue)} · ${fmtNumber(player.board.seasonTotal)} proj pts`}
                         </span>
                       </div>
                     </button>
@@ -1046,7 +1025,7 @@ export function MyBoardPage() {
                           </div>
                         </td>
                         <td className="board-page__td board-page__td--num board-page__td--headline">
-                          {fmtNumber(player.adjustedValue)}
+                          {fmtNumber(player.scaledValue)}
                         </td>
                         <td className="board-page__td board-page__td--num">{fmtNumber(player.board.seasonTotal)}</td>
                         <td className="board-page__td board-page__td--num">{fmtNumber(player.board.floor)}</td>
@@ -1237,11 +1216,8 @@ export function BoardPlayerCard({
           </div>
           <div className="board-card__hero-value">
             <span className="board-card__value-label">Value</span>
-            <span className="board-card__headline">{fmtNumber(player.adjustedValue)}</span>
-            <span className="board-card__subline">
-              {player.vor >= 0 ? '+' : ''}
-              {fmtNumber(player.vor)} vs waiver-level starter
-            </span>
+            <span className="board-card__headline">{fmtNumber(player.scaledValue)}</span>
+            <span className="board-card__subline">100 = best value in the league</span>
           </div>
           <button
             aria-label={`Collapse ${player.board.name}`}
