@@ -130,6 +130,17 @@ function SideCard({ side }: { side: TradeSideDelta }) {
   const rows = [
     { label: 'Championship', b: side.before.titleProb, a: side.after.titleProb, d: side.delta.titleProb, pct: true, lowerIsBetter: false },
     { label: 'Make playoffs', b: side.before.playoffProb, a: side.after.playoffProb, d: side.delta.playoffProb, pct: true, lowerIsBetter: false },
+    // Current-week matchup win % — only in-season (null off-season).
+    ...(side.before.weekWinProb != null
+      ? [{
+          label: 'Win this week',
+          b: side.before.weekWinProb,
+          a: side.after.weekWinProb ?? 0,
+          d: side.delta.weekWinProb ?? 0,
+          pct: true,
+          lowerIsBetter: false,
+        }]
+      : []),
     { label: 'Expected wins', b: side.before.expWins, a: side.after.expWins, d: side.delta.expWins, pct: false, lowerIsBetter: false },
     // Avg seed: LOWER is better (the #1 seed beats the #6), so a drop is an
     // improvement — invert the chip so it reads green/+ when the seed goes down.

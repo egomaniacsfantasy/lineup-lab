@@ -1106,6 +1106,22 @@ function TradeDealsView() {
                             },
                           ]
                         : []),
+                      ...(entry.suggestion.youWeekDelta != null
+                        ? [
+                            {
+                              label: 'Win this week',
+                              value: signedPct(entry.suggestion.youWeekDelta),
+                              tone: deltaTone(entry.suggestion.youWeekDelta),
+                              emphasis: 'primary' as const,
+                            },
+                            {
+                              label: 'their week',
+                              value: signedPct(entry.suggestion.partnerWeekDelta ?? 0),
+                              tone: deltaTone(entry.suggestion.partnerWeekDelta ?? 0),
+                              emphasis: 'secondary' as const,
+                            },
+                          ]
+                        : []),
                     ]}
                     key={entry.signature}
                     onClick={() => loadSuggestedTrade(entry.suggestion)}

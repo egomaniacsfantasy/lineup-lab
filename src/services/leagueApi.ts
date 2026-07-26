@@ -596,6 +596,8 @@ export interface TradeSideStat {
   titleProb: number;
   avgSeed: number;
   expWins: number;
+  // Current-week matchup win %. null off-season (no scheduled matchup).
+  weekWinProb?: number | null;
 }
 export interface TradeSideDelta {
   rosterId: number;
@@ -673,6 +675,8 @@ export interface TradeSuggestion {
   partnerDelta: number;
   youPlayoffDelta?: number;
   partnerPlayoffDelta?: number;
+  youWeekDelta?: number | null;
+  partnerWeekDelta?: number | null;
 }
 export interface TradeSuggestions {
   available: boolean;
