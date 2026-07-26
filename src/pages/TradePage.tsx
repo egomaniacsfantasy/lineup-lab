@@ -861,7 +861,9 @@ function TradeDealsView() {
                     />
                     <span className="trade-cc__pill-copy">
                       <span className="trade-cc__pill-name">{row.player.name}</span>
-                      <span className="trade-cc__pill-pos">{row.player.position}</span>
+                      <span className="trade-cc__pill-pos">
+                        {[row.player.position, row.player.team].filter(Boolean).join(' · ')}
+                      </span>
                     </span>
                     <span aria-hidden="true" className="trade-cc__pill-add">
                       {list.includes(row.id) ? '✓' : '+'}

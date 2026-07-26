@@ -2455,30 +2455,23 @@
 }
 
 .matchup-page__module--rail-chart,
-.matchup-page__module--rail-glance,
-.matchup-page__module--rail-feed {
+.matchup-page__module--rail-glance {
   padding: 16px;
 }
 
-.matchup-page__module--rail-feed {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  flex: 1 1 auto;
-}
-
+/* Empty state compacts to a slim strip instead of reserving a tall box
+   for one sentence. */
 .matchup-page__rail-placeholder {
   display: grid;
-  gap: 8px;
-  min-height: 180px;
+  gap: 4px;
   align-content: start;
 }
 
 .matchup-page__rail-placeholder strong {
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 28px;
-  line-height: 0.98;
+  font-size: 19px;
+  line-height: 1.05;
 }
 
 .matchup-page__rail-stats {
@@ -2593,30 +2586,6 @@
   background: color-mix(in srgb, var(--bg-inset) 80%, transparent);
 }
 
-.matchup-page__activity-feed {
-  display: grid;
-  gap: 10px;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.matchup-page__activity-row {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--bg-inset) 82%, transparent);
-}
-
-.matchup-page__activity-row strong {
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 700;
-}
-
 @media (min-width: 1200px) {
   .matchup-page__frame {
     grid-template-columns: minmax(640px, 1fr) 384px;
@@ -2628,22 +2597,9 @@
     /* the scroller's 80px header padding already insets the sticky
        rectangle, so 16px here pins the rail 96px from the viewport top */
     top: 16px;
-    height: calc(100dvh - 112px);
-  }
-
-  /* elastic rail: the activity feed absorbs leftover depth so the rail
-     never ends early against a long main column */
-  .matchup-page__module--rail-feed {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .matchup-page__module--rail-feed .matchup-page__activity-feed {
-    flex: 1;
-    align-content: start;
-    min-height: 0;
+    /* Sizes to its modules rather than being padded out to full height.
+       The rail is sticky, so it stays in view instead of ending early. */
+    max-height: calc(100dvh - 112px);
     overflow-y: auto;
   }
 

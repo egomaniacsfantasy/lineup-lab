@@ -916,3 +916,42 @@ static marketing strings; nothing computed. Sub copy now names the three
 value props in plain language.
 
 Verified: `artifacts/design-shots/sweep-2/landing-v2.png`. Guards green.
+
+---
+
+# Design Pass: Cut the Activity feeds, team tags on trade bubbles
+
+Date: July 25, 2026
+
+## Activity removed from Matchup and League
+
+The owner had never seen content in either feed. The code says why, and the
+verdict is not "it needs data", it is "the module was redundant by design":
+
+- Matchup: items were reprices (the same series the Line movement chart
+  renders directly above it in the same rail) plus movers (the same rows as
+  the market digest in the main column).
+- League: `activityFeed` mapped each row to `"{team} {win%}"` gated behind
+  the one-point material-move threshold, which is the number already on that
+  board row's movement chip.
+
+So it was empty most of the time and duplicative when full, which fails the
+same rule that killed "the week at a glance": nothing that duplicates a
+number already on the page ships. Both feeds, their builders, their types
+and their styles are gone.
+
+Consequence, stated honestly: the matchup rail is now shorter and no longer
+satisfies the elastic-rail law's "last module is a feed" clause. Padding a
+sticky rail with a module that is usually empty is worse than a short rail,
+and because the rail is sticky it stays in view rather than ending early.
+The rail now sizes to its modules with `max-height` and internal scroll.
+If it should be filled, it should be filled with something real; that is a
+product decision, not a layout patch.
+
+Also compacted the Line movement empty state from a 180px reserved box to a
+slim strip, since it is now the last rail module and was reading as a void.
+
+## Trade builder bubbles
+
+Position tags now read "QB · KC", "RB · BAL", so each bubble carries
+headshot, name, position and NFL team.

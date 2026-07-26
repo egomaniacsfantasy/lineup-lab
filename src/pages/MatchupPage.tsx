@@ -504,57 +504,6 @@ function buildMirroredSlotRows(
   return rows;
 }
 
-type MatchupActivityItem = {
-  key: string;
-  eyebrow: string;
-  headline: string;
-  meta: string;
-};
-
-function buildMatchupActivityFeed({
-  lineHistory,
-  matchupId,
-  yourRosterId,
-  yourTeamName,
-  movers,
-}: {
-  lineHistory: NonNullable<MatchupLiveProps['lineHistory']>;
-  matchupId: number | null | undefined;
-  yourRosterId: number | null;
-  yourTeamName: string;
-  movers: PricedMover[];
-}) {
-  const reprices = matchupId != null
-    ? lineHistory
-      .slice(-6)
-      .reverse()
-      .map((entry): MatchupActivityItem | null => {
-        const line = entry.lines.find((candidate: LineHistoryEntry['lines'][number]) => candidate.matchupId === matchupId);
-        const side = yourRosterId != null ? line?.sides[String(yourRosterId)] : null;
-        if (!side) return null;
-        return {
-          key: `repricing-${entry.inputsHash}-${entry.computedAt}`,
-          eyebrow: 'Reprice',
-          headline: `${yourTeamName} ${formatPercent(side.winProbability)}`,
-          meta: `${formatAsOfTime(entry.computedAt) ?? 'Now'} · ${entry.trigger ?? 'line moved'}`,
-        } satisfies MatchupActivityItem;
-      })
-      .filter((entry): entry is MatchupActivityItem => entry !== null)
-    : [];
-
-  const moverItems = movers.slice(0, 4).map((mover, index) => ({
-    key: `mover-${mover.headline}-${index}`,
-    eyebrow: mover.kind === 'trade' ? 'Trade lane' : 'Waiver',
-    headline: mover.headline,
-    meta:
-      mover.before !== mover.after
-        ? `${formatAmericanOdds(mover.before)} → ${formatAmericanOdds(mover.after)}`
-        : mover.detail,
-  }));
-
-  return [...reprices, ...moverItems].slice(0, 8);
-}
-
 function HeadToHeadStrip({ summary }: { summary: SleeperHeadToHeadSummary }) {
   return (
     <section className="matchup-page__h2h-strip" aria-label="Head-to-head history">
@@ -1693,18 +1642,6 @@ function MatchupLive({
       .sort((left, right) => left.x - right.x);
   }, [bootstrap, lineHistory, userRosterId]);
 
-  const matchupActivityFeed = useMemo(
-    () =>
-      buildMatchupActivityFeed({
-        lineHistory: lineHistory ?? [],
-        matchupId: bootstrap?.matchups.find((item) => item.rosterId === userRosterId)?.matchupId,
-        yourRosterId: userRosterId,
-        yourTeamName: matchup.yourTeam.teamName,
-        movers,
-      }),
-    [bootstrap?.matchups, lineHistory, matchup.yourTeam.teamName, movers, userRosterId],
-  );
-
   /* Your starters carrying an injury tag, straight from the payload's
      injuryStatus. Display only: nothing here re-weights a projection. */
   const riskyStarters = useMemo(() => {
@@ -2606,24 +2543,6 @@ function MatchupLive({
               )}
             </section>
 
-            <section className="matchup-page__module matchup-page__module--rail-feed">
-              <div className="matchup-page__module-row">
-                <h2 className="matchup-page__module-title">Activity</h2>
-              </div>
-              <div className="matchup-page__activity-feed">
-                {matchupActivityFeed.length > 0 ? (
-                  matchupActivityFeed.map((item) => (
-                    <article className="matchup-page__activity-row" key={item.key}>
-                      <span className="matchup-page__edge-line-label">{item.eyebrow}</span>
-                      <strong>{item.headline}</strong>
-                      <span className="matchup-page__meta-copy">{item.meta}</span>
-                    </article>
-                  ))
-                ) : (
-                  <p className="matchup-page__meta-copy">The feed fills as the book reprices this matchup and the market moves around you.</p>
-                )}
-              </div>
-            </section>
           </aside>
       </div>
 

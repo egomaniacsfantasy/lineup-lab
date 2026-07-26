@@ -34,13 +34,6 @@ type BoardTeam = {
   isUser?: boolean;
 };
 
-type MatchupFeedItem = {
-  key: string;
-  eyebrow: string;
-  headline: string;
-  detail: string;
-};
-
 const CHART_RANGES: OddsChartRangeOption[] = [
   { id: 'week', label: 'Week', windowMs: 7 * 24 * 60 * 60 * 1000 },
   { id: 'month', label: 'Month', windowMs: 30 * 24 * 60 * 60 * 1000 },
@@ -177,23 +170,6 @@ function moveLabel(value: number) {
   return `${value >= 0 ? '▲' : '▼'}${Math.abs(value).toFixed(1)}`;
 }
 
-function activityFeed(rows: Array<{
-  rowKey: string;
-  left: BoardTeam;
-  right: BoardTeam;
-  summary: { point: RawMovement; move: number } | null;
-}>) {
-  return rows
-    .filter((row) => row.summary)
-    .map((row) => ({
-      key: row.rowKey,
-      eyebrow: 'Reprice',
-      headline: `${row.left.name} ${formatPercent(row.left.winProb)}`,
-      detail: `${row.left.name} vs ${row.right.name} · ${moveLabel(row.summary!.move)} today`,
-    }))
-    .slice(0, 8) satisfies MatchupFeedItem[];
-}
-
 export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupSlateProps) {
   const rows = useMemo(
     () =>
@@ -249,7 +225,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
     x: point.at,
     y: valueForSide(point, selectedRow.left.side),
   })) ?? [];
-  const feedItems = activityFeed(rows);
   const chartFooter = selectedRow?.summary
     ? `${selectedRow.left.name} moved ${selectedRow.summary.move >= 0 ? 'up' : 'down'} ${Math.abs(selectedRow.summary.move).toFixed(1)} points since the week opened.`
     : chartPoints.length > 1
@@ -400,22 +375,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             ) : null}
           </section>
 
-          <section className="matchup-slate__feed">
-            <span className="matchup-slate__glance-title">Activity</span>
-            <div className="matchup-slate__feed-body">
-              {feedItems.length > 0 ? (
-                feedItems.map((item) => (
-                  <article className="matchup-slate__feed-row" key={item.key}>
-                    <span className="matchup-slate__detail-kicker">{item.eyebrow}</span>
-                    <strong>{item.headline}</strong>
-                    <span>{item.detail}</span>
-                  </article>
-                ))
-              ) : (
-                <p className="matchup-slate__movement-note">The feed fills as the board reprices and real movement clears the one-point threshold.</p>
-              )}
-            </div>
-          </section>
         </aside>
       </div>
     </section>
