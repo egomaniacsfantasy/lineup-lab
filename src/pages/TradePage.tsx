@@ -15,6 +15,8 @@ import {
   analyzeTradeApi,
   fetchTradeCounter,
   fetchTradeSuggestions,
+  fetchBoard,
+  type BoardRow,
   type TradeResult,
   type TradeAnalysis,
   type TradeCounter,
@@ -276,6 +278,61 @@ function TradeDealsView() {
     () => (bootstrap ? bootstrap.teams.filter((t) => !t.isUser) : []),
     [bootstrap],
   );
+
+  /* The board's ranked player list, used only to describe each manager's
+     roster: whose names to show and where they are deep or thin. Rank order
+     is the board's own; nothing here is re-ranked or re-valued. */
+  const [boardRanks, setBoardRanks] = useState<BoardRow[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchBoard(800, bootstrap?.league.scoringFamily)
+      .then((payload) => {
+        if (cancelled || !payload.available) return;
+        setBoardRanks(payload.rankings ?? []);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrap?.league.scoringFamily]);
+
+  const rankByPlayerId = useMemo(() => {
+    const map = new Map<string, number>();
+    (boardRanks ?? []).forEach((row) => map.set(row.playerId, row.rank));
+    return map;
+  }, [boardRanks]);
+
+  /* Per manager: their best names in board order, and the position they are
+     thinnest at by simple headcount. Display only. */
+  const managerProfiles = useMemo(() => {
+    const profiles = new Map<number, { headliners: string[]; thin: string | null; counts: Record<string, number> }>();
+    if (!bootstrap) return profiles;
+    const tracked = ['QB', 'RB', 'WR', 'TE'];
+    for (const team of bootstrap.teams) {
+      const owned = team.players
+        .map((id) => ({ id, player: bootstrap.players[id] }))
+        .filter((entry) => entry.player);
+      const counts: Record<string, number> = {};
+      tracked.forEach((position) => { counts[position] = 0; });
+      owned.forEach((entry) => {
+        const position = entry.player.position;
+        if (counts[position] != null) counts[position] += 1;
+      });
+      const ranked = owned
+        .filter((entry) => rankByPlayerId.has(entry.id))
+        .sort((left, right) => rankByPlayerId.get(left.id)! - rankByPlayerId.get(right.id)!);
+      // Board order when the board covers them; otherwise the manager's own
+      // declared starters, in lineup order.
+      const starterSet = new Set((team.starters ?? []).filter((id) => id && id !== '0'));
+      const source = ranked.length > 0 ? ranked : owned.filter((entry) => starterSet.has(entry.id));
+      const headliners = source.slice(0, 2).map((entry) => entry.player.name);
+      const thin = tracked
+        .filter((position) => counts[position] > 0)
+        .sort((left, right) => counts[left] - counts[right])[0] ?? null;
+      profiles.set(team.rosterId, { headliners, thin, counts });
+    }
+    return profiles;
+  }, [bootstrap, rankByPlayerId]);
 
   const [partnerRosterId, setPartnerRosterId] = useState<number | null>(null);
   const [give, setGive] = useState<string[]>([]);
@@ -1003,6 +1060,21 @@ function TradeDealsView() {
                       <span className="trade-cc__manager-card-meta">{recordText(team.record)}</span>
                     </span>
                   </span>
+                  {managerProfiles.get(team.rosterId)?.headliners.length ? (
+                    <span className="trade-cc__manager-card-roster">
+                      <span className="trade-cc__manager-card-roster-label">Their best</span>
+                      <span className="trade-cc__manager-card-roster-names">
+                        {managerProfiles.get(team.rosterId)!.headliners.join(', ')}
+                      </span>
+                    </span>
+                  ) : null}
+                  {managerProfiles.get(team.rosterId)?.thin ? (
+                    <span className="trade-cc__manager-card-thin">
+                      Thinnest at {managerProfiles.get(team.rosterId)!.thin}
+                      {' · '}
+                      {managerProfiles.get(team.rosterId)!.counts[managerProfiles.get(team.rosterId)!.thin as string]} deep
+                    </span>
+                  ) : null}
                   <span className="trade-cc__manager-card-bottom">
                     <span className="trade-cc__manager-card-stat-label">
                       <span className="trade-cc__manager-card-stat-default">Title price</span>
