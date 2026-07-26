@@ -895,3 +895,24 @@ Prompt: follow-up on `og-frontend-sweep-2026-07-25` (owner voice notes)
 Fixture screenshots: `finder-v2.png` (grouped grid + new header),
 `finder-v2-hover.png` (card CTA swap), `matchup-rename.png`. tsc,
 brand-check, copy-scan, lint, 40 tests green.
+
+---
+
+# Design Pass: Landing hero tells the truth
+
+Date: July 25, 2026
+
+The landing hero's product card was a "Scouting read" with persona meters,
+a feature removed from the product this week. The front door advertised
+something that no longer exists while the actual product never appeared
+above the fold.
+
+The hero panel is now three miniatures of the real surfaces, staggered like
+slips, using the demo league's numbers: the head-to-head line (Zeus's Bolts
+-159 / Hermes Express +134 with the share bar), the start/sit answer (Sit
+McLaurin, Start Smith, -159 to -182, +3.2%), and the trade finder (Send
+Kelce + Aubrey, Get McBride + Nacua, 48% they take it · Coin flip). All
+static marketing strings; nothing computed. Sub copy now names the three
+value props in plain language.
+
+Verified: `artifacts/design-shots/sweep-2/landing-v2.png`. Guards green.

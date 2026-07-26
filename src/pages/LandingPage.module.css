@@ -140,74 +140,202 @@
   color: rgba(240, 230, 208, 0.25);
 }
 
-.personaCard {
-  display: grid;
-  gap: 18px;
-  padding: clamp(22px, 4vw, 32px);
-  border: 1px solid rgba(240, 230, 208, 0.12);
-  border-radius: 22px;
-  background:
-    linear-gradient(145deg, rgba(240, 230, 208, 0.07), rgba(240, 230, 208, 0.015)),
-    #08090b;
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
-}
-
-.personaHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  color: rgba(240, 230, 208, 0.48);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.personaHeader strong {
-  color: rgba(240, 230, 208, 0.88);
-}
-
-.personaCard h2 {
-  margin: 0;
-  color: #f0e6d0;
-  font-family: var(--font-serif);
-  font-size: clamp(34px, 5vw, 58px);
-  font-weight: 400;
-  line-height: 1.02;
-}
-
-.meterStack {
+/* Hero board: three miniatures of the product, stacked like slips. */
+.heroBoard {
   display: grid;
   gap: 14px;
 }
 
-.meterRow {
+.boardCard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 12px;
-  color: rgba(240, 230, 208, 0.72);
-  font-size: 13px;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid rgba(232, 84, 29, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(232, 84, 29, 0.06), rgba(240, 230, 208, 0.012)),
+    #101112;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.4);
+}
+
+.boardCard:nth-child(2) {
+  margin-right: 26px;
+  margin-left: -14px;
+}
+
+.boardCard:nth-child(3) {
+  margin-right: -10px;
+  margin-left: 14px;
+}
+
+.boardCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(240, 230, 208, 0.48);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.boardLive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #ff8049;
+}
+
+.boardLive::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff8049;
+}
+
+.boardFaceoff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.boardFaceoffRight {
+  text-align: right;
+}
+
+.boardTeam {
+  margin: 0 0 2px;
+  color: rgba(240, 230, 208, 0.82);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.boardNumber,
+.boardNumberDim {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.boardNumber {
+  color: #ff8049;
+}
+
+.boardNumberDim {
+  color: rgba(240, 230, 208, 0.6);
+}
+
+.boardVs {
+  color: rgba(240, 230, 208, 0.3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.boardBar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(240, 230, 208, 0.1);
+}
+
+.boardBar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e8541d, #ff8049);
+}
+
+.boardBarLabels {
+  display: flex;
+  justify-content: space-between;
+  color: rgba(240, 230, 208, 0.55);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.boardSwap {
+  margin: 0;
+  color: rgba(240, 230, 208, 0.88);
+  font-size: 15px;
   font-weight: 700;
 }
 
-.meterRow code {
+.boardTag,
+.boardTagStart {
+  margin-right: 4px;
   font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
-.meterRow i {
-  grid-column: 1 / -1;
-  display: block;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(240, 230, 208, 0.72);
+.boardTag {
+  color: rgba(240, 230, 208, 0.45);
 }
 
-.personaCopy {
+.boardTagStart {
+  color: #ff8049;
+}
+
+.boardArrow {
+  color: rgba(240, 230, 208, 0.4);
+}
+
+.boardMove {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   margin: 0;
-  color: rgba(239, 228, 207, 0.68);
-  font-size: 14px;
-  line-height: 1.6;
+  font-family: var(--font-mono);
+  font-size: 17px;
+}
+
+.boardMove s {
+  color: rgba(240, 230, 208, 0.38);
+}
+
+.boardMove strong {
+  color: #f0e6d0;
+}
+
+.boardMove em {
+  margin-left: auto;
+  color: #3ad29f;
+  font-size: 19px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.boardAccept {
+  display: grid;
+  gap: 6px;
+}
+
+.boardAcceptBar {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(240, 230, 208, 0.1);
+}
+
+.boardAcceptBar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e8541d, #ff8049);
+}
+
+.boardAcceptLabel {
+  color: rgba(240, 230, 208, 0.62);
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .section {

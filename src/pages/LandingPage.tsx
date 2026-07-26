@@ -40,31 +40,70 @@ function LiveLineCard() {
   );
 }
 
-function ScoutingPersonaCard() {
+/* Three miniatures of the real product, with the demo league's numbers.
+   Static marketing copy: nothing here is computed. */
+function HeroBoard() {
   return (
-    <article className={styles.personaCard} aria-label="Scouting read example">
-      <div className={styles.personaHeader}>
-        <span>Scouting read</span>
-        <strong>Roster 4</strong>
-      </div>
-      <h2>The book has read your league.</h2>
-      <div className={styles.meterStack}>
-        {[
-          ['Trade appetite', 23],
-          ['Waiver aggression', 81],
-          ['Reach tendency', 68],
-        ].map(([label, value]) => (
-          <div className={styles.meterRow} key={label}>
-            <span>{label}</span>
-            <code>{value}</code>
-            <i style={{ width: `${value}%` }} />
+    <div aria-label="What the book prices" className={styles.heroBoard}>
+      <article className={styles.boardCard}>
+        <div className={styles.boardCardHead}>
+          <span>Week 8 · head-to-head</span>
+          <span className={styles.boardLive}>Live line</span>
+        </div>
+        <div className={styles.boardFaceoff}>
+          <div>
+            <p className={styles.boardTeam}>Zeus&apos;s Bolts</p>
+            <p className={styles.boardNumber}>-159</p>
           </div>
-        ))}
-      </div>
-      <p className={styles.personaCopy}>
-        Their guys: K. Williams, R. Rice. Needs RB. Trades move when acceptance clears the price.
-      </p>
-    </article>
+          <span className={styles.boardVs}>VS</span>
+          <div className={styles.boardFaceoffRight}>
+            <p className={styles.boardTeam}>Hermes Express</p>
+            <p className={styles.boardNumberDim}>+134</p>
+          </div>
+        </div>
+        <div aria-hidden="true" className={styles.boardBar}>
+          <span style={{ width: '61.4%' }} />
+        </div>
+        <div className={styles.boardBarLabels}>
+          <span>61.4% you</span>
+          <span>38.6% them</span>
+        </div>
+      </article>
+
+      <article className={styles.boardCard}>
+        <div className={styles.boardCardHead}>
+          <span>Who do I start?</span>
+        </div>
+        <p className={styles.boardSwap}>
+          <span className={styles.boardTag}>Sit</span> T. McLaurin
+          <span aria-hidden="true" className={styles.boardArrow}> → </span>
+          <span className={styles.boardTagStart}>Start</span> D. Smith
+        </p>
+        <p className={styles.boardMove}>
+          <s>-159</s>
+          <span aria-hidden="true"> → </span>
+          <strong>-182</strong>
+          <em>+3.2%</em>
+        </p>
+      </article>
+
+      <article className={styles.boardCard}>
+        <div className={styles.boardCardHead}>
+          <span>Trade finder</span>
+        </div>
+        <p className={styles.boardSwap}>
+          <span className={styles.boardTag}>Send</span> Kelce + Aubrey
+          <span aria-hidden="true" className={styles.boardArrow}> → </span>
+          <span className={styles.boardTagStart}>Get</span> McBride + Nacua
+        </p>
+        <div className={styles.boardAccept}>
+          <div aria-hidden="true" className={styles.boardAcceptBar}>
+            <span style={{ width: '48%' }} />
+          </div>
+          <span className={styles.boardAcceptLabel}>48% they take it · Coin flip</span>
+        </div>
+      </article>
+    </div>
   );
 }
 
@@ -94,8 +133,9 @@ export function LandingPage() {
           <div className={styles.kicker}>FANTASY FOOTBALL · PRICED LIKE A SPORTSBOOK</div>
           <h1 className={styles.headline}>Your league has a line.</h1>
           <p className={styles.sub}>
-            Odds Gods prices lineups, trades, futures, and draft spots against
-            the people in your league.
+            Connect your league and every decision gets a price: your matchup
+            as a moneyline, start or sit as a probability swing, trades with
+            the odds the other manager says yes.
           </p>
           <div className={styles.ctaRow}>
             <a className={styles.primaryCta} href="/signin">Price my league</a>
@@ -107,7 +147,7 @@ export function LandingPage() {
             <span>10,000 simulations per decision</span>
           </div>
         </div>
-        <ScoutingPersonaCard />
+        <HeroBoard />
       </section>
 
       <section className={styles.section}>
