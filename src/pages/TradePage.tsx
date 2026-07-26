@@ -44,6 +44,7 @@ import type { ManagerFile } from '../services/managerFiles';
 import { compileManagerFile } from '../services/managerFiles';
 import {
   clearTradeTraitsOverride,
+  loadTradeTraitsRecord,
   resolveTradeTraits,
   saveTradeTraits,
   NEUTRAL_READ,
@@ -401,9 +402,26 @@ function TradeDealsView() {
     let cancelled = false;
     setManagerSuggestionsLoading(true);
     setManagerSuggestionsError(null);
+
+    // Send YOUR saved read (friendliness/relationship) for each manager so the scan's
+    // accept % uses the exact sliders you set on their card — the same input the
+    // Build-a-trade analyzer uses. Only real overrides travel; managers you haven't
+    // adjusted fall back to neutral server-side.
+    const readsByRoster: Record<number, { friendliness: number; relationship: number }> = {};
+    for (const team of partners) {
+      const rec = loadTradeTraitsRecord(stored.leagueId, team.rosterId);
+      if (rec && rec.mode !== 'default') {
+        readsByRoster[team.rosterId] = {
+          friendliness: rec.friendliness,
+          relationship: rec.relationship,
+        };
+      }
+    }
+
     fetchTradeSuggestions(stored.leagueId, {
       userId: stored.userId,
       partnerRosterId: marketManagerFilter,
+      readsByRoster,
     })
       .then((response) => {
         if (cancelled) return;
@@ -426,7 +444,7 @@ function TradeDealsView() {
     return () => {
       cancelled = true;
     };
-  }, [marketManagerFilter, stored]);
+  }, [marketManagerFilter, stored, partners]);
 
   // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
   // pre-selects that partner in the builder. We intentionally do NOT pre-fill
