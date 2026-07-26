@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
+import { MatchupDistributions } from '../components/matchup/MatchupDistributions';
 import { PlayerChip } from '../components/player/PlayerChip';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeRow } from '../components/trade-display/TradeDisplay';
@@ -2413,6 +2414,12 @@ function MatchupLive({
                 <p className="matchup-page__rail-call-clean">
                   Your lineup is already the best play.
                 </p>
+              </section>
+            ) : null}
+
+            {isConnected && matchup.histograms ? (
+              <section className="matchup-page__module matchup-page__module--rail-dist">
+                <MatchupDistributions histograms={matchup.histograms} />
               </section>
             ) : null}
 

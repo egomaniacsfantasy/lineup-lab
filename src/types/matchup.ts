@@ -12,6 +12,30 @@ export interface MatchupLine {
   total: number;
 }
 
+export interface HistogramBin {
+  /** Bin center. */
+  x: number;
+  /** Probability density (bar areas sum to 1). */
+  density: number;
+}
+
+export interface DensityHistogram {
+  min: number;
+  max: number;
+  mean: number;
+  binWidth: number;
+  bins: HistogramBin[];
+}
+
+/** The three matchup distributions from the user's perspective, from the same
+ *  seeded sim that produces the displayed win%. */
+export interface MatchupHistograms {
+  sims: number;
+  you: DensityHistogram;
+  opponent: DensityHistogram;
+  margin: DensityHistogram;
+}
+
 export interface MatchupData {
   week: number;
   scoringFormat: ScoringFormat;
@@ -21,6 +45,7 @@ export interface MatchupData {
     yours: MatchupLine;
     opponent: MatchupLine;
   };
+  histograms?: MatchupHistograms | null;
 }
 
 export interface TeamMatchupData {

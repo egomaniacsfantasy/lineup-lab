@@ -420,6 +420,82 @@ function simulateMatchupWinProb(a, b, rng) {
   return wins / MATCHUP_SIMS;
 }
 
+/**
+ * Same matchup sim as simulateMatchupWinProb, but KEEPS every sim's two team
+ * scores (it draws in the identical a-then-b order, so it consumes the rng
+ * exactly the same way and yields the identical win prob — safe to swap in for
+ * one matchup without perturbing a shared rng stream). Returns the raw per-sim
+ * score arrays so the caller can build score/margin histograms.
+ */
+function simulateMatchupSamples(a, b, rng) {
+  const scoreA = new Float64Array(MATCHUP_SIMS);
+  const scoreB = new Float64Array(MATCHUP_SIMS);
+  let wins = 0;
+  for (let i = 0; i < MATCHUP_SIMS; i += 1) {
+    let sa = 0;
+    for (const p of a.players) sa += splitNormalDraw(p, rng);
+    let sb = 0;
+    for (const p of b.players) sb += splitNormalDraw(p, rng);
+    scoreA[i] = sa;
+    scoreB[i] = sb;
+    if (sa > sb) wins += 1;
+    else if (sa === sb) wins += 0.5;
+  }
+  return { winProbA: wins / MATCHUP_SIMS, scoreA, scoreB };
+}
+
+/** Density histogram of a sample array: equal-width bins whose areas sum to 1. */
+function densityHistogram(values, nbins = 32) {
+  const n = values.length;
+  let min = Infinity;
+  let max = -Infinity;
+  let sum = 0;
+  for (let i = 0; i < n; i += 1) {
+    const v = values[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+    sum += v;
+  }
+  if (!(max > min)) max = min + 1; // degenerate guard
+  const width = (max - min) / nbins;
+  const counts = new Array(nbins).fill(0);
+  for (let i = 0; i < n; i += 1) {
+    let idx = Math.floor((values[i] - min) / width);
+    if (idx < 0) idx = 0;
+    else if (idx >= nbins) idx = nbins - 1;
+    counts[idx] += 1;
+  }
+  const bins = counts.map((c, i) => ({
+    x: Number((min + (i + 0.5) * width).toFixed(2)), // bin center
+    density: Number((c / (n * width)).toFixed(6)),
+  }));
+  return {
+    min: Number(min.toFixed(2)),
+    max: Number(max.toFixed(2)),
+    mean: Number((sum / n).toFixed(2)),
+    binWidth: Number(width.toFixed(3)),
+    bins,
+  };
+}
+
+/**
+ * The three matchup distributions from the USER's perspective, built from the
+ * same seeded sim that produces the displayed win% (so the margin histogram's
+ * area right of 0 equals that win%). userIsA orients "you" vs "opponent".
+ */
+function matchupHistograms(scoreA, scoreB, userIsA) {
+  const you = userIsA ? scoreA : scoreB;
+  const opp = userIsA ? scoreB : scoreA;
+  const margin = new Float64Array(you.length);
+  for (let i = 0; i < you.length; i += 1) margin[i] = you[i] - opp[i];
+  return {
+    sims: you.length,
+    you: densityHistogram(you),
+    opponent: densityHistogram(opp),
+    margin: densityHistogram(margin),
+  };
+}
+
 function lineFromDistributions(a, b, winProb) {
   return {
     moneyline: probToAmerican(winProb),
@@ -561,11 +637,29 @@ export function priceLeague(ctx) {
     const distB = distByRoster.get(b.rosterId);
     // Player-level asymmetric sim for win%. projection/spread/total below stay
     // the sum of player means, so displayed totals are unchanged.
-    const winProbA = simulateMatchupWinProb(
-      paramsByRoster.get(a.rosterId),
-      paramsByRoster.get(b.rosterId),
-      linesRng,
-    );
+    // For the USER's own matchup we keep the per-sim scores to build the margin /
+    // your-points / opponent-points density histograms shown on the Matchup tab.
+    // simulateMatchupSamples draws identically to simulateMatchupWinProb, so the
+    // win% is the same and the shared linesRng stream stays aligned.
+    const isUserMatchup =
+      a.rosterId === userRosterIdForLines || b.rosterId === userRosterIdForLines;
+    let winProbA;
+    let userHistograms = null;
+    if (isUserMatchup) {
+      const s = simulateMatchupSamples(
+        paramsByRoster.get(a.rosterId),
+        paramsByRoster.get(b.rosterId),
+        linesRng,
+      );
+      winProbA = s.winProbA;
+      userHistograms = matchupHistograms(s.scoreA, s.scoreB, a.rosterId === userRosterIdForLines);
+    } else {
+      winProbA = simulateMatchupWinProb(
+        paramsByRoster.get(a.rosterId),
+        paramsByRoster.get(b.rosterId),
+        linesRng,
+      );
+    }
     if (a.rosterId === userRosterIdForLines) userDisplayWinProb = winProbA;
     else if (b.rosterId === userRosterIdForLines) userDisplayWinProb = 1 - winProbA;
 
@@ -579,11 +673,17 @@ export function priceLeague(ctx) {
           ...lineFromDistributions(distA, distB, winProbA),
           unpricedStarters: distA.unpriced,
           zeroedStarters: distA.zeroed,
+          ...(a.rosterId === userRosterIdForLines && userHistograms
+            ? { histograms: userHistograms }
+            : {}),
         },
         [b.rosterId]: {
           ...lineFromDistributions(distB, distA, 1 - winProbA),
           unpricedStarters: distB.unpriced,
           zeroedStarters: distB.zeroed,
+          ...(b.rosterId === userRosterIdForLines && userHistograms
+            ? { histograms: userHistograms }
+            : {}),
         },
       },
     });

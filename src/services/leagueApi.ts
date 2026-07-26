@@ -3,6 +3,7 @@
  * talks to Sleeper (or any provider) directly.
  */
 import { maybeHandleDesignFixtureRequest } from '../dev/designFixtures';
+import type { MatchupHistograms } from '../types/matchup';
 
 export interface ProviderUser {
   id: string;
@@ -91,6 +92,8 @@ export interface PricedSide {
   total: number;
   unpricedStarters: string[];
   zeroedStarters: string[];
+  // Present only on the user's own current-week matchup side.
+  histograms?: MatchupHistograms | null;
 }
 
 export interface PricedLine {

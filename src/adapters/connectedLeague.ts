@@ -404,6 +404,7 @@ export function toMatchupData(
       bench: [],
     },
     baseline: line,
+    histograms: pricedLine?.sides[String(userTeam.rosterId)]?.histograms ?? null,
   };
 }
 
