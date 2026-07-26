@@ -241,6 +241,98 @@ function nextMatchup(projection: ProjectionPlayer | null, currentWeek: number | 
   return sorted[0] ?? null;
 }
 
+/**
+ * Franco's week-by-week projection for one player. `board.weekly` arrives
+ * keyed by week and already scoring-adjusted, so this only reads and scales
+ * for bar height. Weeks absent from the payload are byes.
+ */
+function WeeklyProjectionStrip({
+  weekly,
+  currentWeek,
+  playoffWeekStart,
+}: {
+  weekly: Record<string, number> | null | undefined;
+  currentWeek: number | null;
+  playoffWeekStart: number | null;
+}) {
+  const weeks = Object.keys(weekly ?? {})
+    .map(Number)
+    .filter((week) => Number.isFinite(week))
+    .sort((left, right) => left - right);
+  if (weeks.length === 0) return null;
+
+  const last = weeks[weeks.length - 1];
+  const values = weeks.map((week) => weekly![String(week)]);
+  const peak = Math.max(...values);
+  if (!(peak > 0)) return null;
+  const best = weeks[values.indexOf(peak)];
+  const low = Math.min(...values);
+  const worst = weeks[values.indexOf(low)];
+
+  const columns: Array<{ week: number; points: number | null }> = [];
+  for (let week = weeks[0]; week <= last; week += 1) {
+    const points = weekly![String(week)];
+    columns.push({ week, points: typeof points === 'number' ? points : null });
+  }
+  const hasPlayoffWeeks =
+    playoffWeekStart != null && columns.some((column) => column.week >= playoffWeekStart);
+
+  return (
+    <div className="board-card__weekly">
+      <div className="board-card__weekly-head">
+        <span className="board-card__stat-label">Week by week</span>
+        <span className="board-card__weekly-legend">
+          Best wk {best} · {fmtNumber(peak)} · Worst wk {worst} · {fmtNumber(low)}
+        </span>
+      </div>
+      <div className="board-card__weekly-bars">
+        {columns.map((column) => {
+          const isBye = column.points == null;
+          const isPlayoff = playoffWeekStart != null && column.week >= playoffWeekStart;
+          const isNow = currentWeek != null && column.week === currentWeek;
+          const isBest = !isBye && column.week === best;
+          const isWorst = !isBye && column.week === worst;
+          return (
+            <div
+              className={[
+                'board-card__weekly-col',
+                isBye ? 'board-card__weekly-col--bye' : '',
+                isPlayoff ? 'board-card__weekly-col--playoff' : '',
+                isNow ? 'board-card__weekly-col--now' : '',
+                isBest ? 'board-card__weekly-col--best' : '',
+                isWorst ? 'board-card__weekly-col--worst' : '',
+              ].filter(Boolean).join(' ')}
+              key={column.week}
+              title={
+                isBye
+                  ? `Week ${column.week}: bye`
+                  : `Week ${column.week}: ${fmtNumber(column.points)} pts`
+              }
+            >
+              <span className="board-card__weekly-track">
+                {isBye ? (
+                  <span className="board-card__weekly-bye" />
+                ) : (
+                  <span
+                    className="board-card__weekly-bar"
+                    style={{ height: `${Math.max(4, (column.points! / peak) * 100)}%` }}
+                  />
+                )}
+              </span>
+              <span className="board-card__weekly-week">{column.week}</span>
+            </div>
+          );
+        })}
+      </div>
+      {hasPlayoffWeeks ? (
+        <p className="board-card__weekly-note">
+          Shaded weeks are your league&apos;s playoffs.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function tierLabel(tier: number | null) {
   return tier == null ? null : `Tier ${tier}`;
 }
@@ -893,6 +985,7 @@ export function MyBoardPage() {
                   {isOpen ? (
                     <BoardPlayerCard
                       currentWeek={bootstrap?.week ?? null}
+                      playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
                       draftRating={readDraftRating(player.board.playerId)}
                       focusRatingControl={ratingFocusPlayerId === player.board.playerId}
                       influenceChip={influenceChip}
@@ -1136,6 +1229,7 @@ export function MyBoardPage() {
                           >
                             <BoardPlayerCard
                               currentWeek={bootstrap?.week ?? null}
+                              playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
                               draftRating={draftRating}
                               focusRatingControl={ratingFocusPlayerId === player.board.playerId}
                               influenceChip={influenceChip}
@@ -1189,6 +1283,7 @@ export function BoardPlayerCard({
   onCommit,
   onDraftChange,
   currentWeek,
+  playoffWeekStart = null,
   mode,
   rank,
   onClose,
@@ -1206,6 +1301,7 @@ export function BoardPlayerCard({
   onCommit: (value: number) => void;
   onDraftChange: (value: number) => void;
   currentWeek: number | null;
+  playoffWeekStart?: number | null;
   mode: 'standalone' | 'embedded';
   rank: number;
   onClose: () => void;
@@ -1326,6 +1422,12 @@ export function BoardPlayerCard({
           <span className="board-card__range-marker" style={{ left: `${marker}%` }} />
         </div>
       </div>
+
+      <WeeklyProjectionStrip
+        currentWeek={currentWeek}
+        playoffWeekStart={playoffWeekStart}
+        weekly={player.board.weekly}
+      />
 
       <div className="board-card__stat-strip" role="list" aria-label="Player stat summary">
         {stats.map((stat) => (
