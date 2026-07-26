@@ -815,3 +815,42 @@ Manager cards were oversized: 54px avatars and 30px display type carrying one nu
 - The Market is denser but still not *richer*. The owner's note was that it feels dead, and shrinking it does not by itself add value; what would is per-manager signal (their needs, their tendencies, what they have that you want) surfaced before you click. That needs payload work and a design round of its own, and I did not do it this pass.
 - The area under the trade builder is still short of the uncapped-closer law at tall viewports.
 - Compare eligibility is verified against the design fixture. The live-league case (auth-gated) is unverified, as with prior passes.
+
+---
+
+# Design Pass: Slot table v3
+
+Date: July 25, 2026
+Prompt: follow-up on `og-frontend-sweep-2026-07-25`
+
+Owner feedback on v2: orange-as-emphasis is lazy, the bare "+0.3" chips and
+gutter "5 options" labels are not intuitive, the reserved chip column leaves
+blank space, and you-vs-them is not obvious.
+
+## What changed
+
+- **Blank space closed.** The reserved chip columns are gone. The margin now
+  renders under the leading projection as "+5.6 edge", and since every row has
+  exactly one leader there is no empty-column state at all. Projections
+  right-align to the card edge on your side and mirror on theirs.
+- **Self-documenting numbers.** The delta carries its own word ("edge") and
+  sits directly under the number it modifies. Green marks the favored side of
+  the slot, either side, per the green-equals-favored brand rule; the winner
+  card border matches instead of using orange.
+- **Options cue moved into the row it describes.** The gutter is back to slot
+  labels only. Rows with a real decision show "⇄ N on the bench" in orange at
+  the end of the meta line, which is also the tap affordance in words.
+- **Hierarchy by structure, not hue.** Projections are no longer orange:
+  yours are bright white and heavy, the opponent's dim. Orange is reserved
+  for the bench cue; green for edges. Accent coverage drops back toward the
+  brand's 5 to 15% band.
+- **You-vs-them labeled.** An orange YOU pill sits by your team name, a dim
+  THEM pill by the opponent's.
+
+## Verified
+
+Fixture screenshots at 1512px: default and picked states
+(`artifacts/design-shots/sweep-2/slot-table-v3*.png`). Picked state confirms
+the bench drawer auto-opens with only the eligible option bright, including
+its engine-provided resulting line. tsc, brand-check, copy-scan, lint, and
+all 40 frontend tests pass.

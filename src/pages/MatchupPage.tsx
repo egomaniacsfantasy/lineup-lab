@@ -2129,6 +2129,7 @@ function MatchupLive({
 
               <div className="matchup-page__slot-board-grid">
                 <div className="matchup-page__slot-board-head matchup-page__slot-board-head--left">
+                  <span className="matchup-page__side-pill matchup-page__side-pill--you">You</span>
                   {matchup.yourTeam.teamName}
                 </div>
                 <div className="matchup-page__slot-board-head matchup-page__slot-board-head--center">
@@ -2136,6 +2137,7 @@ function MatchupLive({
                 </div>
                 <div className="matchup-page__slot-board-head matchup-page__slot-board-head--right">
                   {matchup.opponentTeam.teamName}
+                  <span className="matchup-page__side-pill">Them</span>
                 </div>
 
                 {slotComparisonRows.map((row) => {
@@ -2146,6 +2148,8 @@ function MatchupLive({
                     : false;
                   const isPickable = starter ? canPick(starter) : false;
                   const isMuted = Boolean(activePick) && !isSelected && !isPickable;
+                  const youLead = row.edgeDelta > 0;
+                  const theyLead = row.edgeDelta < 0;
 
                   return (
                     <Fragment key={row.key}>
@@ -2153,7 +2157,7 @@ function MatchupLive({
                         aria-pressed={isSelected}
                         className={[
                           'matchup-page__slot-card',
-                          row.edgeDelta > 0 ? 'matchup-page__slot-card--winner' : '',
+                          youLead ? 'matchup-page__slot-card--winner' : '',
                           optionCount > 0 ? 'matchup-page__slot-card--decision' : '',
                           isSelected ? 'matchup-page__slot-card--picked' : '',
                           isMuted ? 'matchup-page__slot-card--muted' : '',
@@ -2172,12 +2176,19 @@ function MatchupLive({
                             />
                             <span className="matchup-page__slot-copy">
                               <span className="matchup-page__row-name">{row.yourSlot.starter.shortName}</span>
-                              <span className="matchup-page__row-secondary">{lineupMetaFor(row.yourSlot.starter)}</span>
+                              <span className="matchup-page__row-secondary">
+                                {lineupMetaFor(row.yourSlot.starter)}
+                                {optionCount > 0 ? (
+                                  <span className="matchup-page__slot-bench-cue">
+                                    {' '}⇄ {optionCount} on the bench
+                                  </span>
+                                ) : null}
+                              </span>
                             </span>
-                            <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection)}</span>
-                            <span className="matchup-page__slot-chip-slot">
-                              {row.edgeDelta > 0 ? (
-                                <span className="matchup-page__slot-edge-chip">+{row.edgeDelta.toFixed(1)}</span>
+                            <span className="matchup-page__slot-numbers">
+                              <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection)}</span>
+                              {youLead ? (
+                                <span className="matchup-page__slot-edge">+{row.edgeDelta.toFixed(1)} edge</span>
                               ) : null}
                             </span>
                           </>
@@ -2188,11 +2199,6 @@ function MatchupLive({
 
                       <div className="matchup-page__slot-center">
                         <span>{row.slotLabel}</span>
-                        {optionCount > 0 ? (
-                          <span className="matchup-page__slot-options">
-                            {optionCount} {optionCount === 1 ? 'option' : 'options'}
-                          </span>
-                        ) : null}
                       </div>
 
                       <div
@@ -2200,18 +2206,18 @@ function MatchupLive({
                           'matchup-page__slot-card',
                           'matchup-page__slot-card--right',
                           'matchup-page__slot-card--opponent',
-                          row.edgeDelta < 0 ? 'matchup-page__slot-card--winner' : '',
+                          theyLead ? 'matchup-page__slot-card--winner' : '',
                           activePick ? 'matchup-page__slot-card--muted' : '',
                         ].filter(Boolean).join(' ')}
                       >
                         {row.opponentSlot ? (
                           <>
-                            <span className="matchup-page__slot-chip-slot">
-                              {row.edgeDelta < 0 ? (
-                                <span className="matchup-page__slot-edge-chip">+{Math.abs(row.edgeDelta).toFixed(1)}</span>
+                            <span className="matchup-page__slot-numbers matchup-page__slot-numbers--right">
+                              <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection)}</span>
+                              {theyLead ? (
+                                <span className="matchup-page__slot-edge">+{Math.abs(row.edgeDelta).toFixed(1)} edge</span>
                               ) : null}
                             </span>
-                            <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection)}</span>
                             <span className="matchup-page__slot-copy matchup-page__slot-copy--right">
                               <span className="matchup-page__row-name">{row.opponentSlot.starter.shortName}</span>
                               <span className="matchup-page__row-secondary">{lineupMetaFor(row.opponentSlot.starter)}</span>
