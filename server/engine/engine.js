@@ -479,17 +479,44 @@ function densityHistogram(values, nbins = 32) {
 }
 
 /**
- * The three matchup distributions from the USER's perspective, built from the
- * same seeded sim that produces the displayed win% (so the margin histogram's
- * area right of 0 equals that win%). userIsA orients "you" vs "opponent".
+ * The three matchup distributions from the USER's perspective. Each team's
+ * samples are RECENTERED onto its displayed projection (projA / projB = the
+ * sum-of-means shown on the matchup line): the raw sim mean carries a small
+ * clip/skew bias (splitNormalDraw clamps at 0), so without this the histogram
+ * means wouldn't equal the numbers on the line. Shifting preserves each
+ * distribution's shape (variance/skew) and, since both teams shift by nearly the
+ * same amount, leaves the margin — and thus the win% — essentially unchanged.
+ * The returned winProb is the exact recentered sample fraction, and the caller
+ * uses it as the matchup line's win% so the chart and the line agree to the digit.
  */
-function matchupHistograms(scoreA, scoreB, userIsA) {
-  const you = userIsA ? scoreA : scoreB;
-  const opp = userIsA ? scoreB : scoreA;
-  const margin = new Float64Array(you.length);
-  for (let i = 0; i < you.length; i += 1) margin[i] = you[i] - opp[i];
+function matchupHistograms(scoreA, scoreB, userIsA, projA, projB) {
+  const n = scoreA.length;
+  let sumA = 0;
+  let sumB = 0;
+  for (let i = 0; i < n; i += 1) {
+    sumA += scoreA[i];
+    sumB += scoreB[i];
+  }
+  const shiftA = projA - sumA / n;
+  const shiftB = projB - sumB / n;
+  const you = new Float64Array(n);
+  const opp = new Float64Array(n);
+  const margin = new Float64Array(n);
+  let wins = 0;
+  for (let i = 0; i < n; i += 1) {
+    const av = scoreA[i] + shiftA;
+    const bv = scoreB[i] + shiftB;
+    const yv = userIsA ? av : bv;
+    const ov = userIsA ? bv : av;
+    you[i] = yv;
+    opp[i] = ov;
+    margin[i] = yv - ov;
+    if (yv > ov) wins += 1;
+    else if (yv === ov) wins += 0.5;
+  }
   return {
-    sims: you.length,
+    sims: n,
+    winProb: wins / n,
     you: densityHistogram(you),
     opponent: densityHistogram(opp),
     margin: densityHistogram(margin),
@@ -636,11 +663,13 @@ export function priceLeague(ctx) {
     const distA = distByRoster.get(a.rosterId);
     const distB = distByRoster.get(b.rosterId);
     // Player-level asymmetric sim for win%. projection/spread/total below stay
-    // the sum of player means, so displayed totals are unchanged.
+    // the sum of player means (distByRoster), so displayed totals are unchanged.
     // For the USER's own matchup we keep the per-sim scores to build the margin /
-    // your-points / opponent-points density histograms shown on the Matchup tab.
+    // your-points / opponent-points histograms, RECENTERED onto those displayed
+    // projections so the charts and the line match exactly; the displayed win% is
+    // then taken from the recentered samples so it agrees with the margin chart.
     // simulateMatchupSamples draws identically to simulateMatchupWinProb, so the
-    // win% is the same and the shared linesRng stream stays aligned.
+    // shared linesRng stream stays aligned for the other matchups.
     const isUserMatchup =
       a.rosterId === userRosterIdForLines || b.rosterId === userRosterIdForLines;
     let winProbA;
@@ -651,8 +680,9 @@ export function priceLeague(ctx) {
         paramsByRoster.get(b.rosterId),
         linesRng,
       );
-      winProbA = s.winProbA;
-      userHistograms = matchupHistograms(s.scoreA, s.scoreB, a.rosterId === userRosterIdForLines);
+      const userIsA = a.rosterId === userRosterIdForLines;
+      userHistograms = matchupHistograms(s.scoreA, s.scoreB, userIsA, distA.mean, distB.mean);
+      winProbA = userIsA ? userHistograms.winProb : 1 - userHistograms.winProb;
     } else {
       winProbA = simulateMatchupWinProb(
         paramsByRoster.get(a.rosterId),

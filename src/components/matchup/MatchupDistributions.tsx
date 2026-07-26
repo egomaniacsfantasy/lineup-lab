@@ -73,11 +73,8 @@ function DensityChart({
  * the same seeded sim that produces the displayed win %.
  */
 export function MatchupDistributions({ histograms }: { histograms: MatchupHistograms }) {
-  const bw = histograms.margin.binWidth;
-  const winProb = histograms.margin.bins.reduce(
-    (s, b) => s + (b.x > 0 ? b.density * bw : 0),
-    0,
-  );
+  // Exact win% from the recentered samples — identical to the matchup line.
+  const winProb = histograms.winProb;
 
   return (
     <div className="mhist-group">

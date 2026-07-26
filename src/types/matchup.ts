@@ -31,6 +31,8 @@ export interface DensityHistogram {
  *  seeded sim that produces the displayed win%. */
 export interface MatchupHistograms {
   sims: number;
+  /** Exact win probability from the (recentered) samples — matches the line. */
+  winProb: number;
   you: DensityHistogram;
   opponent: DensityHistogram;
   margin: DensityHistogram;
