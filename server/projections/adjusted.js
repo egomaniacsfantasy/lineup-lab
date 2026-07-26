@@ -140,6 +140,21 @@ export async function getAdjustedProjections(suf = '') {
   return _computeAdjusted(false, suf); // model-only, no consensus, no network — instant
 }
 
+/**
+ * Model-only projections (NO agreement/consensus tilt) for one scoring format —
+ * i.e. exactly the combined-file numbers. The board reads this so its displayed
+ * projected points / floor / ceiling / weekly match the source sheet; the
+ * agreement tilt stays reserved for pricing/trades. Cached briefly; no network.
+ */
+const _modelCaches = new Map(); // suf -> { at, data }
+export async function getModelProjections(suf = '') {
+  const e = _modelCaches.get(suf);
+  if (e && e.data && Date.now() - e.at < 60_000) return e.data;
+  const data = await _computeAdjusted(false, suf); // consensus off -> delta 0 -> pure model
+  _modelCaches.set(suf, { at: Date.now(), data });
+  return data;
+}
+
 /** Warm all three scoring formats at boot (background). */
 export async function warmAdjustedProjections() {
   for (const suf of SCORING_SUFFIXES) _refreshInBackground(suf);
@@ -152,6 +167,7 @@ export async function warmAdjustedProjections() {
  */
 export function invalidateAdjusted() {
   _consensusMemo = { at: 0, data: null }; // drop the 30s consensus memo -> re-read Supabase
+  _modelCaches.clear(); // pure-model board cache also refreshes on re-import
   for (const suf of SCORING_SUFFIXES) {
     _cacheFor(suf).at = 0; // mark stale so any reader also refreshes
     _refreshInBackground(suf);

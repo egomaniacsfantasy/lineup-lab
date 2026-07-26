@@ -14,7 +14,7 @@ import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStor
 import { registerLeague } from '../engine/leagueRegistry.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
-import { getAdjustedProjections } from '../projections/adjusted.js';
+import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
 import { getNflSchedule } from '../services/nflSchedule.js';
 import { getRequestUserId } from '../services/supabaseAdmin.js';
 import { runScoutingHarvest } from '../services/scoutingHarvest/index.js';
@@ -179,13 +179,16 @@ apiRouter.get('/rankings', async (req, res, next) => {
     // scoring-specific (PPR / half / standard, from ?scoring=). Falls back to the
     // raw snapshot only if the adjusted set is unavailable.
     const suf = scoringSuffix(String(req.query.scoring ?? ''));
+    // The board asks for ?model=1 so it shows the pure combined-file numbers
+    // (no agreement tilt). Pricing/trades still use the agreement-weighted set.
+    const modelOnly = String(req.query.model ?? '') === '1';
     let active = null;
     let source = 'Odds Gods model';
     try {
-      const adjusted = await getAdjustedProjections(suf);
+      const adjusted = modelOnly ? await getModelProjections(suf) : await getAdjustedProjections(suf);
       if (adjusted && adjusted.matched > 0) {
         active = adjusted;
-        source = 'Odds Gods model (agreement-weighted)';
+        source = modelOnly ? 'Odds Gods model' : 'Odds Gods model (agreement-weighted)';
       }
     } catch (err) {
       console.error('[rankings] adjusted projections failed; using snapshot', err);

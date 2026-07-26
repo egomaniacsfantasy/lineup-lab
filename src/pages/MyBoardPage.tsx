@@ -435,7 +435,7 @@ export function MyBoardPage() {
   useEffect(() => {
     let alive = true;
     setError(null);
-    fetchBoard(800, scoring)
+    fetchBoard(800, scoring, true) // model-only: show pure combined-file numbers, no agreement tilt
       .then((payload) => {
         if (!alive) return;
         if (!payload.available) {
