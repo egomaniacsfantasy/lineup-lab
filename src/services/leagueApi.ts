@@ -671,6 +671,8 @@ export interface TradeSuggestion {
   get: { id: string; name: string }[];
   youDelta: number;
   partnerDelta: number;
+  youPlayoffDelta?: number;
+  partnerPlayoffDelta?: number;
 }
 export interface TradeSuggestions {
   available: boolean;

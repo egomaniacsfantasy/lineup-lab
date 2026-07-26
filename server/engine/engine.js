@@ -1745,7 +1745,15 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     // How much the trade upgrades the PARTNER's starters (pts/week) — the main
     // driver of whether they'd accept.
     const theirValueDelta = computeStarterImpact(partnerTeam.players, partnerAfter, slotLabels, projectionMap, catalog).delta;
-    return { youDelta: au.titleProb - bu.titleProb, partnerDelta: ap.titleProb - bp.titleProb, theirValueDelta };
+    // Playoff-odds delta rides the SAME seeded season sim as the title delta — no
+    // extra run, no added noise.
+    return {
+      youDelta: au.titleProb - bu.titleProb,
+      partnerDelta: ap.titleProb - bp.titleProb,
+      youPlayoffDelta: au.playoffProb - bu.playoffProb,
+      partnerPlayoffDelta: ap.playoffProb - bp.playoffProb,
+      theirValueDelta,
+    };
   };
 
   // Yield to the event loop so a concurrent request (e.g. the trade analyzer)
@@ -1907,7 +1915,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const suggestions = [];
   let re = 0;
   for (const c of finalists) {
-    const { youDelta, partnerDelta, theirValueDelta } = evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline);
+    const { youDelta, partnerDelta, youPlayoffDelta, partnerPlayoffDelta } = evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline);
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
     if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
@@ -1920,6 +1928,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       get: c.get.map((id) => ({ id, name: nameOf(id) })),
       youDelta: Number(youDelta.toFixed(1)),
       partnerDelta: Number(partnerDelta.toFixed(1)),
+      youPlayoffDelta: Number(youPlayoffDelta.toFixed(1)),
+      partnerPlayoffDelta: Number(partnerPlayoffDelta.toFixed(1)),
       acceptance: accept,
       score: Number((youDelta * (accept / 100)).toFixed(2)),
     });

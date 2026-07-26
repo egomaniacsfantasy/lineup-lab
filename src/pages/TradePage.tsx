@@ -1090,6 +1090,22 @@ function TradeDealsView() {
                         tone: deltaTone(entry.suggestion.partnerDelta),
                         emphasis: 'secondary',
                       },
+                      ...(entry.suggestion.youPlayoffDelta != null
+                        ? [
+                            {
+                              label: 'Your playoffs',
+                              value: signedPct(entry.suggestion.youPlayoffDelta),
+                              tone: deltaTone(entry.suggestion.youPlayoffDelta),
+                              emphasis: 'primary' as const,
+                            },
+                            {
+                              label: 'their playoffs',
+                              value: signedPct(entry.suggestion.partnerPlayoffDelta ?? 0),
+                              tone: deltaTone(entry.suggestion.partnerPlayoffDelta ?? 0),
+                              emphasis: 'secondary' as const,
+                            },
+                          ]
+                        : []),
                     ]}
                     key={entry.signature}
                     onClick={() => loadSuggestedTrade(entry.suggestion)}
