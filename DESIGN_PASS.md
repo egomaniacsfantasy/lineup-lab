@@ -854,3 +854,44 @@ Fixture screenshots at 1512px: default and picked states
 the bench drawer auto-opens with only the eligible option bright, including
 its engine-provided resulting line. tsc, brand-check, copy-scan, lint, and
 all 40 frontend tests pass.
+
+---
+
+# Design Pass: Plain names, live finder, roster as pieces
+
+Date: July 25, 2026
+Prompt: follow-up on `og-frontend-sweep-2026-07-25` (owner voice notes)
+
+## Names say what things are
+
+- "The Market" widget header is now eyebrow "Trade finder" + display headline
+  "Find a trade." in the same pattern as the builder's "Who is moving?".
+- The matchup rail's "The call" is now "Who do I start?". The mystery-name
+  register (the market, the call) is retired for user-facing labels; the book
+  voice stays in the copy, not the nouns.
+
+## Engine language out of the UI
+
+- "9 managers ready for sims" is now "9 managers taking calls".
+- "The book simulates trades with them and ranks by title gain times chance
+  they accept" is now "Pick a manager. The book finds deals they'd actually
+  take." Mechanics belong to Franco's docs, not the page.
+
+## The finder sells the tap
+
+- Hovering a manager card flips its "Title price" label to "Find trades" with
+  the arrow, in accent orange, so every card advertises what clicking does.
+
+## Roster as pieces, not a list
+
+- The builder's "You send" pool is now grouped by position (QB / RB / WR / TE
+  / K / DEF), each group a wrapping grid of compact bubbles: headshot, name,
+  position tag. Hover reveals the add affordance; added players hold an
+  orange check. Bench players keep their dimmer tone inside each group.
+  A whole roster is visible without scrolling a 15-row list.
+
+## Verified
+
+Fixture screenshots: `finder-v2.png` (grouped grid + new header),
+`finder-v2-hover.png` (card CTA swap), `matchup-rename.png`. tsc,
+brand-check, copy-scan, lint, 40 tests green.

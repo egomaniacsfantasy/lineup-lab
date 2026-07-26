@@ -2482,7 +2482,7 @@ function MatchupLive({
             {biggestSwing ? (
               <section className="matchup-page__module matchup-page__module--rail-call">
                 <div className="matchup-page__module-row">
-                  <h2 className="matchup-page__module-title">The call</h2>
+                  <h2 className="matchup-page__module-title">Who do I start?</h2>
                   <div className="matchup-page__module-meta">
                     <MatchupSuggestionStatus
                       asOf={suggestionsAsOf}
@@ -2533,11 +2533,11 @@ function MatchupLive({
                 </div>
               </section>
             ) : isConnected && showSuggestionSkeletons ? (
-              <MatchupSuggestionSkeleton mode="edge" title="The call" subtitle="start or sit" />
+              <MatchupSuggestionSkeleton mode="edge" title="Who do I start?" subtitle="the book's answer" />
             ) : isConnected ? (
               <section className="matchup-page__module matchup-page__module--rail-call">
                 <div className="matchup-page__module-row">
-                  <h2 className="matchup-page__module-title">The call</h2>
+                  <h2 className="matchup-page__module-title">Who do I start?</h2>
                 </div>
                 <p className="matchup-page__rail-call-clean">
                   Your lineup is already the best play.

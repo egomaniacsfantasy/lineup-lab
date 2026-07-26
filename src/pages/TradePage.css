@@ -385,7 +385,35 @@
 }
 
 .trade-cc__manager-card-stat-label {
+  display: grid;
   color: color-mix(in srgb, currentColor 58%, transparent);
+}
+
+/* Hover flips the label into the action so every card sells the tap. */
+.trade-cc__manager-card-stat-default,
+.trade-cc__manager-card-cta {
+  grid-area: 1 / 1;
+  transition: opacity 100ms ease;
+}
+
+.trade-cc__manager-card-cta {
+  color: var(--amber-bright);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.trade-cc__manager-card:hover .trade-cc__manager-card-cta,
+.trade-cc__manager-card:focus-visible .trade-cc__manager-card-cta {
+  opacity: 1;
+}
+
+.trade-cc__manager-card:hover .trade-cc__manager-card-stat-default,
+.trade-cc__manager-card:focus-visible .trade-cc__manager-card-stat-default {
+  opacity: 0;
+}
+
+.trade-cc__manager-card--active .trade-cc__manager-card-cta {
+  color: inherit;
 }
 
 .trade-cc__manager-card-stat-value {
@@ -1591,21 +1619,32 @@
 }
 
 .trade-cc__pool {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 280px;
+  display: grid;
+  gap: 14px;
+  max-height: 420px;
   overflow-y: auto;
+}
+
+.trade-cc__pool-group {
+  display: grid;
+  gap: 6px;
+}
+
+/* Pieces on a board: horizontally wrapped bubbles per position group. */
+.trade-cc__pool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 6px;
 }
 
 .trade-cc__pill {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 7px 9px;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg-inset);
   color: var(--text-primary);
   font-family: var(--font-ui);
@@ -1613,6 +1652,12 @@
   text-align: left;
   cursor: pointer;
   transition: border-color 100ms ease, background 100ms ease;
+}
+
+.trade-cc__pill-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
 }
 
 .trade-cc__pill--on {
@@ -1636,11 +1681,9 @@
 }
 
 .trade-cc__pill-pos {
-  flex-shrink: 0;
-  width: 30px;
   color: var(--ink-3);
   font-family: var(--font-num);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -1648,6 +1691,7 @@
 .trade-cc__pill-name {
   min-width: 0;
   overflow: hidden;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1660,13 +1704,21 @@
   white-space: nowrap;
 }
 
+/* The add affordance stays quiet until hover; the check stays lit. */
 .trade-cc__pill-add {
-  min-width: 44px;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
+  opacity: 0;
   text-align: right;
+  transition: opacity 100ms ease;
+}
+
+.trade-cc__pill:hover:not(:disabled) .trade-cc__pill-add,
+.trade-cc__pill:focus-visible .trade-cc__pill-add,
+.trade-cc__pill--on .trade-cc__pill-add {
+  opacity: 1;
 }
 
 .trade-cc__pill--on .trade-cc__pill-add {

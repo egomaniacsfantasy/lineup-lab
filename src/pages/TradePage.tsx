@@ -383,7 +383,7 @@ function TradeDealsView() {
     : 0;
   const managerFacts = showingManagerMarket
     ? `${partners.length} managers priced · ${visibleMarketCount} deals found`
-    : `${partners.length} managers ready for sims`;
+    : `${partners.length} managers taking calls`;
 
   useEffect(() => {
     setShowAllMarketCards(false);
@@ -799,7 +799,14 @@ function TradeDealsView() {
     const q = search.trim().toLowerCase();
     const allRows = rosterRows(bootstrap, rosterId);
     const rows = q ? allRows.filter((r) => r.player.name.toLowerCase().includes(q)) : allRows;
-    const firstBenchIndex = rows.findIndex((r) => !r.isStarter);
+    // Pieces on a board, not a list: group by position so you scan the
+    // roster the way you think about it.
+    const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+    const groups = POSITION_ORDER
+      .map((position) => ({ position, rows: rows.filter((r) => r.player.position === position) }))
+      .filter((group) => group.rows.length > 0);
+    const leftover = rows.filter((r) => !POSITION_ORDER.includes(r.player.position));
+    if (leftover.length > 0) groups.push({ position: 'Other', rows: leftover });
     return (
       <>
         <input
@@ -811,32 +818,40 @@ function TradeDealsView() {
           value={search}
         />
         <div className="trade-cc__pool">
-          {rows.map((row, index) => (
-          <div key={row.id}>
-            {index === firstBenchIndex && firstBenchIndex > 0 ? (
-              <p className="trade-cc__pool-divider">Bench</p>
-            ) : null}
-            <button
-              className={[
-                'trade-cc__pill',
-                list.includes(row.id) ? 'trade-cc__pill--on' : '',
-                row.isStarter ? '' : 'trade-cc__pill--bench',
-              ].join(' ')}
-              disabled={isPricing || counterLoading}
-              onClick={() => toggle(list, set, row.id)}
-              type="button"
-            >
-              <PlayerHeadshot
-                className="trade-cc__pill-headshot"
-                fallbackClassName="trade-cc__pill-headshot-fallback"
-                imageClassName="trade-cc__pill-headshot-image"
-                player={toPlayer(row.id, bootstrap.players)}
-              />
-              <span className="trade-cc__pill-pos">{row.player.position}</span>
-              <span className="trade-cc__pill-name">{row.player.name}</span>
-              <span className="trade-cc__pill-add">{list.includes(row.id) ? '✓ Added' : 'Add'}</span>
-            </button>
-          </div>
+          {groups.map((group) => (
+            <div className="trade-cc__pool-group" key={group.position}>
+              <p className="trade-cc__pool-divider">{group.position}</p>
+              <div className="trade-cc__pool-grid">
+                {group.rows.map((row) => (
+                  <button
+                    aria-pressed={list.includes(row.id)}
+                    className={[
+                      'trade-cc__pill',
+                      list.includes(row.id) ? 'trade-cc__pill--on' : '',
+                      row.isStarter ? '' : 'trade-cc__pill--bench',
+                    ].join(' ')}
+                    disabled={isPricing || counterLoading}
+                    key={row.id}
+                    onClick={() => toggle(list, set, row.id)}
+                    type="button"
+                  >
+                    <PlayerHeadshot
+                      className="trade-cc__pill-headshot"
+                      fallbackClassName="trade-cc__pill-headshot-fallback"
+                      imageClassName="trade-cc__pill-headshot-image"
+                      player={toPlayer(row.id, bootstrap.players)}
+                    />
+                    <span className="trade-cc__pill-copy">
+                      <span className="trade-cc__pill-name">{row.player.name}</span>
+                      <span className="trade-cc__pill-pos">{row.player.position}</span>
+                    </span>
+                    <span aria-hidden="true" className="trade-cc__pill-add">
+                      {list.includes(row.id) ? '✓' : '+'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </>
@@ -923,10 +938,11 @@ function TradeDealsView() {
           <div>
             <div className="trade-cc__market-kicker">
               <span className="trade-cc__live-pulse" aria-hidden="true" />
-              <h2 className="trade-cc__section-label trade-cc__section-label--market">THE MARKET</h2>
+              <p className="trade-cc__kicker">Trade finder</p>
             </div>
+            <h2 className="trade-cc__title">Find a trade.</h2>
             <p className="trade-cc__finder-sub">
-              Pick a manager. The book simulates trades with them and ranks by title gain times chance they accept.
+              Pick a manager. The book finds deals they&apos;d actually take.
             </p>
             <p className="trade-cc__finder-facts">{managerFacts}</p>
             {managerSuggestionsError && showingManagerMarket ? (
@@ -968,7 +984,10 @@ function TradeDealsView() {
                     </span>
                   </span>
                   <span className="trade-cc__manager-card-bottom">
-                    <span className="trade-cc__manager-card-stat-label">Title price</span>
+                    <span className="trade-cc__manager-card-stat-label">
+                      <span className="trade-cc__manager-card-stat-default">Title price</span>
+                      <span aria-hidden="true" className="trade-cc__manager-card-cta">Find trades ▸</span>
+                    </span>
                     <strong className="trade-cc__manager-card-stat-value">
                       {futuresByRoster.get(team.rosterId)?.championOdds != null
                         ? formatAmericanOdds(futuresByRoster.get(team.rosterId)!.championOdds)
