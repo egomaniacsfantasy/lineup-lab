@@ -15,8 +15,6 @@ import {
   analyzeTradeApi,
   fetchTradeCounter,
   fetchTradeSuggestions,
-  fetchBoard,
-  type BoardRow,
   type TradeResult,
   type TradeAnalysis,
   type TradeCounter,
@@ -278,61 +276,6 @@ function TradeDealsView() {
     () => (bootstrap ? bootstrap.teams.filter((t) => !t.isUser) : []),
     [bootstrap],
   );
-
-  /* The board's ranked player list, used only to describe each manager's
-     roster: whose names to show and where they are deep or thin. Rank order
-     is the board's own; nothing here is re-ranked or re-valued. */
-  const [boardRanks, setBoardRanks] = useState<BoardRow[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetchBoard(800, bootstrap?.league.scoringFamily)
-      .then((payload) => {
-        if (cancelled || !payload.available) return;
-        setBoardRanks(payload.rankings ?? []);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [bootstrap?.league.scoringFamily]);
-
-  const rankByPlayerId = useMemo(() => {
-    const map = new Map<string, number>();
-    (boardRanks ?? []).forEach((row) => map.set(row.playerId, row.rank));
-    return map;
-  }, [boardRanks]);
-
-  /* Per manager: their best names in board order, and the position they are
-     thinnest at by simple headcount. Display only. */
-  const managerProfiles = useMemo(() => {
-    const profiles = new Map<number, { headliners: string[]; thin: string | null; counts: Record<string, number> }>();
-    if (!bootstrap) return profiles;
-    const tracked = ['QB', 'RB', 'WR', 'TE'];
-    for (const team of bootstrap.teams) {
-      const owned = team.players
-        .map((id) => ({ id, player: bootstrap.players[id] }))
-        .filter((entry) => entry.player);
-      const counts: Record<string, number> = {};
-      tracked.forEach((position) => { counts[position] = 0; });
-      owned.forEach((entry) => {
-        const position = entry.player.position;
-        if (counts[position] != null) counts[position] += 1;
-      });
-      const ranked = owned
-        .filter((entry) => rankByPlayerId.has(entry.id))
-        .sort((left, right) => rankByPlayerId.get(left.id)! - rankByPlayerId.get(right.id)!);
-      // Board order when the board covers them; otherwise the manager's own
-      // declared starters, in lineup order.
-      const starterSet = new Set((team.starters ?? []).filter((id) => id && id !== '0'));
-      const source = ranked.length > 0 ? ranked : owned.filter((entry) => starterSet.has(entry.id));
-      const headliners = source.slice(0, 2).map((entry) => entry.player.name);
-      const thin = tracked
-        .filter((position) => counts[position] > 0)
-        .sort((left, right) => counts[left] - counts[right])[0] ?? null;
-      profiles.set(team.rosterId, { headliners, thin, counts });
-    }
-    return profiles;
-  }, [bootstrap, rankByPlayerId]);
 
   const [partnerRosterId, setPartnerRosterId] = useState<number | null>(null);
   const [give, setGive] = useState<string[]>([]);
@@ -1014,7 +957,6 @@ function TradeDealsView() {
         <div className="trade-cc__finder-head">
           <div>
             <div className="trade-cc__market-kicker">
-              <span className="trade-cc__live-pulse" aria-hidden="true" />
               <p className="trade-cc__kicker">Trade finder</p>
             </div>
             <h2 className="trade-cc__title">Find a trade.</h2>
@@ -1067,20 +1009,7 @@ function TradeDealsView() {
                       <span className="trade-cc__manager-card-name" title={team.teamName}>
                         {team.teamName}
                       </span>
-                      <span className="trade-cc__manager-card-meta">
-                        {recordText(team.record)}
-                        {managerProfiles.get(team.rosterId)?.thin ? (
-                          <>
-                            {' · thin at '}
-                            {managerProfiles.get(team.rosterId)!.thin}
-                          </>
-                        ) : null}
-                      </span>
-                      {managerProfiles.get(team.rosterId)?.headliners.length ? (
-                        <span className="trade-cc__manager-card-roster-names">
-                          {managerProfiles.get(team.rosterId)!.headliners.join(', ')}
-                        </span>
-                      ) : null}
+                      <span className="trade-cc__manager-card-meta">{recordText(team.record)}</span>
                     </span>
                   </span>
                   <span className="trade-cc__manager-card-price">
@@ -1146,6 +1075,18 @@ function TradeDealsView() {
 
         {visibleMarketCount > 0 ? (
           <>
+            {/* The manager and the scan time are the same on every card, so
+                they belong here once rather than on each result. */}
+            <div className="trade-cc__market-results-head">
+              <span className="trade-cc__market-results-title">
+                Deals with {selectedPartner?.teamName ?? 'this manager'}
+              </span>
+              {formatGeneratedAt(managerSuggestionsUpdatedAt ?? undefined) ? (
+                <span className="trade-cc__market-results-meta">
+                  scanned {formatGeneratedAt(managerSuggestionsUpdatedAt ?? undefined)}
+                </span>
+              ) : null}
+            </div>
             <div
               className={[
                 'trade-cc__market-grid',
@@ -1155,14 +1096,12 @@ function TradeDealsView() {
               {visibleManagerSuggestions.map((entry) => {
                 const getPlayerIds = entry.suggestion.get.map((asset) => asset.id);
                 const givePlayerIds = entry.suggestion.give.map((asset) => asset.id);
-                const partner = partners.find((team) => team.rosterId === entry.suggestion.partnerRosterId);
                 const acceptanceRead = acceptanceGaugeLabel(entry.acceptanceProbability);
                 return (
                   <TradeCard
                     acceptanceLabel={acceptanceRead}
                     acceptanceProbability={entry.acceptanceProbability}
                     dismissLabel="Dismiss this suggested trade"
-                    generatedAt={formatGeneratedAt(managerSuggestionsUpdatedAt ?? undefined)}
                     getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
                     impactRows={[
                       {
@@ -1185,7 +1124,6 @@ function TradeDealsView() {
                       event.stopPropagation();
                       dismissLane(entry.signature);
                     }}
-                    partnerLine={partner?.teamName ?? entry.suggestion.partnerName}
                     sendSide={tradeSideFromIds('You send', givePlayerIds, bootstrap.players)}
                   />
                 );
