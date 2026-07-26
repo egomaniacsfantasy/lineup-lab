@@ -1730,7 +1730,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const bp = baseline.find((f) => f.rosterId === partnerTeam.rosterId);
     const au = after.find((f) => f.rosterId === userTeam.rosterId);
     const ap = after.find((f) => f.rosterId === partnerTeam.rosterId);
-    return { youDelta: au.titleProb - bu.titleProb, partnerDelta: ap.titleProb - bp.titleProb };
+    // How much the trade upgrades the PARTNER's starters (pts/week) — the main
+    // driver of whether they'd accept.
+    const theirValueDelta = computeStarterImpact(partnerTeam.players, partnerAfter, slotLabels, projectionMap, catalog).delta;
+    return { youDelta: au.titleProb - bu.titleProb, partnerDelta: ap.titleProb - bp.titleProb, theirValueDelta };
   };
 
   // Yield to the event loop so a concurrent request (e.g. the trade analyzer)
@@ -1744,6 +1747,38 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
   const projected = (id) => projectionMap.get(id)?.mean ?? 0;
   const val = (ids) => ids.reduce((s, id) => s + projected(id), 0);
+  // Trade VALUE (VOR × position weight vs a 12-team reference) + a NEUTRAL
+  // acceptance estimate — the same currency the trade detail uses, so the Market
+  // ranking (title gain × accept %) lines up with the deal you open. Per-manager
+  // scouting dials refine the % further on the detail view.
+  const startersPerTeam = (pos) => {
+    const ded = slotLabels.filter((s) => s === pos).length;
+    const flex = slotLabels.filter((s) => FLEX_ELIGIBILITY[s]?.includes(pos)).length;
+    return ded + flex / 3;
+  };
+  const TRADE_POS_W = { QB: 1.4, RB: 0.85, WR: 1.25, TE: 1.1, DEF: 0.25, K: 0.2 };
+  const replByPos = {};
+  const replacementTotal = (pos) => {
+    if (replByPos[pos] === undefined) {
+      const totals = active.projections.filter((p) => p.position === pos).map((p) => p.seasonTotal ?? 0).sort((a, b) => b - a);
+      const rank = Math.max(0, Math.round(12 * Math.max(1, startersPerTeam(pos))) - 1);
+      replByPos[pos] = totals[Math.min(totals.length - 1, rank)] ?? 0;
+    }
+    return replByPos[pos];
+  };
+  const valueOf = (id) => {
+    const p = projectionMap.get(id);
+    if (!p) return 0;
+    return ((p.seasonTotal ?? 0) - replacementTotal(p.position)) * (TRADE_POS_W[p.position] ?? 1);
+  };
+  const sumValue = (ids) => ids.reduce((s, id) => s + Math.max(0, valueOf(id)), 0);
+  const valueGapOf = (give, get) => sumValue(give) - sumValue(get); // >0 = you overpay
+  const acceptEstimate = (theirValueDelta, valueGap) => {
+    let s = 0.35;
+    s += theirValueDelta * (theirValueDelta >= 0 ? 1.15 : 1.35);
+    s += Math.max(-3.5, Math.min(3.5, valueGap / 18));
+    return Math.max(3, Math.min(97, Math.round(100 / (1 + Math.exp(-s / 3.2)))));
+  };
   const tradeable = (team) => team.players
     .filter((id) => TRADEABLE.includes(catalog[id]?.position))
     .sort((a, b) => projected(b) - projected(a))
@@ -1785,7 +1820,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
         for (const get of combos(theirs, j)) {
           const tv = val(get);
           const r = tv > 0 ? gv / tv : 1;
-          if (r < 0.75 || r > 1.3) continue; // fair value only — no lopsided fleeces
+          if (r < 0.6 || r > 1.5) continue; // fair-value band — open enough to surface a deal for most teams, still no wild fleeces
           if (targetPos) {
             const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
             const afterPos = positionStarterMean(userAfter, targetPos, slotLabels, projectionMap, catalog);
@@ -1802,8 +1837,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // near-even swaps that raise your title without gutting the partner.
   const dedupeKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
   const numOpp = Math.max(1, opponents.length);
-  const SCAN_CAP = 54;
-  const perOpp = Math.max(12, Math.ceil(SCAN_CAP / numOpp));
+  // Guarantee every opponent a fair slice of the scan budget so the all-teams sweep
+  // never starves teams late in the loop — the old fixed 54-cap did exactly that,
+  // leaving most managers blank. Deep on a single clicked partner.
+  const perOpp = partnerRosterId != null ? 40 : 8;
+  const SCAN_CAP = perOpp * numOpp;
   const byOpp = new Map();
   for (const c of scored) {
     const list = byOpp.get(c.partner.rosterId) ?? [];
@@ -1830,31 +1868,37 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     takeFrom([...list].sort((a, b) => a.gap - b.gap), perOpp);
   }
 
-  const MAX_PARTNER_DROP = 2; // realistic: partner's title drop no worse than this
-  // ── Pass 1: cheap scan to find which balanced candidates actually raise your
-  // title without dropping the partner past the near-even gate.
+  // ── Pass 1: cheap scan. A suggestion must (a) raise YOUR title and (b) clear the
+  // scam guard — the partner's championship can't drop more than MAX_PARTNER_DROP.
+  // Survivors are RANKED by title gain × chance they accept, so a big-gain/tiny-
+  // accept deal (+10% × 3% = 0.30) still loses to a solid win-win (+2.4% × 40% =
+  // 0.96). Fair value (0.7–1.4) is already enforced in candidate generation.
+  const MAX_PARTNER_DROP = 4; // hard scam guard: never suggest a deal that craters the partner's title beyond this
   const SCAN_SIMS = 1200;
   const scanBaseline = simulateSeason({ ...base, sims: SCAN_SIMS });
   const scanned = [];
   let simmed = 0;
   for (const c of promising) {
-    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline);
+    const { youDelta, partnerDelta, theirValueDelta } = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline);
     simmed += 1;
     if (simmed % 4 === 0) await yieldToLoop();
-    if (youDelta > 0 && partnerDelta >= -MAX_PARTNER_DROP) scanned.push({ ...c, youDelta });
+    if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
+    const accept = acceptEstimate(theirValueDelta, valueGapOf(c.give, c.get));
+    scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
   }
 
-  // ── Pass 2: re-sim the best survivors at FULL sims (same seed + count as the
-  // Build-a-trade analyzer) so the shown Δc matches exactly. Re-confirm the gate.
-  const finalists = scanned.sort((a, b) => b.youDelta - a.youDelta).slice(0, 8);
+  // ── Pass 2: re-sim the top survivors (by title gain × accept) at FULL sims so
+  // the shown Δc matches the Build-a-trade analyzer exactly.
+  const finalists = scanned.sort((a, b) => b.score - a.score).slice(0, 10);
   const finalBaseline = simulateSeason({ ...base, sims: SEASON_SIMS });
   const suggestions = [];
   let re = 0;
   for (const c of finalists) {
-    const { youDelta, partnerDelta } = evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline);
+    const { youDelta, partnerDelta, theirValueDelta } = evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline);
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
     if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
+    const accept = acceptEstimate(theirValueDelta, valueGapOf(c.give, c.get));
     suggestions.push({
       partnerRosterId: c.partner.rosterId,
       partnerName: c.partner.teamName,
@@ -1862,9 +1906,12 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       get: c.get.map((id) => ({ id, name: nameOf(id) })),
       youDelta: Number(youDelta.toFixed(1)),
       partnerDelta: Number(partnerDelta.toFixed(1)),
+      acceptance: accept,
+      score: Number((youDelta * (accept / 100)).toFixed(2)),
     });
   }
-  suggestions.sort((a, b) => b.youDelta - a.youDelta);
+  suggestions.sort((a, b) => b.score - a.score);
+
   return {
     available: true,
     suggestions: suggestions.slice(0, 40),
