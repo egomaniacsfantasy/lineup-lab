@@ -171,15 +171,21 @@ const POSITION_STAT_COLUMNS: Record<Position, StatColumn[]> = {
   ],
 };
 
-function fmtNumber(value: number | null | undefined, digits = 0) {
+function fmtNumber(value: number | null | undefined, digits = 2) {
   if (value == null || !Number.isFinite(value)) return '-';
   return digits > 0 ? value.toFixed(digits) : Math.round(value).toString();
 }
 
-function statValue(value: unknown, digits = 0) {
+function statValue(value: unknown, digits = 2) {
   const num = Number(value);
   if (!Number.isFinite(num)) return '-';
   return digits > 0 ? num.toFixed(digits) : Math.round(num).toString();
+}
+
+/** Season stat key -> weekly row column. QB season stats carry an `_adj` suffix
+ *  that the raw weekly rows don't. */
+function weeklyStatKey(seasonKey: string): string {
+  return seasonKey.replace(/_adj$/, '');
 }
 
 function clampRating(value: number) {
@@ -276,6 +282,7 @@ type WeekColumn = {
   ceiling: number | null;
   opponent: string | null;
   home: boolean | null;
+  row: Row | null; // raw weekly stat row, for the per-week stat breakdown
 };
 
 function num(value: unknown): number | null {
@@ -324,6 +331,7 @@ function WeeklyProjectionStrip({
       ceiling: delta ? num(scaleBound(num(row[fields.ceiling]), rawPts, pts)) : num(row[fields.ceiling]),
       opponent: typeof row.opponent === 'string' ? row.opponent : null,
       home: row.game_location == null ? null : Number(row.game_location) === 1,
+      row,
     });
   }
   // Leagues whose projection sheet has not landed still get the points curve
@@ -332,7 +340,7 @@ function WeeklyProjectionStrip({
     for (const [key, value] of Object.entries(fallbackWeekly ?? {})) {
       const week = Number(key);
       if (!Number.isFinite(week)) continue;
-      byWeek.set(week, { week, pts: num(value), floor: null, ceiling: null, opponent: null, home: null });
+      byWeek.set(week, { week, pts: num(value), floor: null, ceiling: null, opponent: null, home: null, row: null });
     }
   }
   if (byWeek.size === 0) return null;
@@ -351,7 +359,7 @@ function WeeklyProjectionStrip({
 
   const columns: WeekColumn[] = [];
   for (let week = first; week <= last; week += 1) {
-    columns.push(byWeek.get(week) ?? { week, pts: null, floor: null, ceiling: null, opponent: null, home: null });
+    columns.push(byWeek.get(week) ?? { week, pts: null, floor: null, ceiling: null, opponent: null, home: null, row: null });
   }
   const hasPlayoffWeeks = playoffWeekStart != null && columns.some((c) => c.week >= playoffWeekStart);
   const detail = openWeek == null ? null : byWeek.get(openWeek) ?? null;
@@ -412,15 +420,36 @@ function WeeklyProjectionStrip({
         })}
       </div>
       {detail ? (
-        <p className="board-card__weekly-detail">
-          <strong>Week {detail.week}</strong>
-          {detail.opponent ? ` · ${detail.home === false ? '@' : 'vs'} ${detail.opponent}` : ''}
-          {' · '}
-          <span className="board-card__weekly-detail-pts">{fmtNumber(detail.pts, 1)}</span> proj
-          {detail.floor != null && detail.ceiling != null
-            ? ` · floor ${fmtNumber(detail.floor, 1)} · ceiling ${fmtNumber(detail.ceiling, 1)}`
-            : ''}
-        </p>
+        <div className="board-card__weekly-detail">
+          <p className="board-card__weekly-detail-line">
+            <strong>Week {detail.week}</strong>
+            {detail.opponent ? ` · ${detail.home === false ? '@' : 'vs'} ${detail.opponent}` : ''}
+            {' · '}
+            <span className="board-card__weekly-detail-pts">{fmtNumber(detail.pts)}</span> proj
+            {detail.floor != null && detail.ceiling != null
+              ? ` · floor ${fmtNumber(detail.floor)} · ceiling ${fmtNumber(detail.ceiling)}`
+              : ''}
+          </p>
+          {detail.row ? (
+            <div
+              className="board-card__stat-strip"
+              role="list"
+              aria-label={`Week ${detail.week} projected stats`}
+            >
+              {(POSITION_STAT_COLUMNS[pos as Position] ?? []).map((stat) => {
+                const wkKey = weeklyStatKey(stat.key);
+                const raw = detail.row?.[wkKey];
+                if (raw == null || !Number.isFinite(Number(raw))) return null;
+                return (
+                  <div className="board-card__pill" key={stat.key} role="listitem">
+                    <span className="board-card__pill-label">{stat.label}</span>
+                    <span className="board-card__pill-value">{statValue(tiltStat(pos, wkKey, raw, delta))}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
       ) : (
         <p className="board-card__weekly-note">
           Tap a week for its floor and ceiling.
