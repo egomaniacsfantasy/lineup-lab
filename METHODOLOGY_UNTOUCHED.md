@@ -285,3 +285,45 @@ Also on the board: `WeeklyProjectionStrip` renders `board.weekly`, which
 `/api/rankings` already returns scoring-adjusted. Bar heights scale to the
 player's own peak for display; no weekly value is derived, averaged, or
 converted.
+
+---
+
+## 2026-07-25 — Personal rankings removed
+
+Andre's decision: the product will not store or create rankings for users.
+Crowdsourced player ranking that feeds Franco's ratings system is the
+future direction, and its design is still to come.
+
+Removed from the frontend:
+
+- The model overlay entirely (`ModelOverlayContext` provider detached from
+  the app): named ranking sets, per-player point overrides, PRICED ON YOUR
+  BOARD, its popover, Reset to Franco, and the Franco baseline row on the
+  matchup hero. The overlay is no longer constructed, so the
+  `x-olympus-overlay` header is never set and every request is priced on
+  Franco's numbers.
+- The whole rating surface on the board: the 0 to 100 slider, MY CALLS
+  filter and count, YOU up/down chips, rapid-entry keyboard mode, the
+  YOUR RATING sheet column, save/pending/recalculating states, and the
+  sort-by-your-rating option added earlier the same day.
+- `src/utils/myCalls.ts` and its test, `DesignBoardLoopPage` (a fixture
+  that existed only to demo the rating loop) and its route, and the dead
+  `ProjectionsPage`.
+
+Stored overlays are cleared on boot in `src/main.tsx`. Without this a
+returning user who had saved an overlay would still have it in local
+storage and no UI left to see or clear it.
+
+NOT touched, deliberately, and left for Franco:
+
+- The `olympus_agreement` Supabase table and any server-side handling of
+  agreement scores. No rows are read or written by the frontend now.
+- Any server handling of the `x-olympus-overlay` header. The frontend
+  simply never sends one.
+- `computeLegacyAdjustedValues` still produces the board's value column.
+  It reads only board rows, never agreement scores, so it is unaffected by
+  this removal and stays quarantined as before. The board header no longer
+  claims the value is "adjusted by manager ratings", because it is not.
+- The labs-gated Player votes prompt (`?labs=player-votes`) is left in
+  place: it is hidden behind a flag and is the crowdsourced-voting
+  direction rather than personal rankings. Say the word and it goes too.

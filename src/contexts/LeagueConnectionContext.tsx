@@ -28,7 +28,6 @@ import {
 } from '../services/leaguePricingCache';
 import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
-import { useModelOverlay } from './ModelOverlayContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
 const MARKET_SCAN_KEY = 'og.market.last-scan';
@@ -291,7 +290,6 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     () => (stored ? readLastMarketScan(stored.leagueId) : null),
   );
   const { user } = useAuth();
-  const { overlayVersion } = useModelOverlay();
   const userIdRef = useRef<string | null>(null);
   const lastHydrateKeyRef = useRef<string | null>(null);
   const pricingRef = useRef<LeaguePricing | null>(null);
@@ -720,7 +718,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       void revalidatePricing(stored, { week: bootstrap?.week ?? pricingRef.current?.week ?? null, silent: true });
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [bootstrap?.week, overlayVersion, revalidatePricing, stored]);
+  }, [bootstrap?.week, revalidatePricing, stored]);
 
   const refresh = useCallback(async () => {
     if (!stored) return;

@@ -3,21 +3,16 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
-  useRef,
   useState,
-  type KeyboardEvent,
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { RankingMechanic } from '../components/rankings/RankingMechanic';
 import { toPlayer } from '../adapters/connectedLeague';
-import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { usePlayerVotesEnabled } from '../hooks/useLabsFlags';
 import { fetchBoard, type BoardRow } from '../services/leagueApi';
-import { isMyCallValue, myCallLabel } from '../utils/myCalls';
-import { supabase } from '../services/supabase';
 import type { Player } from '../types';
 import { computeLegacyAdjustedValues } from './legacyAdjustedValue';
 import './MyBoardPage.css';
@@ -26,8 +21,6 @@ type Row = Record<string, unknown>;
 type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'DEF';
 type BoardPosition = 'ALL' | Position;
 type BoardView = 'board' | 'sheet';
-type SavingState = 'saving' | 'ok' | 'err' | 'pending';
-
 interface ProjectionPlayer {
   id: string;
   position: Position;
@@ -71,14 +64,6 @@ interface StatColumn {
   label: string;
 }
 
-interface PendingBoardRefresh {
-  savedValue: string;
-  previousRank: number;
-  previousAdjustedValue: number;
-}
-
-type RowMotionState = 'moved' | 'recalculating';
-
 const BOARD_POSITIONS: BoardPosition[] = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 /* One surface, two densities. Both render the same rows, the same filters
    and the same sort; only the amount of detail per row changes. */
@@ -91,13 +76,12 @@ const PLAYER_VOTES_QUEUE_KEY = 'og.playerVotes.queue';
 /* Board order is the default and is the board's own ranking. The other
    options are user-initiated lenses on columns already displayed; none of
    them re-rank an engine recommendation list. */
-type BoardSort = 'board' | 'points' | 'floor' | 'ceiling' | 'rating';
+type BoardSort = 'board' | 'points' | 'floor' | 'ceiling';
 const SORT_OPTIONS: Array<{ key: BoardSort; label: string }> = [
   { key: 'board', label: 'Board order' },
   { key: 'points', label: 'Proj pts' },
   { key: 'floor', label: 'Floor' },
   { key: 'ceiling', label: 'Ceiling' },
-  { key: 'rating', label: 'Your rating' },
 ];
 
 function parseSort(raw: string | null): BoardSort {
@@ -168,10 +152,6 @@ function writePlayerVoteQueue(queue: PlayerVoteQueueEntry[]) {
   }
 }
 
-function clampRating(value: number) {
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
 function fmtNumber(value: number | null | undefined, digits = 0) {
   if (value == null || !Number.isFinite(value)) return '-';
   return digits > 0 ? value.toFixed(digits) : Math.round(value).toString();
@@ -207,10 +187,6 @@ function parsePosition(raw: string | null): BoardPosition {
     : 'ALL';
 }
 
-function parseMyCalls(raw: string | null) {
-  return raw === 'mine';
-}
-
 function boardPlayer(row: BoardRow, catalog?: Parameters<typeof toPlayer>[1]): Player {
   if (catalog?.[row.playerId]) {
     return toPlayer(row.playerId, catalog);
@@ -236,14 +212,6 @@ function boardPlayer(row: BoardRow, catalog?: Parameters<typeof toPlayer>[1]): P
     teamLogoUrl: `/api/img/logo/${(row.team || 'fa').toLowerCase()}`,
     bye: 0,
     isActive: true,
-  };
-}
-
-function rowIdentity(row: BoardRow, projection: ProjectionPlayer | null) {
-  return {
-    name: projection?.name ?? row.name,
-    position: (projection?.position ?? row.position) as Position,
-    team: projection?.team ?? row.team,
   };
 }
 
@@ -355,57 +323,23 @@ function tierLabel(tier: number | null) {
   return tier == null ? null : `Tier ${tier}`;
 }
 
-function toneClass(value: string | null | undefined) {
-  if (value == null || value === '') return '';
-  const num = Number(value);
-  if (!Number.isFinite(num)) return '';
-  if (num > 50) return 'is-up';
-  if (num < 50) return 'is-down';
-  return 'is-even';
-}
-
-function ratingSummary(value: number) {
-  if (value > 50) return `Your rating: ${value} · lifts him vs Franco's number.`;
-  if (value < 50) return `Your rating: ${value} · pushes him down vs Franco's number.`;
-  return `Your rating: ${value} · aligned with Franco's number.`;
-}
-
-function saveConfirmation(value: number) {
-  if (value > 50) return `Saved: ${value}. He climbs your board.`;
-  if (value < 50) return `Saved: ${value}. He falls.`;
-  return `Saved: ${value}. Aligned with Franco.`;
-}
-
 function columnCountForSheet(statsCount: number) {
-  return 7 + statsCount;
+  return 6 + statsCount;
 }
 
 export function MyBoardPage() {
   const { bootstrap } = useLeagueConnection();
-  const { session } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [board, setBoard] = useState<BoardRow[] | null>(null);
   const [projectionData, setProjectionData] = useState<ProjectionDataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
-  const [ratingFocusPlayerId, setRatingFocusPlayerId] = useState<string | null>(null);
-  const [sheetEditing, setSheetEditing] = useState(false);
-  const [rapidEntryEnabled, setRapidEntryEnabled] = useState(true);
-  const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
-  const [ratingDrafts, setRatingDrafts] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<Record<string, SavingState>>({});
-  const [saveMessages, setSaveMessages] = useState<Record<string, string>>({});
-  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
-  const [pendingRefresh, setPendingRefresh] = useState<Record<string, PendingBoardRefresh>>({});
-  const [rowMotion, setRowMotion] = useState<Record<string, RowMotionState>>({});
-  const [reloadToken, setReloadToken] = useState(0);
+  const [reloadToken] = useState(0);
   const [votesPromptSeed, setVotesPromptSeed] = useState(0);
   const [voteQueue, setVoteQueue] = useState<PlayerVoteQueueEntry[]>([]);
-  const userId = session?.user?.id ?? null;
   const playerVotesEnabled = usePlayerVotesEnabled();
   const activeView = parseView(searchParams.get('view'));
   const activePosition = parsePosition(searchParams.get('pos'));
-  const myCallsOnly = parseMyCalls(searchParams.get('calls'));
   const activeSort = parseSort(searchParams.get('sort'));
   const query = searchParams.get('q') ?? '';
   const [searchDraft, setSearchDraft] = useState(query);
@@ -462,50 +396,6 @@ export function MyBoardPage() {
     };
   }, [reloadToken]);
 
-  useEffect(() => {
-    if (!userId || (!board && !projectionData)) {
-      setAgreeSaved({});
-      return;
-    }
-    let alive = true;
-    const players = projectionData?.players ?? [];
-    const boardRows = board ?? [];
-    const idByKey = new Map<string, string>();
-    for (const player of players) {
-      idByKey.set(`${player.position}::${player.name}`, player.id);
-    }
-    for (const row of boardRows) {
-      if (!idByKey.has(`${row.position}::${row.name}`)) {
-        idByKey.set(`${row.position}::${row.name}`, row.playerId);
-      }
-    }
-    supabase
-      .from('olympus_agreement')
-      .select('position, player, score')
-      .eq('user_id', userId)
-      .then(({ data, error: loadError }) => {
-        if (!alive || loadError || !data) return;
-        const next: Record<string, string> = {};
-        for (const row of data) {
-          const playerId = idByKey.get(`${row.position}::${row.player}`);
-          if (playerId) next[playerId] = String(row.score);
-        }
-        setAgreeSaved(next);
-        setRatingDrafts((current) => {
-          const nextDrafts = { ...current };
-          Object.entries(next).forEach(([playerId, value]) => {
-            if (nextDrafts[playerId] === value) {
-              delete nextDrafts[playerId];
-            }
-          });
-          return nextDrafts;
-        });
-      });
-    return () => {
-      alive = false;
-    };
-  }, [board, projectionData, userId]);
-
   const projectionById = useMemo(
     () =>
       new Map(
@@ -553,7 +443,6 @@ export function MyBoardPage() {
   const visibleRows = useMemo(() => {
     const filtered = mergedRows.filter((row) => {
       if (activePosition !== 'ALL' && row.board.position !== activePosition) return false;
-      if (myCallsOnly && !isMyCallValue(agreeSaved[row.board.playerId] ?? '')) return false;
       if (!deferredQuery) return true;
       const haystack = [
         row.board.name,
@@ -578,29 +467,14 @@ export function MyBoardPage() {
           return numeric(b.board.floor) - numeric(a.board.floor) || boardOrder(a, b);
         case 'ceiling':
           return numeric(b.board.ceiling) - numeric(a.board.ceiling) || boardOrder(a, b);
-        case 'rating': {
-          const rated = (row: MergedBoardPlayer) => {
-            const raw = agreeSaved[row.board.playerId];
-            return raw == null || raw === '' ? Number.NEGATIVE_INFINITY : Number(raw);
-          };
-          return rated(b) - rated(a) || boardOrder(a, b);
-        }
         default:
           return boardOrder(a, b);
       }
     });
     return activePosition === 'ALL' ? sorted.slice(0, 300) : sorted;
-  }, [activePosition, activeSort, agreeSaved, deferredQuery, mergedRows, myCallsOnly]);
+  }, [activePosition, activeSort, deferredQuery, mergedRows]);
 
-  const myCallsCount = useMemo(
-    () => mergedRows.filter((row) => isMyCallValue(agreeSaved[row.board.playerId] ?? '')).length,
-    [agreeSaved, mergedRows],
-  );
 
-  const visibleRankByPlayerId = useMemo(
-    () => new Map(visibleRows.map((row, index) => [row.board.playerId, index + 1] as const)),
-    [visibleRows],
-  );
 
   const voteCandidates = useMemo(
     () =>
@@ -614,61 +488,7 @@ export function MyBoardPage() {
     if (openPlayerId && !visibleRows.some((row) => row.board.playerId === openPlayerId)) {
       setOpenPlayerId(null);
     }
-    if (ratingFocusPlayerId && !visibleRows.some((row) => row.board.playerId === ratingFocusPlayerId)) {
-      setRatingFocusPlayerId(null);
-    }
-  }, [openPlayerId, ratingFocusPlayerId, visibleRows]);
-
-  useEffect(() => {
-    const pendingEntries = Object.entries(pendingRefresh);
-    if (pendingEntries.length === 0) return;
-    let touched = false;
-    const nextPending = { ...pendingRefresh };
-    const nextSaving = { ...saving };
-    const nextRowMotion = { ...rowMotion };
-
-    pendingEntries.forEach(([playerId, pending]) => {
-      if ((agreeSaved[playerId] ?? '') !== pending.savedValue) return;
-      const row = mergedRows.find((candidate) => candidate.board.playerId === playerId);
-      if (!row) return;
-      const currentRank = visibleRankByPlayerId.get(playerId) ?? pending.previousRank;
-      const moved =
-        row.adjustedValue !== pending.previousAdjustedValue || currentRank !== pending.previousRank;
-
-      if (moved) {
-        delete nextPending[playerId];
-        nextSaving[playerId] = 'ok';
-        nextRowMotion[playerId] = 'moved';
-        touched = true;
-        window.setTimeout(() => {
-          setRowMotion((current) => {
-            if (current[playerId] !== 'moved') return current;
-            const next = { ...current };
-            delete next[playerId];
-            return next;
-          });
-          setSaving((current) => {
-            if (current[playerId] !== 'ok') return current;
-            const next = { ...current };
-            delete next[playerId];
-            return next;
-          });
-        }, 1800);
-        return;
-      }
-
-      if (nextSaving[playerId] !== 'pending' || nextRowMotion[playerId] !== 'recalculating') {
-        nextSaving[playerId] = 'pending';
-        nextRowMotion[playerId] = 'recalculating';
-        touched = true;
-      }
-    });
-
-    if (!touched) return;
-    setPendingRefresh(nextPending);
-    setSaving(nextSaving);
-    setRowMotion(nextRowMotion);
-  }, [agreeSaved, mergedRows, pendingRefresh, rowMotion, saving, visibleRankByPlayerId]);
+  }, [openPlayerId, visibleRows]);
 
   function updateSearchParam(next: Record<string, string | null>) {
     setSearchParams((current) => {
@@ -681,198 +501,8 @@ export function MyBoardPage() {
     }, { replace: true });
   }
 
-  function readRating(playerId: string) {
-    return agreeSaved[playerId] ?? '';
-  }
-
-  function readDraftRating(playerId: string) {
-    return ratingDrafts[playerId] ?? null;
-  }
-
   function toggleOpenPlayer(playerId: string) {
-    setRatingFocusPlayerId(null);
     setOpenPlayerId((current) => (current === playerId ? null : playerId));
-  }
-
-  function openPlayerRating(playerId: string) {
-    setOpenPlayerId(playerId);
-    setRatingFocusPlayerId(playerId);
-  }
-
-  async function commitAgreementValue(
-    player: MergedBoardPlayer,
-    nextValue: string,
-    currentRank: number,
-  ) {
-    const identity = rowIdentity(player.board, player.projection);
-    const normalizedValue = String(clampRating(Number(nextValue)));
-    const previous = readRating(player.board.playerId);
-    if (previous === normalizedValue) {
-      setRatingDrafts((current) => {
-        if (!(player.board.playerId in current)) return current;
-        const next = { ...current };
-        delete next[player.board.playerId];
-        return next;
-      });
-      return;
-    }
-
-    setRatingDrafts((current) => ({ ...current, [player.board.playerId]: normalizedValue }));
-    setSaving((current) => ({ ...current, [player.board.playerId]: 'saving' }));
-    setSaveMessages((current) => ({ ...current, [player.board.playerId]: '' }));
-    setSaveErrors((current) => {
-      if (!(player.board.playerId in current)) return current;
-      const next = { ...current };
-      delete next[player.board.playerId];
-      return next;
-    });
-
-    const doWrite = async (uid: string) =>
-      supabase.from('olympus_agreement').upsert(
-        {
-          user_id: uid,
-          position: identity.position,
-          player: identity.name,
-          score: Number(normalizedValue),
-        },
-        { onConflict: 'user_id,position,player' },
-      );
-
-    try {
-      if (!userId) {
-        setSaving((current) => ({ ...current, [player.board.playerId]: 'err' }));
-        setSaveErrors((current) => ({
-          ...current,
-          [player.board.playerId]: 'Log in to save ratings.',
-        }));
-        setRatingDrafts((current) => {
-          const next = { ...current };
-          delete next[player.board.playerId];
-          return next;
-        });
-        return;
-      }
-      let { error: writeError } = await doWrite(userId);
-      if (writeError) {
-        const { data: refreshed } = await supabase.auth.refreshSession();
-        const freshUid = refreshed?.session?.user?.id ?? userId;
-        if (refreshed?.session) {
-          ({ error: writeError } = await doWrite(freshUid));
-        }
-      }
-      if (writeError) {
-        setSaving((current) => ({ ...current, [player.board.playerId]: 'err' }));
-        setSaveErrors((current) => ({
-          ...current,
-          [player.board.playerId]: `Could not save: ${writeError.message ?? writeError}`,
-        }));
-        setRatingDrafts((current) => {
-          const next = { ...current };
-          delete next[player.board.playerId];
-          return next;
-        });
-        return;
-      }
-      setAgreeSaved((current) => ({ ...current, [player.board.playerId]: normalizedValue }));
-      setRatingDrafts((current) => {
-        const next = { ...current };
-        delete next[player.board.playerId];
-        return next;
-      });
-      setSaveMessages((current) => ({
-        ...current,
-        [player.board.playerId]: saveConfirmation(Number(normalizedValue)),
-      }));
-      setPendingRefresh((current) => ({
-        ...current,
-        [player.board.playerId]: {
-          savedValue: normalizedValue,
-          previousRank: currentRank,
-          previousAdjustedValue: player.adjustedValue,
-        },
-      }));
-      void fetch('/api/projections/refresh-adjusted', { method: 'POST' }).catch(() => null);
-      setReloadToken((current) => current + 1);
-      window.setTimeout(() => {
-        setSaveMessages((current) => {
-          if (!current[player.board.playerId]) return current;
-          const next = { ...current };
-          delete next[player.board.playerId];
-          return next;
-        });
-      }, 1400);
-    } catch (err) {
-      setSaving((current) => ({ ...current, [player.board.playerId]: 'err' }));
-      setSaveErrors((current) => ({
-        ...current,
-        [player.board.playerId]: `Could not save: ${err instanceof Error ? err.message : String(err)}`,
-      }));
-      setRatingDrafts((current) => {
-        const next = { ...current };
-        delete next[player.board.playerId];
-        return next;
-      });
-    }
-  }
-
-  function moveRatingFocus(currentId: string, dir: -1 | 1) {
-    const cells = Array.from(
-      document.querySelectorAll<HTMLInputElement>('.board-page__rating-input'),
-    );
-    const index = cells.findIndex((cell) => cell.dataset.playerId === currentId);
-    const next = cells[index + dir];
-    if (!next) return;
-    next.focus();
-    next.scrollIntoView({ block: 'nearest' });
-  }
-
-  function handleRatingKeyDown(
-    event: KeyboardEvent<HTMLInputElement>,
-    player: MergedBoardPlayer,
-    currentRank: number,
-  ) {
-    if (!rapidEntryEnabled) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        void commitAgreementValue(player, event.currentTarget.value || '50', currentRank);
-        event.currentTarget.blur();
-      }
-      return;
-    }
-
-    if (/^[0-9]$/.test(event.key)) {
-      event.preventDefault();
-      const digit = Number(event.key);
-      const value = digit === 0 ? 100 : digit * 10;
-      void commitAgreementValue(player, String(value), currentRank);
-      moveRatingFocus(player.board.playerId, 1);
-      return;
-    }
-
-    switch (event.key) {
-      case 'ArrowDown':
-      case 'Enter':
-        event.preventDefault();
-        moveRatingFocus(player.board.playerId, 1);
-        break;
-      case 'ArrowUp':
-        event.preventDefault();
-        moveRatingFocus(player.board.playerId, -1);
-        break;
-      case 'Backspace':
-      case 'Delete':
-        event.preventDefault();
-        void commitAgreementValue(player, '50', currentRank);
-        break;
-      case 'Escape':
-        event.preventDefault();
-        event.currentTarget.blur();
-        break;
-      default:
-        if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
-          event.preventDefault();
-        }
-    }
   }
 
   function queueVote(entry: PlayerVoteQueueEntry) {
@@ -914,9 +544,9 @@ export function MyBoardPage() {
       <header className="board-page__hero">
         <div className="board-page__hero-copy">
           <p className="board-page__eyebrow">Board</p>
-          <h2 className="board-page__title">Adjusted value</h2>
+          <h2 className="board-page__title">Player value</h2>
           <p className="board-page__caption">
-            Franco&apos;s projections, adjusted by manager ratings · {scoringLabel(scoring)}
+            Franco&apos;s projections · {scoringLabel(scoring)}
           </p>
           <p className="board-page__freshness">
             Updated {formatUpdatedDate(projectionData.updatedAt)} · {board.length} players
@@ -960,16 +590,6 @@ export function MyBoardPage() {
               {position === 'ALL' ? 'Overall' : position}
             </button>
           ))}
-          <button
-            className={[
-              'board-page__chip',
-              myCallsOnly ? 'board-page__chip--active' : '',
-            ].filter(Boolean).join(' ')}
-            onClick={() => updateSearchParam({ calls: myCallsOnly ? null : 'mine' })}
-            type="button"
-          >
-            My calls ({myCallsCount})
-          </button>
         </div>
         <div className="board-page__filter-tools">
           <label className="board-page__sort">
@@ -1019,10 +639,7 @@ export function MyBoardPage() {
         <section className="board-page__stack" aria-label="Board view">
           {visibleRows.map((player, index) => {
             const isOpen = openPlayerId === player.board.playerId;
-            const persistedRating = readRating(player.board.playerId);
-            const influenceChip = myCallLabel(persistedRating);
-            const motionState = rowMotion[player.board.playerId];
-            const currentTier = player.board.tier;
+                const currentTier = player.board.tier;
             const previousTier = index > 0 ? visibleRows[index - 1]?.board.tier ?? null : null;
             return (
               <Fragment key={player.board.playerId}>
@@ -1035,31 +652,16 @@ export function MyBoardPage() {
                   className={[
                     'board-page__row',
                     isOpen ? 'board-page__row--open' : '',
-                    motionState === 'moved' ? 'board-page__row--moved' : '',
-                    motionState === 'recalculating' ? 'board-page__row--recalculating' : '',
                   ].filter(Boolean).join(' ')}
                 >
                   {isOpen ? (
                     <BoardPlayerCard
                       currentWeek={bootstrap?.week ?? null}
                       playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
-                      draftRating={readDraftRating(player.board.playerId)}
-                      focusRatingControl={ratingFocusPlayerId === player.board.playerId}
-                      influenceChip={influenceChip}
                       mode="standalone"
                       onClose={() => setOpenPlayerId(null)}
-                      onDraftChange={(value) =>
-                        setRatingDrafts((current) => ({ ...current, [player.board.playerId]: String(value) }))
-                      }
                       player={player}
-                      rating={persistedRating}
                       rank={index + 1}
-                      rowMotionState={motionState}
-                      saveError={saveErrors[player.board.playerId] ?? ''}
-                      saveMessage={saveMessages[player.board.playerId] ?? ''}
-                      savingState={saving[player.board.playerId]}
-                      onCommit={(value) => void commitAgreementValue(player, String(value), index + 1)}
-                      onRatingFocusHandled={() => setRatingFocusPlayerId(null)}
                     />
                   ) : (
                     <button
@@ -1079,8 +681,7 @@ export function MyBoardPage() {
                         <span className="board-page__identity-copy">
                           <span className="board-page__name-row">
                             <span className="board-page__name">{player.board.name}</span>
-                            {influenceChip ? <span className="board-page__influence-chip">{influenceChip}</span> : null}
-                          </span>
+                                      </span>
                           <span className="board-page__meta">
                             {player.board.position} · {player.board.team}
                           </span>
@@ -1094,9 +695,6 @@ export function MyBoardPage() {
                           {player.vor >= 0 ? '+' : ''}
                           {fmtNumber(player.vor)} vs waiver-level starter · {fmtNumber(player.board.seasonTotal)} proj pts
                         </span>
-                        {motionState === 'recalculating' ? (
-                          <span className="board-page__motion-note">Recalculating…</span>
-                        ) : null}
                       </div>
                     </button>
                   )}
@@ -1110,64 +708,13 @@ export function MyBoardPage() {
         </section>
       ) : (
         <section className="board-page__sheet" aria-label="Sheet view">
-          <div className="board-page__sheet-toolbar">
-            <div className="board-page__sheet-actions">
-              <button
-                className={[
-                  'board-page__rapid-trigger',
-                  sheetEditing ? 'board-page__rapid-trigger--active' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => {
-                  if (!userId) {
-                    window.alert('Log in to rate players.');
-                    return;
-                  }
-                  setSheetEditing((current) => !current);
-                }}
-                title="Power-user keyboard grid for rating players quickly"
-                type="button"
-              >
-                Rate players · rapid mode
-              </button>
-            </div>
-          </div>
-
-          {sheetEditing ? (
-            <div className="board-page__rapid-note" role="note">
-              <span className="board-page__rapid-lead">Power mode</span>
-              <span>50 means aligned with Franco.</span>
-              <span>Higher pushes him up. Lower pushes him down.</span>
-              <span>{rapidEntryEnabled ? 'Rapid keys are live.' : 'Exact typing is live.'}</span>
-              <div className="board-page__rapid-switch">
-                <button
-                  aria-pressed={rapidEntryEnabled}
-                  className={rapidEntryEnabled ? 'board-page__rapid-mode board-page__rapid-mode--active' : 'board-page__rapid-mode'}
-                  onClick={() => setRapidEntryEnabled(true)}
-                  type="button"
-                >
-                  Rapid
-                </button>
-                <button
-                  aria-pressed={!rapidEntryEnabled}
-                  className={!rapidEntryEnabled ? 'board-page__rapid-mode board-page__rapid-mode--active' : 'board-page__rapid-mode'}
-                  onClick={() => setRapidEntryEnabled(false)}
-                  type="button"
-                >
-                  Type exact
-                </button>
-              </div>
-            </div>
-          ) : null}
-
           <div className="board-page__table-wrap">
             <table className="board-page__table">
               <thead>
                 <tr>
                   <th className="board-page__th board-page__th--rank">#</th>
                   <th className="board-page__th board-page__th--sticky">Player</th>
-                  <th className="board-page__th board-page__th--num">Adjusted value</th>
+                  <th className="board-page__th board-page__th--num">Value</th>
                   <th className="board-page__th board-page__th--num">Proj pts</th>
                   <th className="board-page__th board-page__th--num">Floor</th>
                   <th className="board-page__th board-page__th--num">Ceiling</th>
@@ -1176,24 +723,17 @@ export function MyBoardPage() {
                       {column.label}
                     </th>
                   ))}
-                  <th className="board-page__th board-page__th--num">Your rating</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleRows.map((player, index) => {
                   const isOpen = openPlayerId === player.board.playerId;
-                  const rating = readRating(player.board.playerId);
-                  const draftRating = readDraftRating(player.board.playerId);
-                  const influenceChip = myCallLabel(rating);
-                  const motionState = rowMotion[player.board.playerId];
                   return (
                     <Fragment key={player.board.playerId}>
                       <tr
                         className={[
                           'board-page__table-row',
                           isOpen ? 'board-page__table-row--open' : '',
-                          motionState === 'moved' ? 'board-page__table-row--moved' : '',
-                          motionState === 'recalculating' ? 'board-page__table-row--recalculating' : '',
                         ].filter(Boolean).join(' ')}
                         onClick={() => toggleOpenPlayer(player.board.playerId)}
                       >
@@ -1209,14 +749,10 @@ export function MyBoardPage() {
                             <span className="board-page__table-copy">
                               <span className="board-page__name-row">
                                 <span className="board-page__table-name">{player.board.name}</span>
-                                {influenceChip ? <span className="board-page__influence-chip">{influenceChip}</span> : null}
                               </span>
                               <span className="board-page__table-meta">
                                 {player.board.position} · {player.board.team}
                               </span>
-                              {motionState === 'recalculating' ? (
-                                <span className="board-page__table-recalc">Recalculating…</span>
-                              ) : null}
                             </span>
                           </div>
                         </td>
@@ -1231,52 +767,6 @@ export function MyBoardPage() {
                             {statValue(player.projection?.season[column.key])}
                           </td>
                         ))}
-                        <td
-                          className="board-page__td board-page__td--num"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {sheetEditing ? (
-                            <input
-                              className={[
-                                'board-page__rating-input',
-                                toneClass(draftRating ?? rating),
-                                saving[player.board.playerId]
-                                  ? `board-page__rating-input--${saving[player.board.playerId]}`
-                                  : '',
-                              ]
-                                .filter(Boolean)
-                                .join(' ')}
-                              data-player-id={player.board.playerId}
-                              inputMode="numeric"
-                              onChange={(event) =>
-                                setRatingDrafts((current) => ({
-                                  ...current,
-                                  [player.board.playerId]: event.currentTarget.value,
-                                }))
-                              }
-                              onBlur={(event) =>
-                                void commitAgreementValue(player, event.currentTarget.value || '50', index + 1)
-                              }
-                              onKeyDown={(event) => handleRatingKeyDown(event, player, index + 1)}
-                              placeholder="50"
-                              value={draftRating ?? rating}
-                            />
-                          ) : (
-                            <button
-                              aria-label={`Rate ${player.board.name}`}
-                              className={[
-                                'board-page__rating-value',
-                                'board-page__rating-button',
-                                toneClass(rating),
-                              ].filter(Boolean).join(' ')}
-                              onClick={() => openPlayerRating(player.board.playerId)}
-                              title="Rate him"
-                              type="button"
-                            >
-                              {rating || '-'}
-                            </button>
-                          )}
-                        </td>
                       </tr>
                       {isOpen ? (
                         <tr className="board-page__detail-row">
@@ -1287,23 +777,10 @@ export function MyBoardPage() {
                             <BoardPlayerCard
                               currentWeek={bootstrap?.week ?? null}
                               playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
-                              draftRating={draftRating}
-                              focusRatingControl={ratingFocusPlayerId === player.board.playerId}
-                              influenceChip={influenceChip}
                               mode="embedded"
                               onClose={() => setOpenPlayerId(null)}
-                              onDraftChange={(value) =>
-                                setRatingDrafts((current) => ({ ...current, [player.board.playerId]: String(value) }))
-                              }
                               player={player}
-                              rating={rating}
                               rank={index + 1}
-                              rowMotionState={motionState}
-                              saveError={saveErrors[player.board.playerId] ?? ''}
-                              saveMessage={saveMessages[player.board.playerId] ?? ''}
-                              savingState={saving[player.board.playerId]}
-                              onCommit={(value) => void commitAgreementValue(player, String(value), index + 1)}
-                              onRatingFocusHandled={() => setRatingFocusPlayerId(null)}
                             />
                           </td>
                         </tr>
@@ -1332,64 +809,22 @@ export function MyBoardPage() {
 
 export function BoardPlayerCard({
   player,
-  rating,
-  draftRating = null,
-  savingState,
-  saveMessage,
-  saveError,
-  onCommit,
-  onDraftChange,
   currentWeek,
   playoffWeekStart = null,
   mode,
   rank,
   onClose,
-  influenceChip,
-  rowMotionState,
-  focusRatingControl = false,
-  onRatingFocusHandled,
 }: {
   player: MergedBoardPlayer;
-  rating: string;
-  draftRating?: string | null;
-  savingState: SavingState | undefined;
-  saveMessage: string;
-  saveError: string;
-  onCommit: (value: number) => void;
-  onDraftChange: (value: number) => void;
   currentWeek: number | null;
   playoffWeekStart?: number | null;
   mode: 'standalone' | 'embedded';
   rank: number;
   onClose: () => void;
-  influenceChip?: string | null;
-  rowMotionState?: RowMotionState | null;
-  focusRatingControl?: boolean;
-  onRatingFocusHandled?: () => void;
 }) {
-  const savedValue = rating === '' ? 50 : clampRating(Number(rating));
-  const [draftValue, setDraftValue] = useState(draftRating != null ? clampRating(Number(draftRating)) : savedValue);
-  const ratingRef = useRef<HTMLDivElement | null>(null);
-  const sliderRef = useRef<HTMLInputElement | null>(null);
   const projection = player.projection;
   const matchup = nextMatchup(projection, currentWeek);
   const stats = POSITION_STAT_COLUMNS[player.board.position as Position];
-
-  useEffect(() => {
-    if (draftRating != null) {
-      setDraftValue(clampRating(Number(draftRating)));
-      return;
-    }
-    if (savingState === 'saving') return;
-    setDraftValue(savedValue);
-  }, [draftRating, player.board.playerId, savedValue, savingState]);
-
-  useEffect(() => {
-    if (!focusRatingControl) return;
-    ratingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    sliderRef.current?.focus({ preventScroll: true });
-    onRatingFocusHandled?.();
-  }, [focusRatingControl, onRatingFocusHandled]);
 
   const floor = player.board.floor ?? 0;
   const ceiling = player.board.ceiling ?? 0;
@@ -1413,7 +848,6 @@ export function BoardPlayerCard({
             <div className="board-card__hero-copy">
               <p className="board-card__name-row">
                 <span className="board-card__name">{player.board.name}</span>
-                {influenceChip ? <span className="board-page__influence-chip">{influenceChip}</span> : null}
               </p>
               <p className="board-card__meta">
                 {player.board.position} · {player.board.team}
@@ -1495,65 +929,6 @@ export function BoardPlayerCard({
         ))}
       </div>
 
-      <div className="board-card__rating" ref={ratingRef}>
-        <div className="board-card__rating-head">
-          <div>
-            <p className="board-card__rating-label">Your rating</p>
-            <p className="board-card__rating-copy">{ratingSummary(draftValue)}</p>
-          </div>
-          <span className="board-card__rating-chip">{draftValue}</span>
-        </div>
-
-        <div className="board-card__slider-wrap">
-          <span className="board-card__slider-end">Much lower</span>
-          <div className="board-card__slider-core">
-            <span className="board-card__slider-notch" aria-hidden="true" />
-            <input
-              className="board-card__slider"
-              ref={sliderRef}
-              max={100}
-              min={0}
-              onChange={(event) => {
-                const nextValue = clampRating(Number(event.target.value));
-                setDraftValue(nextValue);
-                onDraftChange(nextValue);
-              }}
-              onKeyUp={(event) => {
-                if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
-                  onCommit(clampRating(Number(event.currentTarget.value)));
-                }
-              }}
-              onMouseUp={(event) => onCommit(clampRating(Number(event.currentTarget.value)))}
-              onTouchEnd={(event) => onCommit(clampRating(Number(event.currentTarget.value)))}
-              step={1}
-              type="range"
-              value={draftValue}
-            />
-            <span className="board-card__slider-center">Aligned with Franco</span>
-          </div>
-          <span className="board-card__slider-end board-card__slider-end--right">Much higher</span>
-        </div>
-
-        <div className="board-card__rating-actions">
-          <button
-            className="board-card__reset"
-            onClick={() => {
-              setDraftValue(50);
-              onDraftChange(50);
-              onCommit(50);
-            }}
-            type="button"
-          >
-            Reset to 50
-          </button>
-          {savingState === 'saving' ? <span className="board-card__save-note">Saving…</span> : null}
-          {savingState === 'pending' || rowMotionState === 'recalculating' ? (
-            <span className="board-card__save-note">Recalculating…</span>
-          ) : null}
-          {saveMessage ? <span className="board-card__save-note board-card__save-note--ok">{saveMessage}</span> : null}
-          {saveError ? <span className="board-card__save-note board-card__save-note--error">{saveError}</span> : null}
-        </div>
-      </div>
     </div>
   );
 }

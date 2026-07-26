@@ -7,13 +7,11 @@ import {
   useLeagueConnection,
 } from './contexts/LeagueConnectionContext';
 import { OddsFormatProvider } from './contexts/OddsFormatContext';
-import { ModelOverlayProvider } from './contexts/ModelOverlayContext';
 import { AuthLanding } from './pages/AuthLanding';
 import { ConnectPage } from './pages/ConnectPage';
 import { DraftPage } from './pages/DraftPage';
 import { DemoPage, LandingPage } from './pages/LandingPage';
 import { DesignBoardRowPage } from './pages/DesignBoardRowPage';
-import { DesignBoardLoopPage } from './pages/DesignBoardLoopPage';
 import { DesignChartPage } from './pages/DesignChartPage';
 import { DesignFixturePage } from './pages/DesignFixturePage';
 import { LeaguePage } from './pages/LeaguePage';
@@ -40,7 +38,6 @@ function RequireLeague() {
 function AppRoutes() {
   return (
     <SeasonModeProvider>
-      <ModelOverlayProvider>
         <LeagueConnectionProvider>
           <OddsFormatProvider>
           <Routes>
@@ -65,7 +62,6 @@ function AppRoutes() {
           </Routes>
           </OddsFormatProvider>
         </LeagueConnectionProvider>
-      </ModelOverlayProvider>
     </SeasonModeProvider>
   );
 }
@@ -73,7 +69,6 @@ function AppRoutes() {
 function PublicRoutes() {
   return (
     <SeasonModeProvider>
-      <ModelOverlayProvider>
         <LeagueConnectionProvider>
           <OddsFormatProvider>
             <Routes>
@@ -82,7 +77,6 @@ function PublicRoutes() {
               <Route element={<AppShell />}>
                 <Route path="/demo" element={<DemoPage />} />
                 {import.meta.env.DEV ? <Route path="/design/board-row/:variant" element={<DesignBoardRowPage />} /> : null}
-                {import.meta.env.DEV ? <Route path="/design/board-rating" element={<DesignBoardLoopPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/chart/:variant" element={<DesignChartPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/:scene" element={<DesignFixturePage />} /> : null}
               </Route>
@@ -90,7 +84,6 @@ function PublicRoutes() {
             </Routes>
           </OddsFormatProvider>
         </LeagueConnectionProvider>
-      </ModelOverlayProvider>
     </SeasonModeProvider>
   );
 }

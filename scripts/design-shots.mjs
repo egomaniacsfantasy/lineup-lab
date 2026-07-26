@@ -203,57 +203,6 @@ try {
     await page.waitForTimeout(300);
   });
 
-  await capture('board-sheet-rating-open', async (page) => {
-    await page.goto('http://127.0.0.1:4173/design/board?view=sheet&pos=WR', { waitUntil: 'domcontentloaded' });
-    await page.locator('.board-page__table').waitFor({ state: 'visible' });
-    const unrated = page.locator('.board-page__rating-button').filter({ hasText: '-' }).first();
-    await unrated.click();
-    await page.waitForTimeout(300);
-  });
-
-  await capture('board-rating-loop', async (page) => {
-    await page.goto('http://127.0.0.1:4173/design/board-rating', { waitUntil: 'domcontentloaded' });
-    await page.locator('.board-card__slider').waitFor({ state: 'visible' });
-    await page.waitForTimeout(200);
-  });
-
-  await capture('board-rating-saved', async (page) => {
-    await page.goto('http://127.0.0.1:4173/design/board-rating', { waitUntil: 'domcontentloaded' });
-    const slider = page.locator('.board-card__slider');
-    await slider.waitFor({ state: 'visible' });
-    await slider.evaluate((element) => {
-      element.value = '80';
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-      element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-    });
-    await page.waitForTimeout(320);
-  });
-
-  await capture('board-rating-my-calls', async (page) => {
-    await page.goto('http://127.0.0.1:4173/design/board-rating', { waitUntil: 'domcontentloaded' });
-    const slider = page.locator('.board-card__slider');
-    await slider.waitFor({ state: 'visible' });
-    await slider.evaluate((element) => {
-      element.value = '80';
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-      element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-    });
-    await page.waitForTimeout(320);
-    await page.getByRole('button', { name: /My calls \(1\)/i }).click();
-    await page.waitForTimeout(160);
-  });
-
-  await capture(
-    'board-row-truncation-1512',
-    async (page) => {
-      await page.goto('http://127.0.0.1:4173/design/board-row/truncation', { waitUntil: 'networkidle' });
-      await page.waitForTimeout(250);
-    },
-    { width: 1512, height: 900 },
-  );
-
   await browser.close();
   await writeFile(path.join(outputDir, 'manifest.json'), `${JSON.stringify(shots, null, 2)}\n`, 'utf8');
   console.log(`Saved ${shots.length} design shots to ${outputDir}`);

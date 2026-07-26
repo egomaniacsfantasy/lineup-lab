@@ -8,11 +8,10 @@ import { OddsChart, type OddsChartPoint, type OddsChartRangeOption } from '../co
 import { Card, Chip } from '../components/ui/DesignPrimitives';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
-import { useModelOverlay } from '../contexts/ModelOverlayContext';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
-import { fetchLines, type ApiCatalogPlayer, type LineHistoryEntry } from '../services/leagueApi';
+import { type ApiCatalogPlayer, type LineHistoryEntry } from '../services/leagueApi';
 import { fetchSleeperHeadToHeadSummary, type SleeperHeadToHeadSummary } from '../services/headToHead';
 import { useMatchupEngine } from '../hooks/useMatchupEngine';
 import { useNflSchedule } from '../hooks/useNflSchedule';
@@ -1189,7 +1188,6 @@ function MatchupLive({
 }: MatchupLiveProps) {
   const engine = useMatchupEngine(matchup);
   const { stored, bootstrap } = useLeagueConnection();
-  const { overrideCount, reset: resetBoardToFranco } = useModelOverlay();
   const { format: oddsFormat } = useOddsFormat();
   const { openScoutingCard } = useScoutingCard();
   const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : 'your fantasy app';
@@ -1222,28 +1220,6 @@ function MatchupLive({
       ? `${winProbability.toFixed(1)}%`
       : formatAmericanOdds(moneyline);
 
-  // When the user's model is live, fetch the pure-Franco (house) line for the
-  // same matchup so we can show it as the quiet baseline ("Franco +154").
-  const [houseYours, setHouseYours] = useState<{ moneyline: number; winProbability: number } | null>(
-    null,
-  );
-  useEffect(() => {
-    if (!stored || !bootstrap || overrideCount === 0) return;
-    const rid = bootstrap.teams.find((t) => t.isUser)?.rosterId;
-    if (rid == null) return;
-    let cancelled = false;
-    fetchLines(stored.leagueId, stored.userId, { house: true })
-      .then((p) => {
-        if (cancelled) return;
-        const side = p.lines?.find((l) => l.sides[String(rid)])?.sides[String(rid)];
-        setHouseYours(side ? { moneyline: side.moneyline, winProbability: side.winProbability } : null);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [stored, bootstrap, overrideCount]);
-
   // A "preview" lineup: you've swapped someone in here, so every number below
   // is hypothetical until you reset it or make it official in your platform.
   const isPreview = Object.values(engine.selectedAlternatives).some((value) => value !== null);
@@ -1264,7 +1240,6 @@ function MatchupLive({
   );
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [isBenchOpen, setIsBenchOpen] = useState(false);
-  const [isBoardPopoverOpen, setIsBoardPopoverOpen] = useState(false);
   const [compareSelection, setCompareSelection] = useState<Player[]>([]);
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
@@ -1465,14 +1440,6 @@ function MatchupLive({
     setIsRecapDismissed(true);
   };
 
-  const handleResetBoardToFranco = () => {
-    const confirmed = window.confirm(
-      'Reset your board to Franco? Your matchup will refresh on the baseline rankings.',
-    );
-    if (!confirmed) return;
-    resetBoardToFranco();
-    setIsBoardPopoverOpen(false);
-  };
 
   const MAX_COMPARE = 2;
 
@@ -1856,38 +1823,6 @@ function MatchupLive({
               <span className="matchup-page__preview-chip">Preview lineup</span>
             ) : null}
             <div className="matchup-page__hero-chips">
-              {overrideCount > 0 ? (
-                <div className="matchup-page__model-menu">
-                  <button
-                    aria-expanded={isBoardPopoverOpen}
-                    className="matchup-page__model-chip"
-                    onClick={() => setIsBoardPopoverOpen((current) => !current)}
-                    type="button"
-                  >
-                    PRICED ON YOUR BOARD
-                  </button>
-                  {isBoardPopoverOpen ? (
-                    <div className="matchup-page__model-popover" role="dialog">
-                      <p>
-                        These lines are priced on your board, the rankings you set.{' '}
-                        {overrideCount} {overrideCount === 1 ? 'move' : 'moves'} from Franco.
-                      </p>
-                      <div className="matchup-page__model-popover-actions">
-                        <a className="matchup-page__text-link" href="/rankings">
-                          View board
-                        </a>
-                        <button
-                          className="matchup-page__text-link"
-                          onClick={handleResetBoardToFranco}
-                          type="button"
-                        >
-                          Reset to Franco
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
               <span className="matchup-page__live-chip">
                 <span className="matchup-page__live-dot" aria-hidden="true" />
                 Live line
@@ -1916,12 +1851,6 @@ function MatchupLive({
                   engine.activeLine.yours.winProbability,
                 )}
               </span>
-              {overrideCount > 0 && houseYours ? (
-                <p className="matchup-page__house-line">
-                  Franco{' '}
-                  {formatDisplayedOdds(houseYours.moneyline, houseYours.winProbability)}
-                </p>
-              ) : null}
               <p className="matchup-page__meta-copy">
                 Proj{' '}
                 <span className="matchup-page__inline-number">

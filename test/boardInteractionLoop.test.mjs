@@ -47,7 +47,7 @@ test.before(async () => {
     ownsVite = true;
   }
 
-  await waitForUrl(`${baseUrl}/design/board-rating`);
+  await waitForUrl(`${baseUrl}/design/board`);
   browser = await chromium.launch({ headless: true });
 });
 
@@ -59,36 +59,13 @@ test.after(async () => {
 test('board search keeps every typed character under realistic typing speed', async () => {
   const page = await browser.newPage({ viewport: { width: 1512, height: 1200 }, colorScheme: 'dark' });
   try {
-    await page.goto(`${baseUrl}/design/board-rating`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseUrl}/design/board`, { waitUntil: 'domcontentloaded' });
     const search = page.locator('.board-page__search');
     await search.waitFor({ state: 'visible' });
     await search.click();
     await search.pressSequentially('saquonbarkley', { delay: 18 });
     await page.waitForTimeout(120);
     assert.equal(await search.inputValue(), 'saquonbarkley');
-  } finally {
-    await page.close();
-  }
-});
-
-test('board rating slider keeps the committed value through rerenders', async () => {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 960 }, colorScheme: 'dark' });
-  try {
-    await page.goto(`${baseUrl}/design/board-rating`, { waitUntil: 'domcontentloaded' });
-    const slider = page.locator('.board-card__slider');
-    await slider.waitFor({ state: 'visible' });
-    await slider.evaluate((element) => {
-      element.value = '80';
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-      element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-    });
-    await page.waitForTimeout(280);
-    assert.equal(await page.locator('.board-card__rating-chip').textContent(), '80');
-    assert.match(
-      (await page.locator('.board-card__save-note--ok').textContent()) ?? '',
-      /Saved: 80\./,
-    );
   } finally {
     await page.close();
   }
