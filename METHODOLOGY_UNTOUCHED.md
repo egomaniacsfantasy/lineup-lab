@@ -251,3 +251,37 @@ This rebuild pass was constrained by one rule: frontend presentation changed, pr
 - `test/boardInteractionLoop.test.mjs` launches the dev-only Board rerender harness and locks the two regression paths from the July 24 rating-loop audit:
   - a realistic-speed typed search string must survive rerenders intact
   - a committed slider rating must survive rerenders and keep the confirmed saved value visible
+
+---
+
+## 2026-07-25 — Board sorting (FLAG FOR FRANCO)
+
+The board now exposes a user-facing Sort control: Board order (default),
+Proj pts, Floor, Ceiling, Your rating.
+
+Why this was judged safe, and where the line was drawn:
+
+- The DEFAULT is unchanged and is the board's own order. The `sort` URL
+  param is omitted entirely when it is the default, so nothing sorts
+  differently unless a user explicitly asks.
+- Every alternative sorts on a value already displayed in that row and
+  already served by `/api/rankings` (`seasonTotal`, `floor`, `ceiling`) or
+  by the user's own saved agreement rating. No new value is derived and
+  nothing is recomputed.
+- Every comparator falls back to board order on ties, so board order is
+  never fully discarded.
+- This is NOT the forbidden case. The rule that triggered the revert was
+  re-ranking the engine's own recommendation list (trade suggestions
+  ordered by title-gain x acceptance). This is a user-initiated lens on a
+  reference table of players, which is the core purpose of a board.
+
+Authorised by Andre on 2026-07-25 after the boundary question was raised
+explicitly. Franco should still confirm. If he wants it gone, deleting
+`SORT_OPTIONS`, `parseSort`, `activeSort` and the switch inside
+`visibleRows` in `src/pages/MyBoardPage.tsx` restores the previous single
+ordering exactly.
+
+Also on the board: `WeeklyProjectionStrip` renders `board.weekly`, which
+`/api/rankings` already returns scoring-adjusted. Bar heights scale to the
+player's own peak for display; no weekly value is derived, averaged, or
+converted.

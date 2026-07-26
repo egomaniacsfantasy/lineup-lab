@@ -955,3 +955,48 @@ slim strip, since it is now the last rail module and was reading as a void.
 
 Position tags now read "QB · KC", "RB · BAL", so each bubble carries
 headshot, name, position and NFL team.
+
+---
+
+# Design Pass: Board becomes one surface; finder cards earn the click
+
+Date: July 25, 2026
+
+## Board and Sheet were never two views
+
+They shared row set, filters, search, sort and the rating control. The only
+difference was card versus table, which is a density preference. Evidence
+that they were one surface all along: the weekly-projection strip added
+earlier this session appears in both, because both expand the same card.
+
+So the toggle is relabelled Cards / Table, and a Sort control now sits with
+search and applies to both. Sorting by raw projected points floats QBs to
+the top while board order keeps Bijan Robinson at 1, which is a useful live
+demonstration of why value over replacement is the default and not raw
+points.
+
+Boundary note: sorting is flagged in METHODOLOGY_UNTOUCHED.md. Default is
+untouched board order, every option sorts on a column already displayed and
+already served, and every comparator falls back to board order on ties.
+
+## Trade finder: cards that answer "why call this guy?"
+
+Nine cards differing only by a title price gave no basis for choosing. Each
+card now carries the two best players on that roster plus the position they
+are thinnest at. Names come from the board's own rank order filtered to that
+roster, falling back to the manager's declared starters where the board does
+not cover them; depth is a headcount.
+
+## Honest gaps
+
+- This is an enrichment of the picker, not the feed-first finder. The
+  server DOES support a whole-league scan (`partnerRosterId: null`), but a
+  live probe against DINK returned `positive: 0` with `scanned: 2` of 9
+  managers in 7.2s: it is time-budgeted and, in a 0-0 preseason where every
+  team prices identically, nothing comes back positive. Franco's most recent
+  commits are actively reworking exactly this path, so leading the page with
+  it would have been building on sand. Revisit once his scan coverage lands.
+- Market research surfaced competitors (FantasyPros Trade Finder, FantasySP,
+  RotoTrade) but no published UX comparisons of feed-versus-picker patterns,
+  so the direction above is reasoned from our own payload constraints rather
+  than borrowed.

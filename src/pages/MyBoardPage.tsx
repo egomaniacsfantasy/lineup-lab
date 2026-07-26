@@ -80,11 +80,29 @@ interface PendingBoardRefresh {
 type RowMotionState = 'moved' | 'recalculating';
 
 const BOARD_POSITIONS: BoardPosition[] = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+/* One surface, two densities. Both render the same rows, the same filters
+   and the same sort; only the amount of detail per row changes. */
 const VIEW_OPTIONS: Array<{ key: BoardView; label: string }> = [
-  { key: 'board', label: 'Board' },
-  { key: 'sheet', label: 'Sheet' },
+  { key: 'board', label: 'Cards' },
+  { key: 'sheet', label: 'Table' },
 ];
 const PLAYER_VOTES_QUEUE_KEY = 'og.playerVotes.queue';
+
+/* Board order is the default and is the board's own ranking. The other
+   options are user-initiated lenses on columns already displayed; none of
+   them re-rank an engine recommendation list. */
+type BoardSort = 'board' | 'points' | 'floor' | 'ceiling' | 'rating';
+const SORT_OPTIONS: Array<{ key: BoardSort; label: string }> = [
+  { key: 'board', label: 'Board order' },
+  { key: 'points', label: 'Proj pts' },
+  { key: 'floor', label: 'Floor' },
+  { key: 'ceiling', label: 'Ceiling' },
+  { key: 'rating', label: 'Your rating' },
+];
+
+function parseSort(raw: string | null): BoardSort {
+  return SORT_OPTIONS.some((option) => option.key === raw) ? (raw as BoardSort) : 'board';
+}
 
 const POSITION_STAT_COLUMNS: Record<Position, StatColumn[]> = {
   QB: [
@@ -388,6 +406,7 @@ export function MyBoardPage() {
   const activeView = parseView(searchParams.get('view'));
   const activePosition = parsePosition(searchParams.get('pos'));
   const myCallsOnly = parseMyCalls(searchParams.get('calls'));
+  const activeSort = parseSort(searchParams.get('sort'));
   const query = searchParams.get('q') ?? '';
   const [searchDraft, setSearchDraft] = useState(query);
   const votesLabActive = searchParams.get('labs') === 'player-votes' && playerVotesEnabled;
@@ -547,11 +566,31 @@ export function MyBoardPage() {
         .toLowerCase();
       return haystack.includes(deferredQuery);
     });
-    const sorted = filtered
-      .slice()
-      .sort((a, b) => b.adjustedValue - a.adjustedValue || a.board.rank - b.board.rank);
+    const boardOrder = (a: MergedBoardPlayer, b: MergedBoardPlayer) =>
+      b.adjustedValue - a.adjustedValue || a.board.rank - b.board.rank;
+    const numeric = (value: number | null | undefined) =>
+      value == null || !Number.isFinite(value) ? Number.NEGATIVE_INFINITY : value;
+    const sorted = filtered.slice().sort((a, b) => {
+      switch (activeSort) {
+        case 'points':
+          return numeric(b.board.seasonTotal) - numeric(a.board.seasonTotal) || boardOrder(a, b);
+        case 'floor':
+          return numeric(b.board.floor) - numeric(a.board.floor) || boardOrder(a, b);
+        case 'ceiling':
+          return numeric(b.board.ceiling) - numeric(a.board.ceiling) || boardOrder(a, b);
+        case 'rating': {
+          const rated = (row: MergedBoardPlayer) => {
+            const raw = agreeSaved[row.board.playerId];
+            return raw == null || raw === '' ? Number.NEGATIVE_INFINITY : Number(raw);
+          };
+          return rated(b) - rated(a) || boardOrder(a, b);
+        }
+        default:
+          return boardOrder(a, b);
+      }
+    });
     return activePosition === 'ALL' ? sorted.slice(0, 300) : sorted;
-  }, [activePosition, agreeSaved, deferredQuery, mergedRows, myCallsOnly]);
+  }, [activePosition, activeSort, agreeSaved, deferredQuery, mergedRows, myCallsOnly]);
 
   const myCallsCount = useMemo(
     () => mergedRows.filter((row) => isMyCallValue(agreeSaved[row.board.playerId] ?? '')).length,
@@ -883,7 +922,7 @@ export function MyBoardPage() {
             Updated {formatUpdatedDate(projectionData.updatedAt)} · {board.length} players
           </p>
         </div>
-        <div className="board-page__view-toggle" role="tablist" aria-label="Board view">
+        <div className="board-page__view-toggle" role="tablist" aria-label="Row density">
           {VIEW_OPTIONS.map((option) => (
             <button
               aria-selected={activeView === option.key}
@@ -932,17 +971,35 @@ export function MyBoardPage() {
             My calls ({myCallsCount})
           </button>
         </div>
-        <input
-          className="board-page__search"
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setSearchDraft(nextValue);
-            updateSearchParam({ q: nextValue || null });
-          }}
-          placeholder="Search player or team"
-          type="search"
-          value={searchDraft}
-        />
+        <div className="board-page__filter-tools">
+          <label className="board-page__sort">
+            <span className="board-page__sort-label">Sort</span>
+            <select
+              className="board-page__sort-select"
+              onChange={(event) =>
+                updateSearchParam({ sort: event.target.value === 'board' ? null : event.target.value })
+              }
+              value={activeSort}
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <input
+            className="board-page__search"
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setSearchDraft(nextValue);
+              updateSearchParam({ q: nextValue || null });
+            }}
+            placeholder="Search player or team"
+            type="search"
+            value={searchDraft}
+          />
+        </div>
       </section>
 
       {votesLabActive ? (
