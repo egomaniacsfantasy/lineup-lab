@@ -402,6 +402,17 @@ function splitNormalDraw(p, rng) {
   return splitNormalFromZ(p, gaussian(rng));
 }
 
+// Unclamped split-normal draw: E[draw] = mean exactly (no 0-floor). Used ONLY for
+// the user's matchup histograms so their averages land on the displayed
+// projection — the 0-floor in splitNormalDraw would lift a team's summed score a
+// couple points. The rest of the app keeps the floored draw unchanged.
+function splitNormalDrawRaw(p, rng) {
+  const z = gaussian(rng);
+  const s = z >= 0 ? p.sigmaUp : p.sigmaDown;
+  const skewOffset = (p.sigmaUp - p.sigmaDown) * INV_SQRT_2PI;
+  return p.mean - skewOffset + z * s;
+}
+
 /**
  * Player-level Monte Carlo win probability: each sim draws every starter from
  * their own asymmetric CI, sums the lineup, and compares to the opponent's.
@@ -432,10 +443,11 @@ function simulateMatchupSamples(a, b, rng) {
   const scoreB = new Float64Array(MATCHUP_SIMS);
   let wins = 0;
   for (let i = 0; i < MATCHUP_SIMS; i += 1) {
+    // Unclamped draws so the team totals are unbiased (see splitNormalDrawRaw).
     let sa = 0;
-    for (const p of a.players) sa += splitNormalDraw(p, rng);
+    for (const p of a.players) sa += splitNormalDrawRaw(p, rng);
     let sb = 0;
-    for (const p of b.players) sb += splitNormalDraw(p, rng);
+    for (const p of b.players) sb += splitNormalDrawRaw(p, rng);
     scoreA[i] = sa;
     scoreB[i] = sb;
     if (sa > sb) wins += 1;
@@ -479,15 +491,13 @@ function densityHistogram(values, nbins = 32) {
 }
 
 /**
- * The three matchup distributions from the USER's perspective. Each team's
- * samples are RECENTERED onto its displayed projection (projA / projB = the
- * sum-of-means shown on the matchup line): the raw sim mean carries a small
- * clip/skew bias (splitNormalDraw clamps at 0), so without this the histogram
- * means wouldn't equal the numbers on the line. Shifting preserves each
- * distribution's shape (variance/skew) and, since both teams shift by nearly the
- * same amount, leaves the margin — and thus the win% — essentially unchanged.
- * The returned winProb is the exact recentered sample fraction, and the caller
- * uses it as the matchup line's win% so the chart and the line agree to the digit.
+ * The three matchup distributions from the USER's perspective. Samples come from
+ * the UNBIASED (unclamped) draw, so each team's average already sits on its
+ * displayed projection (projA / projB = the sum-of-means on the matchup line); the
+ * tiny shift below just pins it there exactly, cancelling Monte-Carlo sampling
+ * noise so the chart matches the line to the decimal (shape is untouched). The
+ * returned winProb is the exact sample fraction, and the caller uses it as the
+ * matchup line's win% so the chart and the line agree.
  */
 function matchupHistograms(scoreA, scoreB, userIsA, projA, projB) {
   const n = scoreA.length;
