@@ -1264,6 +1264,10 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   const titleCounts = new Map(rosterIds.map((id) => [id, 0]));
   const winSums = new Map(rosterIds.map((id) => [id, 0]));
   const seedSums = new Map(rosterIds.map((id) => [id, 0]));
+  // Wins in the TARGET (current) week, so a trade can borrow THIS sim's own
+  // current-week win prob — identical draws to the title/playoff numbers.
+  const currentWeekWins = new Map(rosterIds.map((id) => [id, 0]));
+  const currentWeekTeams = new Set();
 
   for (let sim = 0; sim < sims; sim += 1) {
     const wins = new Map(teams.map((t) => [t.rosterId, t.record?.wins ?? 0]));
@@ -1286,6 +1290,12 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
         pf.set(b.rosterId, (pf.get(b.rosterId) ?? 0) + sb);
         if (sa > sb) wins.set(a.rosterId, wins.get(a.rosterId) + 1);
         else if (sb > sa) wins.set(b.rosterId, wins.get(b.rosterId) + 1);
+        if (weekEntry.week === week) {
+          currentWeekTeams.add(a.rosterId);
+          currentWeekTeams.add(b.rosterId);
+          if (sa > sb) currentWeekWins.set(a.rosterId, currentWeekWins.get(a.rosterId) + 1);
+          else if (sb > sa) currentWeekWins.set(b.rosterId, currentWeekWins.get(b.rosterId) + 1);
+        }
       });
     }
 
@@ -1350,6 +1360,11 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
       titleProb: Number((titleProb * 100).toFixed(1)),
       championOdds: probToAmerican(titleProb),
       avgSeed: Number((seedSums.get(t.rosterId) / sims).toFixed(1)),
+      // This sim's own current-week matchup win % (null if the target week isn't
+      // being simulated — already scored, a bye, or a playoff week).
+      weekWinProb: currentWeekTeams.has(t.rosterId)
+        ? Number(((currentWeekWins.get(t.rosterId) / sims) * 100).toFixed(1))
+        : null,
     };
   });
 }
@@ -1453,41 +1468,10 @@ export function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projection
  * the SAME seed (common random numbers) and report the change in playoff %,
  * championship %, average seed, and expected wins — for both sides.
  */
-/**
- * Current-week matchup win% (0-100) for one roster: its OPTIMAL lineup this week
- * (bye/empty slots streamed at the replacement level, same as the futures sim) vs
- * its scheduled opponent, taken from the SAME team set — so if the opponent is the
- * trade partner, their post-trade roster is used too. Seeded deterministically per
- * roster, so calling it on the before- and after-trade team sets shares the random
- * draws: the opponent's contribution cancels and the delta is pure signal from the
- * swapped players. Returns null when the roster has no scheduled opponent this week
- * (off-season / bye) so the metric hides itself.
- */
-function currentWeekWinProb(teamSet, rosterId, env) {
-  const { weekEntry, week, slotLabels, projectionMap, catalog, replacementFor, seed } = env;
-  if (!weekEntry) return null;
-  const mine = weekEntry.matchups.find((m) => m.rosterId === rosterId && m.matchupId != null);
-  if (!mine) return null;
-  const theirs = weekEntry.matchups.find((m) => m.matchupId === mine.matchupId && m.rosterId !== rosterId);
-  const myTeam = teamSet.find((t) => t.rosterId === rosterId);
-  const oppTeam = theirs ? teamSet.find((t) => t.rosterId === theirs.rosterId) : null;
-  if (!myTeam || !oppTeam) return null;
-  const myParams = streamedLineupParams(myTeam.players, slotLabels, projectionMap, catalog, week, replacementFor);
-  const oppParams = streamedLineupParams(oppTeam.players, slotLabels, projectionMap, catalog, week, replacementFor);
-  const rng = mulberry32(streamSeed((seed ^ 0x1b56c4e9) >>> 0, 0, week, rosterId));
-  return simulateMatchupWinProb(myParams, oppParams, rng) * 100;
-}
-
-/** This-week win% before/after/delta for a roster across a trade (all null off-season). */
-function weekWinDelta(baseTeams, tradedTeams, rosterId, env) {
-  const before = currentWeekWinProb(baseTeams, rosterId, env);
-  const after = currentWeekWinProb(tradedTeams, rosterId, env);
-  if (before == null || after == null) return { before: null, after: null, delta: null };
-  return {
-    before: Number(before.toFixed(1)),
-    after: Number(after.toFixed(1)),
-    delta: Number((after - before).toFixed(1)),
-  };
+/** Current-week win% delta between two season-sim rows (null when unavailable). */
+function weekWinProbDelta(after, before) {
+  if (after == null || after.weekWinProb == null || before == null || before.weekWinProb == null) return null;
+  return Number((after.weekWinProb - before.weekWinProb).toFixed(1));
 }
 
 export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDrops = null }) {
@@ -1557,28 +1541,25 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   );
   const after = simulateSeason({ ...base, teams: tradedTeams });
 
-  // Current-week matchup win% shift (same seeded weekly sim the Matchup tab uses;
-  // opponent fixed, only the swapped players move it). null off-season.
-  const weekEntry = (scheduleWeeks ?? []).find((w) => w.week === week) ?? null;
-  const weekEnv = { weekEntry, week, slotLabels, projectionMap, catalog, replacementFor, seed };
-
   const find = (arr, id) => arr.find((f) => f.rosterId === id);
   const sideDelta = (team) => {
     const b = find(baseline, team.rosterId);
     const a = find(after, team.rosterId);
-    const wk = weekWinDelta(teams, tradedTeams, team.rosterId, weekEnv);
+    // Current-week win % is borrowed straight from the season sim above — the same
+    // run (and same seed) that produced the title/playoff numbers, so it's
+    // internally consistent and free.
     return {
       rosterId: team.rosterId,
       teamName: team.teamName,
       isUser: team.isUser ?? false,
-      before: { playoffProb: b.playoffProb, titleProb: b.titleProb, avgSeed: b.avgSeed, expWins: b.expWins, weekWinProb: wk.before },
-      after: { playoffProb: a.playoffProb, titleProb: a.titleProb, avgSeed: a.avgSeed, expWins: a.expWins, weekWinProb: wk.after },
+      before: { playoffProb: b.playoffProb, titleProb: b.titleProb, avgSeed: b.avgSeed, expWins: b.expWins, weekWinProb: b.weekWinProb },
+      after: { playoffProb: a.playoffProb, titleProb: a.titleProb, avgSeed: a.avgSeed, expWins: a.expWins, weekWinProb: a.weekWinProb },
       delta: {
         playoffProb: Number((a.playoffProb - b.playoffProb).toFixed(1)),
         titleProb: Number((a.titleProb - b.titleProb).toFixed(1)),
         avgSeed: Number((a.avgSeed - b.avgSeed).toFixed(1)),
         expWins: Number((a.expWins - b.expWins).toFixed(1)),
-        weekWinProb: wk.delta,
+        weekWinProb: weekWinProbDelta(a, b),
       },
     };
   };
@@ -1763,11 +1744,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const seed = parseInt(inputsHash.slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
-  const weekEntry = (scheduleWeeks ?? []).find((w) => w.week === week) ?? null;
-  const weekEnv = { weekEntry, week, slotLabels, projectionMap, catalog, replacementFor, seed };
 
   // Season-sim a give/get trade with a specific partner vs a shared baseline.
-  const evalTrade = (giveList, getList, partnerTeam, sims, baseline, withWeek = false) => {
+  const evalTrade = (giveList, getList, partnerTeam, sims, baseline) => {
     const giveSet = new Set(giveList.map(String));
     const getSet = new Set(getList.map(String));
     const userAfter = [...userTeam.players.filter((id) => !giveSet.has(String(id))), ...getList];
@@ -1793,20 +1772,17 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const theirValueDelta = computeStarterImpact(partnerTeam.players, partnerAfter, slotLabels, projectionMap, catalog).delta;
     // Playoff-odds delta rides the SAME seeded season sim as the title delta — no
     // extra run, no added noise.
-    const out = {
+    // Playoff-odds AND current-week win% deltas both ride the SAME seeded season
+    // sim as the title delta — no extra runs, no added noise.
+    return {
       youDelta: au.titleProb - bu.titleProb,
       partnerDelta: ap.titleProb - bp.titleProb,
       youPlayoffDelta: au.playoffProb - bu.playoffProb,
       partnerPlayoffDelta: ap.playoffProb - bp.playoffProb,
+      youWeekDelta: weekWinProbDelta(au, bu),
+      partnerWeekDelta: weekWinProbDelta(ap, bp),
       theirValueDelta,
     };
-    // This-week matchup win% shift — only for the final finalists (a separate,
-    // more expensive weekly sim), so the wide scan stays cheap.
-    if (withWeek) {
-      out.youWeekDelta = weekWinDelta(teams, tradedTeams, userTeam.rosterId, weekEnv).delta;
-      out.partnerWeekDelta = weekWinDelta(teams, tradedTeams, partnerTeam.rosterId, weekEnv).delta;
-    }
-    return out;
   };
 
   // Yield to the event loop so a concurrent request (e.g. the trade analyzer)
@@ -1969,7 +1945,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   let re = 0;
   for (const c of finalists) {
     const { youDelta, partnerDelta, youPlayoffDelta, partnerPlayoffDelta, youWeekDelta, partnerWeekDelta } =
-      evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline, true);
+      evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline);
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
     if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
