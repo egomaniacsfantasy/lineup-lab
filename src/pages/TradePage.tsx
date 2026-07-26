@@ -1039,7 +1039,17 @@ function TradeDealsView() {
         <div className="trade-cc__filter-stack">
           <div className="trade-cc__filter-row">
             <span className="trade-cc__filter-label">Managers</span>
-            <div className="trade-cc__manager-grid">
+            {/* League sizes run 4 to 20, so density follows the number of
+                partners as well as the viewport: few managers get roomy
+                rows, a 20-team league packs tighter so the board never
+                pushes the builder off the page. */}
+            <div
+              className={[
+                'trade-cc__manager-grid',
+                partners.length <= 6 ? 'trade-cc__manager-grid--roomy' : '',
+                partners.length >= 13 ? 'trade-cc__manager-grid--dense' : '',
+              ].filter(Boolean).join(' ')}
+            >
               {partners.map((team) => (
                 <button
                   aria-pressed={marketManagerFilter === team.rosterId}

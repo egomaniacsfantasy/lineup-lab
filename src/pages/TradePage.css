@@ -305,8 +305,52 @@
 
 .trade-cc__manager-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  /* auto-fit, not auto-fill: a 4-team league has 3 partners and should fill
+     its row rather than leave dead tracks. */
+  grid-template-columns: repeat(auto-fit, minmax(var(--manager-min, 300px), 1fr));
   gap: 8px;
+}
+
+.trade-cc__manager-grid--roomy {
+  --manager-min: 340px;
+}
+
+.trade-cc__manager-grid--dense {
+  --manager-min: 232px;
+  gap: 6px;
+}
+
+/* A 20-team league packs 19 rows in, so the row sheds height and the
+   supporting lines shrink before anything wraps. */
+.trade-cc__manager-grid--dense .trade-cc__manager-card {
+  min-height: 66px;
+  gap: 10px;
+  padding: 9px 12px;
+}
+
+.trade-cc__manager-grid--dense .trade-cc__manager-card-id {
+  gap: 9px;
+}
+
+.trade-cc__manager-grid--dense .trade-cc__team-avatar {
+  width: 32px;
+  height: 32px;
+}
+
+.trade-cc__manager-grid--dense .trade-cc__manager-card-name {
+  font-size: 15px;
+}
+
+.trade-cc__manager-grid--dense .trade-cc__manager-card-stat-value {
+  font-size: 22px;
+}
+
+.trade-cc__manager-grid--dense .trade-cc__manager-card-roster-names {
+  font-size: 11px;
+}
+
+.trade-cc__manager-grid--dense .trade-cc__manager-card-price {
+  min-width: 78px;
 }
 
 .trade-cc__manager-card {

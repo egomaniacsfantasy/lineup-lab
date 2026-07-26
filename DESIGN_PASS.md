@@ -1051,3 +1051,27 @@ book scans that manager. This was a visual rebuild only.
   rather than the old solid-orange fill that inverted all the text.
 
 Verified: `finder-v4.png`, `finder-v4-hover.png`.
+
+## Finder adapts to league size (4 to 20 teams)
+
+The board previously used a fixed 360px minimum track, which suited a
+10-team league and nothing else: a 4-team league left dead grid tracks, and
+a 20-team league stacked 19 rows and pushed the builder off the page.
+
+Density now follows the partner count as well as the viewport:
+
+| League | Partners | Class | Track min | Result at 1512px |
+| --- | --- | --- | --- | --- |
+| 4 to 7 teams | 3 to 6 | roomy | 340px | fills one row, 83px tall |
+| 8 to 13 teams | 7 to 12 | default | 300px | 4 columns, ~264px tall |
+| 14 to 20 teams | 13 to 19 | dense | 232px | 5 columns, ~308px tall |
+
+`auto-fit` replaces `auto-fill` so a short partner list stretches to fill its
+row instead of leaving empty tracks. The dense tier also sheds row height
+(78px to 66px), avatar size (40px to 32px), price size (27px to 22px) and
+supporting type, so a 20-team league costs only 44px more vertical space
+than a 10-team one and the builder stays on screen.
+
+Verified by simulating 3, 9 and 19 partners, and at 1512 / 1024 / 768 /
+390px: columns collapse 4 to 2 to 1 with no card overflow and no page
+horizontal scroll.
