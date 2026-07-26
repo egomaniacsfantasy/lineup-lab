@@ -1,0 +1,195 @@
+.vote-prompt__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 5, 6, 0.68);
+  backdrop-filter: blur(6px);
+  animation: vote-prompt-fade 160ms ease-out;
+}
+
+.vote-prompt {
+  width: min(100%, 620px);
+  padding: 22px;
+  border: 1px solid rgba(232, 84, 29, 0.22);
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(232, 84, 29, 0.14), transparent 58%),
+    linear-gradient(180deg, #1a1512, #131416);
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.6);
+  animation: vote-prompt-rise 180ms ease-out;
+}
+
+.vote-prompt__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.vote-prompt__eyebrow {
+  margin: 0 0 4px;
+  color: var(--amber-bright);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.vote-prompt__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(22px, 3.4vw, 28px);
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+
+.vote-prompt__close {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.vote-prompt__close:hover {
+  border-color: rgba(232, 84, 29, 0.5);
+  color: var(--text-primary);
+}
+
+.vote-prompt__hint,
+.vote-prompt__loading {
+  margin: 8px 0 16px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.vote-prompt__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.vote-prompt__cards--flash {
+  animation: vote-prompt-flash 260ms ease-out;
+}
+
+.vote-prompt__card {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 16px 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 60%), #16120f;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.vote-prompt__card:hover,
+.vote-prompt__card:focus-visible {
+  border-color: rgba(232, 84, 29, 0.6);
+  outline: none;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.vote-prompt__shot,
+.vote-prompt__shot-fallback,
+.vote-prompt__shot-image {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+}
+
+.vote-prompt__shot {
+  border: 2px solid rgba(232, 84, 29, 0.22);
+}
+
+.vote-prompt__name {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.vote-prompt__meta {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.vote-prompt__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.vote-prompt__count {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.vote-prompt__foot-actions {
+  display: inline-flex;
+  gap: 14px;
+}
+
+.vote-prompt__text-btn {
+  border: 0;
+  background: none;
+  color: var(--amber-bright);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.vote-prompt__text-btn:hover {
+  text-decoration: underline;
+}
+
+@keyframes vote-prompt-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vote-prompt-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vote-prompt-flash {
+  0% { opacity: 0.35; transform: scale(0.99); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vote-prompt__scrim,
+  .vote-prompt,
+  .vote-prompt__cards--flash {
+    animation: none;
+  }
+}

@@ -1149,3 +1149,23 @@
     padding: 14px;
   }
 }
+
+/* On-demand entry to the ranking prompt. The popup is deliberately rare, so
+   anyone who wants to do a run needs a door that is always open. */
+.board-page__vote-cta {
+  padding: 9px 16px;
+  border: 1px solid rgba(232, 84, 29, 0.45);
+  border-radius: 12px;
+  background: rgba(232, 84, 29, 0.12);
+  color: #ff8049;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.board-page__vote-cta:hover {
+  border-color: #e8541d;
+  background: rgba(232, 84, 29, 0.2);
+}

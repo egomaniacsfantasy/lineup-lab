@@ -9,9 +9,9 @@ import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { RankingMechanic } from '../components/rankings/RankingMechanic';
+import { PlayerVotePrompt } from '../components/votes/PlayerVotePrompt';
 import { toPlayer } from '../adapters/connectedLeague';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
-import { usePlayerVotesEnabled } from '../hooks/useLabsFlags';
 import { fetchBoard, type BoardRow } from '../services/leagueApi';
 import type { Player } from '../types';
 import { computeLegacyAdjustedValues } from './legacyAdjustedValue';
@@ -48,17 +48,6 @@ interface MergedBoardPlayer {
   vor: number;
 }
 
-interface PlayerVoteQueueEntry {
-  at: string;
-  keep: string;
-  keepName: string;
-  trade: string;
-  tradeName: string;
-  cut: string;
-  cutName: string;
-  trio: string[];
-}
-
 interface StatColumn {
   key: string;
   label: string;
@@ -71,7 +60,6 @@ const VIEW_OPTIONS: Array<{ key: BoardView; label: string }> = [
   { key: 'board', label: 'Cards' },
   { key: 'sheet', label: 'Table' },
 ];
-const PLAYER_VOTES_QUEUE_KEY = 'og.playerVotes.queue';
 
 /* Board order is the default and is the board's own ranking. The other
    options are user-initiated lenses on columns already displayed; none of
@@ -132,25 +120,6 @@ const POSITION_STAT_COLUMNS: Record<Position, StatColumn[]> = {
     { key: 'pred_ya', label: 'Yards allowed' },
   ],
 };
-
-function readPlayerVoteQueue(): PlayerVoteQueueEntry[] {
-  try {
-    const raw = window.localStorage.getItem(PLAYER_VOTES_QUEUE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writePlayerVoteQueue(queue: PlayerVoteQueueEntry[]) {
-  try {
-    window.localStorage.setItem(PLAYER_VOTES_QUEUE_KEY, JSON.stringify(queue));
-  } catch {
-    // ignore storage failures
-  }
-}
 
 function fmtNumber(value: number | null | undefined, digits = 0) {
   if (value == null || !Number.isFinite(value)) return '-';
@@ -406,24 +375,18 @@ export function MyBoardPage() {
   const [error, setError] = useState<string | null>(null);
   const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
   const [reloadToken] = useState(0);
-  const [votesPromptSeed, setVotesPromptSeed] = useState(0);
-  const [voteQueue, setVoteQueue] = useState<PlayerVoteQueueEntry[]>([]);
-  const playerVotesEnabled = usePlayerVotesEnabled();
+  const [voteOpen, setVoteOpen] = useState(false);
   const activeView = parseView(searchParams.get('view'));
   const activePosition = parsePosition(searchParams.get('pos'));
   const activeSort = parseSort(searchParams.get('sort'));
   const query = searchParams.get('q') ?? '';
   const [searchDraft, setSearchDraft] = useState(query);
-  const votesLabActive = searchParams.get('labs') === 'player-votes' && playerVotesEnabled;
   const deferredQuery = useDeferredValue(searchDraft.trim().toLowerCase());
   const scoring = bootstrap?.league.scoringFamily;
   const numTeams = bootstrap?.league.totalTeams ?? 12;
   const sheetStatColumns =
     activePosition === 'ALL' ? [] : POSITION_STAT_COLUMNS[activePosition as Position];
 
-  useEffect(() => {
-    setVoteQueue(readPlayerVoteQueue());
-  }, []);
 
   useEffect(() => {
     setSearchDraft((current) => (current === query ? current : query));
@@ -547,13 +510,6 @@ export function MyBoardPage() {
 
 
 
-  const voteCandidates = useMemo(
-    () =>
-      visibleRows.filter(
-        (row) => row.board.position !== 'K' && row.board.position !== 'DEF' && row.projection,
-      ),
-    [visibleRows],
-  );
 
   useEffect(() => {
     if (openPlayerId && !visibleRows.some((row) => row.board.playerId === openPlayerId)) {
@@ -576,11 +532,6 @@ export function MyBoardPage() {
     setOpenPlayerId((current) => (current === playerId ? null : playerId));
   }
 
-  function queueVote(entry: PlayerVoteQueueEntry) {
-    const next = [entry, ...voteQueue].slice(0, 24);
-    setVoteQueue(next);
-    writePlayerVoteQueue(next);
-  }
 
   if (error) {
     return (
@@ -663,6 +614,13 @@ export function MyBoardPage() {
           ))}
         </div>
         <div className="board-page__filter-tools">
+          <button
+            className="board-page__vote-cta"
+            onClick={() => setVoteOpen(true)}
+            type="button"
+          >
+            Rank three
+          </button>
           <label className="board-page__sort">
             <span className="board-page__sort-label">Sort</span>
             <select
@@ -693,18 +651,7 @@ export function MyBoardPage() {
         </div>
       </section>
 
-      {votesLabActive ? (
-        <PlayerVotesPanel
-          key={votesPromptSeed}
-          onDismiss={() => updateSearchParam({ labs: null })}
-          onQueueVote={queueVote}
-          onRefreshPrompt={() => setVotesPromptSeed((current) => current + 1)}
-          players={voteCandidates}
-          queue={voteQueue}
-          scoringLabel={scoringLabel(scoring)}
-          seed={votesPromptSeed}
-        />
-      ) : null}
+      <PlayerVotePrompt onClose={() => setVoteOpen(false)} open={voteOpen} />
 
       {activeView === 'board' ? (
         <section className="board-page__stack" aria-label="Board view">
@@ -1007,159 +954,5 @@ export function BoardPlayerCard({
       </div>
 
     </div>
-  );
-}
-
-function PlayerVotesPanel({
-  players,
-  queue,
-  onQueueVote,
-  onRefreshPrompt,
-  onDismiss,
-  scoringLabel: scoring,
-  seed,
-}: {
-  players: MergedBoardPlayer[];
-  queue: PlayerVoteQueueEntry[];
-  onQueueVote: (entry: PlayerVoteQueueEntry) => void;
-  onRefreshPrompt: () => void;
-  onDismiss: () => void;
-  scoringLabel: string;
-  seed: number;
-}) {
-  const trio = useMemo(() => {
-    if (players.length < 3) return [];
-    const sorted = players.slice(0, 24);
-    const offset = seed % sorted.length;
-    return [
-      sorted[offset],
-      sorted[(offset + 7) % sorted.length],
-      sorted[(offset + 15) % sorted.length],
-    ]
-      .filter(Boolean)
-      .filter((player, index, list) => list.findIndex((item) => item.board.playerId === player.board.playerId) === index)
-      .slice(0, 3);
-  }, [players, seed]);
-  const [choices, setChoices] = useState<Record<string, 'keep' | 'trade' | 'cut' | null>>({});
-
-  useEffect(() => {
-    setChoices({});
-  }, [trio]);
-
-  if (trio.length < 3) return null;
-
-  const assignments = trio.reduce<Record<string, 'keep' | 'trade' | 'cut' | null>>((acc, player) => {
-    acc[player.board.playerId] = choices[player.board.playerId] ?? null;
-    return acc;
-  }, {});
-  const complete = ['keep', 'trade', 'cut'].every((slot) =>
-    Object.values(assignments).includes(slot as 'keep' | 'trade' | 'cut'),
-  );
-
-  function choose(playerId: string, slot: 'keep' | 'trade' | 'cut') {
-    setChoices((current) => {
-      const next = { ...current };
-      Object.keys(next).forEach((key) => {
-        if (next[key] === slot) next[key] = null;
-      });
-      next[playerId] = slot;
-      return next;
-    });
-  }
-
-  function submit() {
-    if (!complete) return;
-    const keep = Object.entries(assignments).find(([, value]) => value === 'keep')?.[0];
-    const trade = Object.entries(assignments).find(([, value]) => value === 'trade')?.[0];
-    const cut = Object.entries(assignments).find(([, value]) => value === 'cut')?.[0];
-    if (!keep || !trade || !cut) return;
-    onQueueVote({
-      at: new Date().toISOString(),
-      keep,
-      keepName: trio.find((player) => player.board.playerId === keep)?.board.name ?? keep,
-      trade,
-      tradeName: trio.find((player) => player.board.playerId === trade)?.board.name ?? trade,
-      cut,
-      cutName: trio.find((player) => player.board.playerId === cut)?.board.name ?? cut,
-      trio: trio.map((player) => player.board.playerId),
-    });
-    onRefreshPrompt();
-  }
-
-  return (
-    <section className="vote-panel" aria-label="Player votes lab">
-      <div className="vote-panel__head">
-        <div>
-          <p className="vote-panel__eyebrow">Labs</p>
-          <h3 className="vote-panel__title">Your read?</h3>
-          <p className="vote-panel__copy">
-            Rank these three: Keep the most valuable, Trade the middle, Cut the least.
-          </p>
-          <p className="vote-panel__meta">
-            {scoring} · your score applies across formats
-          </p>
-        </div>
-        <button className="vote-panel__dismiss" onClick={onDismiss} type="button">
-          Dismiss
-        </button>
-      </div>
-
-      <div className="vote-panel__grid">
-        {trio.map((player) => (
-          <article className="vote-panel__card" key={player.board.playerId}>
-            <PlayerHeadshot
-              className="vote-panel__shot"
-              fallbackClassName="vote-panel__shot-fallback"
-              imageClassName="vote-panel__shot-image"
-              player={boardPlayer(player.board)}
-            />
-            <p className="vote-panel__player">{player.board.name}</p>
-            <p className="vote-panel__team">
-              {player.board.position} · {player.board.team} · {fmtNumber(player.board.seasonTotal)} proj pts
-            </p>
-            <div className="vote-panel__actions">
-              {(['keep', 'trade', 'cut'] as const).map((slot) => (
-                <button
-                  className={[
-                    'vote-panel__action',
-                    choices[player.board.playerId] === slot ? 'vote-panel__action--active' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  key={slot}
-                  onClick={() => choose(player.board.playerId, slot)}
-                  type="button"
-                >
-                  {slot.toUpperCase()}
-                </button>
-              ))}
-            </div>
-          </article>
-        ))}
-      </div>
-
-      <div className="vote-panel__footer">
-        <button className="vote-panel__skip" onClick={onRefreshPrompt} type="button">
-          I don&apos;t know all of these players
-        </button>
-        <button
-          className="vote-panel__submit"
-          disabled={!complete}
-          onClick={submit}
-          type="button"
-        >
-          Submit
-        </button>
-      </div>
-
-      <div className="vote-panel__queue">
-        <p className="vote-panel__queue-title">Local queue · {queue.length}</p>
-        {queue.slice(0, 3).map((entry) => (
-          <p className="vote-panel__queue-row" key={`${entry.at}:${entry.keep}`}>
-            Keep {entry.keepName} · Trade {entry.tradeName} · Cut {entry.cutName}
-          </p>
-        ))}
-      </div>
-    </section>
   );
 }
