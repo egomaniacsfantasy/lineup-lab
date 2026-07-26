@@ -1773,8 +1773,14 @@
   border-radius: 16px;
   background:
     radial-gradient(120% 160% at 50% 0%, rgba(232, 84, 29, 0.1), transparent 55%),
-    var(--bg-surface);
-  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.55);
+    color-mix(in srgb, var(--bg-surface) 82%, transparent);
+  /* It floats over live content, so it needs to read as a layer: frosted
+     backing, a lifted shadow and a warm rim rather than a flat panel. */
+  backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.66),
+    0 0 0 1px rgba(232, 84, 29, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   animation: slip-rise 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -2268,16 +2274,6 @@
   justify-items: start;
 }
 
-/* The favored side of the slot, in favored green with the word attached
-   so the number explains itself. */
-.matchup-page__slot-edge {
-  color: var(--green);
-  font-family: var(--font-num);
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 
 /* The tappable promise on rows with a real decision. */
 .matchup-page__slot-bench-cue {
@@ -2328,7 +2324,13 @@
   opacity: 0.34;
 }
 
+/* The gutter carries the whole comparison: which slot, and who is ahead by
+   how much. One number per row instead of the same margin printed on both
+   cards with the word "edge" attached. */
 .matchup-page__slot-center {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
   color: var(--ink-3);
   font-family: var(--font-ui);
   font-size: 11px;
@@ -2336,6 +2338,30 @@
   letter-spacing: 0.12em;
   text-align: center;
   text-transform: uppercase;
+}
+
+.matchup-page__slot-margin {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.matchup-page__slot-margin--you {
+  color: var(--green);
+}
+
+.matchup-page__slot-margin--them {
+  color: var(--text-muted);
+}
+
+.matchup-page__slot-margin-caret {
+  font-size: 9px;
+  opacity: 0.85;
 }
 
 .matchup-page__slot-copy {

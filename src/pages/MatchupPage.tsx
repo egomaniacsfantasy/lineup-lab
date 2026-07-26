@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { PlayerChip } from '../components/player/PlayerChip';
@@ -1235,6 +1235,7 @@ function MatchupLive({
   );
   const [isCompareMode, setIsCompareMode] = useState(false);
   const [isBenchOpen, setIsBenchOpen] = useState(false);
+  const benchRef = useRef<HTMLDetailsElement | null>(null);
   const [compareSelection, setCompareSelection] = useState<Player[]>([]);
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
@@ -1474,6 +1475,13 @@ function MatchupLive({
 
   const handleComparePick = (player: Player) => {
     if (!canPick(player)) return;
+    // The next thing you need is the bench option, so take them to it rather
+    // than leaving them to find a collapsed drawer further down the page.
+    if (!compareSelection.some((candidate) => candidate.id === player.id)) {
+      window.setTimeout(() => {
+        benchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 120);
+    }
     setIsCompareMode(true);
     const current = compareSelection;
     const next = current.some((candidate) => candidate.id === player.id)
@@ -1979,7 +1987,7 @@ function MatchupLive({
             <section className="matchup-page__module matchup-page__module--slot-board">
               <div className="matchup-page__module-row matchup-page__module-row--lineup">
                 <div>
-                  <h2 className="matchup-page__module-title">Slot by slot</h2>
+                  <h2 className="matchup-page__module-title">Lineup vs lineup</h2>
                   <p className="matchup-page__lineup-hint">{compareHint}</p>
                 </div>
               </div>
@@ -1989,9 +1997,7 @@ function MatchupLive({
                   <span className="matchup-page__side-pill matchup-page__side-pill--you">You</span>
                   {matchup.yourTeam.teamName}
                 </div>
-                <div className="matchup-page__slot-board-head matchup-page__slot-board-head--center">
-                  Slots
-                </div>
+                <div className="matchup-page__slot-board-head matchup-page__slot-board-head--center" />
                 <div className="matchup-page__slot-board-head matchup-page__slot-board-head--right">
                   {matchup.opponentTeam.teamName}
                   <span className="matchup-page__side-pill">Them</span>
@@ -2006,7 +2012,6 @@ function MatchupLive({
                   const isPickable = starter ? canPick(starter) : false;
                   const isMuted = Boolean(activePick) && !isSelected && !isPickable;
                   const youLead = row.edgeDelta > 0;
-                  const theyLead = row.edgeDelta < 0;
 
                   return (
                     <Fragment key={row.key}>
@@ -2014,7 +2019,6 @@ function MatchupLive({
                         aria-pressed={isSelected}
                         className={[
                           'matchup-page__slot-card',
-                          youLead ? 'matchup-page__slot-card--winner' : '',
                           optionCount > 0 ? 'matchup-page__slot-card--decision' : '',
                           isSelected ? 'matchup-page__slot-card--picked' : '',
                           isMuted ? 'matchup-page__slot-card--muted' : '',
@@ -2044,9 +2048,6 @@ function MatchupLive({
                             </span>
                             <span className="matchup-page__slot-numbers">
                               <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection)}</span>
-                              {youLead ? (
-                                <span className="matchup-page__slot-edge">+{row.edgeDelta.toFixed(1)} edge</span>
-                              ) : null}
                             </span>
                           </>
                         ) : (
@@ -2055,7 +2056,23 @@ function MatchupLive({
                       </button>
 
                       <div className="matchup-page__slot-center">
-                        <span>{row.slotLabel}</span>
+                        <span className="matchup-page__slot-slot-label">{row.slotLabel}</span>
+                        {row.edgeDelta !== 0 ? (
+                          <span
+                            className={[
+                              'matchup-page__slot-margin',
+                              youLead
+                                ? 'matchup-page__slot-margin--you'
+                                : 'matchup-page__slot-margin--them',
+                            ].join(' ')}
+                            title={`${youLead ? matchup.yourTeam.teamName : matchup.opponentTeam.teamName} by ${Math.abs(row.edgeDelta).toFixed(1)}`}
+                          >
+                            <span aria-hidden="true" className="matchup-page__slot-margin-caret">
+                              {youLead ? '◀' : '▶'}
+                            </span>
+                            {Math.abs(row.edgeDelta).toFixed(1)}
+                          </span>
+                        ) : null}
                       </div>
 
                       <div
@@ -2063,7 +2080,6 @@ function MatchupLive({
                           'matchup-page__slot-card',
                           'matchup-page__slot-card--right',
                           'matchup-page__slot-card--opponent',
-                          theyLead ? 'matchup-page__slot-card--winner' : '',
                           activePick ? 'matchup-page__slot-card--muted' : '',
                         ].filter(Boolean).join(' ')}
                       >
@@ -2071,9 +2087,6 @@ function MatchupLive({
                           <>
                             <span className="matchup-page__slot-numbers matchup-page__slot-numbers--right">
                               <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection)}</span>
-                              {theyLead ? (
-                                <span className="matchup-page__slot-edge">+{Math.abs(row.edgeDelta).toFixed(1)} edge</span>
-                              ) : null}
                             </span>
                             <span className="matchup-page__slot-copy matchup-page__slot-copy--right">
                               <span className="matchup-page__row-name">{row.opponentSlot.starter.shortName}</span>
@@ -2100,6 +2113,7 @@ function MatchupLive({
                   the pick instead of leaving the answer hidden. */}
               <details
                 className="matchup-page__bench-drawer"
+                ref={benchRef}
                 onToggle={(event) => setIsBenchOpen(event.currentTarget.open)}
                 open={isBenchOpen || Boolean(activePick)}
               >
