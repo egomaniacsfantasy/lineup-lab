@@ -2119,7 +2119,9 @@ function MatchupLive({
                 open={isBenchOpen || Boolean(activePick)}
               >
                 <summary className="matchup-page__bench-summary">
-                  Your bench · {benchRows.length}
+                  {(matchup.opponentTeam.bench?.length ?? 0) > 0
+                    ? `Benches · ${benchRows.length} vs ${matchup.opponentTeam.bench!.length}`
+                    : `Your bench · ${benchRows.length}`}
                 </summary>
                 <div className="matchup-page__bench-columns">
                   <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">

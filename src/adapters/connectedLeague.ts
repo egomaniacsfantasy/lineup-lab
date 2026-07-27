@@ -401,7 +401,9 @@ export function toMatchupData(
       record: recordLabel(oppTeam),
       avatarUrl: oppTeam.avatarUrl,
       roster: buildRoster(oppMatchup, false),
-      bench: [],
+      // Their bench is players minus starters, same as ours. Useful for
+      // seeing what they could swap in; we still never price their moves.
+      bench: buildBench(oppTeam, oppMatchup),
     },
     baseline: line,
     histograms: pricedLine?.sides[String(userTeam.rosterId)]?.histograms ?? null,
