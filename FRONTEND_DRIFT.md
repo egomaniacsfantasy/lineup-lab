@@ -252,3 +252,73 @@ supply.
 - Not audited: whether the redundant-subtext sweep (open item (e)) touches
   this module. The footnote and the two ribbon labels were written fresh here,
   but the rest of the rail was not re-read for redundancy this pass.
+
+## 2026-07-26 — Trade cards, and the waiver empty-slot bug diagnosed
+
+| Area | Status | Note |
+| --- | --- | --- |
+| Deal card hierarchy | Fixed | Six rows became three. `Your title` leads at 26px, `Playoffs` and `This week` support at 13px, partner mirrors ride on their own metric's row at 11px. All six served numbers still render; nothing hidden, nothing re-ranked. |
+| Top-tier delta ignored its sign | Fixed | A CSS rule forced `color: inherit` on primary-row values, so the lead delta rendered amber whether the trade helped or hurt you. Values now take `--green`/`--red` by sign in every tier. |
+| Label truncation in the deal rail | Fixed | At the rail's width the three-column rows clipped to `Your play...` and `Win this ...`. Labels shortened to `Playoffs` and `This week`; verified `scrollWidth === clientWidth` on every label at 1512px and 375px. |
+| Six-row deal state unreachable in fixtures | Fixed | Fixture suggestions carried only `youDelta`/`partnerDelta`, so `/design/market?view=deals` rendered two of six rows. Playoff and week deltas added to the three fixture suggestions. |
+| Waiver empty-slot bug | Diagnosed, needs Franco | See below. The handoff's stated cause was wrong. |
+
+### Waiver empty-slot bug: the handoff's inference was incorrect
+
+The handoff recorded this as "inference, not confirmed: waiver scoring
+evaluates claims as upgrades over an existing starter and finds no improvement
+against an empty slot. Should treat empty slots as replacement-level zero."
+
+It already does. `server/engine/engine.js:1228`, inside `computeMovers`:
+
+```js
+mean: (id && id !== '0' && projectionMap.has(id)) ? weekMeanOf(id) : 0,
+```
+
+An empty or unprojected slot scores 0, and the comment three lines above says
+in as many words that an empty slot is the easiest to beat. So that is not the
+fault.
+
+The actual fault looks like an iteration-source mismatch. Two places in the
+same file build the slot list, and they do not agree:
+
+- `actualAssign` (line 353) maps over **`slotLabels`** and indexes into
+  `starterIds`. A missing entry still yields the slot, with no player. Correct.
+- the waiver block (line 1225) maps over **`userStarterIds`** and reads
+  `slotLabels[i] ?? 'FLEX'`.
+
+`slotLabels` comes from the league's own `rosterPositions` (line 611) and is
+always full length. `starters` is not guaranteed to be. When `userStarterIds`
+is shorter than `slotLabels`, the trailing slots never enter `starterSlots` at
+all, and K and DEF are conventionally last in Sleeper's `roster_positions`.
+Every K or DEF candidate then fails `slotAllows`, hits `if (!target) continue`
+at line 1243, and the surface correctly reports that it found nothing.
+
+That matches the report exactly: no K, no DEF, and "Nothing on waivers beats
+what you'd already stream."
+
+Suggested shape of the fix, Franco's call and Franco's file. Mirror
+`actualAssign` so the slots come from the league, not from the array that is
+missing them:
+
+```js
+const starterSlots = slotLabels.map((slot, i) => {
+  const id = userStarterIds[i];
+  return {
+    index: i,
+    slot,
+    mean: (id && id !== '0' && projectionMap.has(id)) ? weekMeanOf(id) : 0,
+  };
+});
+```
+
+Line 1255 needs the same treatment in the same change: `afterStarterIds` is
+built with `userStarterIds.map(...)`, so if that array is short it cannot hold
+a claim placed at a trailing index.
+
+NOT VERIFIED AGAINST A LIVE LEAGUE. This is read from the code, and it rests on
+`starters` being shorter than `rosterPositions` for Andre's team. If Sleeper is
+in fact returning a full-length array padded with `"0"`, this diagnosis is
+wrong and the cause is elsewhere. The one-line check is whether
+`userStarterIds.length === slotLabels.length` for that roster. Engine code was
+not touched.

@@ -1173,3 +1173,49 @@ live league; `designFixtures.ts` now carries a dev-only replay of the payload
 shape so the surface can be reviewed and measured. Every number it shows
 reconciles with the matchup line already on the same page: 61.4%, spread 6.6,
 projections 149.8 and 143.1.
+
+## Trade cards: one deciding number, not three
+
+![Trade card hierarchy](artifacts/design-shots/trade-card-hierarchy/market-manager-apollo.png)
+
+### What was wrong
+
+Measured on the fixture rather than eyeballed: the deal card's rail rendered
+six rows. `Your title`, `Your playoffs` and `Win this week` all at 19px, each
+followed by the partner's mirror at 12px.
+
+The mirrors were already demoted, so the real fault was narrower than "six
+numbers at equal weight": it was three numbers at equal weight. A card that
+answers "should I make this trade" was giving the same size to the answer, to a
+season-long side effect, and to one week's win probability. And because each
+mirror took its own row, the rail was six rows tall and alternated big, small,
+big, small, which reads as a list rather than a verdict.
+
+### What changed
+
+Hierarchy, not restyling, as the brief asked:
+
+- `Your title` leads at 26px. It is the number the card is about.
+- `Playoffs` and `This week` sit together at 13px, clearly supporting.
+- Each partner value moved onto its own metric's row at 11px, so the rail is
+  three rows instead of six and every comparison is left to right rather than
+  top to bottom.
+- Delta values now take their sign colour in every tier. The old CSS forced the
+  top tier to amber whether the trade helped or hurt, which is the one thing a
+  reader wants at a glance.
+
+### Two labels got shorter, and had to
+
+At the rail's width the three-column rows truncated to `Your play...` and
+`Win this ...`. Shortening to `Playoffs` and `This week` fixed it, and the
+`Your` prefix was redundant anyway once the lead row says `YOUR TITLE` and
+every mirror says `them`. That is also one small piece of the redundant-subtext
+sweep.
+
+### Verified
+
+`/design/market?view=deals` at 1512px and at 375px: no label truncation
+(`scrollWidth === clientWidth` on every label), no row overflow, no page
+horizontal scroll. The fixture previously carried only title deltas, so the
+six-row state did not exist under `/design` at all; playoff and week deltas
+were added to the fixture suggestions so the case is reviewable.

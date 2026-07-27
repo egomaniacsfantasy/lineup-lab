@@ -40,11 +40,20 @@ interface TradeLayoutProps {
   tone?: 'compact' | 'rich';
   partnerLine?: string | null;
   impactLine?: string | null;
+  /* One row per metric. `mirror` is the partner's value for that same metric:
+     it rides on its own metric's row rather than taking a row of its own, so
+     the rail reads as three decisions instead of six numbers. `lead` is the
+     one number the card is actually about. */
   impactRows?: Array<{
     label: string;
     value: string;
     tone?: 'positive' | 'negative' | 'neutral';
-    emphasis?: 'primary' | 'secondary';
+    emphasis?: 'lead' | 'primary' | 'secondary';
+    mirror?: {
+      label: string;
+      value: string;
+      tone?: 'positive' | 'negative' | 'neutral';
+    } | null;
   }>;
   valueLabel?: string | null;
   acceptanceProbability?: number | null;
@@ -216,9 +225,11 @@ function TradeLayout({
               <span
                 className={[
                   'trade-display__impact-row',
-                  row.emphasis === 'primary'
-                    ? 'trade-display__impact-row--primary'
-                    : 'trade-display__impact-row--secondary',
+                  row.emphasis === 'lead'
+                    ? 'trade-display__impact-row--lead'
+                    : row.emphasis === 'primary'
+                      ? 'trade-display__impact-row--primary'
+                      : 'trade-display__impact-row--secondary',
                   row.tone === 'positive'
                     ? 'trade-display__impact-row--positive'
                     : row.tone === 'negative'
@@ -229,6 +240,21 @@ function TradeLayout({
               >
                 <span className="trade-display__impact-label">{row.label}</span>
                 <span className="trade-display__impact-value">{row.value}</span>
+                {row.mirror ? (
+                  <span
+                    className={[
+                      'trade-display__impact-mirror',
+                      row.mirror.tone === 'positive'
+                        ? 'trade-display__impact-mirror--positive'
+                        : row.mirror.tone === 'negative'
+                          ? 'trade-display__impact-mirror--negative'
+                          : '',
+                    ].filter(Boolean).join(' ')}
+                  >
+                    <span className="trade-display__impact-mirror-label">{row.mirror.label}</span>
+                    <span className="trade-display__impact-mirror-value">{row.mirror.value}</span>
+                  </span>
+                ) : null}
               </span>
               ))
             : impactLine

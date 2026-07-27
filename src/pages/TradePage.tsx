@@ -1078,47 +1078,49 @@ function TradeDealsView() {
                     dismissLabel="Dismiss this suggested trade"
                     getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
                     impactRows={[
+                      /* Your title change is what the card is for, so it
+                         leads. Playoffs and this week support it at one shared
+                         smaller size, and each partner value rides on its own
+                         metric's row instead of taking a row of its own. Same
+                         six served numbers, three rows. */
                       {
                         label: 'Your title',
                         value: signedPct(entry.suggestion.youDelta),
                         tone: deltaTone(entry.suggestion.youDelta),
-                        emphasis: 'primary',
-                      },
-                      {
-                        label: 'them',
-                        value: signedPct(entry.suggestion.partnerDelta),
-                        tone: deltaTone(entry.suggestion.partnerDelta),
-                        emphasis: 'secondary',
+                        emphasis: 'lead',
+                        mirror: {
+                          label: 'them',
+                          value: signedPct(entry.suggestion.partnerDelta),
+                          tone: deltaTone(entry.suggestion.partnerDelta),
+                        },
                       },
                       ...(entry.suggestion.youPlayoffDelta != null
                         ? [
                             {
-                              label: 'Your playoffs',
+                              label: 'Playoffs',
                               value: signedPct(entry.suggestion.youPlayoffDelta),
                               tone: deltaTone(entry.suggestion.youPlayoffDelta),
                               emphasis: 'primary' as const,
-                            },
-                            {
-                              label: 'their playoffs',
-                              value: signedPct(entry.suggestion.partnerPlayoffDelta ?? 0),
-                              tone: deltaTone(entry.suggestion.partnerPlayoffDelta ?? 0),
-                              emphasis: 'secondary' as const,
+                              mirror: {
+                                label: 'them',
+                                value: signedPct(entry.suggestion.partnerPlayoffDelta ?? 0),
+                                tone: deltaTone(entry.suggestion.partnerPlayoffDelta ?? 0),
+                              },
                             },
                           ]
                         : []),
                       ...(entry.suggestion.youWeekDelta != null
                         ? [
                             {
-                              label: 'Win this week',
+                              label: 'This week',
                               value: signedPct(entry.suggestion.youWeekDelta),
                               tone: deltaTone(entry.suggestion.youWeekDelta),
                               emphasis: 'primary' as const,
-                            },
-                            {
-                              label: 'their week',
-                              value: signedPct(entry.suggestion.partnerWeekDelta ?? 0),
-                              tone: deltaTone(entry.suggestion.partnerWeekDelta ?? 0),
-                              emphasis: 'secondary' as const,
+                              mirror: {
+                                label: 'them',
+                                value: signedPct(entry.suggestion.partnerWeekDelta ?? 0),
+                                tone: deltaTone(entry.suggestion.partnerWeekDelta ?? 0),
+                              },
                             },
                           ]
                         : []),

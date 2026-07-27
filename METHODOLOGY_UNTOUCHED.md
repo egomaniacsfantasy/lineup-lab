@@ -448,3 +448,63 @@ BRAND: these two files were not in `scripts/brand-check.mjs` TARGETS, which
 is how the component came to use `#6ea8fe`, `#22c55e` and `#ff6b6b` instead of
 tokens. They are in TARGETS now, and the colours are `var(--green)`,
 `var(--red)` and neutral greys from `tokens.css`.
+
+## 2026-07-26 — Trade suggestion card hierarchy (display only)
+
+The manager-deal cards on Market showed six numbers in six rows. Measured on
+the fixture, three of them rendered at 19px (`Your title`, `Your playoffs`,
+`Win this week`) and three at 12px (the partner's mirror of each). Three
+numbers at identical size is three answers, so the card never said which one
+decides anything.
+
+Files touched:
+
+- `src/components/trade-display/TradeDisplay.tsx`
+- `src/components/trade-display/TradeDisplay.css`
+- `src/pages/TradePage.tsx` (the `impactRows` the card is given)
+- `src/dev/designFixtures.ts` (dev-only fixture data, see below)
+
+What changed is arrangement and type size only:
+
+- `impactRows` gained an optional `mirror`, so the partner's value for a metric
+  rides on that metric's own row instead of taking a row of its own.
+- A third emphasis tier, `lead`, was added. `Your title` is the lead at 26px;
+  `Playoffs` and `This week` sit together at 13px; mirrors at 11px.
+- Six rows became three. All six served numbers are still rendered.
+
+NOTHING IS HIDDEN AND NOTHING IS RE-RANKED. The suggestion list still renders
+in engine order; this only changes the layout of the metrics inside one card,
+and that metric order was authored in `TradePage.tsx`, not served by the
+engine. No value, sign, rounding or tone was changed.
+
+Pixel to field map, unchanged from before this pass except for where they sit:
+
+| Rendered | Payload field |
+| --- | --- |
+| `YOUR TITLE` value | `suggestion.youDelta` |
+| its `them` mirror | `suggestion.partnerDelta` |
+| `Playoffs` value | `suggestion.youPlayoffDelta` |
+| its `them` mirror | `suggestion.partnerPlayoffDelta` |
+| `This week` value | `suggestion.youWeekDelta` |
+| its `them` mirror | `suggestion.partnerWeekDelta` |
+
+All six go through `signedPct` (one decimal, explicit sign) and `deltaTone`
+(sign-driven colour), both pre-existing.
+
+Two labels were shortened, `Your playoffs` to `Playoffs` and `Win this week`
+to `This week`. This was needed: at the rail's width the three-column row
+truncated them to `Your play...` and `Win this ...`. With the lead row reading
+`YOUR TITLE` and every mirror reading `them`, the `Your` prefix was carrying no
+information anyway.
+
+Colour: delta values now take their sign colour in every tier. Previously a
+CSS rule forced `color: inherit` on primary-row values, so the top tier
+rendered amber regardless of whether the trade helped or hurt you. The sign
+colour is the more useful signal on a card whose whole question is "is this
+good for me", and it matches `--green`/`--red` money semantics in tokens.css.
+
+FIXTURE DATA: the fixture's suggestions carried only `youDelta` and
+`partnerDelta`, so `/design/market?view=deals` rendered two of the six rows and
+the problem state was not reviewable. Playoff and week deltas were added to
+the three fixture suggestions, signed consistently with the title delta each
+one already had. Dev fixtures only; no connected-path behaviour changed.
