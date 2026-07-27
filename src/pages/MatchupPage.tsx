@@ -1472,10 +1472,10 @@ function MatchupLive({
      are fluid, and deciding which of two starters gives up a spot is a real
      call. Pairs that share a slot get the priced swap; the rest get a
      straight projection comparison, never an invented number. */
-  const canPick = (_player: Player) => true;
+  const canPick = () => true;
 
   const handleComparePick = (player: Player) => {
-    if (!canPick(player)) return;
+    if (!canPick()) return;
     // The next thing you need is the bench option, so take them to it rather
     // than leaving them to find a collapsed drawer further down the page.
     if (!compareSelection.some((candidate) => candidate.id === player.id)) {
@@ -1712,7 +1712,7 @@ function MatchupLive({
     );
     const isLineupSlot = tone === 'starter';
     const showSlotLabel = isLineupSlot;
-    const pickable = canPick(player);
+    const pickable = canPick();
     const muted = false;
 
     return (
@@ -2010,7 +2010,7 @@ function MatchupLive({
                   const isSelected = starter
                     ? compareSelection.some((candidate) => candidate.id === starter.id)
                     : false;
-                  const isPickable = starter ? canPick(starter) : false;
+                  const isPickable = starter ? canPick() : false;
                   const isMuted = false;
                   const youLead = row.edgeDelta > 0;
 
