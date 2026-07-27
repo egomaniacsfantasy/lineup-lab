@@ -14,7 +14,7 @@ import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
 import { type ApiCatalogPlayer, type LineHistoryEntry } from '../services/leagueApi';
 import { fetchSleeperHeadToHeadSummary, type SleeperHeadToHeadSummary } from '../services/headToHead';
-import { useMatchupEngine } from '../hooks/useMatchupEngine';
+import { useMatchupEngine, type SitCost } from '../hooks/useMatchupEngine';
 import { useNflSchedule } from '../hooks/useNflSchedule';
 import {
   MOCK_MATCHUP,
@@ -799,6 +799,8 @@ function CompareSheet({
     leftProjection: number;
     rightProjection: number;
     deltaWinProbability: number;
+    leftSitCost?: SitCost | null;
+    rightSitCost?: SitCost | null;
   };
   leftPlayer: Player;
   rightPlayer: Player;
@@ -829,9 +831,13 @@ function CompareSheet({
         projectionDelta,
         comparison.deltaWinProbability,
       )
-    : headlineWinner
-      ? `${headlineWinner.shortName} projects ${Math.abs(projectionDelta).toFixed(1)} more points this week. ${tapeNote}`.trim()
-      : `Dead even on projection. ${tapeNote}`.trim();
+    // The headline already reads the gap and its label, and the winning card
+    // already wears the EDGE badge, so restating the gap in a sentence said
+    // nothing new. Keep the tape note, which is the only added information.
+    : (tapeNote ?? '').trim()
+      || (headlineWinner
+        ? `${headlineWinner.shortName} has the edge on projection.`
+        : 'Dead even on projection.');
 
   const maxProjection = Math.max(comparison.leftProjection, comparison.rightProjection, 1);
   const leftVolatility = getVolatilityProfile(leftPlayer, week);
@@ -907,6 +913,38 @@ function CompareSheet({
             {isSwap ? 'win probability if you swap' : 'projection gap'}
           </span>
         </div>
+
+        {/* No shared slot, so there is no swap to price. The engine can still
+            answer which of the two you can most afford to sit: each number is
+            the served resulting line of that slot's best bench option. */}
+        {!isSwap && comparison.leftSitCost && comparison.rightSitCost
+          ? (() => {
+              const leftSit = Number(comparison.leftSitCost.line.winProbability.toFixed(1));
+              const rightSit = Number(comparison.rightSitCost.line.winProbability.toFixed(1));
+              const easier = leftSit === rightSit ? null : leftSit > rightSit ? leftPlayer : rightPlayer;
+              const sitSides = [
+                { player: leftPlayer, sit: comparison.leftSitCost, value: leftSit },
+                { player: rightPlayer, sit: comparison.rightSitCost, value: rightSit },
+              ];
+              return (
+                <div className="matchup-page__compare-sit">
+                  <p className="matchup-page__eyebrow">If you have to sit one</p>
+                  {sitSides.map(({ player, sit, value }) => (
+                    <div className="matchup-page__compare-sit-row" key={player.id}>
+                      <span className="matchup-page__compare-sit-name">Sit {player.shortName}</span>
+                      <span className="matchup-page__compare-sit-sub">{sit.benchName} starts</span>
+                      <span className="matchup-page__compare-sit-value">{value.toFixed(1)}%</span>
+                    </div>
+                  ))}
+                  <p className="matchup-page__compare-sit-verdict">
+                    {easier
+                      ? `${easier.shortName} is the easier one to sit.`
+                      : 'Either one leaves you in the same spot.'}
+                  </p>
+                </div>
+              );
+            })()
+          : null}
 
         <div className="matchup-page__compare-cards matchup-page__compare-cards--faceoff">
           {sides.map(({ player, projection, line, winner, volatility }) => (

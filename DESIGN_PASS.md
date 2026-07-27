@@ -1219,3 +1219,45 @@ sweep.
 horizontal scroll. The fixture previously carried only title deltas, so the
 six-row state did not exist under `/design` at all; playoff and week deltas
 were added to the fixture suggestions so the case is reviewable.
+
+## Comparing two players who cannot swap
+
+### What was wrong
+
+Picking two of your own starters who share no lineup slot gave a projection
+face-off and nothing else. That is honest, since there is no swap to price,
+but it is thin: the reader picked two players because they were weighing a
+real decision, and "one projects 2.8 more points" is not that decision.
+
+The sheet also closed with "X projects 2.8 more points this week", directly
+under a headline reading "+2.8 pts / projection gap", beside a card already
+badged EDGE. Three statements of one fact.
+
+### What changed
+
+The sheet now answers the question the pairing actually implies: if you have
+to sit one of them, which one costs less?
+
+```
+IF YOU HAVE TO SIT ONE
+Sit D. Henry       S. Barkley starts     63.0%
+Sit T. McLaurin    D. Smith starts       64.6%
+T. McLaurin is the easier one to sit.
+```
+
+Each percentage is the engine's own resulting line for that slot's best bench
+option, so both branches are priced, not estimated. The bench name is there
+because "sit Henry" is meaningless without knowing who takes the snaps.
+
+It only appears when both players have a priced bench option. Showing one side
+would invite a comparison against nothing.
+
+The closing sentence now carries only the tape note, "Both already start this
+week", which was the one thing on that line the reader did not already know.
+
+### Verified
+
+`/design/matchup-live` at 1512px and 375px, comparing D. Henry (RB) against
+T. McLaurin (FLEX). The two numbers match the fixture's `userSwaps`
+`resultingWinProb` for RB/S. Barkley and FLEX/D. Smith exactly. No row
+overflow, no horizontal scroll at either width.

@@ -1,0 +1,74 @@
+[
+  {
+    "name": "matchup-cold",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/matchup-cold.png"
+  },
+  {
+    "name": "matchup-empty",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/matchup-empty.png"
+  },
+  {
+    "name": "matchup-live-expanded",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/matchup-live-expanded.png"
+  },
+  {
+    "name": "market-default",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/market-default.png"
+  },
+  {
+    "name": "market-manager-apollo",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/market-manager-apollo.png"
+  },
+  {
+    "name": "market-verdict-1for1",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/market-verdict-1for1.png"
+  },
+  {
+    "name": "market-verdict-3for1",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/market-verdict-3for1.png"
+  },
+  {
+    "name": "league-board",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/league-board.png"
+  },
+  {
+    "name": "league-board-expanded",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/league-board-expanded.png"
+  },
+  {
+    "name": "league-futures",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/league-futures.png"
+  },
+  {
+    "name": "league-futures-scrub",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/league-futures-scrub.png"
+  },
+  {
+    "name": "league-futures-compare",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/league-futures-compare.png"
+  },
+  {
+    "name": "league-schedule",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/league-schedule.png"
+  },
+  {
+    "name": "league-schedule-scrub",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/league-schedule-scrub.png"
+  },
+  {
+    "name": "board-default",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/board-default.png"
+  },
+  {
+    "name": "board-expanded",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/board-expanded.png"
+  },
+  {
+    "name": "board-sheet",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/board-sheet.png"
+  },
+  {
+    "name": "board-sheet-expanded",
+    "file": "/Users/andrevlahakis/Desktop/lineup-lab-push/artifacts/design-shots/sit-comparison/board-sheet-expanded.png"
+  }
+]

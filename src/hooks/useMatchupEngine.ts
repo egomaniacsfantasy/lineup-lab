@@ -5,7 +5,17 @@ import {
   roundTo,
 } from '../utils/lineupComparison';
 import { getDisplayedWinProbabilityDelta } from '../utils/matchupDelta';
+import { evaluateStarterSlot } from '../utils/starterEvaluation';
 import { getWeek8ReplayProjection } from '../data/playerManifest';
+
+/** What your line becomes if you sit this starter and play the best bench
+ *  option the engine priced for his slot. Both the line and the bench name are
+ *  engine output; only the choice of "best" is ours, and it reuses the same
+ *  shipped `evaluateStarterSlot` rule the start/sit call already runs on. */
+export interface SitCost {
+  line: MatchupLine;
+  benchName: string;
+}
 
 export interface MatchupPlayerComparison {
   slotIndex: number;
@@ -16,6 +26,10 @@ export interface MatchupPlayerComparison {
   leftProjection: number;
   rightProjection: number;
   deltaWinProbability: number;
+  /** Only populated for the no-shared-slot case, and only when BOTH players
+   *  have a priced bench option, so the sheet never shows a lopsided answer. */
+  leftSitCost?: SitCost | null;
+  rightSitCost?: SitCost | null;
 }
 
 interface MatchupEngineState {
@@ -114,6 +128,21 @@ function getPlayerProjection(
  * case (slotIndex -1). It previously invented a win probability here, which
  * is exactly the kind of client-side pricing the methodology forbids.
  */
+function sitCostFor(
+  player: Player,
+  baselineLine: MatchupLine,
+  roster: RosterSlot[],
+): SitCost | null {
+  const slotIndex = roster.findIndex((slot) => slot.starter.id === player.id);
+  if (slotIndex < 0) return null;
+  const slot = roster[slotIndex];
+  if (!slot.alternatives.length) return null;
+  const evaluation = evaluateStarterSlot(slot, slotIndex, baselineLine);
+  const best = evaluation.bestBenchAlternative;
+  if (!best) return null;
+  return { line: best.resultingLine, benchName: best.player.shortName };
+}
+
 function buildSyntheticComparison(
   playerA: Player,
   playerB: Player,
@@ -121,6 +150,15 @@ function buildSyntheticComparison(
   roster: RosterSlot[],
   bench: BenchPlayer[],
 ): MatchupPlayerComparison {
+  /* Neither player can take the other's slot, so there is no swap to price.
+     The engine can still answer a real question here: what does each of them
+     cost you to sit? Both numbers are the served `resultingLine` of that
+     slot's best bench option, so nothing is invented. Only offered when both
+     sides have one, otherwise the comparison would be one-legged. */
+  const leftSitCost = sitCostFor(playerA, baselineLine, roster);
+  const rightSitCost = sitCostFor(playerB, baselineLine, roster);
+  const bothPriced = leftSitCost != null && rightSitCost != null;
+
   return {
     slotIndex: -1,
     leftSelectionIndex: null,
@@ -130,6 +168,8 @@ function buildSyntheticComparison(
     leftProjection: getPlayerProjection(playerA, roster, bench),
     rightProjection: getPlayerProjection(playerB, roster, bench),
     deltaWinProbability: 0,
+    leftSitCost: bothPriced ? leftSitCost : null,
+    rightSitCost: bothPriced ? rightSitCost : null,
   };
 }
 

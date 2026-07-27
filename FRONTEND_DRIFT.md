@@ -322,3 +322,28 @@ in fact returning a full-length array padded with `"0"`, this diagnosis is
 wrong and the cause is elsewhere. The one-line check is whether
 `userStarterIds.length === slotLabels.length` for that roster. Engine code was
 not touched.
+
+## 2026-07-26 — Non-swap comparison, and a tooling gap worth knowing
+
+| Area | Status | Note |
+| --- | --- | --- |
+| Non-swap comparison was projection-only | Fixed | Comparing two starters with no shared slot now also shows what each costs you to sit, read from that slot's best bench alternative's served `resultingLine`. Only renders when both sides have a priced bench option. Verified against the fixture's `userSwaps`: 63.0% and 64.6% match `resultingWinProb` exactly. |
+| Compare footer restated the headline | Fixed | It read "X projects 2.8 more points this week" directly under a "+2.8 pts / projection gap" headline, next to an EDGE badge. Now carries only the tape note. |
+| `npx tsc --noEmit` checks nothing | Worth knowing | Root `tsconfig.json` is `{"files": [], "references": [...]}`, so a bare `tsc --noEmit` at the repo root type-checks zero files and exits 0. It reported clean while `npm run build` failed on two real type errors. Use `npm run build` (or `tsc -b`) as the typecheck. Any past session that trusted `tsc --noEmit` was not actually checking types. |
+
+## Honest gaps
+
+- The redundant-subtext sweep is a first cut, not the audit Andre asked for.
+  Two demonstrable duplications were removed (compare footer, deal-card
+  labels). No surface was read end to end for redundancy, and the standing
+  note covers "everywhere". League, Board and More were not looked at.
+- The sit comparison silently does not appear when either player's slot has no
+  priced bench alternative. That is deliberate, but it means the feature is
+  invisible in exactly the lineups with the thinnest benches, and no copy
+  explains the absence. Worth Andre's eye on whether an explicit "no bench
+  option for X" line would be better than showing nothing.
+- Compare-sheet state toggles on repeat clicks, which made several early
+  measurements read as "not rendered" when the pick had simply been undone.
+  Measure after a reload with a known-zero pick count, and query the DOM in a
+  later tick than the click: React has not flushed in the same tick, so a
+  same-tick query returns null even when the block renders correctly.

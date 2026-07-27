@@ -508,3 +508,58 @@ FIXTURE DATA: the fixture's suggestions carried only `youDelta` and
 the problem state was not reviewable. Playoff and week deltas were added to
 the three fixture suggestions, signed consistently with the title delta each
 one already had. Dev fixtures only; no connected-path behaviour changed.
+
+## 2026-07-26 — Non-swap comparison now answers a real question
+
+Comparing two of your starters who share no slot used to show only a
+projection face-off, because there is no swap for the engine to price. It now
+also answers which of the two you can most afford to sit.
+
+Files touched:
+
+- `src/hooks/useMatchupEngine.ts`
+- `src/pages/MatchupPage.tsx`
+- `src/pages/MatchupPage.css`
+
+Where the numbers come from. For each player, find his slot, take that slot's
+best bench alternative, and read that alternative's served `resultingLine`:
+
+| Rendered | Payload field |
+| --- | --- |
+| `Sit D. Henry ... 63.0%` | `roster[slot].alternatives[best].resultingLine.winProbability` |
+| `S. Barkley starts` | `roster[slot].alternatives[best].player.shortName` |
+| `T. McLaurin is the easier one to sit.` | comparison of the two displayed values above |
+
+Nothing is computed. "Best" is chosen by `evaluateStarterSlot` in
+`src/utils/starterEvaluation.ts`, the same shipped rule the start/sit call
+already runs, which ranks alternatives by `getDisplayedWinProbabilityDelta`
+against the baseline. No new selection or ranking logic was written.
+
+Two deliberate constraints:
+
+- The block only renders when BOTH players have a priced bench option. A
+  one-legged version would invite the reader to compare a number against
+  nothing.
+- The verdict sentence compares the two DISPLAYED (rounded to 1dp) values, so
+  it can never disagree with the numbers printed above it.
+
+Verified on `/design/matchup-live` at 1512px and 375px by comparing D. Henry
+(RB) with T. McLaurin (FLEX). Rendered 63.0% and 64.6%, which are exactly the
+fixture's `userSwaps` `resultingWinProb` for the RB/S. Barkley and
+FLEX/D. Smith entries. No row overflow, no page horizontal scroll.
+
+## 2026-07-26 — Redundant subtext, first cut
+
+Two removals, both cases where copy restated something already on screen:
+
+- The non-swap compare sheet footer read "X projects 2.8 more points this
+  week" while the headline directly above it read "+2.8 pts / projection gap"
+  and the winning card already wore an EDGE badge. The sentence now carries
+  only the tape note, which is the sole piece of new information, and falls
+  back to a short plain line when there is no tape note.
+- `Your playoffs` and `Win this week` on the deal cards became `Playoffs` and
+  `This week`, since the lead row says `YOUR TITLE` and every mirror says
+  `them`. That one was also forced by truncation.
+
+This is a first cut, not the full sweep Andre asked for. The rest is listed as
+an open gap in FRONTEND_DRIFT.md.

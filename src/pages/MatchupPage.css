@@ -2694,3 +2694,54 @@
     display: none;
   }
 }
+
+/* No-shared-slot compare: what each player costs you to sit. Both values are
+   the engine's resulting line for that slot's best bench option. */
+.matchup-page__compare-sit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--bg-surface);
+}
+
+.matchup-page__compare-sit-row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.matchup-page__compare-sit-name {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.matchup-page__compare-sit-sub {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matchup-page__compare-sit-value {
+  color: var(--text-amber);
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-page__compare-sit-verdict {
+  margin: 2px 0 0;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
