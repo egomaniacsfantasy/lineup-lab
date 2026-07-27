@@ -953,7 +953,7 @@ function CompareSheet({
                 {volatility.available ? (
                   <div className="matchup-page__range">
                     <div className="matchup-page__range-head">
-                      <span className="matchup-page__meta-copy">Franco range</span>
+                      <span className="matchup-page__meta-copy">Week {week} range</span>
                       {formatProfileLabel(volatility.profile) ? (
                         <span className="matchup-page__profile-tag">
                           {formatProfileLabel(volatility.profile)}
