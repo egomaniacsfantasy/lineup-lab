@@ -11,6 +11,7 @@ import type {
   TradeResult,
   TradeSuggestions,
 } from '../services/leagueApi';
+import type { DensityHistogram, MatchupHistograms } from '../types/matchup';
 
 export type DesignScene =
   | 'matchup-cold'
@@ -384,10 +385,50 @@ function buildSchedule() {
   }));
 }
 
+/* DEV FIXTURE ONLY. The design scenes replay a server payload so each surface
+   can be reviewed without a live league. This mirrors the shape the engine
+   serves from `matchupHistograms` (server/engine/engine.js) so the matchup
+   distributions render under /design. It is NOT a model: the connected path
+   always shows the engine's real seeded Monte Carlo histograms, and nothing
+   here is ever used outside the design fixtures. */
+function designHistogram(mean: number, sd: number): DensityHistogram {
+  const nbins = 32;
+  const min = mean - 3.2 * sd;
+  const max = mean + 3.2 * sd;
+  const binWidth = (max - min) / nbins;
+  const bins = Array.from({ length: nbins }, (_, i) => {
+    const x = min + binWidth * (i + 0.5);
+    const z = (x - mean) / sd;
+    return {
+      x: Number(x.toFixed(3)),
+      density: Number((Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI))).toFixed(6)),
+    };
+  });
+  return {
+    min: Number(min.toFixed(3)),
+    max: Number(max.toFixed(3)),
+    mean,
+    binWidth: Number(binWidth.toFixed(4)),
+    bins,
+  };
+}
+
+/* Kept consistent with the user's fixture line below: the two score spreads
+   combine to the margin spread, and 6.6 / 22.77 puts the win share at the
+   61.4% the same fixture line already quotes. */
+const DESIGN_HISTOGRAMS: MatchupHistograms = {
+  sims: 5000,
+  winProb: 0.614,
+  you: designHistogram(149.8, 16.2),
+  opponent: designHistogram(143.1, 16.0),
+  margin: designHistogram(6.6, 22.77),
+};
+
 function lineFor(
   matchupId: number,
   teamA: { rosterId: number; moneyline: number; winProbability: number; projection: number; spread: number; total: number },
   teamB: { rosterId: number; moneyline: number; winProbability: number; projection: number; spread: number; total: number },
+  histograms?: MatchupHistograms,
 ) {
   return {
     matchupId,
@@ -403,6 +444,7 @@ function lineFor(
         total: teamA.total,
         unpricedStarters: [],
         zeroedStarters: [],
+        ...(histograms ? { histograms } : {}),
       },
       [String(teamB.rosterId)]: {
         moneyline: teamB.moneyline,
@@ -530,6 +572,7 @@ function buildPricing(leagueId: string, pricingMode: 'empty' | 'live'): LeaguePr
       MATCHUP_IDS.user,
       { rosterId: 1, moneyline: -159, winProbability: 61.4, projection: 149.8, spread: 6.6, total: 292.9 },
       { rosterId: 2, moneyline: 134, winProbability: 38.6, projection: 143.1, spread: -6.6, total: 292.9 },
+      pricingMode === 'live' ? DESIGN_HISTOGRAMS : undefined,
     ),
     lineFor(
       MATCHUP_IDS.apollo,

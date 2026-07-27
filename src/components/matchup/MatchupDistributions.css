@@ -1,54 +1,57 @@
 .mhist-group {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  --mhist-bar: #6ea8fe;
-  --mhist-win: #22c55e;
-  --mhist-loss: #ff6b6b;
-  --mhist-axis: rgba(140, 145, 155, 0.4);
-  --mhist-mean: rgba(140, 145, 155, 0.85);
-}
+  gap: 10px;
 
-.mhist-group__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  /* Green/red here are the money semantics from tokens.css: green is the
+     part of the range where you win, red is where you lose. The ribbons are
+     deliberately neutral so the only coloured chart is the one that decides
+     something. */
+  --mhist-win: var(--green);
+  --mhist-loss: var(--red);
+  --mhist-bar: rgba(169, 174, 164, 0.45);
+  --mhist-axis: rgba(169, 174, 164, 0.3);
+  --mhist-mean: rgba(244, 245, 242, 0.7);
 }
 
 .mhist-group__title {
   margin: 0;
-  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 15px;
   font-weight: 700;
 }
 
-.mhist-group__runs {
-  font-size: 0.72rem;
-  color: var(--text-muted, #8a8f98);
+.mhist-group__headline {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.mhist-group__count {
+  color: var(--text-amber);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  vertical-align: -2px;
+  margin: 0 2px;
+}
+
+.mhist-group__average {
+  margin: -4px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
 }
 
 .mhist {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-}
-
-.mhist__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.mhist__title {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.mhist__sub {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-muted, #8a8f98);
+  gap: 4px;
 }
 
 .mhist__svg {
@@ -75,16 +78,78 @@
   stroke-dasharray: 3 2;
 }
 
-.mhist__labels {
+.mhist__ends {
   display: flex;
   justify-content: space-between;
-  font-size: 0.68rem;
-  color: var(--text-muted, #8a8f98);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mhist__end--loss {
+  color: var(--red);
+}
+
+.mhist__end--win {
+  color: var(--green);
+}
+
+.mhist-group__ribbons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.mhist-ribbon {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mhist-ribbon__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mhist-ribbon__label {
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mhist-ribbon__mean {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
-@media (prefers-color-scheme: dark) {
-  .mhist-group {
-    --mhist-bar: #5b8def;
-  }
+.mhist-ribbon__svg {
+  width: 100%;
+  height: 22px;
+  display: block;
+  overflow: visible;
+}
+
+.mhist-ribbon__ends {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 10px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.mhist-group__note {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  opacity: 0.8;
 }

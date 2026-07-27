@@ -369,3 +369,82 @@ not what the database accepts, so it is not protection. Enforcement needs a
 row-level-security policy on `olympus_agreement` restricting writes to those
 three user ids. That is server side and Franco's call. Until it exists,
 assume any authenticated user could write agreement rows directly.
+
+## 2026-07-26 — Matchup distributions de-nerded (display only)
+
+The three matchup histograms Franco added were rewritten for presentation.
+No engine call, no payload field and no number changed. `matchupHistograms`
+in `server/engine/engine.js` was not touched, and neither was anything it
+calls.
+
+Files touched:
+
+- `src/components/matchup/MatchupDistributions.tsx`
+- `src/components/matchup/MatchupDistributions.css`
+- `src/dev/designFixtures.ts` (dev-only fixture data, see below)
+- `scripts/brand-check.mjs` (added the two component files to TARGETS)
+
+Pixel to field map. Every number on this surface, and nothing else:
+
+| Rendered | Payload field | Transform |
+| --- | --- | --- |
+| `You win 61 times out of 100.` | `histograms.winProb` | `Math.round(p * 100)`, stated out of 100 instead of as a percent |
+| `On average you win by 6.6.` | `histograms.margin.mean` | `toFixed(1)` on the absolute value; the words win/lose/dead heat are sign driven |
+| `149.8 on average` | `histograms.you.mean` | `toFixed(1)` |
+| `143.1 on average` | `histograms.opponent.mean` | `toFixed(1)` |
+| ribbon end labels | `histograms.you.min/max`, `histograms.opponent.min/max` | `toFixed(0)` |
+| margin bar heights | `histograms.margin.bins[].density` | scaled to the histogram's own peak |
+| ribbon bar heights | `histograms.you/opponent.bins[].density` | scaled to each histogram's own peak |
+| `From 5,000 simulations of this week.` | `histograms.sims` | `toLocaleString()` |
+
+Three things were REMOVED from the render, all of them frontend-computed or
+noise, none of them replaced by anything invented:
+
+- the `(min + max) / 2` mid-axis label, which was a value computed in the
+  component and present in no payload field.
+- the raw extreme margins of the sample as axis labels. The margin axis now
+  says what the two ends MEAN (`you lose` / `you win`) instead.
+- the two score histograms' full height. They are now compact ribbons. They
+  still show each side's spread and average, so nothing is hidden, but they
+  no longer carry the same weight as the chart that decides something.
+
+Frequency framing (`61 times out of 100` rather than `61% to win`) is a
+restatement of the same rounded served probability, not a new statistic. The
+displayed integer is exactly `Math.round(histograms.winProb * 100)`, which is
+the same number the matchup line shows as `61.4%` before rounding.
+
+Rendering fix worth flagging, because it changed which pixels are green:
+
+The margin bars used to be coloured from each bar's bin centre
+(`b.x >= 0 ? win : loss`). One bin always straddles zero, so up to half a bin
+of winning margin was painted red, or losing margin painted green, and the
+dotted zero line cut through a solid colour block instead of sitting on the
+colour boundary. Measured on the design fixture, the zero line sat at x=136.4
+while the red-to-green boundary sat at x=140.6, a 4.2 unit error on a 300
+unit axis. The bars are now drawn twice under two clip paths that meet
+exactly at `xOf(0)`, so the split lands on zero to the pixel. This is a
+colouring fix only. Bin values, densities and the win share are unchanged.
+
+FIXTURE DATA, and the reason it exists:
+
+`/design/matchup-live` served no `histograms`, so this module rendered
+nowhere reachable without a live authenticated league. It could not be
+reviewed or measured. `designFixtures.ts` now builds a `DESIGN_HISTOGRAMS`
+constant in the same shape the engine serves, attached to the user's side of
+the fixture line in `live` mode only.
+
+That constant is a Gaussian drawn in the fixture file. It is NOT a model and
+must never be treated as one:
+
+- it exists only in `src/dev/designFixtures.ts`, which is dev-fixture code.
+- the connected path is untouched and always renders the engine's real seeded
+  Monte Carlo output.
+- its parameters were chosen to agree with the fixture line already in that
+  file: means 149.8 and 143.1 match the fixture projections, and a margin of
+  6.6 with a spread of 22.77 puts the win share at the 61.4% the same fixture
+  line already quotes.
+
+BRAND: these two files were not in `scripts/brand-check.mjs` TARGETS, which
+is how the component came to use `#6ea8fe`, `#22c55e` and `#ff6b6b` instead of
+tokens. They are in TARGETS now, and the colours are `var(--green)`,
+`var(--red)` and neutral greys from `tokens.css`.

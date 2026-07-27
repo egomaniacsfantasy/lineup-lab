@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { DensityHistogram, MatchupHistograms } from '../../types/matchup';
 import './MatchupDistributions.css';
 
@@ -5,43 +6,117 @@ function peakDensity(h: DensityHistogram): number {
   return h.bins.reduce((m, b) => Math.max(m, b.density), 0) || 1;
 }
 
-/** One density histogram drawn as SVG bars, scaled to its own peak. */
-function DensityChart({
-  histogram,
-  title,
-  subtitle,
-  colorFor,
-  zeroLine = false,
-  meanLine = false,
-  fmt = (v: number) => v.toFixed(0),
-}: {
-  histogram: DensityHistogram;
-  title: string;
-  subtitle?: string;
-  colorFor?: (x: number) => string;
-  zeroLine?: boolean;
-  meanLine?: boolean;
-  fmt?: (v: number) => string;
-}) {
+/**
+ * The margin distribution, drawn as the module's one real chart: red where you
+ * lose, green where you win, split at zero. The axis is labelled with what the
+ * two sides MEAN rather than with the extreme margins of the sample, because
+ * the tails of a 5,000-run sample are the least useful thing on the page.
+ */
+function MarginChart({ histogram, label }: { histogram: DensityHistogram; label: string }) {
   const W = 300;
-  const H = 110;
+  const H = 104;
   const padT = 6;
-  const padB = 16;
-  const { min, max, mean, bins } = histogram;
+  const padB = 10;
+  const { min, max, bins } = histogram;
   const span = max - min || 1;
   const peak = peakDensity(histogram);
   const baseY = H - padB;
   const xOf = (x: number) => ((x - min) / span) * W;
   const yOf = (d: number) => padT + (baseY - padT) * (1 - d / peak);
   const barW = W / bins.length;
+  const uid = useId();
+
+  /* Colour is split by clipping the bars at zero rather than by colouring each
+     bar from its bin centre. One bin always straddles zero, and colouring that
+     whole bar one way paints a slice of winning margin as a loss (or the
+     reverse) by up to half a bin. This chart's only claim is "red is where you
+     lose, green is where you win", so the split has to land on zero exactly. */
+  const zeroX = Math.min(W, Math.max(0, xOf(0)));
+  const bars = (fill: string) =>
+    bins.map((b, i) => {
+      const y = yOf(b.density);
+      return (
+        <rect
+          key={i}
+          x={xOf(b.x) - barW / 2}
+          y={y}
+          width={Math.max(0.6, barW - 0.6)}
+          height={Math.max(0, baseY - y)}
+          fill={fill}
+        />
+      );
+    });
 
   return (
     <div className="mhist">
-      <div className="mhist__head">
-        <span className="mhist__title">{title}</span>
-        {subtitle ? <span className="mhist__sub">{subtitle}</span> : null}
+      <svg
+        className="mhist__svg"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={label}
+      >
+        <defs>
+          <clipPath id={`${uid}-loss`}>
+            <rect x={0} y={0} width={zeroX} height={H} />
+          </clipPath>
+          <clipPath id={`${uid}-win`}>
+            <rect x={zeroX} y={0} width={W - zeroX} height={H} />
+          </clipPath>
+        </defs>
+        <g clipPath={`url(#${uid}-loss)`}>{bars('var(--mhist-loss)')}</g>
+        <g clipPath={`url(#${uid}-win)`}>{bars('var(--mhist-win)')}</g>
+        <line
+          x1={zeroX}
+          x2={zeroX}
+          y1={padT}
+          y2={baseY}
+          className="mhist__marker mhist__marker--zero"
+        />
+        <line x1={0} x2={W} y1={baseY} y2={baseY} className="mhist__axis" />
+      </svg>
+      <div className="mhist__ends">
+        <span className="mhist__end mhist__end--loss">you lose</span>
+        <span className="mhist__end mhist__end--win">you win</span>
       </div>
-      <svg className="mhist__svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={title}>
+    </div>
+  );
+}
+
+/**
+ * A score distribution demoted to one compact ribbon. It keeps what these
+ * charts are for (how high and how low each side can realistically land)
+ * without giving a second and third histogram the weight of the first.
+ */
+function ScoreRibbon({
+  histogram,
+  label,
+}: {
+  histogram: DensityHistogram;
+  label: string;
+}) {
+  const W = 300;
+  const H = 26;
+  const { min, max, mean, bins } = histogram;
+  const span = max - min || 1;
+  const peak = peakDensity(histogram);
+  const xOf = (x: number) => ((x - min) / span) * W;
+  const yOf = (d: number) => H * (1 - d / peak);
+  const barW = W / bins.length;
+
+  return (
+    <div className="mhist-ribbon">
+      <div className="mhist-ribbon__head">
+        <span className="mhist-ribbon__label">{label}</span>
+        <span className="mhist-ribbon__mean">{mean.toFixed(1)} on average</span>
+      </div>
+      <svg
+        className="mhist-ribbon__svg"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`${label}, ${mean.toFixed(1)} on average`}
+      >
         {bins.map((b, i) => {
           const y = yOf(b.density);
           return (
@@ -50,19 +125,22 @@ function DensityChart({
               x={xOf(b.x) - barW / 2}
               y={y}
               width={Math.max(0.6, barW - 0.6)}
-              height={Math.max(0, baseY - y)}
-              fill={colorFor ? colorFor(b.x) : 'var(--mhist-bar)'}
+              height={Math.max(0, H - y)}
+              fill="var(--mhist-bar)"
             />
           );
         })}
-        {zeroLine ? <line x1={xOf(0)} x2={xOf(0)} y1={padT} y2={baseY} className="mhist__marker mhist__marker--zero" /> : null}
-        {meanLine ? <line x1={xOf(mean)} x2={xOf(mean)} y1={padT} y2={baseY} className="mhist__marker mhist__marker--mean" /> : null}
-        <line x1={0} x2={W} y1={baseY} y2={baseY} className="mhist__axis" />
+        <line
+          x1={xOf(mean)}
+          x2={xOf(mean)}
+          y1={0}
+          y2={H}
+          className="mhist__marker mhist__marker--mean"
+        />
       </svg>
-      <div className="mhist__labels">
-        <span>{fmt(min)}</span>
-        <span>{fmt((min + max) / 2)}</span>
-        <span>{fmt(max)}</span>
+      <div className="mhist-ribbon__ends">
+        <span>{min.toFixed(0)}</span>
+        <span>{max.toFixed(0)}</span>
       </div>
     </div>
   );
@@ -71,37 +149,46 @@ function DensityChart({
 /**
  * The three matchup distributions (margin, your points, opponent points) from
  * the same seeded sim that produces the displayed win %.
+ *
+ * Every number here is read straight off the payload: the headline count is the
+ * served win probability stated out of 100, and the average margin and the two
+ * ribbon averages are the served `mean` of each histogram, rounded. Nothing on
+ * this surface is computed in the frontend.
  */
 export function MatchupDistributions({ histograms }: { histograms: MatchupHistograms }) {
   // Exact win% from the recentered samples — identical to the matchup line.
   const winProb = histograms.winProb;
+  const winsPerHundred = Math.round(winProb * 100);
+  const avgMargin = histograms.margin.mean;
+  const marginSize = Math.abs(avgMargin).toFixed(1);
+  const averageLine = Number(marginSize) === 0
+    ? 'On average it is a dead heat.'
+    : avgMargin > 0
+      ? `On average you win by ${marginSize}.`
+      : `On average you lose by ${marginSize}.`;
 
   return (
     <div className="mhist-group">
-      <div className="mhist-group__head">
-        <h3 className="mhist-group__title">Simulated outcomes</h3>
-        <span className="mhist-group__runs">{histograms.sims.toLocaleString()} runs</span>
-      </div>
-      <DensityChart
+      <h2 className="mhist-group__title">How this week could go</h2>
+
+      <p className="mhist-group__headline">
+        You win <strong className="mhist-group__count">{winsPerHundred}</strong> times out of 100.
+      </p>
+      <p className="mhist-group__average">{averageLine}</p>
+
+      <MarginChart
         histogram={histograms.margin}
-        title="Margin (you − opponent)"
-        subtitle={`${Math.round(winProb * 100)}% to win`}
-        zeroLine
-        colorFor={(x) => (x >= 0 ? 'var(--mhist-win)' : 'var(--mhist-loss)')}
-        fmt={(v) => (v > 0 ? `+${v.toFixed(0)}` : v.toFixed(0))}
+        label={`How much you win or lose by. You win ${winsPerHundred} times out of 100.`}
       />
-      <DensityChart
-        histogram={histograms.you}
-        title="Your points"
-        subtitle={`avg ${histograms.you.mean.toFixed(1)}`}
-        meanLine
-      />
-      <DensityChart
-        histogram={histograms.opponent}
-        title="Opponent points"
-        subtitle={`avg ${histograms.opponent.mean.toFixed(1)}`}
-        meanLine
-      />
+
+      <div className="mhist-group__ribbons">
+        <ScoreRibbon histogram={histograms.you} label="Your score" />
+        <ScoreRibbon histogram={histograms.opponent} label="Opponent score" />
+      </div>
+
+      <p className="mhist-group__note">
+        From {histograms.sims.toLocaleString()} simulations of this week.
+      </p>
     </div>
   );
 }

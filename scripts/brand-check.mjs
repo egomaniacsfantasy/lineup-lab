@@ -19,6 +19,8 @@ const TARGETS = [
   'src/components/league/LeagueFutures.css',
   'src/components/charts/OddsChart.tsx',
   'src/components/charts/OddsChart.css',
+  'src/components/matchup/MatchupDistributions.tsx',
+  'src/components/matchup/MatchupDistributions.css',
   'src/components/trade-display/TradeDisplay.tsx',
   'src/components/trade-display/TradeDisplay.css',
   'src/components/trade/TradeAnalyzerPanel.tsx',

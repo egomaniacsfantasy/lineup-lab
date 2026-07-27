@@ -1075,3 +1075,101 @@ than a 10-team one and the builder stays on screen.
 Verified by simulating 3, 9 and 19 partners, and at 1512 / 1024 / 768 /
 390px: columns collapse 4 to 2 to 1 with no card overflow and no page
 horizontal scroll.
+
+## "How this week could go" (was "Simulated outcomes")
+
+![Matchup distributions, de-nerded](artifacts/design-shots/distributions-denerd/matchup-live-expanded.png)
+
+### What was wrong
+
+Three equal-weight histograms sat in the matchup rail under the title
+"Simulated outcomes", captioned "5,000 runs". The first was labelled
+"Margin (you − opponent)". The second and third were "Your points" and
+"Opponent points", each with a mean line and a three-point numeric axis.
+
+The problems, in the order a reader hits them:
+
+- "Simulated outcomes" and "5,000 runs" lead with the machinery, not the
+  answer. The reader has to work out that this is about their week.
+- "Margin (you − opponent)" is a formula. It asks the reader to do the
+  subtraction in their head before the chart means anything.
+- The margin axis was labelled with the extreme margins of the sample. The
+  tails of a 5,000-run sample are the least useful numbers on the page.
+- Three charts of equal size implied three equally important questions. Only
+  one of them decides anything.
+- Nothing told the reader what the green and red halves were.
+
+### What the research says
+
+Andre asked for real research before touching this, and it pointed somewhere
+slightly different from a restyle.
+
+The consistent finding across the uncertainty-visualisation literature is
+that lay readers do much better with **frequency framing** than with
+percentages or density curves: expressing a probability as a count out of a
+hundred. Kay et al.'s quantile dotplots are the canonical form of this, and
+they measurably improve both recall of the distribution and consistency of
+probability estimates versus a density plot. FiveThirtyEight reached the
+same place from the design side with the "ball swarm", which shows a hundred
+representative outcomes as dots rather than one summary bar.
+
+Two further findings shaped the layout:
+
+- Readers fixate on summary statistics when a chart offers one, so the
+  summary should be stated in words rather than left as the only handle on
+  the chart.
+- Whenever uncertainty is shown, it is worth saying explicitly how to read
+  it. Chart readers misread confidence intervals and box plots as
+  categorical, so plain labelling matters more than a more clever encoding.
+
+### What changed
+
+- Title is now "How this week could go".
+- The answer leads, in frequency framing: "You win 61 times out of 100",
+  with the count set in the display face in accent orange.
+- The average result is stated in words underneath, sign driven: "On average
+  you win by 6.6" / "you lose by" / "it is a dead heat".
+- The margin chart keeps its shape but loses the formula title and the
+  extreme-value axis. Its two ends now say what they mean, "YOU LOSE" in red
+  and "YOU WIN" in green, which is the single biggest de-nerding move here:
+  it turns an abstract axis into the thing the reader actually wants.
+- "Your points" and "Opponent points" drop to compact ribbons with their
+  average on the right. They still show each side's spread, so their purpose
+  survives, but they no longer read as two more charts to decode.
+- "5,000 runs" moves to a footnote: "From 5,000 simulations of this week."
+- Colours moved onto brand tokens (`--green`, `--red`, neutral greys). The
+  component had been using `#6ea8fe`, `#22c55e` and `#ff6b6b`, because it was
+  never added to `scripts/brand-check.mjs` TARGETS. It is in TARGETS now.
+
+The module is also about 35% shorter, which matters in a 384px rail that
+already has the start/sit call above it.
+
+### The colour split was wrong, and it is fixed
+
+Measured rather than eyeballed, per this repo's standing lesson. The bars
+were coloured from each bar's bin centre, so the bar straddling zero took one
+colour for its whole width: the dotted zero line sat at x=136.4 while the
+red-to-green boundary sat at x=140.6, on a 300-unit axis. A slice of winning
+margin was painted as a loss.
+
+That was survivable when the chart was titled with a formula. It is not
+survivable once the chart says "YOU LOSE" and "YOU WIN" under those colours.
+The bars are now drawn twice under clip paths meeting exactly at zero, and
+the measured offset is 0.
+
+### Not done, and why
+
+The research's best answer is a quantile dotplot: a hundred dots, each one a
+simulated week. That cannot be built from what the endpoint serves. The
+payload carries a binned density (`min`, `max`, `mean`, `binWidth`, `bins[]`)
+and no quantiles or samples, and deriving quantiles would mean inverting a
+CDF in the frontend, which is exactly the kind of client-side computation
+this repo forbids. It needs Franco to add percentiles to `matchupHistograms`.
+Flagged for him rather than worked around.
+
+Verified on `/design/matchup-live` at 1512px. The fixture previously served
+no histograms at all, so this module rendered nowhere reachable without a
+live league; `designFixtures.ts` now carries a dev-only replay of the payload
+shape so the surface can be reviewed and measured. Every number it shows
+reconciles with the matchup line already on the same page: 61.4%, spread 6.6,
+projections 149.8 and 143.1.

@@ -216,3 +216,39 @@ a swap" and falls back to comparing projections, so two starters now read
 Net effect: comparing any two of your players is allowed again, and no
 comparison anywhere in the app can produce a probability the engine did not
 supply.
+
+## 2026-07-26 — Matchup distributions
+
+| Area | Status | Note |
+| --- | --- | --- |
+| `MatchupDistributions` outside brand-check | Fixed | The component and its CSS were never in `scripts/brand-check.mjs` TARGETS, so it had drifted onto `#6ea8fe`, `#22c55e` and `#ff6b6b` instead of tokens. Both files added to TARGETS; colours moved to `var(--green)`, `var(--red)` and neutral greys. |
+| Margin colour split landed off zero | Fixed | Bars were coloured from each bin's centre, so the bin straddling zero took one colour across its whole width. Measured on the fixture: zero line at x=136.4, red-to-green boundary at x=140.6, on a 300-unit axis. Winning margin was painted as a loss. Bars are now drawn twice under clip paths meeting at `xOf(0)`; measured offset is 0. |
+| Frontend-computed axis label | Removed | The mid-axis label was `(min + max) / 2`, a value computed in the component and backed by no payload field. Gone; the margin axis now carries meaning labels and the ribbons carry served `min`/`max` only. |
+| Distributions unreachable in fixtures | Fixed | `/design/matchup-live` served no `histograms`, so this module rendered nowhere reachable without a live authenticated league and could not be reviewed or measured. `designFixtures.ts` now carries a dev-only `DESIGN_HISTOGRAMS` in the engine's payload shape, `live` mode only. |
+| `npm run lint` red on `main` | Fixed | `main` at `2c5a686` failed lint on a clean tree: `'_player' is defined but never used` at `MatchupPage.tsx:1475`, from `27d1117`. The pre-push hook would have blocked any push. `canPick` always returned true, so the vestigial parameter was dropped rather than loosening the lint config. |
+| Quantile dotplot | Open, needs Franco | The research's best answer for a lay reader is a hundred dots, one per simulated week. The payload serves a binned density and no quantiles or samples; deriving them means inverting a CDF in the frontend, which the boundary forbids. Needs percentiles added to `matchupHistograms` server-side. |
+| Pricing, engine, API, server | Untouched | No engine, route or persistence code changed. `node --test server/engine/*.test.js *.test.mjs`: 12/12 pass. |
+
+## Honest gaps
+
+- **The fixture is symmetric; the engine's output is not.** `DESIGN_HISTOGRAMS`
+  is a Gaussian, so the shape I verified against is symmetric. The real engine
+  draws each starter from an asymmetric floor/ceiling interval
+  (`splitNormalDraw`), so a real margin distribution will be skewed and its
+  peak will not sit on its mean. The layout does not assume symmetry, and the
+  zero-split fix is independent of shape, but the skewed case has not been
+  seen. Worth a look on Andre's live league.
+- **"On average" is the mean, because the mean is what is served.** For a
+  skewed distribution the median is the better "typical result", and the
+  headline would read truer with it. It is not in the payload, so the copy
+  says "on average" rather than "typically" to stay honest about which
+  statistic it is. Another reason to ask Franco for percentiles.
+- The ribbon end labels are the sample extremes, which are still the nerdiest
+  numbers left on the surface. Kept because the ribbons need some scale and
+  they are served fields; a served p5/p95 would be strictly better.
+- Verified on the design fixture at 1512px only. The real app is auth-gated
+  and this pass had no credentials. Andre's live numbers will differ from the
+  fixture's; do not compare screenshots across the two.
+- Not audited: whether the redundant-subtext sweep (open item (e)) touches
+  this module. The footnote and the two ribbon labels were written fresh here,
+  but the rest of the rail was not re-read for redundancy this pass.
