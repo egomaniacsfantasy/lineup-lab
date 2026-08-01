@@ -290,6 +290,7 @@ function buildTeam(team: typeof USER_TEAM) {
     pointsFor: team.pointsFor,
     pointsAgainst: team.pointsAgainst,
     isUser: team.isUser,
+    division: null,
   };
 }
 
@@ -824,6 +825,7 @@ function buildBootstrap(leagueId: string): LeagueBootstrap {
       regularSeasonWeeks: 10,
       leagueType: 'redraft',
       bestBall: false,
+      divisions: null,
     },
     teams: TEAM_POOL.map(buildTeam),
     week: WEEK,

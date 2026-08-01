@@ -1385,6 +1385,12 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   const playoffWeeks = [];
   for (let r = 0; r < rounds; r += 1) playoffWeeks.push(playoffWeekStart + r);
 
+  // Division-aware seeding: when the league has ≥2 divisions, each division's
+  // best team (by the record tiebreak) takes a top seed ahead of any wildcard,
+  // matching how Sleeper/ESPN seat division winners. No divisions -> flat by record.
+  const divisionOf = new Map(teams.map((t) => [t.rosterId, t.division ?? null]));
+  const divisionsEnabled = (league.divisions ?? 0) >= 2 && teams.some((t) => t.division != null);
+
   // Precompute each team's optimal-lineup params for every needed week (once).
   // Waiver-replacement level per position = best available free agent (league
   // -size-aware), used to fill any unfillable required slot instead of scoring 0.
@@ -1443,12 +1449,29 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
 
     // Standings: wins -> points-for -> coin flip.
     const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, sim, 0, id))()]));
-    const standings = [...rosterIds].sort(
+    const ranked = [...rosterIds].sort(
       (x, y) =>
         (wins.get(y) - wins.get(x)) ||
         (pf.get(y) - pf.get(x)) ||
         (coin.get(y) - coin.get(x)),
     );
+    let standings = ranked;
+    if (divisionsEnabled) {
+      // Best-ranked team in each division wins it and jumps ahead of every
+      // wildcard; the division winners keep record order among themselves, then
+      // the remaining teams (wildcards) follow by record.
+      const wonDiv = new Set();
+      const winners = [];
+      for (const id of ranked) {
+        const d = divisionOf.get(id);
+        if (d != null && !wonDiv.has(d)) {
+          wonDiv.add(d);
+          winners.push(id);
+        }
+      }
+      const winnerSet = new Set(winners);
+      standings = [...winners, ...ranked.filter((id) => !winnerSet.has(id))];
+    }
     standings.forEach((id, i) => seedSums.set(id, seedSums.get(id) + (i + 1)));
     const seeded = standings.slice(0, playoffTeams); // seed 1..K
     seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));

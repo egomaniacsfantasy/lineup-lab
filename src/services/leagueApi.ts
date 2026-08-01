@@ -32,6 +32,9 @@ export interface ApiLeague extends ApiLeagueSummary {
   regularSeasonWeeks: number;
   leagueType: 'redraft' | 'keeper' | 'dynasty';
   bestBall: boolean;
+  // Number of divisions (≥2 means the sim seeds division winners first). null/1
+  // = no divisions, seed purely by overall record.
+  divisions: number | null;
 }
 
 export interface ApiTeam {
@@ -48,6 +51,8 @@ export interface ApiTeam {
   pointsFor: number;
   pointsAgainst: number;
   isUser: boolean;
+  // Division id this team belongs to (null when the league has no divisions).
+  division: number | null;
 }
 
 export interface ApiMatchup {

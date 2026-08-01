@@ -207,6 +207,7 @@ export function createEspnProvider({ season, espnS2, swid }) {
         },
         pointsFor: team.record?.overall?.pointsFor ?? 0,
         pointsAgainst: team.record?.overall?.pointsAgainst ?? 0,
+        division: team.divisionId ?? null,
       };
     });
   };
@@ -241,6 +242,7 @@ export function createEspnProvider({ season, espnS2, swid }) {
         regularSeasonWeeks: s.scheduleSettings?.matchupPeriodCount ?? 14,
         leagueType: isKeeper ? 'keeper' : 'redraft',
         bestBall: false,
+        divisions: s.scheduleSettings?.divisions?.length ?? null,
       };
     },
 

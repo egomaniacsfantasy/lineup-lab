@@ -163,6 +163,7 @@ export const sleeperProvider = {
         (raw.settings?.playoff_week_start ?? 15) - 1 || 14,
       leagueType,
       bestBall: raw.settings?.best_ball === 1,
+      divisions: raw.settings?.divisions ?? null,
     };
   },
 
@@ -186,6 +187,7 @@ export const sleeperProvider = {
       pointsFor: (r.settings?.fpts ?? 0) + (r.settings?.fpts_decimal ?? 0) / 100,
       pointsAgainst:
         (r.settings?.fpts_against ?? 0) + (r.settings?.fpts_against_decimal ?? 0) / 100,
+      division: r.settings?.division ?? null,
     }));
   },
 
