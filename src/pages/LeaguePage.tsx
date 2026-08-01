@@ -4,6 +4,7 @@ import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { LeagueFutures } from '../components/league/LeagueFutures';
 import { MatchupSlate } from '../components/league/MatchupSlate';
+import { StandingsTable } from '../components/league/StandingsTable';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { DraftWrappedCard } from '../components/season/DraftWrappedCard';
@@ -35,10 +36,11 @@ import './ConnectPage.css';
 import './LeaguePage.css';
 
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
-type LeagueView = 'this-week' | 'futures' | 'schedule';
+type LeagueView = 'this-week' | 'standings' | 'futures' | 'schedule';
 
 const LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
   { key: 'this-week', label: 'This week' },
+  { key: 'standings', label: 'Standings' },
   { key: 'futures', label: 'Futures' },
   { key: 'schedule', label: 'Schedule' },
 ];
@@ -346,6 +348,17 @@ export function LeaguePage() {
             />
           ) : null}
         </>
+      ) : null}
+
+      {activeView === 'standings' ? (
+        bootstrap && bootstrap.teams.length > 0 ? (
+          <StandingsTable
+            teams={bootstrap.teams}
+            playoffTeams={bootstrap.league.playoffTeams}
+          />
+        ) : (
+          <SeasonalNotice>Connect a league to see its standings.</SeasonalNotice>
+        )
       ) : null}
 
       {activeView === 'futures' ? (
