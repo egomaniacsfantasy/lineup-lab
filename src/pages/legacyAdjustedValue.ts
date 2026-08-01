@@ -93,7 +93,7 @@ function computeReplacement(
 const POS_ALPHA: Record<string, number> = {
   QB: 0.22,
   RB: 0.34,
-  WR: 0.34,
+  WR: 0.37, // slightly above RB: PPR receptions make receivers a touch more valuable
   TE: 0.3,
   K: 0.34,
   DEF: 0.34,
