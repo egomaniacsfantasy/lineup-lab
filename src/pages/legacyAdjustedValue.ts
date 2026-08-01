@@ -82,10 +82,13 @@ function computeReplacement(
     .map((r) => r.seasonTotal ?? 0)
     .filter((total) => total > 0)
     .sort((a, b) => b - a);
-  const kdefRank = Math.max(1, Math.round(T * KDEF_BASELINE_DEPTH));
-  const kdefBase = allTotals[Math.min(kdefRank, allTotals.length - 1)] ?? 0;
-  repl.K = kdefBase;
-  repl.DEF = kdefBase;
+  // K and DEF replacement come off overall depth (not a position pool). Kickers
+  // use a SHALLOWER depth (higher replacement -> lower value); defenses a DEEPER
+  // one (lower replacement -> less harsh), so the two are no longer identical.
+  const baseAt = (depth: number) =>
+    allTotals[Math.min(Math.max(1, Math.round(T * depth)), allTotals.length - 1)] ?? 0;
+  repl.K = baseAt(K_BASELINE_DEPTH);
+  repl.DEF = baseAt(DEF_BASELINE_DEPTH);
 
   return repl;
 }
@@ -95,11 +98,14 @@ const POS_ALPHA: Record<string, number> = {
   RB: 0.34,
   WR: 0.37, // slightly above RB: PPR receptions make receivers a touch more valuable
   TE: 0.3,
-  K: 0.34,
-  DEF: 0.34,
+  K: 0.3, // trimmed from 0.34 — kickers were ranking a touch high
+  DEF: 0.4, // raised from 0.34 — defenses were too harsh
 };
 
-const KDEF_BASELINE_DEPTH = 3;
+// Overall-depth replacement rank for K / DEF (× number of teams). Kickers use a
+// shallower depth (higher replacement, lower value); defenses a deeper one.
+const K_BASELINE_DEPTH = 2.5;
+const DEF_BASELINE_DEPTH = 4.5;
 
 export interface LegacyAdjustedValue {
   adjustedValue: number;
