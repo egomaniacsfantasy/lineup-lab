@@ -38,6 +38,10 @@ export interface ApiLeague extends ApiLeagueSummary {
   // true = playoff bracket re-seeds each round (top remaining seed plays bottom);
   // false/null = classic fixed bracket. Drives simulateSeason's bracket.
   playoffReseed: boolean | null;
+  // Whether division winners get seeding priority. null = engine default (ON when
+  // divisions ≥ 2); false = seed purely by record even with divisions. Not
+  // provider-detected — set via the on-site playoff-settings override.
+  divisionWinnerPriority: boolean | null;
 }
 
 export interface ApiTeam {
@@ -364,6 +368,30 @@ export interface BoardRow {
 /** The projection board: agreement-weighted, scoring-specific season totals for
  *  the value-over-replacement board. Pass the league's scoring so PPR / half /
  *  standard return the right numbers. */
+export interface PlayoffSettings {
+  divisions: number | null;
+  hasDivisions: boolean;
+  divisionWinnerPriority: boolean | null;
+  playoffReseed: boolean;
+  detected: { playoffReseed: boolean | null };
+  override: { divisionWinnerPriority?: boolean | null; playoffReseed?: boolean | null } | null;
+}
+
+export function fetchPlayoffSettings(leagueId: string) {
+  return get<PlayoffSettings>(`/api/league/${leagueId}/playoff-settings`);
+}
+
+export function savePlayoffSettings(
+  leagueId: string,
+  patch: { divisionWinnerPriority?: boolean | null; playoffReseed?: boolean | null },
+) {
+  return get<{ ok: boolean }>(`/api/league/${leagueId}/playoff-settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+}
+
 export function fetchBoard(limit = 800, scoring?: string, modelOnly = false) {
   const scoringQ = scoring ? `&scoring=${encodeURIComponent(scoring)}` : '';
   const modelQ = modelOnly ? '&model=1' : '';

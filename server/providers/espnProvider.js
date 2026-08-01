@@ -243,9 +243,12 @@ export function createEspnProvider({ season, espnS2, swid }) {
         leagueType: isKeeper ? 'keeper' : 'redraft',
         bestBall: false,
         divisions: s.scheduleSettings?.divisions?.length ?? null,
-        // TODO(reseed): ESPN's mSettings doesn't cleanly expose reseeding; left
-        // null (fixed bracket) until the exact field is confirmed on a real league.
-        playoffReseed: null,
+        // ESPN exposes reseeding directly on scheduleSettings. Absent -> null
+        // (fixed bracket); the user can still override on the site.
+        playoffReseed: s.scheduleSettings?.playoffReseed ?? null,
+        // Not detected from either provider — defaults to ON when divisions exist
+        // (engine), user-overridable. null = use that default.
+        divisionWinnerPriority: null,
       };
     },
 

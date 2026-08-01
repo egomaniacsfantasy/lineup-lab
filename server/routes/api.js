@@ -21,6 +21,11 @@ import {
   finalTeamsSignature,
   buildLiveLocks,
 } from '../live/nflGameStatus.js';
+import {
+  readPlayoffSettings,
+  writePlayoffSettings,
+  playoffSettingsSignature,
+} from '../engine/playoffSettingsStore.js';
 import { getNflSchedule } from '../services/nflSchedule.js';
 import { getRequestUserId } from '../services/supabaseAdmin.js';
 import { runScoutingHarvest } from '../services/scoutingHarvest/index.js';
@@ -423,6 +428,13 @@ async function loadLeagueContext(provider, leagueId, userId) {
   const league = await provider.getLeague(leagueId);
   if (!league) return null;
 
+  // Layer any user-set playoff-structure override onto the detected config.
+  const poOverride = readPlayoffSettings(leagueId);
+  if (poOverride) {
+    if (poOverride.divisionWinnerPriority != null) league.divisionWinnerPriority = poOverride.divisionWinnerPriority;
+    if (poOverride.playoffReseed != null) league.playoffReseed = poOverride.playoffReseed;
+  }
+
   const [rosters, users, state] = await Promise.all([
     provider.getRosters(leagueId),
     provider.getUsers(leagueId),
@@ -526,7 +538,7 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
     }
     const liveLocks = buildLiveLocks(ctx.matchups, ctx.players, finalTeams);
     return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections, liveLocks };
-  }, `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}`);
+  }, `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${playoffSettingsSignature(leagueId)}`);
 }
 
 /**
@@ -549,6 +561,53 @@ apiRouter.post('/admin/reprice', async (req, res, next) => {
     // charts stay on the 6h line-history cadence (they only chart matters).
     const summary = await repriceAllLeagues({ live: true, staggerMs: 250, stamp: false });
     res.json({ ok: true, ...summary, finalTeams: [...getFinalNflTeams()] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Playoff-structure settings for a league: what we detected + the effective values
+ * (detected + any user override). Lets the UI show and edit the settings the sim
+ * uses for seeding, so a user can correct them when we can't detect them.
+ */
+apiRouter.get('/league/:leagueId/playoff-settings', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const league = await provider.getLeague(req.params.leagueId);
+    if (!league) {
+      res.status(404).json({ error: 'league_not_found' });
+      return;
+    }
+    const override = readPlayoffSettings(req.params.leagueId);
+    const divisions = league.divisions ?? null;
+    const hasDivisions = (divisions ?? 0) >= 2;
+    // Effective values (override wins; else detected; else engine default).
+    const divisionWinnerPriority = hasDivisions
+      ? (override?.divisionWinnerPriority ?? true) // default ON with divisions
+      : null;
+    const playoffReseed = override?.playoffReseed ?? league.playoffReseed ?? false;
+    res.json({
+      divisions,
+      hasDivisions,
+      divisionWinnerPriority,
+      playoffReseed,
+      detected: { playoffReseed: league.playoffReseed ?? null },
+      override: override ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/league/:leagueId/playoff-settings', async (req, res, next) => {
+  try {
+    const body = req.body ?? {};
+    const patch = {};
+    if ('divisionWinnerPriority' in body) patch.divisionWinnerPriority = body.divisionWinnerPriority;
+    if ('playoffReseed' in body) patch.playoffReseed = body.playoffReseed;
+    const saved = writePlayoffSettings(req.params.leagueId, patch);
+    res.json({ ok: true, override: saved });
   } catch (err) {
     next(err);
   }

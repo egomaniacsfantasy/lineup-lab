@@ -1421,7 +1421,13 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   // best team (by the record tiebreak) takes a top seed ahead of any wildcard,
   // matching how Sleeper/ESPN seat division winners. No divisions -> flat by record.
   const divisionOf = new Map(teams.map((t) => [t.rosterId, t.division ?? null]));
-  const divisionsEnabled = (league.divisions ?? 0) >= 2 && teams.some((t) => t.division != null);
+  // Division-winner priority is ON by default when the league has divisions;
+  // league.divisionWinnerPriority === false (a user override) turns it off so
+  // seeding is purely by record even with divisions.
+  const divisionsEnabled =
+    (league.divisions ?? 0) >= 2 &&
+    teams.some((t) => t.division != null) &&
+    league.divisionWinnerPriority !== false;
   // Reseeding bracket: each round the highest remaining seed plays the lowest.
   // Only when the league setting says so; otherwise the classic fixed bracket.
   const playoffReseed = league.playoffReseed === true;

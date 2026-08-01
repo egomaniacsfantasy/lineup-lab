@@ -4,6 +4,7 @@ import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { LeagueFutures } from '../components/league/LeagueFutures';
 import { MatchupSlate } from '../components/league/MatchupSlate';
+import { PlayoffSettings } from '../components/league/PlayoffSettings';
 import { StandingsTable } from '../components/league/StandingsTable';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -352,10 +353,13 @@ export function LeaguePage() {
 
       {activeView === 'standings' ? (
         bootstrap && bootstrap.teams.length > 0 ? (
-          <StandingsTable
-            teams={bootstrap.teams}
-            playoffTeams={bootstrap.league.playoffTeams}
-          />
+          <>
+            <StandingsTable
+              teams={bootstrap.teams}
+              playoffTeams={bootstrap.league.playoffTeams}
+            />
+            {connected ? <PlayoffSettings leagueId={bootstrap.league.id} /> : null}
+          </>
         ) : (
           <SeasonalNotice>Connect a league to see its standings.</SeasonalNotice>
         )

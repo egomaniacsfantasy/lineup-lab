@@ -827,6 +827,7 @@ function buildBootstrap(leagueId: string): LeagueBootstrap {
       bestBall: false,
       divisions: null,
       playoffReseed: null,
+      divisionWinnerPriority: null,
     },
     teams: TEAM_POOL.map(buildTeam),
     week: WEEK,

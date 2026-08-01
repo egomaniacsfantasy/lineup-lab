@@ -16,15 +16,15 @@ const SCOREBOARD =
   'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const TTL_MS = 90_000;
 
-// ESPN abbreviations don't always match provider abbreviations. Normalize both
-// sides through this before comparing (see buildLiveLocks). Add aliases as they
-// surface against real data.
+// The player catalog uses Sleeper's team codes for BOTH providers (the ESPN
+// provider maps its proTeamIds to Sleeper codes). The ESPN SCOREBOARD uses ESPN
+// codes. Comparing the two 32-team sets, the only real mismatch is Washington
+// (catalog WAS vs scoreboard WSH); JAC/LA are defensive (ESPN has used them).
+// normalizeTeam is applied to BOTH sides, collapsing variants to one canonical.
 const TEAM_ALIASES = {
-  JAC: 'JAX',
   WSH: 'WAS',
+  JAC: 'JAX',
   LA: 'LAR',
-  LV: 'LVR',
-  ARZ: 'ARI',
 };
 
 export function normalizeTeam(abbr) {
