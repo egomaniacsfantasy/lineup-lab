@@ -12,7 +12,7 @@
  * consensus -> agreement-weighted per-week projections.
  */
 
-const ALPHA = 0.1; // max +/-10% shift.
+const ALPHA = 0; // agreement tilt PARKED — everything prices on the pure model. Set back to 0.1 to re-enable (admin ratings stay in Supabase untouched).
 
 /** Consensus average (0-100) -> signed tilt delta. >0 = boost (underrated). */
 export function tiltFromConsensus(avg) {
