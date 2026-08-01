@@ -1422,6 +1422,9 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
   // matching how Sleeper/ESPN seat division winners. No divisions -> flat by record.
   const divisionOf = new Map(teams.map((t) => [t.rosterId, t.division ?? null]));
   const divisionsEnabled = (league.divisions ?? 0) >= 2 && teams.some((t) => t.division != null);
+  // Reseeding bracket: each round the highest remaining seed plays the lowest.
+  // Only when the league setting says so; otherwise the classic fixed bracket.
+  const playoffReseed = league.playoffReseed === true;
 
   // Precompute each team's optimal-lineup params for every needed week (once).
   // Waiver-replacement level per position = best available free agent (league
@@ -1509,27 +1512,53 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
     seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
 
     // Fixed bracket: map seed positions to rosters (byes for missing top seeds).
-    let alive = bracketOrder.map((s) => (s <= playoffTeams ? seeded[s - 1] : null));
-    let r = 0;
-    while (alive.length > 1) {
-      const wk = playoffWeeks[Math.min(r, playoffWeeks.length - 1)];
-      const next = [];
-      for (let i = 0; i < alive.length; i += 2) {
-        const a = alive[i];
-        const b = alive[i + 1];
-        if (a == null && b == null) next.push(null);
-        else if (a == null) next.push(b);
-        else if (b == null) next.push(a);
-        else {
-          const sa = drawTeamScoreCRN(paramsFor(a, wk), seed, sim, wk, a);
-          const sb = drawTeamScoreCRN(paramsFor(b, wk), seed, sim, wk, b);
-          next.push(sa >= sb ? a : b);
+    let champion = null;
+    if (playoffReseed) {
+      // Re-seed every round: sort survivors by seed, top seeds get byes when the
+      // field isn't a power of two, then pair highest-vs-lowest remaining seed.
+      let survivors = seeded.map((id, i) => ({ id, seed: i + 1 }));
+      let r = 0;
+      while (survivors.length > 1) {
+        const wk = playoffWeeks[Math.min(r, playoffWeeks.length - 1)];
+        survivors.sort((x, y) => x.seed - y.seed);
+        const byes = nextPow2(survivors.length) - survivors.length;
+        const advancing = survivors.slice(0, byes); // top seeds sit out this round
+        const playing = survivors.slice(byes);
+        for (let i = 0; i < playing.length / 2; i += 1) {
+          const hi = playing[i];
+          const lo = playing[playing.length - 1 - i];
+          const sa = drawTeamScoreCRN(paramsFor(hi.id, wk), seed, sim, wk, hi.id);
+          const sb = drawTeamScoreCRN(paramsFor(lo.id, wk), seed, sim, wk, lo.id);
+          advancing.push(sa >= sb ? hi : lo);
         }
+        survivors = advancing;
+        r += 1;
       }
-      alive = next;
-      r += 1;
+      champion = survivors[0]?.id ?? null;
+    } else {
+      // Fixed bracket: seeds mapped to bracket slots once; winners advance in place.
+      let alive = bracketOrder.map((s) => (s <= playoffTeams ? seeded[s - 1] : null));
+      let r = 0;
+      while (alive.length > 1) {
+        const wk = playoffWeeks[Math.min(r, playoffWeeks.length - 1)];
+        const next = [];
+        for (let i = 0; i < alive.length; i += 2) {
+          const a = alive[i];
+          const b = alive[i + 1];
+          if (a == null && b == null) next.push(null);
+          else if (a == null) next.push(b);
+          else if (b == null) next.push(a);
+          else {
+            const sa = drawTeamScoreCRN(paramsFor(a, wk), seed, sim, wk, a);
+            const sb = drawTeamScoreCRN(paramsFor(b, wk), seed, sim, wk, b);
+            next.push(sa >= sb ? a : b);
+          }
+        }
+        alive = next;
+        r += 1;
+      }
+      champion = alive[0];
     }
-    const champion = alive[0];
     if (champion != null) titleCounts.set(champion, titleCounts.get(champion) + 1);
   }
 

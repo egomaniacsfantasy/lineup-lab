@@ -164,6 +164,10 @@ export const sleeperProvider = {
       leagueType,
       bestBall: raw.settings?.best_ball === 1,
       divisions: raw.settings?.divisions ?? null,
+      // TODO(reseed): confirm Sleeper's field. `settings.playoff_type` is the
+      // candidate, but its values aren't verified — left null (fixed bracket) so
+      // we never silently reseed a league by guessing wrong.
+      playoffReseed: null,
     };
   },
 

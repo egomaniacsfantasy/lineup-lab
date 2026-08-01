@@ -826,6 +826,7 @@ function buildBootstrap(leagueId: string): LeagueBootstrap {
       leagueType: 'redraft',
       bestBall: false,
       divisions: null,
+      playoffReseed: null,
     },
     teams: TEAM_POOL.map(buildTeam),
     week: WEEK,

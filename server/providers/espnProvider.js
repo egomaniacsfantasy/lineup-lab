@@ -243,6 +243,9 @@ export function createEspnProvider({ season, espnS2, swid }) {
         leagueType: isKeeper ? 'keeper' : 'redraft',
         bestBall: false,
         divisions: s.scheduleSettings?.divisions?.length ?? null,
+        // TODO(reseed): ESPN's mSettings doesn't cleanly expose reseeding; left
+        // null (fixed bracket) until the exact field is confirmed on a real league.
+        playoffReseed: null,
       };
     },
 

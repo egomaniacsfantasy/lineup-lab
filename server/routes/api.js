@@ -545,7 +545,9 @@ apiRouter.post('/admin/reprice', async (req, res, next) => {
     }
     // Dynamic import avoids a static api.js <-> scheduler.js circular dependency.
     const { repriceAllLeagues } = await import('../scheduler.js');
-    const summary = await repriceAllLeagues({ live: true, staggerMs: 250 });
+    // stamp:false -> live numbers update everywhere, but the futures title/playoff
+    // charts stay on the 6h line-history cadence (they only chart matters).
+    const summary = await repriceAllLeagues({ live: true, staggerMs: 250, stamp: false });
     res.json({ ok: true, ...summary, finalTeams: [...getFinalNflTeams()] });
   } catch (err) {
     next(err);

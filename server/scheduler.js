@@ -20,7 +20,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  *  - `staggerMs`: pause between leagues so a big batch doesn't spike CPU / starve
  *    web requests. Total wall time ≈ leagues × staggerMs; keep it small (100-300ms).
  */
-export async function repriceAllLeagues({ live = false, staggerMs = 0 } = {}) {
+export async function repriceAllLeagues({ live = false, staggerMs = 0, stamp = true } = {}) {
   if (live) await awaitFinalNflTeams(); // one shared scoreboard read for the whole batch
   const registry = readRegistry();
   const leagueIds = Object.keys(registry);
@@ -34,7 +34,10 @@ export async function repriceAllLeagues({ live = false, staggerMs = 0 } = {}) {
       const providerObj = buildHeadlessProvider(provider, season);
       const pricing = await computeLeaguePricing(providerObj, leagueId, userId ?? null, null);
       if (pricing?.available) {
-        recordPricing(leagueId, pricing, { force: true });
+        // stamp=false (live reprices): refresh the served NUMBERS but DON'T append
+        // a line-history point, so the futures title/playoff charts stay on the 6h
+        // cadence while matchup + live odds still update. stamp=true = the 6h tick.
+        if (stamp) recordPricing(leagueId, pricing, { force: true });
         ok += 1;
       }
     } catch (err) {

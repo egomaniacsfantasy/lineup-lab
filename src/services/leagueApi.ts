@@ -35,6 +35,9 @@ export interface ApiLeague extends ApiLeagueSummary {
   // Number of divisions (≥2 means the sim seeds division winners first). null/1
   // = no divisions, seed purely by overall record.
   divisions: number | null;
+  // true = playoff bracket re-seeds each round (top remaining seed plays bottom);
+  // false/null = classic fixed bracket. Drives simulateSeason's bracket.
+  playoffReseed: boolean | null;
 }
 
 export interface ApiTeam {
