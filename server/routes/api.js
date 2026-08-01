@@ -15,6 +15,12 @@ import { registerLeague } from '../engine/leagueRegistry.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
+import {
+  getFinalNflTeams,
+  awaitFinalNflTeams,
+  finalTeamsSignature,
+  buildLiveLocks,
+} from '../live/nflGameStatus.js';
 import { getNflSchedule } from '../services/nflSchedule.js';
 import { getRequestUserId } from '../services/supabaseAdmin.js';
 import { runScoutingHarvest } from '../services/scoutingHarvest/index.js';
@@ -493,6 +499,11 @@ export function buildHeadlessProvider(providerKind, season) {
 // Build + price a league's lines (shared by the /lines route and the 6h
 // scheduler). getLeaguePricing caches 60s, so the scheduler always recomputes.
 export async function computeLeaguePricing(provider, leagueId, userId, overlay = null) {
+  // Cheap, non-blocking read of which NFL teams' games are final (empty outside a
+  // live regular-season game window). Folded into the cache key so a newly-final
+  // game busts the price and re-locks those players.
+  const finalTeams = getFinalNflTeams();
+  const liveSig = finalTeamsSignature();
   return getLeaguePricing(async () => {
     const ctx = await loadLeagueContext(provider, leagueId, userId);
     if (!ctx) throw new Error('league_not_found');
@@ -513,9 +524,33 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
     } catch (err) {
       console.error('[pricing] adjusted projections failed; using snapshot', err);
     }
-    return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections };
-  }, `${leagueId}:${userId}:${overlayHash(overlay)}`);
+    const liveLocks = buildLiveLocks(ctx.matchups, ctx.players, finalTeams);
+    return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections, liveLocks };
+  }, `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}`);
 }
+
+/**
+ * Admin-only: force a LIVE reprice of every registered league. Reads the NFL
+ * scoreboard fresh, locks any player whose game is final into the current week,
+ * then re-sims (matchup + playoff + title) and records a line-history point.
+ * Meant to be pressed after each game wave concludes. Staggered so a big batch
+ * doesn't spike CPU.
+ */
+apiRouter.post('/admin/reprice', async (req, res, next) => {
+  try {
+    const expected = (process.env.ADMIN_PASSWORD ?? 'olympus-admin').trim();
+    if ((req.get('x-admin-password') ?? '').trim() !== expected) {
+      res.status(401).json({ error: 'unauthorized', message: 'Wrong admin password.' });
+      return;
+    }
+    // Dynamic import avoids a static api.js <-> scheduler.js circular dependency.
+    const { repriceAllLeagues } = await import('../scheduler.js');
+    const summary = await repriceAllLeagues({ live: true, staggerMs: 250 });
+    res.json({ ok: true, ...summary, finalTeams: [...getFinalNflTeams()] });
+  } catch (err) {
+    next(err);
+  }
+});
 
 /** Everything one league needs to render: league, teams, week matchups, players. */
 apiRouter.get('/league/:leagueId/bootstrap', async (req, res, next) => {

@@ -7,15 +7,26 @@
 import { readRegistry } from './engine/leagueRegistry.js';
 import { recordPricing } from './engine/lineStore.js';
 import { computeLeaguePricing, buildHeadlessProvider } from './routes/api.js';
+import { awaitFinalNflTeams } from './live/nflGameStatus.js';
 
 const SIX_HOURS = 6 * 60 * 60_000;
 
-export async function repriceAllLeagues() {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Reprice every registered league and append a line-history snapshot.
+ *  - `live`: force a fresh NFL-scoreboard read first, so any just-finished game's
+ *    players lock into the current week (computeLeaguePricing picks them up).
+ *  - `staggerMs`: pause between leagues so a big batch doesn't spike CPU / starve
+ *    web requests. Total wall time ≈ leagues × staggerMs; keep it small (100-300ms).
+ */
+export async function repriceAllLeagues({ live = false, staggerMs = 0 } = {}) {
+  if (live) await awaitFinalNflTeams(); // one shared scoreboard read for the whole batch
   const registry = readRegistry();
   const leagueIds = Object.keys(registry);
-  if (leagueIds.length === 0) return;
+  if (leagueIds.length === 0) return { total: 0, ok: 0 };
 
-  console.log(`[reprice] repricing ${leagueIds.length} league(s)`);
+  console.log(`[reprice] repricing ${leagueIds.length} league(s)${live ? ' (live)' : ''}`);
   let ok = 0;
   for (const leagueId of leagueIds) {
     const { userId, provider, season } = registry[leagueId] ?? {};
@@ -29,8 +40,10 @@ export async function repriceAllLeagues() {
     } catch (err) {
       console.error(`[reprice] ${leagueId} failed:`, err?.message ?? err);
     }
+    if (staggerMs > 0) await sleep(staggerMs);
   }
   console.log(`[reprice] done (${ok}/${leagueIds.length} priced)`);
+  return { total: leagueIds.length, ok };
 }
 
 export function startRepriceScheduler() {

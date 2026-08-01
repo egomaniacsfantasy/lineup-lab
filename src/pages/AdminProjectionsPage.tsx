@@ -131,6 +131,28 @@ export function AdminProjectionsPage() {
     }
   };
 
+  // Live reprice: after a game wave ends, lock finished players to their real
+  // score and re-sim every league. Safe to press anytime — off-season it just
+  // reprices with no players locked.
+  const handleReprice = async () => {
+    setIsBusy(true);
+    setStatus('Repricing all leagues with live results…');
+    try {
+      const response = await adminFetch('/api/admin/reprice', { method: 'POST' });
+      const body = await response.json();
+      if (!response.ok) {
+        setStatus(body.message ?? 'Reprice failed.');
+        return;
+      }
+      const finals = (body.finalTeams ?? []).length;
+      setStatus(
+        `Repriced ${body.ok}/${body.total} leagues. ${finals} team${finals === 1 ? '' : 's'} currently final: their players are locked to live scores.`,
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   if (!isAuthed) {
     return (
       <div className="admin-projections">
@@ -201,6 +223,23 @@ export function AdminProjectionsPage() {
             : Object.keys(resolutions).length > 0
               ? 'Re-import with confirmed matches'
               : 'Import and activate'}
+        </button>
+      </section>
+
+      <section className="admin-projections__card">
+        <h2 className="admin-projections__subtitle">Live reprice</h2>
+        <p className="admin-projections__summary">
+          After a game wave ends, press this to lock every finished player to their
+          real score and re-sim all leagues (matchup, playoff and title odds). Safe
+          anytime: off-season it just reprices with nothing locked.
+        </p>
+        <button
+          className="admin-projections__primary"
+          disabled={isBusy}
+          onClick={() => void handleReprice()}
+          type="button"
+        >
+          {isBusy ? 'Repricing…' : 'Reprice all leagues (live)'}
         </button>
       </section>
 

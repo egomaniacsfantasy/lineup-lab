@@ -561,6 +561,35 @@ export function computeInputsHash({ projectionVersion, teams, week, overlay }) {
  * starting point, the user's number wins where present, everything else stays
  * Franco. This is the "my book, my line" merge: Franco → user.
  */
+/**
+ * Live-score lock: for the CURRENT week, replace a finished player's projection
+ * with their ACTUAL points and zero variance (floor = ceiling = mean), so the
+ * sim draws exactly that score every iteration and treats them as decided. Mutates
+ * projectionMap in place. No-op when liveLocks is empty — so the normal
+ * projection-only pricing path is 100% unchanged, and this only activates during
+ * a live game week once finished players are passed in.
+ */
+export function applyLiveLocks(projectionMap, liveLocks, week) {
+  if (!liveLocks || week == null) return projectionMap;
+  for (const playerId of Object.keys(liveLocks)) {
+    const pts = Number(liveLocks[playerId]);
+    if (!Number.isFinite(pts)) continue;
+    const proj = projectionMap.get(playerId);
+    if (!proj) continue;
+    projectionMap.set(playerId, {
+      ...proj,
+      stdev: 0,
+      weekly: { ...(proj.weekly ?? {}), [week]: pts, [String(week)]: pts },
+      weeklyCI: {
+        ...(proj.weeklyCI ?? {}),
+        [week]: { floor: pts, ceiling: pts },
+        [String(week)]: { floor: pts, ceiling: pts },
+      },
+    });
+  }
+  return projectionMap;
+}
+
 export function applyOverlay(projectionMap, overlay) {
   if (!overlay || typeof overlay !== 'object') return projectionMap;
   for (const [playerId, ov] of Object.entries(overlay)) {
@@ -613,6 +642,9 @@ export function priceLeague(ctx) {
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   // Layer the user's own numbers on top of Franco before any sim runs.
   applyOverlay(projectionMap, overlay);
+  // Lock finished players to their live final score for the current week. Empty
+  // in the normal path, so this changes nothing until a game week is live.
+  applyLiveLocks(projectionMap, ctx.liveLocks, week);
 
   const inputsHash = computeInputsHash({
     projectionVersion: active.version,
