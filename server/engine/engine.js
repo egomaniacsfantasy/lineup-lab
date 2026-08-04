@@ -1390,7 +1390,7 @@ function standardBracketSeeds(size) {
 // Iteration count for the LIVE season engine (fewer than SEASON_SIMS: the live
 // number refreshes every ~30s, so ±1% Monte-Carlo noise is fine and it keeps the
 // per-cycle cost + baseline memory low at scale).
-const LIVE_SIMS = 2500;
+export const LIVE_SIMS = 2500;
 
 /** Shared season setup used by simulateSeason, computeSeasonBaseline and the
  *  live engine — so seeding/bracket/params logic never drifts between them. */

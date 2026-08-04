@@ -9,17 +9,27 @@ import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
 import { saveEspnCreds } from '../providers/espnCredStore.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
-import { getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades } from '../engine/engine.js';
+import {
+  getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
+  computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
+} from '../engine/engine.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
-import { registerLeague } from '../engine/leagueRegistry.js';
+import { registerLeague, readRegistry } from '../engine/leagueRegistry.js';
+import {
+  isLiveOn, liveStatus, getOverlay, setOverlay, getBaseline, mergeLiveOverlay,
+  setLiveMode, registerCycle,
+} from '../live/liveEngine.js';
 import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
 import {
   getFinalNflTeams,
   awaitFinalNflTeams,
+  awaitNflGameState,
+  getNflGameState,
   finalTeamsSignature,
   buildLiveLocks,
+  normalizeTeam,
 } from '../live/nflGameStatus.js';
 import {
   readPlayoffSettings,
@@ -510,36 +520,101 @@ export function buildHeadlessProvider(providerKind, season) {
 
 // Build + price a league's lines (shared by the /lines route and the 6h
 // scheduler). getLeaguePricing caches 60s, so the scheduler always recomputes.
+// Assemble the full pricing context (league + rosters + schedule + adjusted
+// projections + any final-game locks). Shared by the cached static price and the
+// live overlay so the two never build a different context.
+async function assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams) {
+  const ctx = await loadLeagueContext(provider, leagueId, userId);
+  if (!ctx) throw new Error('league_not_found');
+
+  const lastWeek = Math.min((ctx.league.playoffWeekStart ?? 15) + 2, 18);
+  const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
+    const all = [];
+    for (let week = 1; week <= lastWeek; week += 1) {
+      all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
+    }
+    return all;
+  });
+
+  let liveProjections;
+  try {
+    const adjusted = await getAdjustedProjections(scoringSuffix(ctx.league?.scoringFamily));
+    if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+  } catch (err) {
+    console.error('[pricing] adjusted projections failed; using snapshot', err);
+  }
+  const liveLocks = buildLiveLocks(ctx.matchups, ctx.players, finalTeams);
+  return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections, liveLocks };
+}
+
 export async function computeLeaguePricing(provider, leagueId, userId, overlay = null) {
   // Cheap, non-blocking read of which NFL teams' games are final (empty outside a
   // live regular-season game window). Folded into the cache key so a newly-final
   // game busts the price and re-locks those players.
   const finalTeams = getFinalNflTeams();
   const liveSig = finalTeamsSignature();
-  return getLeaguePricing(async () => {
-    const ctx = await loadLeagueContext(provider, leagueId, userId);
-    if (!ctx) throw new Error('league_not_found');
-
-    const lastWeek = Math.min((ctx.league.playoffWeekStart ?? 15) + 2, 18);
-    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
-      const all = [];
-      for (let week = 1; week <= lastWeek; week += 1) {
-        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
-      }
-      return all;
-    });
-
-    let liveProjections;
-    try {
-      const adjusted = await getAdjustedProjections(scoringSuffix(ctx.league?.scoringFamily));
-      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-    } catch (err) {
-      console.error('[pricing] adjusted projections failed; using snapshot', err);
-    }
-    const liveLocks = buildLiveLocks(ctx.matchups, ctx.players, finalTeams);
-    return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections, liveLocks };
-  }, `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${playoffSettingsSignature(leagueId)}`);
+  return getLeaguePricing(
+    () => assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams),
+    `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${playoffSettingsSignature(leagueId)}`,
+  );
 }
+
+/**
+ * Compute ONE league's live overlay for the current game state: each team's live
+ * distribution from the game clock + points so far, closed-form matchup win%, and
+ * simulateSeasonLive futures off a cached baseline. Returns null off-season.
+ */
+export async function computeLeagueLiveOverlay(provider, leagueId, userId, gameState) {
+  const finalTeams = getFinalNflTeams();
+  const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, finalTeams);
+  const inputs = buildLiveProjectionInputs(ctx);
+  if (!inputs) return null; // no projections (off-season)
+
+  // Baseline signature: recomputes when projections, week, any lineup, or playoff
+  // settings change. Stable while a game plays, so it's reused every 30s cycle.
+  const rosterSig = ctx.teams.map((t) => `${t.rosterId}:${(t.starters ?? []).join('-')}`).join('|');
+  const sig = `${inputs.version}:${ctx.week}:${rosterSig}:${playoffSettingsSignature(leagueId)}`;
+  const baseline = getBaseline(leagueId, sig, () =>
+    computeSeasonBaseline({
+      league: ctx.league, teams: ctx.teams, scheduleWeeks: ctx.scheduleWeeks, week: ctx.week,
+      projectionMap: inputs.projectionMap, catalog: ctx.catalog, slotLabels: inputs.slotLabels,
+      seed: inputs.seed, sims: LIVE_SIMS,
+    }),
+  );
+
+  // Per-player points so far (from the week's matchups) and fraction of game left
+  // (from the player's NFL team's live game state; default 1 = not started).
+  const pointsByPlayer = {};
+  for (const m of ctx.matchups ?? []) Object.assign(pointsByPlayer, m.playersPoints ?? {});
+  const fFor = (id) => {
+    const team = normalizeTeam(ctx.catalog?.[id]?.team);
+    const st = team ? gameState.get(team) : null;
+    return st ? st.f : 1;
+  };
+  const live = { pointsForPlayer: (id) => pointsByPlayer[id] ?? 0, fForPlayer: fFor };
+  return priceLiveOverlay(ctx, inputs, live, baseline);
+}
+
+/**
+ * One live cycle (driven by the 30s loop while live mode is on): one shared
+ * scoreboard read, then recompute + store an overlay for every registered league.
+ */
+async function runLiveCycle() {
+  await awaitNflGameState(); // one shared scrape for the whole batch
+  const gameState = getNflGameState();
+  const registry = readRegistry();
+  for (const leagueId of Object.keys(registry)) {
+    const { userId, provider, season } = registry[leagueId] ?? {};
+    try {
+      const providerObj = buildHeadlessProvider(provider, season);
+      const overlay = await computeLeagueLiveOverlay(providerObj, leagueId, userId ?? null, gameState);
+      if (overlay) setOverlay(leagueId, overlay);
+    } catch (err) {
+      console.error(`[live] ${leagueId} overlay failed:`, err?.message ?? err);
+    }
+  }
+}
+registerCycle(runLiveCycle);
 
 /**
  * Admin-only: force a LIVE reprice of every registered league. Reads the NFL
@@ -564,6 +639,27 @@ apiRouter.post('/admin/reprice', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * Admin-only: turn LIVE mode on/off. ON starts a 30s loop that scrapes the NFL
+ * scoreboard once and refreshes every league's live matchup win% + futures; OFF
+ * stops the loop and clears overlays so the app reverts to the static price. Flip
+ * it ON before a game window, OFF after.
+ */
+apiRouter.post('/admin/live', (req, res) => {
+  const expected = (process.env.ADMIN_PASSWORD ?? 'olympus-admin').trim();
+  if ((req.get('x-admin-password') ?? '').trim() !== expected) {
+    res.status(401).json({ error: 'unauthorized', message: 'Wrong admin password.' });
+    return;
+  }
+  const on = req.body?.on === true || req.body?.on === 'true';
+  res.json(setLiveMode(on));
+});
+
+/** Public: is live mode on right now (so the client knows to poll ~30s). */
+apiRouter.get('/live/status', (_req, res) => {
+  res.json(liveStatus());
 });
 
 /**
@@ -801,10 +897,18 @@ apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
       });
     }
 
+    // Live mode: overlay live matchup win% + live futures onto the RESPONSE only
+    // (line history above stays on the static/6h price). No-op when live is off or
+    // this league has no overlay yet.
+    const served =
+      pricing.available && isLiveOn()
+        ? mergeLiveOverlay(pricing, getOverlay(leagueId))
+        : pricing;
+
     res.json(
-      pricing.available
-        ? { ...pricing, titleHistory: readTitleHistory(leagueId) }
-        : pricing,
+      served.available
+        ? { ...served, titleHistory: readTitleHistory(leagueId) }
+        : served,
     );
   } catch (error) {
     next(error);
