@@ -33,34 +33,63 @@ export function normalizeTeam(abbr) {
   return TEAM_ALIASES[up] ?? up;
 }
 
-let _cache = { at: 0, week: null, finalTeams: new Set(), refreshing: false };
+const PERIOD_SEC = 900; // 15-minute quarter
+const GAME_SEC = 4 * PERIOD_SEC; // 60 minutes of regulation
 
-async function fetchFinalTeams() {
+/**
+ * Fraction of a game's clock remaining for LIVE projections (f in livePlayerScore):
+ *   pre  -> 1 (not kicked off, full pregame projection stands)
+ *   post -> 0 (final, player locks to actual)
+ *   in   -> minutes left / 60, from period + clock. OT (period >= 5) counts only the
+ *           OT clock, so it tends toward ~0 (regulation projection is spent).
+ * Clamped to [0, 1]. This is per GAME; every player on that NFL team shares it.
+ */
+export function fractionRemaining(status) {
+  const state = status?.type?.state;
+  if (state === 'pre') return 1;
+  if (state === 'post') return 0;
+  const period = Number(status?.period) || 1;
+  const clockSec = Number(status?.clock);
+  const sec = Number.isFinite(clockSec) ? clockSec : 0;
+  const remaining = period >= 5 ? sec : (4 - period) * PERIOD_SEC + sec;
+  return Math.max(0, Math.min(1, remaining / GAME_SEC));
+}
+
+let _cache = { at: 0, week: null, finalTeams: new Set(), teamState: new Map(), refreshing: false };
+
+async function fetchGameState() {
   const res = await fetch(SCOREBOARD);
   if (!res.ok) throw new Error(`scoreboard ${res.status}`);
   const data = await res.json();
   const finalTeams = new Set();
+  // team abbrev -> { state: 'pre'|'in'|'post', f } for the LIVE projection layer.
+  const teamState = new Map();
   const week = data?.week?.number ?? null;
   for (const ev of data?.events ?? []) {
-    // Regular season only (2). Preseason (1) / postseason (3) never lock players
-    // into a fantasy regular-season week.
+    // Regular season only (2). Preseason (1) / postseason (3) never drive a fantasy
+    // regular-season week.
     if ((ev?.season?.type ?? data?.season?.type) !== 2) continue;
     const comp = ev?.competitions?.[0];
-    if (comp?.status?.type?.state !== 'post') continue; // 'pre' | 'in' | 'post'
+    const status = comp?.status;
+    const state = status?.type?.state; // 'pre' | 'in' | 'post'
+    if (!state) continue;
+    const f = fractionRemaining(status);
     for (const c of comp?.competitors ?? []) {
       const abbr = normalizeTeam(c?.team?.abbreviation);
-      if (abbr) finalTeams.add(abbr);
+      if (!abbr) continue;
+      teamState.set(abbr, { state, f });
+      if (state === 'post') finalTeams.add(abbr);
     }
   }
-  return { week, finalTeams };
+  return { week, finalTeams, teamState };
 }
 
 function refreshInBackground() {
   if (_cache.refreshing) return;
   _cache.refreshing = true;
-  fetchFinalTeams()
-    .then(({ week, finalTeams }) => {
-      _cache = { at: Date.now(), week, finalTeams, refreshing: false };
+  fetchGameState()
+    .then(({ week, finalTeams, teamState }) => {
+      _cache = { at: Date.now(), week, finalTeams, teamState, refreshing: false };
     })
     .catch((err) => {
       _cache.refreshing = false;
@@ -75,21 +104,40 @@ export function getFinalNflTeams() {
   return _cache.finalTeams;
 }
 
-/** Force a fresh read (for the admin reprice trigger). Falls back to the cached
- *  set on error so a flaky scoreboard never breaks a reprice. */
+/** Per-team live game state (state + fraction remaining) for the live projection
+ *  layer. Non-blocking, same background cache as getFinalNflTeams. */
+export function getNflGameState() {
+  if (Date.now() - _cache.at >= TTL_MS) refreshInBackground();
+  return _cache.teamState;
+}
+
+/** Force a fresh read (for the admin reprice / live-cycle trigger). Falls back to
+ *  the cached state on error so a flaky scoreboard never breaks a cycle. */
 export async function awaitFinalNflTeams() {
   try {
-    const { week, finalTeams } = await fetchFinalTeams();
-    _cache = { at: Date.now(), week, finalTeams, refreshing: false };
+    const { week, finalTeams, teamState } = await fetchGameState();
+    _cache = { at: Date.now(), week, finalTeams, teamState, refreshing: false };
   } catch (err) {
     console.error('[nflGameStatus] await refresh failed:', err?.message ?? err);
   }
   return _cache.finalTeams;
 }
 
+/** Fresh read returning the full per-team state (for the live cycle). */
+export async function awaitNflGameState() {
+  await awaitFinalNflTeams();
+  return _cache.teamState;
+}
+
 /** Stable signature of the current final-team set, for cache-busting pricing. */
 export function finalTeamsSignature() {
   return [..._cache.finalTeams].sort().join(',');
+}
+
+/** True if any regular-season game is currently in progress (state 'in'). */
+export function anyGameLive() {
+  for (const s of _cache.teamState.values()) if (s.state === 'in') return true;
+  return false;
 }
 
 /**

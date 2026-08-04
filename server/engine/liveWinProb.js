@@ -45,6 +45,21 @@ export function teamLiveDistribution(playerLives) {
   return { mean, variance };
 }
 
+/**
+ * A team's LIVE distribution from its starters. Resolvers keep it pure/testable:
+ *  - pregameFor(id) -> {mean, sigma|stdev} (this week's pregame projection)
+ *  - pointsFor(id)  -> points scored so far (0 if not started)
+ *  - fFor(id)       -> fraction of the player's game remaining (0..1; 1 = pregame)
+ */
+export function buildLiveTeamDistribution(starterIds, pregameFor, pointsFor, fFor) {
+  const lives = (starterIds ?? []).map((id) => {
+    const pg = pregameFor(id) || {};
+    const f = fFor(id);
+    return livePlayerScore(pg.mean, pg.sigma ?? pg.stdev, pointsFor(id), f == null ? 1 : f);
+  });
+  return teamLiveDistribution(lives);
+}
+
 /** Closed-form P(team A beats team B) from each team's normal {mean, variance}. */
 export function closedFormWinProb(a, b) {
   const spread = a.mean - b.mean;
