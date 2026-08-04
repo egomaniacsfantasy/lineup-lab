@@ -1386,55 +1386,37 @@ function standardBracketSeeds(size) {
   return out;
 }
 
-/**
- * Season Monte Carlo for the Futures tab: simulates the rest of the regular
- * season player-by-player (each team fielding its OPTIMAL lineup that week), then
- * seeds a real fixed bracket and simulates the playoffs. Uses the same split-
- * normal CI sim as the matchup. Returns per-team playoff %, championship %,
- * average final seed, and projected record.
- */
-export function simulateSeason({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed = 1, sims = SEASON_SIMS }) {
+// Iteration count for the LIVE season engine (fewer than SEASON_SIMS: the live
+// number refreshes every ~30s, so ±1% Monte-Carlo noise is fine and it keeps the
+// per-cycle cost + baseline memory low at scale).
+const LIVE_SIMS = 2500;
+
+/** Shared season setup used by simulateSeason, computeSeasonBaseline and the
+ *  live engine — so seeding/bracket/params logic never drifts between them. */
+function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels }) {
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
   const rosterIds = teams.map((t) => t.rosterId);
-  // Simulate only weeks NOT already in the standings. team.record / pointsFor
-  // reflect weeks 1..lastScoredWeek, so we must start at lastScoredWeek+1 — NOT
-  // the displayWeek. Those differ in the window after a week finalizes but
-  // before the platform advances its "current week" pointer, and that gap is
-  // exactly when `w.week >= week` would re-simulate an already-counted week
-  // (double-counting it in wins/pointsFor). lastScoredWeek is the platform's
-  // own scored-week count (Sleeper last_scored_leg / ESPN latestScoringPeriod-1),
-  // robust to that race and to median-scoring formats. Fall back to week-1.
+  // Start after the last SCORED week (not the displayWeek) — see the long note in
+  // the original simulateSeason: avoids double-counting a finalized-but-unadvanced week.
   const lastScored = Number.isFinite(league.lastScoredWeek) ? league.lastScoredWeek : (week - 1);
   const startWeek = Math.max(1, (lastScored ?? (week - 1)) + 1);
   const remaining = (scheduleWeeks ?? []).filter((w) => w.week >= startWeek && w.week <= regularWeeks);
 
-  // Playoff structure: fixed single-elimination bracket, one week per round.
   const bracketSize = nextPow2(Math.max(1, playoffTeams));
   const rounds = Math.max(1, Math.round(Math.log2(bracketSize)));
   const bracketOrder = standardBracketSeeds(bracketSize);
   const playoffWeeks = [];
   for (let r = 0; r < rounds; r += 1) playoffWeeks.push(playoffWeekStart + r);
 
-  // Division-aware seeding: when the league has ≥2 divisions, each division's
-  // best team (by the record tiebreak) takes a top seed ahead of any wildcard,
-  // matching how Sleeper/ESPN seat division winners. No divisions -> flat by record.
   const divisionOf = new Map(teams.map((t) => [t.rosterId, t.division ?? null]));
-  // Division-winner priority is ON by default when the league has divisions;
-  // league.divisionWinnerPriority === false (a user override) turns it off so
-  // seeding is purely by record even with divisions.
   const divisionsEnabled =
     (league.divisions ?? 0) >= 2 &&
     teams.some((t) => t.division != null) &&
     league.divisionWinnerPriority !== false;
-  // Reseeding bracket: each round the highest remaining seed plays the lowest.
-  // Only when the league setting says so; otherwise the classic fixed bracket.
   const playoffReseed = league.playoffReseed === true;
 
-  // Precompute each team's optimal-lineup params for every needed week (once).
-  // Waiver-replacement level per position = best available free agent (league
-  // -size-aware), used to fill any unfillable required slot instead of scoring 0.
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
   const weeksNeeded = new Set([...remaining.map((w) => w.week), ...playoffWeeks]);
   const paramsBy = new Map();
@@ -1445,135 +1427,87 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
     }
     paramsBy.set(t.rosterId, m);
   }
-  const paramsFor = (rosterId, wk) => paramsBy.get(rosterId)?.get(wk);
+  return {
+    regularWeeks, playoffTeams, rosterIds, remaining, playoffWeeks, paramsBy,
+    playoff: { playoffTeams, playoffWeeks, bracketOrder, divisionOf, divisionsEnabled, playoffReseed },
+  };
+}
 
-  const playoffCounts = new Map(rosterIds.map((id) => [id, 0]));
-  const titleCounts = new Map(rosterIds.map((id) => [id, 0]));
-  const winSums = new Map(rosterIds.map((id) => [id, 0]));
-  const seedSums = new Map(rosterIds.map((id) => [id, 0]));
-  // Wins in the TARGET (current) week, so a trade can borrow THIS sim's own
-  // current-week win prob — identical draws to the title/playoff numbers.
-  const currentWeekWins = new Map(rosterIds.map((id) => [id, 0]));
-  const currentWeekTeams = new Set();
-
-  for (let sim = 0; sim < sims; sim += 1) {
-    const wins = new Map(teams.map((t) => [t.rosterId, t.record?.wins ?? 0]));
-    const pf = new Map(teams.map((t) => [t.rosterId, t.pointsFor ?? 0]));
-
-    for (const weekEntry of remaining) {
-      const byMatchup = new Map();
-      weekEntry.matchups.forEach((m) => {
-        if (m.matchupId == null) return;
-        const list = byMatchup.get(m.matchupId) ?? [];
-        list.push(m);
-        byMatchup.set(m.matchupId, list);
-      });
-      byMatchup.forEach((pair) => {
-        if (pair.length !== 2) return;
-        const [a, b] = pair;
-        const sa = drawTeamScoreCRN(paramsFor(a.rosterId, weekEntry.week), seed, sim, weekEntry.week, a.rosterId);
-        const sb = drawTeamScoreCRN(paramsFor(b.rosterId, weekEntry.week), seed, sim, weekEntry.week, b.rosterId);
-        pf.set(a.rosterId, (pf.get(a.rosterId) ?? 0) + sa);
-        pf.set(b.rosterId, (pf.get(b.rosterId) ?? 0) + sb);
-        if (sa > sb) wins.set(a.rosterId, wins.get(a.rosterId) + 1);
-        else if (sb > sa) wins.set(b.rosterId, wins.get(b.rosterId) + 1);
-        if (weekEntry.week === week) {
-          currentWeekTeams.add(a.rosterId);
-          currentWeekTeams.add(b.rosterId);
-          if (sa > sb) currentWeekWins.set(a.rosterId, currentWeekWins.get(a.rosterId) + 1);
-          else if (sb > sa) currentWeekWins.set(b.rosterId, currentWeekWins.get(b.rosterId) + 1);
-        }
-      });
-    }
-
-    rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + wins.get(id)));
-
-    // Standings: wins -> points-for -> coin flip.
-    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, sim, 0, id))()]));
-    const ranked = [...rosterIds].sort(
-      (x, y) =>
-        (wins.get(y) - wins.get(x)) ||
-        (pf.get(y) - pf.get(x)) ||
-        (coin.get(y) - coin.get(x)),
-    );
-    let standings = ranked;
-    if (divisionsEnabled) {
-      // Best-ranked team in each division wins it and jumps ahead of every
-      // wildcard; the division winners keep record order among themselves, then
-      // the remaining teams (wildcards) follow by record.
-      const wonDiv = new Set();
-      const winners = [];
-      for (const id of ranked) {
-        const d = divisionOf.get(id);
-        if (d != null && !wonDiv.has(d)) {
-          wonDiv.add(d);
-          winners.push(id);
-        }
+/** Standings + top-K seeding (division-aware). Returns { standings, seeded }. */
+function seedStandings(rosterIds, wins, pf, coin, playoff) {
+  const ranked = [...rosterIds].sort(
+    (x, y) =>
+      (wins.get(y) - wins.get(x)) ||
+      (pf.get(y) - pf.get(x)) ||
+      (coin.get(y) - coin.get(x)),
+  );
+  let standings = ranked;
+  if (playoff.divisionsEnabled) {
+    const wonDiv = new Set();
+    const winners = [];
+    for (const id of ranked) {
+      const d = playoff.divisionOf.get(id);
+      if (d != null && !wonDiv.has(d)) {
+        wonDiv.add(d);
+        winners.push(id);
       }
-      const winnerSet = new Set(winners);
-      standings = [...winners, ...ranked.filter((id) => !winnerSet.has(id))];
     }
-    standings.forEach((id, i) => seedSums.set(id, seedSums.get(id) + (i + 1)));
-    const seeded = standings.slice(0, playoffTeams); // seed 1..K
-    seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
-
-    // Fixed bracket: map seed positions to rosters (byes for missing top seeds).
-    let champion = null;
-    if (playoffReseed) {
-      // Re-seed every round: sort survivors by seed, top seeds get byes when the
-      // field isn't a power of two, then pair highest-vs-lowest remaining seed.
-      let survivors = seeded.map((id, i) => ({ id, seed: i + 1 }));
-      let r = 0;
-      while (survivors.length > 1) {
-        const wk = playoffWeeks[Math.min(r, playoffWeeks.length - 1)];
-        survivors.sort((x, y) => x.seed - y.seed);
-        const byes = nextPow2(survivors.length) - survivors.length;
-        const advancing = survivors.slice(0, byes); // top seeds sit out this round
-        const playing = survivors.slice(byes);
-        for (let i = 0; i < playing.length / 2; i += 1) {
-          const hi = playing[i];
-          const lo = playing[playing.length - 1 - i];
-          const sa = drawTeamScoreCRN(paramsFor(hi.id, wk), seed, sim, wk, hi.id);
-          const sb = drawTeamScoreCRN(paramsFor(lo.id, wk), seed, sim, wk, lo.id);
-          advancing.push(sa >= sb ? hi : lo);
-        }
-        survivors = advancing;
-        r += 1;
-      }
-      champion = survivors[0]?.id ?? null;
-    } else {
-      // Fixed bracket: seeds mapped to bracket slots once; winners advance in place.
-      let alive = bracketOrder.map((s) => (s <= playoffTeams ? seeded[s - 1] : null));
-      let r = 0;
-      while (alive.length > 1) {
-        const wk = playoffWeeks[Math.min(r, playoffWeeks.length - 1)];
-        const next = [];
-        for (let i = 0; i < alive.length; i += 2) {
-          const a = alive[i];
-          const b = alive[i + 1];
-          if (a == null && b == null) next.push(null);
-          else if (a == null) next.push(b);
-          else if (b == null) next.push(a);
-          else {
-            const sa = drawTeamScoreCRN(paramsFor(a, wk), seed, sim, wk, a);
-            const sb = drawTeamScoreCRN(paramsFor(b, wk), seed, sim, wk, b);
-            next.push(sa >= sb ? a : b);
-          }
-        }
-        alive = next;
-        r += 1;
-      }
-      champion = alive[0];
-    }
-    if (champion != null) titleCounts.set(champion, titleCounts.get(champion) + 1);
+    const winnerSet = new Set(winners);
+    standings = [...winners, ...ranked.filter((id) => !winnerSet.has(id))];
   }
+  return { standings, seeded: standings.slice(0, playoff.playoffTeams) };
+}
 
+/** Single-elim bracket (reseed or fixed). drawScore(rosterId, wk) -> team score. */
+function runBracket(seeded, playoff, drawScore) {
+  const { playoffTeams, playoffWeeks, bracketOrder, playoffReseed } = playoff;
+  if (playoffReseed) {
+    let survivors = seeded.map((id, i) => ({ id, seed: i + 1 }));
+    let r = 0;
+    while (survivors.length > 1) {
+      const wk = playoffWeeks[Math.min(r, playoffWeeks.length - 1)];
+      survivors.sort((x, y) => x.seed - y.seed);
+      const byes = nextPow2(survivors.length) - survivors.length;
+      const advancing = survivors.slice(0, byes);
+      const playing = survivors.slice(byes);
+      for (let i = 0; i < playing.length / 2; i += 1) {
+        const hi = playing[i];
+        const lo = playing[playing.length - 1 - i];
+        advancing.push(drawScore(hi.id, wk) >= drawScore(lo.id, wk) ? hi : lo);
+      }
+      survivors = advancing;
+      r += 1;
+    }
+    return survivors[0]?.id ?? null;
+  }
+  let alive = bracketOrder.map((s) => (s <= playoffTeams ? seeded[s - 1] : null));
+  let r = 0;
+  while (alive.length > 1) {
+    const wk = playoffWeeks[Math.min(r, playoffWeeks.length - 1)];
+    const next = [];
+    for (let i = 0; i < alive.length; i += 2) {
+      const a = alive[i];
+      const b = alive[i + 1];
+      if (a == null && b == null) next.push(null);
+      else if (a == null) next.push(b);
+      else if (b == null) next.push(a);
+      else next.push(drawScore(a, wk) >= drawScore(b, wk) ? a : b);
+    }
+    alive = next;
+    r += 1;
+  }
+  return alive[0];
+}
+
+/** Shared per-team result mapping for simulateSeason + simulateSeasonLive. */
+function buildSeasonResult(teams, agg) {
+  const { sims, regularWeeks, playoffCounts, titleCounts, winSums, seedSums, currentWeekWins, currentWeekTeams } = agg;
   const totalGames = regularWeeks;
   return teams.map((t) => {
     const playoffProb = playoffCounts.get(t.rosterId) / sims;
     const titleProb = titleCounts.get(t.rosterId) / sims;
     const projWinsExact = winSums.get(t.rosterId) / sims;
-    const projWins = Number(projWinsExact.toFixed(1)); // 1 decimal (avg, not rounded)
+    const projWins = Number(projWinsExact.toFixed(1));
     const projLosses = Number(Math.max(0, totalGames - projWinsExact).toFixed(1));
     return {
       rosterId: t.rosterId,
@@ -1590,13 +1524,178 @@ export function simulateSeason({ league, teams, scheduleWeeks, week, projectionM
       titleProb: Number((titleProb * 100).toFixed(1)),
       championOdds: probToAmerican(titleProb),
       avgSeed: Number((seedSums.get(t.rosterId) / sims).toFixed(1)),
-      // This sim's own current-week matchup win % (null if the target week isn't
-      // being simulated — already scored, a bye, or a playoff week).
       weekWinProb: currentWeekTeams.has(t.rosterId)
         ? Number(((currentWeekWins.get(t.rosterId) / sims) * 100).toFixed(1))
         : null,
     };
   });
+}
+
+/** Group a week's matchups into [aRosterId, bRosterId] pairs. */
+function weekPairs(weekEntry) {
+  const byMatchup = new Map();
+  (weekEntry?.matchups ?? []).forEach((m) => {
+    if (m.matchupId == null) return;
+    const list = byMatchup.get(m.matchupId) ?? [];
+    list.push(m);
+    byMatchup.set(m.matchupId, list);
+  });
+  const pairs = [];
+  byMatchup.forEach((pair) => {
+    if (pair.length === 2) pairs.push([pair[0].rosterId, pair[1].rosterId]);
+  });
+  return pairs;
+}
+
+/**
+ * Season Monte Carlo for the Futures tab: simulates the rest of the regular
+ * season player-by-player (each team fielding its OPTIMAL lineup that week), then
+ * seeds a real bracket and simulates the playoffs. Returns per-team playoff %,
+ * championship %, average final seed, and projected record.
+ */
+export function simulateSeason(ctx) {
+  const { teams, week, seed = 1, sims = SEASON_SIMS } = ctx;
+  const setup = seasonSetup(ctx);
+  const { regularWeeks, rosterIds, remaining, paramsBy, playoff } = setup;
+  const paramsFor = (id, wk) => paramsBy.get(id)?.get(wk);
+
+  const playoffCounts = new Map(rosterIds.map((id) => [id, 0]));
+  const titleCounts = new Map(rosterIds.map((id) => [id, 0]));
+  const winSums = new Map(rosterIds.map((id) => [id, 0]));
+  const seedSums = new Map(rosterIds.map((id) => [id, 0]));
+  const currentWeekWins = new Map(rosterIds.map((id) => [id, 0]));
+  const currentWeekTeams = new Set();
+
+  for (let sim = 0; sim < sims; sim += 1) {
+    const wins = new Map(teams.map((t) => [t.rosterId, t.record?.wins ?? 0]));
+    const pf = new Map(teams.map((t) => [t.rosterId, t.pointsFor ?? 0]));
+
+    for (const weekEntry of remaining) {
+      for (const [aId, bId] of weekPairs(weekEntry)) {
+        const sa = drawTeamScoreCRN(paramsFor(aId, weekEntry.week), seed, sim, weekEntry.week, aId);
+        const sb = drawTeamScoreCRN(paramsFor(bId, weekEntry.week), seed, sim, weekEntry.week, bId);
+        pf.set(aId, (pf.get(aId) ?? 0) + sa);
+        pf.set(bId, (pf.get(bId) ?? 0) + sb);
+        if (sa > sb) wins.set(aId, wins.get(aId) + 1);
+        else if (sb > sa) wins.set(bId, wins.get(bId) + 1);
+        if (weekEntry.week === week) {
+          currentWeekTeams.add(aId);
+          currentWeekTeams.add(bId);
+          if (sa > sb) currentWeekWins.set(aId, currentWeekWins.get(aId) + 1);
+          else if (sb > sa) currentWeekWins.set(bId, currentWeekWins.get(bId) + 1);
+        }
+      }
+    }
+
+    rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + wins.get(id)));
+    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, sim, 0, id))()]));
+    const { standings, seeded } = seedStandings(rosterIds, wins, pf, coin, playoff);
+    standings.forEach((id, i) => seedSums.set(id, seedSums.get(id) + (i + 1)));
+    seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
+    const champion = runBracket(seeded, playoff, (id, wk) => drawTeamScoreCRN(paramsFor(id, wk), seed, sim, wk, id));
+    if (champion != null) titleCounts.set(champion, titleCounts.get(champion) + 1);
+  }
+
+  return buildSeasonResult(teams, { sims, regularWeeks, playoffCounts, titleCounts, winSums, seedSums, currentWeekWins, currentWeekTeams });
+}
+
+/**
+ * LIVE engine, part 1: precompute the reusable BASELINE for a league — for each of
+ * `sims` iterations, every team's wins + points-for from all weeks AFTER the
+ * current one (deterministic given the seed, so stable while a game plays), plus
+ * the current-week pairings and the playoff-week params the live re-roll needs.
+ * Computed once (e.g. off the 6h reprice); reused by every 30s live update.
+ */
+export function computeSeasonBaseline(ctx) {
+  const { teams, week, seed = 1, sims = LIVE_SIMS } = ctx;
+  const setup = seasonSetup(ctx);
+  const { regularWeeks, rosterIds, remaining, playoffWeeks, paramsBy, playoff } = setup;
+  const paramsFor = (id, wk) => paramsBy.get(id)?.get(wk);
+  const futureWeeks = remaining.filter((w) => w.week !== week);
+
+  const futures = [];
+  for (let sim = 0; sim < sims; sim += 1) {
+    const wins = new Map(rosterIds.map((id) => [id, 0]));
+    const pf = new Map(rosterIds.map((id) => [id, 0]));
+    for (const weekEntry of futureWeeks) {
+      for (const [aId, bId] of weekPairs(weekEntry)) {
+        const sa = drawTeamScoreCRN(paramsFor(aId, weekEntry.week), seed, sim, weekEntry.week, aId);
+        const sb = drawTeamScoreCRN(paramsFor(bId, weekEntry.week), seed, sim, weekEntry.week, bId);
+        pf.set(aId, pf.get(aId) + sa);
+        pf.set(bId, pf.get(bId) + sb);
+        if (sa > sb) wins.set(aId, wins.get(aId) + 1);
+        else if (sb > sa) wins.set(bId, wins.get(bId) + 1);
+      }
+    }
+    futures.push(new Map(rosterIds.map((id) => [id, { wins: wins.get(id), pf: pf.get(id) }])));
+  }
+
+  const currentEntry = remaining.find((w) => w.week === week) ?? null;
+  const playoffParamsBy = new Map(
+    rosterIds.map((id) => [id, new Map(playoffWeeks.map((wk) => [wk, paramsFor(id, wk)]))]),
+  );
+
+  return {
+    sims, seed, week, regularWeeks, rosterIds, playoff,
+    teams: teams.map((t) => ({ rosterId: t.rosterId, teamName: t.teamName, record: t.record, isUser: t.isUser })),
+    base: new Map(teams.map((t) => [t.rosterId, { wins: t.record?.wins ?? 0, pf: t.pointsFor ?? 0 }])),
+    futures,
+    currentWeekPairs: currentEntry ? weekPairs(currentEntry) : [],
+    playoffParamsBy,
+  };
+}
+
+/**
+ * LIVE engine, part 2: re-run the season from a cached baseline in milliseconds.
+ * Only the current week is re-rolled — from each team's LIVE normal {mean,
+ * variance} (from livePlayerScore-summed team distributions) — then the cached
+ * future is added, teams are re-seeded, and the bracket runs. Reuses the exact
+ * seeding/bracket logic as the full sim, so the odds are consistent.
+ */
+export function simulateSeasonLive(baseline, liveDists) {
+  const { sims, seed, week, regularWeeks, rosterIds, teams, base, futures, currentWeekPairs, playoff, playoffParamsBy } = baseline;
+  const playoffCounts = new Map(rosterIds.map((id) => [id, 0]));
+  const titleCounts = new Map(rosterIds.map((id) => [id, 0]));
+  const winSums = new Map(rosterIds.map((id) => [id, 0]));
+  const seedSums = new Map(rosterIds.map((id) => [id, 0]));
+  const currentWeekWins = new Map(rosterIds.map((id) => [id, 0]));
+  const currentWeekTeams = new Set();
+
+  for (let sim = 0; sim < sims; sim += 1) {
+    const wins = new Map(rosterIds.map((id) => [id, base.get(id).wins]));
+    const pf = new Map(rosterIds.map((id) => [id, base.get(id).pf]));
+
+    // Current week: one normal draw per team from its LIVE distribution.
+    const rng = mulberry32(streamSeed((seed ^ 0x6d2b79f5) >>> 0, sim, week, 1));
+    for (const [aId, bId] of currentWeekPairs) {
+      const da = liveDists.get(aId);
+      const db = liveDists.get(bId);
+      const sa = da ? Math.max(0, da.mean + Math.sqrt(Math.max(0, da.variance)) * gaussian(rng)) : 0;
+      const sb = db ? Math.max(0, db.mean + Math.sqrt(Math.max(0, db.variance)) * gaussian(rng)) : 0;
+      pf.set(aId, pf.get(aId) + sa);
+      pf.set(bId, pf.get(bId) + sb);
+      currentWeekTeams.add(aId);
+      currentWeekTeams.add(bId);
+      if (sa > sb) { wins.set(aId, wins.get(aId) + 1); currentWeekWins.set(aId, currentWeekWins.get(aId) + 1); }
+      else if (sb > sa) { wins.set(bId, wins.get(bId) + 1); currentWeekWins.set(bId, currentWeekWins.get(bId) + 1); }
+    }
+
+    const fut = futures[sim];
+    for (const id of rosterIds) {
+      wins.set(id, wins.get(id) + fut.get(id).wins);
+      pf.set(id, pf.get(id) + fut.get(id).pf);
+    }
+
+    rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + wins.get(id)));
+    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, sim, 0, id))()]));
+    const { standings, seeded } = seedStandings(rosterIds, wins, pf, coin, playoff);
+    standings.forEach((id, i) => seedSums.set(id, seedSums.get(id) + (i + 1)));
+    seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
+    const champion = runBracket(seeded, playoff, (id, wk) => drawTeamScoreCRN(playoffParamsBy.get(id)?.get(wk), seed, sim, wk, id));
+    if (champion != null) titleCounts.set(champion, titleCounts.get(champion) + 1);
+  }
+
+  return buildSeasonResult(teams, { sims, regularWeeks, playoffCounts, titleCounts, winSums, seedSums, currentWeekWins, currentWeekTeams });
 }
 
 /**
