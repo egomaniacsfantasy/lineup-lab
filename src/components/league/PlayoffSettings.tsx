@@ -51,7 +51,8 @@ export function PlayoffSettings({
       <div className="po-settings__head">
         <h3 className="po-settings__title">Playoff structure</h3>
         <span className="po-settings__sub">
-          How the sim seeds the bracket. Correct these if they don&apos;t match your league.
+          Set how your league seeds the playoffs — the sim uses these. Change them
+          anytime to match your league.
         </span>
       </div>
 

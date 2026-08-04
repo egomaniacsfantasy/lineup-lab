@@ -94,9 +94,13 @@ export function AppHeader() {
 
         <div className="app-header__actions">
           {isAdmin ? (
-            <span className="app-header__admin" title="You can edit agreement values">
+            <NavLink
+              className="app-header__admin"
+              title="Admin: import projections, live reprice"
+              to="/admin/projections"
+            >
               Admin
-            </span>
+            </NavLink>
           ) : null}
           <span
             className={[
