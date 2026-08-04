@@ -1,0 +1,84 @@
+/* A strip, not a row of cards. It sits directly under the matchup hero and
+   must never outrank it: the week is why you opened the app, the season is
+   why you stayed. */
+.season-band {
+  display: grid;
+  gap: 9px;
+  padding: 13px 16px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--bg-surface);
+  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.1);
+}
+
+.season-band__eyebrow {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.season-band__items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 12px 18px;
+}
+
+.season-band__item {
+  display: grid;
+  gap: 1px;
+  align-content: start;
+  min-width: 0;
+}
+
+/* Every item after the first sits behind a hairline so the strip reads as one
+   thought with parts, rather than separate tiles. */
+.season-band__item + .season-band__item {
+  padding-left: 18px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.season-band__label {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.season-band__value {
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: 19px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+}
+
+/* Championship is the differentiator, so it carries the price face the rest
+   of the product uses for a market price, and the accent. */
+.season-band__item--strong .season-band__value {
+  color: var(--text-amber);
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+@media (max-width: 560px) {
+  .season-band__items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  /* The hairline only makes sense between items on one line. */
+  .season-band__item + .season-band__item {
+    padding-left: 0;
+    border-left: none;
+  }
+}

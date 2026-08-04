@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { MatchupDistributions } from '../components/matchup/MatchupDistributions';
+import { SeasonBand } from '../components/matchup/SeasonBand';
 import { PlayerChip } from '../components/player/PlayerChip';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeRow } from '../components/trade-display/TradeDisplay';
@@ -9,6 +10,7 @@ import { OddsChart, type OddsChartPoint } from '../components/charts/OddsChart';
 import { Card, Chip } from '../components/ui/DesignPrimitives';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import type { PricedFuture } from '../services/leagueApi';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
@@ -55,7 +57,6 @@ import {
   type VolatilityProjectionSet,
 } from '../utils/volatilityProfile';
 import {
-  buildExposureWindows,
   getGameContextSource,
   getPlayerContext,
 } from '../utils/playerGameContext';
@@ -427,11 +428,6 @@ function slotToneClass(slotLabel: string) {
     : '';
 }
 
-function prettyDay(dayLabel: string) {
-  return dayLabel.length <= 3
-    ? dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1).toLowerCase()
-    : dayLabel;
-}
 
 function MarketPlayerUnit({
   label,
@@ -1066,6 +1062,8 @@ interface PricedMover {
 interface MatchupLiveProps {
   matchup: MatchupData;
   isConnected: boolean;
+  /** The user's own futures row, for the season band under the hero. */
+  userFuture?: PricedFuture | null;
   isPriced?: boolean;
   lineMovement?: { from: number; to: number; at: number } | null;
   lineHistory?: LineHistoryEntry[] | null;
@@ -1199,6 +1197,7 @@ function MatchupSuggestionEmpty({
 function MatchupLive({
   matchup,
   isConnected,
+  userFuture = null,
   isPriced = false,
   lineMovement = null,
   lineHistory = null,
@@ -1279,7 +1278,6 @@ function MatchupLive({
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
   const [compareSource, setCompareSource] = useState<'slip' | 'edge' | null>(null);
-  const [isLockExpanded, setIsLockExpanded] = useState(false);
   const [volatilityProjectionSet, setVolatilityProjectionSet] =
     useState<VolatilityProjectionSet | null>(null);
   const [headToHead, setHeadToHead] = useState<SleeperHeadToHeadSummary | null>(null);
@@ -1410,25 +1408,6 @@ function MatchupLive({
     );
   }, [topPositiveEvaluation]);
 
-  const exposureTiming = useMemo(
-    () => buildExposureWindows(engine.roster, gameContextSource),
-    [engine.roster, gameContextSource],
-  );
-  const exposureWindows = exposureTiming.windows;
-  const lockSummary = useMemo(() => {
-    const nextWindow = exposureWindows[0];
-    if (!nextWindow) return null;
-    const lockTime = nextWindow.detail.match(/locks\s+(.+)$/i)?.[1] ?? nextWindow.detail;
-    const sundayWindow = exposureWindows.find((window) => window.dayLabel === 'SUN');
-    const endNote = sundayWindow && sundayWindow.key !== nextWindow.key
-      ? 'Sunday decides it'
-      : 'Next window decides it';
-    // No projections for the week yet, so there is no share to quote.
-    if (nextWindow.share <= 0) {
-      return `Your week starts ${prettyDay(nextWindow.dayLabel)} ${lockTime} · ${endNote}`;
-    }
-    return `${nextWindow.share}% of your projection locks ${prettyDay(nextWindow.dayLabel)} ${lockTime} · ${endNote}`;
-  }, [exposureWindows]);
   useEffect(() => {
     if (recapShareState === 'idle' || recapShareState === 'working') {
       return undefined;
@@ -2003,6 +1982,8 @@ function MatchupLive({
           </div>
         </section>
 
+        {userFuture ? <SeasonBand future={userFuture} /> : null}
+
         {scoringNote ? <SeasonalNotice>{scoringNote}</SeasonalNotice> : null}
         {unpricedStarterCount > 0 ? (
           <SeasonalNotice>
@@ -2301,68 +2282,7 @@ function MatchupLive({
               ) : null}
             </div>
 
-            {exposureTiming.contextAvailable && exposureWindows.length > 0 && lockSummary ? (
-              <section className="matchup-page__module matchup-page__module--locks">
-                <button
-                  aria-expanded={isLockExpanded}
-                  className="matchup-page__lock-summary"
-                  onClick={() => setIsLockExpanded((current) => !current)}
-                  type="button"
-                >
-                  <span>{lockSummary}</span>
-                  <span className="matchup-page__lock-summary-action">
-                    {isLockExpanded ? 'Hide' : 'Details'}
-                  </span>
-                </button>
 
-                {isLockExpanded ? (
-                  <div className="matchup-page__lock-detail-panel">
-                    <div className="matchup-page__module-row">
-                      <h2 className="matchup-page__module-title">When your week locks</h2>
-                      <p className="matchup-page__meta-copy">% of projection</p>
-                    </div>
-
-                    <div aria-hidden="true" className="matchup-page__lock-bar">
-                      {exposureWindows.map((window, index) => (
-                        <span
-                          className={index === 0 ? 'matchup-page__lock-segment matchup-page__lock-segment--next' : 'matchup-page__lock-segment'}
-                          key={window.key}
-                          style={{ flexGrow: window.share }}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="matchup-page__lock-grid">
-                      {exposureWindows.map((window, index) => (
-                        <div className="matchup-page__lock-row" key={window.key}>
-                          <span className={index === 0 ? 'matchup-page__lock-day matchup-page__lock-day--next' : 'matchup-page__lock-day'}>
-                            {window.dayLabel}
-                          </span>
-                          <span className="matchup-page__lock-detail">{window.detail}</span>
-                          <span aria-hidden="true" className="matchup-page__lock-headshots">
-                            {window.players.slice(0, 4).map((player, playerIndex) => (
-                              <span
-                                className={playerIndex > 0 ? 'matchup-page__mini-wrap matchup-page__mini-wrap--overlap' : 'matchup-page__mini-wrap'}
-                                key={`${window.key}-${player.id}`}
-                              >
-                                <PlayerChip player={player} showPosition={false} size="sm" />
-                              </span>
-                            ))}
-                            {window.players.length > 4 ? (
-                              <span className="matchup-page__mini-more">+{window.players.length - 4}</span>
-                            ) : null}
-                          </span>
-                          <span className={index === 0 ? 'matchup-page__lock-share matchup-page__lock-share--next' : 'matchup-page__lock-share'}>
-                            {window.share}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
 
             {!isConnected && !isRecapDismissed ? (
               <section className="matchup-page__module matchup-page__module--recap">
@@ -2887,6 +2807,7 @@ export function MatchupPage() {
     <>
       <MatchupLive
         movers={movers}
+        userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}
         isConnected={connectedMatchup !== null}
         isPriced={Boolean(pricing?.available)}
         lineMovement={connectedMatchup ? lineMovement : null}

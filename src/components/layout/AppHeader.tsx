@@ -55,9 +55,9 @@ export function AppHeader() {
     dynastyTradesExperimental;
   const navItems = stored
     ? [
-        { label: 'Matchup', path: '/matchup' },
+        { label: 'Hub', path: '/matchup' },
         { label: 'League', path: '/league' },
-        ...(hideTrade ? [] : [{ label: 'Market', path: '/market', badge: showExperimentalMarketTag ? 'experimental' : null }]),
+        ...(hideTrade ? [] : [{ label: 'Trades', path: '/market', badge: showExperimentalMarketTag ? 'experimental' : null }]),
         { label: 'Board', path: '/rankings' },
         { label: 'More', path: '/more' },
       ]

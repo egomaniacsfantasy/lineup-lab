@@ -5,7 +5,7 @@ import './BottomTabBar.css';
 
 const BASE_TABS = [
   {
-    label: 'Matchup',
+    label: 'Hub',
     path: '/matchup',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -27,7 +27,7 @@ const BASE_TABS = [
     ),
   },
   {
-    label: 'Market',
+    label: 'Trades',
     path: '/market',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
