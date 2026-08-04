@@ -27,7 +27,7 @@ const STATE_LABELS: Record<string, (season: string, week: number) => string> = {
 
 export function AppHeader() {
   const { mode, seasonState, season, nflWeek } = useSeasonMode();
-  const { bootstrap, refresh, stored, isLoading, error } = useLeagueConnection();
+  const { bootstrap, refresh, stored, isLoading, error, liveMode } = useLeagueConnection();
   const { format, toggleFormat } = useOddsFormat();
   const { user } = useAuth();
   const isAdmin = isAgreementAdmin(user?.email);
@@ -93,6 +93,32 @@ export function AppHeader() {
         </nav>
 
         <div className="app-header__actions">
+          {liveMode?.on ? (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                color: '#2fd47a',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+                letterSpacing: '0.06em',
+              }}
+              title="Live in-game odds are updating every 30s"
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#2fd47a',
+                  boxShadow: '0 0 6px #2fd47a',
+                }}
+              />
+              LIVE
+            </span>
+          ) : null}
           {isAdmin ? (
             <NavLink
               className="app-header__admin"

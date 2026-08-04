@@ -70,8 +70,49 @@ export function AdminProjectionsPage() {
     return true;
   }, [adminFetch]);
 
+  const [live, setLive] = useState<{ on: boolean; at: number; leagues?: number }>({
+    on: false,
+    at: 0,
+  });
+
+  const refreshLive = useCallback(async () => {
+    try {
+      const res = await fetch('/api/live/status');
+      if (res.ok) setLive(await res.json());
+    } catch {
+      // best effort
+    }
+  }, []);
+
+  const toggleLive = async () => {
+    setIsBusy(true);
+    try {
+      const res = await adminFetch('/api/admin/live', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ on: !live.on }),
+      });
+      if (!res.ok) {
+        setStatus(res.status === 401 ? 'Wrong admin password.' : 'Could not toggle live mode.');
+        return;
+      }
+      const body = await res.json();
+      setLive(body);
+      setStatus(
+        body.on
+          ? 'Live mode ON: matchup win% and futures refresh every 30s during games.'
+          : 'Live mode OFF: back to the static price.',
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   useEffect(() => {
-    if (password) void loadHistory();
+    if (password) {
+      void loadHistory();
+      void refreshLive();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -223,6 +264,27 @@ export function AdminProjectionsPage() {
             : Object.keys(resolutions).length > 0
               ? 'Re-import with confirmed matches'
               : 'Import and activate'}
+        </button>
+      </section>
+
+      <section className="admin-projections__card">
+        <h2 className="admin-projections__subtitle">
+          Live mode {live.on ? <span style={{ color: '#2fd47a' }}>ON</span> : <span style={{ opacity: 0.6 }}>off</span>}
+        </h2>
+        <p className="admin-projections__summary">
+          Flip this ON before a game window. Every 30s it reads the NFL scoreboard
+          once and refreshes every league's live matchup win% and futures (playoff
+          and title odds) from the game clock. Flip it OFF when games are done and
+          everything reverts to the static price.
+          {live.on && live.leagues != null ? ` Currently updating ${live.leagues} league${live.leagues === 1 ? '' : 's'}.` : ''}
+        </p>
+        <button
+          className="admin-projections__primary"
+          disabled={isBusy}
+          onClick={() => void toggleLive()}
+          type="button"
+        >
+          {isBusy ? 'Working…' : live.on ? 'Turn live mode OFF' : 'Turn live mode ON'}
         </button>
       </section>
 

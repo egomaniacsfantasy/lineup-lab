@@ -349,6 +349,35 @@ export function fetchLines(leagueId: string, userId: string, opts?: { house?: bo
   ).finally(() => window.clearTimeout(timeout));
 }
 
+export interface LiveStatus {
+  on: boolean;
+  at: number;
+  leagues?: number;
+  cycleMs?: number;
+}
+
+/** Is live in-game mode on right now (tells the client to poll ~30s). Public. */
+export async function fetchLiveStatus(): Promise<LiveStatus> {
+  try {
+    const res = await fetch('/api/live/status');
+    if (!res.ok) return { on: false, at: 0 };
+    return (await res.json()) as LiveStatus;
+  } catch {
+    return { on: false, at: 0 };
+  }
+}
+
+/** Admin: turn live in-game mode on/off. */
+export async function setLiveModeAdmin(on: boolean, password: string): Promise<LiveStatus> {
+  const res = await fetch('/api/admin/live', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+    body: JSON.stringify({ on }),
+  });
+  if (!res.ok) throw new Error(res.status === 401 ? 'unauthorized' : 'live_toggle_failed');
+  return (await res.json()) as LiveStatus;
+}
+
 export interface BoardRow {
   rank: number;
   playerId: string;

@@ -12,6 +12,7 @@ import {
 import {
   connectUsername,
   fetchBootstrap,
+  fetchLiveStatus,
   fetchSchedule,
   refreshLeague,
   setApiContext,
@@ -93,6 +94,7 @@ interface LeagueConnectionValue {
   switchLeague: (provider: StoredConnection['provider'], leagueId: string) => void;
   disconnect: () => void;
   refresh: () => Promise<void>;
+  liveMode: { on: boolean; at: number };
   marketScan: {
     isScanning: boolean;
     lastScannedAt: number | null;
@@ -726,6 +728,36 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     await hydrate(stored);
   }, [stored, hydrate]);
 
+  // ── live in-game mode ──
+  // The admin flips live mode on before a game window. The client polls whether
+  // it's on, and while it is, re-fetches pricing every 30s so the matchup win% and
+  // futures update in-game. Off = no polling, so the app is unchanged.
+  const [liveMode, setLiveMode] = useState<{ on: boolean; at: number }>({ on: false, at: 0 });
+  useEffect(() => {
+    let alive = true;
+    const check = () => {
+      void fetchLiveStatus().then((s) => {
+        if (alive && s) setLiveMode({ on: s.on, at: s.at });
+      });
+    };
+    check();
+    const t = window.setInterval(check, 45_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, []);
+  useEffect(() => {
+    if (!liveMode.on || !stored) return undefined;
+    const t = window.setInterval(() => {
+      void revalidatePricing(stored, {
+        week: bootstrap?.week ?? pricingRef.current?.week ?? null,
+        silent: true,
+      });
+    }, 30_000);
+    return () => window.clearInterval(t);
+  }, [liveMode.on, stored, bootstrap?.week, revalidatePricing]);
+
   const scanMarket = useCallback(async () => {
     if (!stored) return null;
     if (marketScanPromiseRef.current) return marketScanPromiseRef.current;
@@ -771,6 +803,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       switchLeague,
       disconnect,
       refresh,
+      liveMode,
       marketScan: {
         isScanning: isScanningMarket,
         lastScannedAt: lastMarketScanAt,
@@ -792,6 +825,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       switchLeague,
       disconnect,
       refresh,
+      liveMode,
       isScanningMarket,
       lastMarketScanAt,
       scanMarket,
