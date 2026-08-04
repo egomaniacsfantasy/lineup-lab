@@ -96,7 +96,11 @@ function initials(name: string) {
     .join('') || '?';
 }
 
-function renderAssetIcon(asset: TradeAssetItem) {
+/** A headshot that 404s used to render as a torn-image icon, because the only
+ *  fallback was "no url at all". Failing images now swap to initials. */
+function AssetIcon({ asset }: { asset: TradeAssetItem }) {
+  const [failed, setFailed] = useState(false);
+
   if (asset.kind !== 'player') {
     return (
       <span className="trade-display__asset-token" aria-hidden="true">
@@ -107,8 +111,13 @@ function renderAssetIcon(asset: TradeAssetItem) {
 
   return (
     <span className="trade-display__asset-avatar" aria-hidden="true">
-      {asset.headshotUrl ? (
-        <img alt="" className="trade-display__asset-avatar-image" src={asset.headshotUrl} />
+      {asset.headshotUrl && !failed ? (
+        <img
+          alt=""
+          className="trade-display__asset-avatar-image"
+          onError={() => setFailed(true)}
+          src={asset.headshotUrl}
+        />
       ) : (
         <span className="trade-display__asset-avatar-fallback">{initials(asset.name)}</span>
       )}
@@ -140,7 +149,7 @@ export function TradeSide({ side, tone, dense = false }: TradeSideProps) {
             ].filter(Boolean).join(' ')}
             compact={dense}
             key={asset.id}
-            media={renderAssetIcon(asset)}
+            media={<AssetIcon asset={asset} />}
             name={asset.name}
             subtitle={asset.subtitle}
           />
@@ -254,19 +263,21 @@ function TradeLayout({
               {verdictLabel ? (
                 <span className="trade-display__tWord">{verdictLabel}</span>
               ) : null}
-              <span
-                className={[
-                  'trade-display__tTitle',
-                  leadRow.tone === 'positive'
-                    ? 'trade-display__tTitle--positive'
-                    : leadRow.tone === 'negative'
-                      ? 'trade-display__tTitle--negative'
-                      : '',
-                ].filter(Boolean).join(' ')}
-              >
-                {leadRow.value}
+              <span className="trade-display__tLine">
+                <span
+                  className={[
+                    'trade-display__tTitle',
+                    leadRow.tone === 'positive'
+                      ? 'trade-display__tTitle--positive'
+                      : leadRow.tone === 'negative'
+                        ? 'trade-display__tTitle--negative'
+                        : '',
+                  ].filter(Boolean).join(' ')}
+                >
+                  {leadRow.value}
+                </span>
+                <span className="trade-display__tTitleLabel">{leadRow.label}</span>
               </span>
-              <span className="trade-display__tTitleLabel">{leadRow.label}</span>
             </header>
           ) : null}
 
