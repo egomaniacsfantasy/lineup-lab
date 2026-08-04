@@ -14,7 +14,6 @@ import { DemoPage, LandingPage } from './pages/LandingPage';
 import { DesignBoardRowPage } from './pages/DesignBoardRowPage';
 import { DesignChartPage } from './pages/DesignChartPage';
 import { DesignFixturePage } from './pages/DesignFixturePage';
-import { TradeLabPage } from './dev/TradeLabPage';
 import { LeaguePage } from './pages/LeaguePage';
 import { MatchupPage } from './pages/MatchupPage';
 import { MorePage } from './pages/MorePage';
@@ -77,7 +76,6 @@ function PublicRoutes() {
               <Route path="/signin" element={<AuthLanding />} />
               <Route element={<AppShell />}>
                 <Route path="/demo" element={<DemoPage />} />
-                {import.meta.env.DEV ? <Route path="/design/trade-lab" element={<TradeLabPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/board-row/:variant" element={<DesignBoardRowPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/chart/:variant" element={<DesignChartPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/:scene" element={<DesignFixturePage />} /> : null}

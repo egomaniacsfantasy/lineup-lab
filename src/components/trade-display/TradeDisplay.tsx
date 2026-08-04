@@ -81,6 +81,12 @@ type TradeRowProps = Omit<TradeLayoutProps, 'tone' | 'partnerLine' | 'impactLine
 
 type TradeCardProps = Omit<TradeLayoutProps, 'tone'>;
 
+/** "Your title" reads as "Title" inside a block already headed Their side. */
+function mirrorLabel(label: string) {
+  const stripped = label.replace(/^your\s+/i, '');
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
 function initials(name: string) {
   return name
     .split(/\s+/)
@@ -210,6 +216,7 @@ function TradeLayout({
      nothing is hidden, reordered or recomputed. */
   const leadRow = impactRows.find((row) => row.emphasis === 'lead') ?? impactRows[0] ?? null;
   const supportRows = impactRows.filter((row) => row !== leadRow);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   return (
     <article
@@ -232,85 +239,110 @@ function TradeLayout({
       ) : null}
 
       {tone === 'rich' ? (
-        <div className="trade-display__body">
-          {/* The verdict is the card's whole point, so it anchors the left
-              edge at full size instead of being squeezed into a gutter. The
-              exchange takes the middle, and every supporting number lives on
-              one strip underneath rather than being strewn down a rail. */}
+        /* Ticket. A deal is a slip you pick up and act on, so the card is
+           never wider than its content, your outcome sits at the top where it
+           decides whether to keep reading, and the actions live on the surface
+           rather than behind a whole-card click nobody can see. */
+        <div className="trade-display__ticket">
           {leadRow ? (
-            <div
+            <header
               className={[
-                'trade-display__verdict',
-                `trade-display__verdict--${verdictTone}`,
-                leadRow.tone === 'positive'
-                  ? 'trade-display__verdict--positive'
-                  : leadRow.tone === 'negative'
-                    ? 'trade-display__verdict--negative'
-                    : '',
-              ].filter(Boolean).join(' ')}
+                'trade-display__tHead',
+                `trade-display__tHead--${verdictTone}`,
+              ].join(' ')}
             >
               {verdictLabel ? (
-                <span className="trade-display__verdict-word">{verdictLabel}</span>
+                <span className="trade-display__tWord">{verdictLabel}</span>
               ) : null}
-              <span className="trade-display__verdict-value">{leadRow.value}</span>
-              <span className="trade-display__verdict-label">{leadRow.label}</span>
-              {leadRow.mirror ? (
-                <span className="trade-display__verdict-mirror">
-                  {leadRow.mirror.label} {leadRow.mirror.value}
-                </span>
-              ) : null}
+              <span
+                className={[
+                  'trade-display__tTitle',
+                  leadRow.tone === 'positive'
+                    ? 'trade-display__tTitle--positive'
+                    : leadRow.tone === 'negative'
+                      ? 'trade-display__tTitle--negative'
+                      : '',
+                ].filter(Boolean).join(' ')}
+              >
+                {leadRow.value}
+              </span>
+              <span className="trade-display__tTitleLabel">{leadRow.label}</span>
+            </header>
+          ) : null}
 
-              {/* The supporting metrics belong with the lead, not on a
-                  full-width strip that was 90% empty. Everything about your
-                  outcome now reads as one column. */}
-              {supportRows.length > 0 ? (
-                <div className="trade-display__verdict-stats">
-                  {supportRows.map((row) => (
+          <div className="trade-display__tBody">
+            <TradeSide side={sendSide} tone="send" />
+            <div className="trade-display__tRule" aria-hidden="true"><span>for</span></div>
+            <TradeSide side={getSide} tone="get" />
+          </div>
+
+          {supportRows.length > 0 ? (
+            <div className="trade-display__tStats">
+              {supportRows.map((row) => (
+                <span
+                  className={[
+                    'trade-display__stat',
+                    row.tone === 'positive'
+                      ? 'trade-display__stat--positive'
+                      : row.tone === 'negative'
+                        ? 'trade-display__stat--negative'
+                        : '',
+                  ].filter(Boolean).join(' ')}
+                  key={`${row.label}-${row.value}`}
+                >
+                  <span className="trade-display__stat-label">{row.label}</span>
+                  <span className="trade-display__stat-value">{row.value}</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Their side of every number, on demand. Keeping it collapsed is
+              what lets the default card stay a glance. */}
+          {detailOpen ? (
+            <div className="trade-display__tDetails" id={`${id}-detail`}>
+              <span className="trade-display__tPartner">
+                {partnerLine ? `${partnerLine} · their side` : 'Their side'}
+              </span>
+              {[leadRow, ...supportRows]
+                .filter((row) => row?.mirror)
+                .map((row) => (
+                  <span className="trade-display__stat" key={`m-${row!.label}`}>
+                    {/* The block already says whose side this is, so the
+                        metric drops its "Your" rather than reading
+                        "Your title them". */}
+                    <span className="trade-display__stat-label">
+                      {mirrorLabel(row!.label)}
+                    </span>
                     <span
                       className={[
-                        'trade-display__stat',
-                        row.tone === 'positive'
-                          ? 'trade-display__stat--positive'
-                          : row.tone === 'negative'
-                            ? 'trade-display__stat--negative'
+                        'trade-display__stat-value',
+                        row!.mirror!.tone === 'positive'
+                          ? 'trade-display__stat-value--positive'
+                          : row!.mirror!.tone === 'negative'
+                            ? 'trade-display__stat-value--negative'
                             : '',
                       ].filter(Boolean).join(' ')}
-                      key={`${row.label}-${row.value}`}
                     >
-                      <span className="trade-display__stat-label">{row.label}</span>
-                      <span className="trade-display__stat-value">{row.value}</span>
-                      {row.mirror ? (
-                        <span className="trade-display__stat-mirror">
-                          {row.mirror.label} {row.mirror.value}
-                        </span>
-                      ) : null}
+                      {row!.mirror!.value}
                     </span>
-                  ))}
-                </div>
+                  </span>
+                ))}
+              {generatedAt ? (
+                <span className="trade-display__generated">generated at {generatedAt}</span>
               ) : null}
             </div>
           ) : null}
 
-          <div className="trade-display__exchange">
-            {partnerLine ? (
-              <span className="trade-display__partner">{partnerLine}</span>
-            ) : null}
-            <div className="trade-display__swap">
-              <TradeSide side={sendSide} tone="send" />
-              <span className="trade-display__direction" aria-hidden="true">→</span>
-              <TradeSide side={getSide} tone="get" />
-            </div>
-          </div>
-
-          {/* Their side of the question gets its own column, weighted to
-              balance the verdict: number first, band word under it. Both the
-              percent and the word come from the shared acceptance map. */}
-          <div className="trade-display__odds">
+          <footer className="trade-display__tFoot">
             {acceptanceProbability != null && acceptanceValue ? (
               <>
-                <span className="trade-display__odds-eyebrow">They accept</span>
-                <span className="trade-display__odds-value">{acceptanceValue}</span>
-                <span className="trade-display__odds-band">{acceptanceBand}</span>
+                <div className="trade-display__tAccept">
+                  <span className="trade-display__tAcceptPct">{acceptanceValue}</span>
+                  <span className="trade-display__tAcceptBand">
+                    {acceptanceBand} to accept
+                  </span>
+                </div>
                 <span className="trade-display__acceptance-track" aria-hidden="true">
                   <span
                     className="trade-display__acceptance-fill"
@@ -321,11 +353,34 @@ function TradeLayout({
             ) : (
               <TradeAcceptanceChip label={acceptanceLabel} probability={acceptanceProbability} />
             )}
-          </div>
 
-          {generatedAt ? (
-            <span className="trade-display__generated">generated at {generatedAt}</span>
-          ) : null}
+            <div className="trade-display__tActions">
+              {onClick ? (
+                <button
+                  className="trade-display__tPrimary"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onClick();
+                  }}
+                  type="button"
+                >
+                  Build this trade
+                </button>
+              ) : null}
+              <button
+                aria-controls={`${id}-detail`}
+                aria-expanded={detailOpen}
+                className="trade-display__tDetailToggle"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDetailOpen((open) => !open);
+                }}
+                type="button"
+              >
+                {detailOpen ? 'Hide their side' : 'Their side'}
+              </button>
+            </div>
+          </footer>
         </div>
       ) : (
       <div className="trade-display__body">

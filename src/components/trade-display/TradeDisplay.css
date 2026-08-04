@@ -482,153 +482,171 @@
   }
 }
 
-/* ── Rich deal card, rebuilt ───────────────────────────────────────────────
-   The old card gave 78% of its width to player pills and squeezed every
-   number into a 210px gutter, on a surface whose only question is "is this
-   worth doing". Three zones now: the verdict anchors the left at full size,
-   the exchange takes the middle, and the supporting numbers sit on one strip.
-   Scoped to --card so the compact row used in the Matchup rail is untouched. */
+/* ── Ticket ────────────────────────────────────────────────────────────────
+   A deal is a slip you pick up and act on. The card is never wider than its
+   content, which is what finally fixed the empty space: the previous
+   full-width layouts had more room than a single trade has to say. Your
+   outcome sits at the top so the card can be dismissed in a glance, their
+   side collapses out of the way, and the actions sit on the surface.
+   Scoped to --card so the compact Matchup row is untouched. */
 
-.trade-display--card .trade-display__body {
-  display: grid;
-  grid-template-columns: minmax(196px, 224px) minmax(0, 1fr) minmax(140px, 172px);
-  grid-template-areas: "verdict exchange odds";
-  align-items: start;
-  gap: 22px;
+.trade-display--card {
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
 }
 
-.trade-display--card .trade-display__odds {
-  grid-area: odds;
-  align-self: stretch;
-  padding-left: 20px;
-  border-left: 1px solid var(--border-subtle);
+/* Cards in a row match height and pin their footers, so the accept number and
+   the action sit on one line across the grid and the deals actually compare. */
+.trade-display__ticket {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
 }
 
-.trade-display--card .trade-display__verdict {
-  grid-area: verdict;
+.trade-display__tFoot {
+  margin-top: auto;
+}
+
+.trade-display__tHead {
   display: grid;
-  justify-items: start;
-  /* align-content MUST stay start. Default `normal` stretches the implicit
-     rows to fill a column whose height is set by the exchange beside it, so a
-     3-for-3 deal spread these four lines 46px apart while a 1-for-1 kept them
-     at 22px. That drift was the empty space. */
-  align-content: start;
   gap: 1px;
-  align-self: stretch;
-  padding-right: 20px;
-  border-right: 1px solid var(--border-subtle);
+  padding: 15px 18px 13px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.trade-display__verdict-stats {
-  display: grid;
-  gap: 5px;
-  width: 100%;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
+.trade-display__tHead--good {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--green) 11%, transparent), transparent);
 }
 
-.trade-display__verdict-word {
+.trade-display__tHead--bad {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--red) 11%, transparent), transparent);
+}
+
+.trade-display__tHead--neutral {
+  background: linear-gradient(180deg, rgba(244, 245, 242, 0.05), transparent);
+}
+
+.trade-display__tWord {
   color: var(--text-soft);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.trade-display__verdict--good .trade-display__verdict-word {
-  color: var(--green);
-}
+.trade-display__tHead--good .trade-display__tWord { color: var(--green); }
+.trade-display__tHead--bad .trade-display__tWord { color: var(--red); }
 
-.trade-display__verdict--bad .trade-display__verdict-word {
-  color: var(--red);
-}
-
-.trade-display__verdict-value {
+.trade-display__tTitle {
   color: var(--text-primary);
   font-family: var(--font-num);
-  font-size: 40px;
+  font-size: 34px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1.02;
   letter-spacing: -0.01em;
 }
 
-.trade-display__verdict--positive .trade-display__verdict-value {
-  color: var(--green);
-}
+.trade-display__tTitle--positive { color: var(--green); }
+.trade-display__tTitle--negative { color: var(--red); }
 
-.trade-display__verdict--negative .trade-display__verdict-value {
-  color: var(--red);
-}
-
-.trade-display__verdict-label {
+.trade-display__tTitleLabel {
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.trade-display__verdict-mirror {
-  margin-top: 4px;
-  color: var(--text-muted);
-  font-family: var(--font-num);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.trade-display--card .trade-display__exchange {
-  grid-area: exchange;
+.trade-display__tBody {
   display: grid;
-  gap: 8px;
+  gap: 2px;
+  padding: 13px 18px 4px;
   min-width: 0;
 }
 
-/* The verdict and odds columns bracket the exchange, so the two sides can
-   fill what is left without reading as a stretched-out void. */
-.trade-display--card .trade-display__swap {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: start;
-  gap: 20px;
+.trade-display--card .trade-display__side {
   min-width: 0;
+}
+
+.trade-display--card .trade-display__eyebrow {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.trade-display--card .trade-display__asset-list {
+  gap: 1px;
+}
+
+.trade-display--card .trade-display__asset {
+  min-height: 0;
+  padding: 5px 0;
+  border: none;
+  border-radius: 0;
+  background: none;
 }
 
 .trade-display--card .trade-display__asset-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .trade-display--card .trade-display__asset-subtitle {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .trade-display--card .trade-display__asset-avatar,
 .trade-display--card .trade-display__asset-token {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
 }
 
-.trade-display--card .trade-display__asset {
+.trade-display__tRule {
+  display: flex;
+  align-items: center;
   gap: 10px;
-  padding: 7px 10px;
+  margin: 8px 0 9px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.trade-display__tRule::before,
+.trade-display__tRule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.trade-display__tStats {
+  display: grid;
+  gap: 3px;
+  padding: 10px 18px 12px;
 }
 
 .trade-display__stat {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
 }
 
 .trade-display__stat-label {
+  overflow: hidden;
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trade-display__stat-value {
@@ -639,138 +657,102 @@
   font-variant-numeric: tabular-nums;
 }
 
-.trade-display__stat--positive .trade-display__stat-value {
-  color: var(--green);
-}
+.trade-display__stat--positive .trade-display__stat-value,
+.trade-display__stat-value--positive { color: var(--green); }
 
-.trade-display__stat--negative .trade-display__stat-value {
-  color: var(--red);
-}
+.trade-display__stat--negative .trade-display__stat-value,
+.trade-display__stat-value--negative { color: var(--red); }
 
-.trade-display__stat-mirror {
-  justify-self: end;
-  min-width: 58px;
-  text-align: right;
-  color: var(--text-muted);
-  font-family: var(--font-num);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  opacity: 0.85;
-}
-
-.trade-display__stat-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Acceptance owns its column, weighted to balance the verdict opposite it. */
-.trade-display--card .trade-display__odds {
+.trade-display__tDetails {
   display: grid;
-  justify-items: start;
-  align-content: start;
-  gap: 2px;
+  gap: 3px;
+  padding: 11px 18px 12px;
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-inset) 34%, transparent);
 }
 
-.trade-display__odds-eyebrow {
+.trade-display__tPartner {
+  margin-bottom: 2px;
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.trade-display__odds-value {
-  color: var(--text-primary);
-  font-family: var(--font-num);
-  font-size: 30px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.05;
+.trade-display__tFoot {
+  display: grid;
+  gap: 8px;
+  padding: 12px 18px 14px;
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-inset) 46%, transparent);
 }
 
-.trade-display__odds-band {
-  color: var(--text-soft);
+.trade-display__tAccept {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.trade-display__tAcceptPct {
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-display__tAcceptBand {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.trade-display--card .trade-display__acceptance-track {
+  width: 100%;
+}
+
+/* Actions on the surface, per the pattern every good book follows: the
+   primary is one tap and never hidden behind the card itself. */
+.trade-display__tActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.trade-display__tPrimary {
+  padding: 9px 14px;
+  border: 1px solid rgba(232, 84, 29, 0.4);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-accent, #e8541d) 16%, transparent);
+  color: var(--text-amber);
   font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
 }
 
-.trade-display--card .trade-display__odds .trade-display__acceptance-track {
-  width: 100%;
-  margin-top: 9px;
+.trade-display__tPrimary:hover {
+  border-color: rgba(232, 84, 29, 0.7);
+  background: color-mix(in srgb, var(--color-accent, #e8541d) 28%, transparent);
 }
 
-@media (max-width: 900px) {
-  .trade-display--card .trade-display__body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "verdict"
-      "exchange"
-      "odds";
-    gap: 14px;
-  }
-
-  .trade-display--card .trade-display__odds {
-    padding-left: 0;
-    border-left: none;
-  }
-
-  .trade-display--card .trade-display__verdict {
-    padding-right: 0;
-    padding-bottom: 14px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-}
-
-@media (max-width: 560px) {
-  .trade-display--card .trade-display__swap {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  .trade-display--card .trade-display__direction {
-    transform: rotate(90deg);
-    justify-self: start;
-  }
-}
-
-/* Each side becomes one panel instead of a stack of wide empty boxes. The
-   per-row box was what made a 420px column read as mostly nothing; without
-   it the position pills line up as a right-hand column and the row is just
-   a row. */
-.trade-display--card .trade-display__side {
-  min-width: 0;
-  padding: 11px 13px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--bg-inset) 55%, transparent);
-}
-
-.trade-display--card .trade-display__asset {
-  min-height: 0;
-  padding: 4px 0;
+.trade-display__tDetailToggle {
+  padding: 8px 4px;
   border: none;
-  border-radius: 0;
   background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.trade-display--card .trade-display__asset-list {
-  gap: 2px;
-}
-
-.trade-display--card .trade-display__eyebrow {
-  display: block;
-  margin-bottom: 8px;
-}
-
-/* The arrow sits between two panels, so centre it on them. */
-.trade-display--card .trade-display__direction {
-  align-self: center;
-  color: var(--text-amber);
-  font-size: 18px;
+.trade-display__tDetailToggle:hover {
+  color: var(--text-dim);
+  text-decoration: underline;
 }
