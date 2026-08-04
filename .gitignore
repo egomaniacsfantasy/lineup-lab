@@ -28,3 +28,10 @@ server/data/
 
 # test scratch output
 .tmp-tests
+
+# Local secrets. NEVER commit these: .env holds the Supabase service-role key,
+# which bypasses row-level security. .env.example is the safe, value-free
+# template and is deliberately allowed through.
+.env
+.env.*
+!.env.example
