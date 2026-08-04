@@ -95,6 +95,11 @@ const VIEW_OPTIONS: Array<{ key: BoardView; label: string }> = [
   { key: 'sheet', label: 'Table' },
 ];
 
+// Admin-only lens: Consensus = agreement-weighted (what everyone sees / prices);
+// Model = the pure model, no admin tilt. Every number (value, points, floor,
+// ceiling, stats, week-by-week) follows the choice.
+type BoardValueView = 'consensus' | 'model';
+
 /* Board order is the default and is the board's own ranking. The other
    options are user-initiated lenses on columns already displayed; none of
    them re-rank an engine recommendation list. */
@@ -480,6 +485,9 @@ export function MyBoardPage() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const isAdmin = isAgreementAdmin(user?.email);
+  // Non-admins always see Consensus. Admins can flip to the pure model.
+  const [boardView, setBoardView] = useState<BoardValueView>('consensus');
+  const effectiveView: BoardValueView = isAdmin ? boardView : 'consensus';
   const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
   const [saveMessages, setSaveMessages] = useState<Record<string, string>>({});
@@ -595,10 +603,11 @@ export function MyBoardPage() {
         projectionById.get(row.playerId)
         ?? projectionByIdentity.get(`${row.position}::${row.name}`)
         ?? null;
-      const delta = tiltFromConsensus(projection?.consensus?.avg ?? null);
+      const delta =
+        effectiveView === 'model' ? 0 : tiltFromConsensus(projection?.consensus?.avg ?? null);
       return { delta, projection };
     },
-    [projectionById, projectionByIdentity],
+    [projectionById, projectionByIdentity, effectiveView],
   );
 
   // The board is fetched as raw model (model=1). In Consensus view we apply the
@@ -807,6 +816,35 @@ export function MyBoardPage() {
             Updated {formatUpdatedDate(projectionData.updatedAt)} · {board.length} players
           </p>
         </div>
+        {isAdmin ? (
+          <div className="board-page__view-toggle" role="tablist" aria-label="Projection source (admin)">
+            {([
+              { key: 'consensus', label: 'Consensus' },
+              { key: 'model', label: 'Model' },
+            ] as Array<{ key: BoardValueView; label: string }>).map((option) => (
+              <button
+                aria-selected={boardView === option.key}
+                className={[
+                  'board-page__view-pill',
+                  boardView === option.key ? 'board-page__view-pill--active' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                key={option.key}
+                onClick={() => setBoardView(option.key)}
+                role="tab"
+                title={
+                  option.key === 'consensus'
+                    ? 'Agreement-weighted numbers (what everyone sees and what prices)'
+                    : 'Pure model, before any admin agreement tilt'
+                }
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="board-page__view-toggle" role="tablist" aria-label="Row density">
           {VIEW_OPTIONS.map((option) => (
             <button
