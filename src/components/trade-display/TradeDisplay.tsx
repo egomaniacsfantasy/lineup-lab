@@ -259,6 +259,35 @@ function TradeLayout({
                   {leadRow.mirror.label} {leadRow.mirror.value}
                 </span>
               ) : null}
+
+              {/* The supporting metrics belong with the lead, not on a
+                  full-width strip that was 90% empty. Everything about your
+                  outcome now reads as one column. */}
+              {supportRows.length > 0 ? (
+                <div className="trade-display__verdict-stats">
+                  {supportRows.map((row) => (
+                    <span
+                      className={[
+                        'trade-display__stat',
+                        row.tone === 'positive'
+                          ? 'trade-display__stat--positive'
+                          : row.tone === 'negative'
+                            ? 'trade-display__stat--negative'
+                            : '',
+                      ].filter(Boolean).join(' ')}
+                      key={`${row.label}-${row.value}`}
+                    >
+                      <span className="trade-display__stat-label">{row.label}</span>
+                      <span className="trade-display__stat-value">{row.value}</span>
+                      {row.mirror ? (
+                        <span className="trade-display__stat-mirror">
+                          {row.mirror.label} {row.mirror.value}
+                        </span>
+                      ) : null}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -294,32 +323,9 @@ function TradeLayout({
             )}
           </div>
 
-          <div className="trade-display__strip">
-            {supportRows.map((row) => (
-              <span
-                className={[
-                  'trade-display__stat',
-                  row.tone === 'positive'
-                    ? 'trade-display__stat--positive'
-                    : row.tone === 'negative'
-                      ? 'trade-display__stat--negative'
-                      : '',
-                ].filter(Boolean).join(' ')}
-                key={`${row.label}-${row.value}`}
-              >
-                <span className="trade-display__stat-label">{row.label}</span>
-                <span className="trade-display__stat-value">{row.value}</span>
-                {row.mirror ? (
-                  <span className="trade-display__stat-mirror">
-                    {row.mirror.label} {row.mirror.value}
-                  </span>
-                ) : null}
-              </span>
-            ))}
-            {generatedAt ? (
-              <span className="trade-display__generated">generated at {generatedAt}</span>
-            ) : null}
-          </div>
+          {generatedAt ? (
+            <span className="trade-display__generated">generated at {generatedAt}</span>
+          ) : null}
         </div>
       ) : (
       <div className="trade-display__body">

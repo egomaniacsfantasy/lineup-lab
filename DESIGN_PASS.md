@@ -1322,3 +1322,36 @@ A first attempt at a lopsided +4.6% steal never rendered, correctly: a deal
 that good for one side is a Long shot on acceptance and the display policy
 filters it. That is worth knowing when designing for these cards, since the
 best-verdict tones are structurally rare next to a decent acceptance number.
+
+### Follow-up: the empty space was a bug, not just taste
+
+Andre called the rebuilt card "still pretty mid, a ton of empty space". He was
+right, and measuring found an actual defect rather than a judgement call.
+
+`.trade-display__verdict` is a grid that stretches to the height of the
+exchange beside it, and it had no `align-content`. The default `normal`
+behaves as `stretch` on a grid, so the implicit rows grew to fill whatever
+height the exchange set. Measured across the three fixture deals, the same
+four lines sat at `0 / 19 / 63 / 85` inside a 105px column and at
+`0 / 43 / 111 / 157` inside a 201px one. The bigger the trade, the further
+apart its own numbers drifted. That drift was the empty space, and it was
+worst on exactly the 3-for-3 deals in Andre's screenshot.
+
+`align-content: start` pins it. All three cards now place those lines at
+identical offsets regardless of how many players are in the deal.
+
+Two structural changes went with it:
+
+- The supporting strip is gone. It ran the full width of the card to hold two
+  short stats, so roughly 90% of it was void. Playoffs and This week moved
+  into the verdict column under a rule, which is where they belong: the whole
+  column is now one answer to "what does this do for me", and the card lost a
+  row it did not need.
+- The stats are single-line (`label · value · them x`) inside a 224px column.
+  A first pass wrapped the partner mirror onto its own line, which pushed the
+  column back out and re-created the problem in miniature.
+
+Net: the 3-a-side card went 300px to 228px, and on that card the verdict and
+exchange columns now measure the same height, so the composition reads as
+deliberate instead of top-heavy. Verified at 1512 / 820 / 375px with no label
+truncation, no card overflow and no page horizontal scroll.

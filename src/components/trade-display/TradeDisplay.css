@@ -491,18 +491,16 @@
 
 .trade-display--card .trade-display__body {
   display: grid;
-  grid-template-columns: minmax(168px, 200px) minmax(0, 1fr) minmax(150px, 190px);
-  grid-template-areas:
-    "verdict exchange odds"
-    "strip   strip    strip";
+  grid-template-columns: minmax(196px, 224px) minmax(0, 1fr) minmax(140px, 172px);
+  grid-template-areas: "verdict exchange odds";
   align-items: start;
-  gap: 18px 24px;
+  gap: 22px;
 }
 
 .trade-display--card .trade-display__odds {
   grid-area: odds;
   align-self: stretch;
-  padding-left: 22px;
+  padding-left: 20px;
   border-left: 1px solid var(--border-subtle);
 }
 
@@ -510,10 +508,24 @@
   grid-area: verdict;
   display: grid;
   justify-items: start;
-  gap: 2px;
+  /* align-content MUST stay start. Default `normal` stretches the implicit
+     rows to fill a column whose height is set by the exchange beside it, so a
+     3-for-3 deal spread these four lines 46px apart while a 1-for-1 kept them
+     at 22px. That drift was the empty space. */
+  align-content: start;
+  gap: 1px;
   align-self: stretch;
-  padding-right: 22px;
+  padding-right: 20px;
   border-right: 1px solid var(--border-subtle);
+}
+
+.trade-display__verdict-stats {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .trade-display__verdict-word {
@@ -605,18 +617,9 @@
   padding: 7px 10px;
 }
 
-.trade-display--card .trade-display__strip {
-  grid-area: strip;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 26px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-subtle);
-}
-
 .trade-display__stat {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: baseline;
   gap: 8px;
 }
@@ -631,7 +634,7 @@
 .trade-display__stat-value {
   color: var(--text-dim);
   font-family: var(--font-num);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -645,11 +648,21 @@
 }
 
 .trade-display__stat-mirror {
+  justify-self: end;
+  min-width: 58px;
+  text-align: right;
   color: var(--text-muted);
   font-family: var(--font-num);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   opacity: 0.85;
+}
+
+.trade-display__stat-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Acceptance owns its column, weighted to balance the verdict opposite it. */
@@ -696,8 +709,7 @@
     grid-template-areas:
       "verdict"
       "exchange"
-      "odds"
-      "strip";
+      "odds";
     gap: 14px;
   }
 
@@ -733,7 +745,7 @@
    a row. */
 .trade-display--card .trade-display__side {
   min-width: 0;
-  padding: 12px 14px 14px;
+  padding: 11px 13px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
   background: color-mix(in srgb, var(--bg-inset) 55%, transparent);
@@ -741,7 +753,7 @@
 
 .trade-display--card .trade-display__asset {
   min-height: 0;
-  padding: 6px 0;
+  padding: 4px 0;
   border: none;
   border-radius: 0;
   background: none;
