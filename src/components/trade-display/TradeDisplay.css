@@ -481,3 +481,284 @@
     opacity: 1;
   }
 }
+
+/* ── Rich deal card, rebuilt ───────────────────────────────────────────────
+   The old card gave 78% of its width to player pills and squeezed every
+   number into a 210px gutter, on a surface whose only question is "is this
+   worth doing". Three zones now: the verdict anchors the left at full size,
+   the exchange takes the middle, and the supporting numbers sit on one strip.
+   Scoped to --card so the compact row used in the Matchup rail is untouched. */
+
+.trade-display--card .trade-display__body {
+  display: grid;
+  grid-template-columns: minmax(168px, 200px) minmax(0, 1fr) minmax(150px, 190px);
+  grid-template-areas:
+    "verdict exchange odds"
+    "strip   strip    strip";
+  align-items: start;
+  gap: 18px 24px;
+}
+
+.trade-display--card .trade-display__odds {
+  grid-area: odds;
+  align-self: stretch;
+  padding-left: 22px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.trade-display--card .trade-display__verdict {
+  grid-area: verdict;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  align-self: stretch;
+  padding-right: 22px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.trade-display__verdict-word {
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.trade-display__verdict--good .trade-display__verdict-word {
+  color: var(--green);
+}
+
+.trade-display__verdict--bad .trade-display__verdict-word {
+  color: var(--red);
+}
+
+.trade-display__verdict-value {
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 40px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+}
+
+.trade-display__verdict--positive .trade-display__verdict-value {
+  color: var(--green);
+}
+
+.trade-display__verdict--negative .trade-display__verdict-value {
+  color: var(--red);
+}
+
+.trade-display__verdict-label {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.trade-display__verdict-mirror {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-display--card .trade-display__exchange {
+  grid-area: exchange;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The verdict and odds columns bracket the exchange, so the two sides can
+   fill what is left without reading as a stretched-out void. */
+.trade-display--card .trade-display__swap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  min-width: 0;
+}
+
+.trade-display--card .trade-display__asset-name {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.trade-display--card .trade-display__asset-subtitle {
+  font-size: 12px;
+}
+
+.trade-display--card .trade-display__asset-avatar,
+.trade-display--card .trade-display__asset-token {
+  width: 34px;
+  height: 34px;
+}
+
+.trade-display--card .trade-display__asset {
+  gap: 10px;
+  padding: 7px 10px;
+}
+
+.trade-display--card .trade-display__strip {
+  grid-area: strip;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 26px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.trade-display__stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.trade-display__stat-label {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trade-display__stat-value {
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-display__stat--positive .trade-display__stat-value {
+  color: var(--green);
+}
+
+.trade-display__stat--negative .trade-display__stat-value {
+  color: var(--red);
+}
+
+.trade-display__stat-mirror {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* Acceptance owns its column, weighted to balance the verdict opposite it. */
+.trade-display--card .trade-display__odds {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: 2px;
+}
+
+.trade-display__odds-eyebrow {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.trade-display__odds-value {
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.trade-display__odds-band {
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trade-display--card .trade-display__odds .trade-display__acceptance-track {
+  width: 100%;
+  margin-top: 9px;
+}
+
+@media (max-width: 900px) {
+  .trade-display--card .trade-display__body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "verdict"
+      "exchange"
+      "odds"
+      "strip";
+    gap: 14px;
+  }
+
+  .trade-display--card .trade-display__odds {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .trade-display--card .trade-display__verdict {
+    padding-right: 0;
+    padding-bottom: 14px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+}
+
+@media (max-width: 560px) {
+  .trade-display--card .trade-display__swap {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .trade-display--card .trade-display__direction {
+    transform: rotate(90deg);
+    justify-self: start;
+  }
+}
+
+/* Each side becomes one panel instead of a stack of wide empty boxes. The
+   per-row box was what made a 420px column read as mostly nothing; without
+   it the position pills line up as a right-hand column and the row is just
+   a row. */
+.trade-display--card .trade-display__side {
+  min-width: 0;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-inset) 55%, transparent);
+}
+
+.trade-display--card .trade-display__asset {
+  min-height: 0;
+  padding: 6px 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+.trade-display--card .trade-display__asset-list {
+  gap: 2px;
+}
+
+.trade-display--card .trade-display__eyebrow {
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* The arrow sits between two panels, so centre it on them. */
+.trade-display--card .trade-display__direction {
+  align-self: center;
+  color: var(--text-amber);
+  font-size: 18px;
+}

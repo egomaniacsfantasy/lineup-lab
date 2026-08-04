@@ -1261,3 +1261,64 @@ week", which was the one thing on that line the reader did not already know.
 T. McLaurin (FLEX). The two numbers match the fixture's `userSwaps`
 `resultingWinProb` for RB/S. Barkley and FLEX/D. Smith exactly. No row
 overflow, no horizontal scroll at either width.
+
+## Deal cards, rebuilt
+
+### What was wrong, measured
+
+The card was 1386px wide and split **1078px for the player pills against 210px
+for every number on it**. Each side got 511px to hold a short name and a
+position chip, so the pills were mostly empty box, while the verdict, three
+metrics, three partner mirrors, an acceptance bar and its label were all
+crushed into a 210px gutter. Player names were 13px inside those 511px rows.
+
+That is backwards for a surface whose only question is "is this worth doing".
+The dashboard literature's test is that a reader should get the status in
+about three seconds without reading labels; this card failed it, because the
+one number that answers it was the smallest thing on the row.
+
+### What changed
+
+Three zones, each with a job, reading left to right as the question actually
+breaks down:
+
+- **What it does for you.** The verdict anchors the left at full size: the
+  engine's own word for the deal (`Good value`, `Fair`, `Overpay`, from the
+  same `analysisVerdict` mapping the analyzer already applies to a title
+  delta) over the title change at 40px, with the partner's mirror beneath it.
+- **What the deal is.** Send and Get become two panels rather than stacks of
+  wide empty boxes. Dropping the per-row box was the fix for "stretched out":
+  a 420px row with content on the left only looks empty when it has a border
+  around it, and looks like a row when it does not. Names went 13px to 15px,
+  avatars 26px to 34px, and the position chips now line up as a right-hand
+  column.
+- **Will they say yes.** Acceptance gets its own column, weighted to balance
+  the verdict opposite it: percent at 30px, band word under it, bar beneath.
+
+Playoffs and This week moved to a single strip along the bottom, which is
+where supporting numbers belong once the lead has somewhere to live.
+
+The verdict word is the important addition. Before, a reader had to parse six
+percentages to learn what the book thought. Now the card says it.
+
+### Kept honest
+
+Every number is still the served value, and the verdict word is the same
+threshold mapping already shipped on the analyzer, not a new judgement. The
+acceptance percent and band word are passed in from the page rather than
+derived inside the display component, so `TradeDisplay` keeps no vocabulary of
+its own and the shared acceptance map stays the single source.
+
+### Verified
+
+`/design/market?view=deals` at 1512px, 820px and 375px: no name truncation, no
+card overflow, no page horizontal scroll, and the body collapses to one column
+under 900px with the exchange stacking under 560px. All three verdict tones
+render with the right tokens (`Good value` green, `Fair` soft, `Overpay` red).
+
+The fixture only carried one deal, and a negative one, so the stack and the
+positive tones could not be reviewed at all. Two more Apollo deals were added.
+A first attempt at a lopsided +4.6% steal never rendered, correctly: a deal
+that good for one side is a Long shot on acceptance and the display policy
+filters it. That is worth knowing when designing for these cards, since the
+best-verdict tones are structurally rare next to a decent acceptance number.

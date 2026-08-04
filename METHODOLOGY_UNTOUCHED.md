@@ -563,3 +563,49 @@ Two removals, both cases where copy restated something already on screen:
 
 This is a first cut, not the full sweep Andre asked for. The rest is listed as
 an open gap in FRONTEND_DRIFT.md.
+
+## 2026-08-04 — Deal cards rebuilt (display only)
+
+Layout and type only. No value, sign, rounding, ordering or threshold changed.
+
+Files touched:
+
+- `src/components/trade-display/TradeDisplay.tsx`
+- `src/components/trade-display/TradeDisplay.css`
+- `src/pages/TradePage.tsx`
+- `src/dev/designFixtures.ts` (two more dev-only deals, see below)
+
+The rich card now renders three zones (verdict, exchange, acceptance) plus a
+supporting strip, instead of an exchange and one cramped rail. The compact
+`TradeRow` used in the Matchup rail is untouched: every new rule is scoped to
+`.trade-display--card`, and that was verified in the DOM rather than assumed.
+
+Pixel to field map for the rebuilt card:
+
+| Rendered | Source |
+| --- | --- |
+| verdict word (`Good value`) | `analysisVerdict(suggestion.youDelta).label` in TradePage, the same mapping already applied to a title delta on the analyzer |
+| verdict value | `suggestion.youDelta` via `signedPct` |
+| verdict mirror | `suggestion.partnerDelta` via `signedPct` |
+| `Playoffs` / `This week` + mirrors | `suggestion.youPlayoffDelta`, `partnerPlayoffDelta`, `youWeekDelta`, `partnerWeekDelta` |
+| acceptance percent | `formatAcceptancePercent(entry.acceptanceProbability)` |
+| acceptance band word | `getAcceptanceLingo(entry.acceptanceProbability).label` |
+
+Two boundary notes:
+
+1. The lead row is picked by `emphasis === 'lead'`, which TradePage already
+   set. `supportRows` is the remainder in served order. Engine order is
+   preserved inside each group, nothing is hidden and nothing is re-ranked.
+2. The acceptance percent and band word are computed in TradePage and passed
+   in as props, not derived inside `TradeDisplay`. This keeps the display
+   component free of vocabulary, and it is also what the snapshot harness
+   requires: it transpiles `TradeDisplay.tsx` into a temp directory where a
+   `../../utils/*` import cannot resolve. Importing the acceptance map
+   directly broke four snapshot tests; passing the strings in fixed them.
+
+FIXTURE DATA: the market fixture carried one deal, with a negative delta, so
+neither the card stack nor the positive verdict tones were reviewable. Two
+more Apollo deals were added. Note for anyone extending them: a deal that is
+strongly positive for the user is filtered by `applyTradeDisplayPolicy`,
+because its acceptance lands in the Long shot band. Fixture deals have to be
+mutually plausible to render at all.

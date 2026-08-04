@@ -998,6 +998,38 @@ function buildSuggestions(): TradeSuggestions {
         youWeekDelta: -1.8,
         partnerWeekDelta: 1.5,
       },
+      /* Two more Apollo deals so /design/market shows a STACK, and shows the
+         positive verdict tones. One card in one tone reviews nothing. */
+      {
+        partnerRosterId: 3,
+        partnerName: 'Apollo Archers',
+        give: [
+          { id: 'd-henry', name: 'Derrick Henry' },
+          { id: 't-mcbride', name: 'Trey McBride' },
+        ],
+        get: [
+          { id: 'p-nacua', name: 'Puka Nacua' },
+          { id: 'b-bowers', name: 'Brock Bowers' },
+        ],
+        youDelta: 2.2,
+        partnerDelta: 0.4,
+        youPlayoffDelta: 2.9,
+        partnerPlayoffDelta: 0.6,
+        youWeekDelta: 1.3,
+        partnerWeekDelta: 0.2,
+      },
+      {
+        partnerRosterId: 3,
+        partnerName: 'Apollo Archers',
+        give: [{ id: 'c-lamb', name: 'CeeDee Lamb' }],
+        get: [{ id: 'j-gibbs', name: 'Jahmyr Gibbs' }],
+        youDelta: 0.4,
+        partnerDelta: -0.2,
+        youPlayoffDelta: 0.6,
+        partnerPlayoffDelta: -0.3,
+        youWeekDelta: -0.9,
+        partnerWeekDelta: 0.7,
+      },
     ],
     debug: { enumerated: 18, scanned: 18, resimmed: 6, positive: 3, ms: 382 },
   };

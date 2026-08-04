@@ -32,6 +32,7 @@ import {
   acceptanceGaugeLabel,
   applyTradeDisplayPolicy,
 } from '../utils/tradeSuggestionDisplay';
+import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
 import { signedDeltaClass } from '../utils/deltaTone';
 import { formatAmericanOdds } from '../utils/formatOdds';
@@ -1071,10 +1072,17 @@ function TradeDealsView() {
                 const getPlayerIds = entry.suggestion.get.map((asset) => asset.id);
                 const givePlayerIds = entry.suggestion.give.map((asset) => asset.id);
                 const acceptanceRead = acceptanceGaugeLabel(entry.acceptanceProbability);
+                /* Same mapping the analyzer already applies to a title delta,
+                   so a suggested deal and a built one are graded alike. */
+                const suggestionVerdict = analysisVerdict(entry.suggestion.youDelta);
                 return (
                   <TradeCard
+                    acceptanceBand={getAcceptanceLingo(entry.acceptanceProbability)?.label ?? null}
                     acceptanceLabel={acceptanceRead}
                     acceptanceProbability={entry.acceptanceProbability}
+                    acceptanceValue={formatAcceptancePercent(entry.acceptanceProbability)}
+                    verdictLabel={suggestionVerdict.label}
+                    verdictTone={suggestionVerdict.tone as 'good' | 'neutral' | 'bad'}
                     dismissLabel="Dismiss this suggested trade"
                     getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
                     impactRows={[

@@ -56,8 +56,18 @@ interface TradeLayoutProps {
     } | null;
   }>;
   valueLabel?: string | null;
+  /* The engine's own read on the lead metric, e.g. "Good value". Rich cards
+     lead with the word and let the number back it up: a reader should know
+     whether a deal is worth their attention before parsing a percentage. */
+  verdictLabel?: string | null;
+  verdictTone?: 'good' | 'neutral' | 'bad';
   acceptanceProbability?: number | null;
   acceptanceLabel?: string | null;
+  /* Split acceptance for rich cards: the percent leads and the band word sits
+     under it. Passed in rather than derived here so this stays a pure display
+     component with no vocabulary of its own. */
+  acceptanceValue?: string | null;
+  acceptanceBand?: string | null;
   footer?: ReactNode;
   generatedAt?: string | null;
   dismissLabel?: string | null;
@@ -167,8 +177,12 @@ function TradeLayout({
   impactLine = null,
   impactRows = [],
   valueLabel = null,
+  verdictLabel = null,
+  verdictTone = 'neutral',
   acceptanceProbability = null,
   acceptanceLabel = null,
+  acceptanceValue = null,
+  acceptanceBand = null,
   footer = null,
   generatedAt = null,
   dismissLabel = 'Dismiss',
@@ -191,6 +205,12 @@ function TradeLayout({
       }
     : {};
 
+  /* Rich cards split the served rows into the one that decides the trade and
+     the ones that support it. Engine order is preserved inside each group;
+     nothing is hidden, reordered or recomputed. */
+  const leadRow = impactRows.find((row) => row.emphasis === 'lead') ?? impactRows[0] ?? null;
+  const supportRows = impactRows.filter((row) => row !== leadRow);
+
   return (
     <article
       className={[
@@ -211,6 +231,97 @@ function TradeLayout({
         </button>
       ) : null}
 
+      {tone === 'rich' ? (
+        <div className="trade-display__body">
+          {/* The verdict is the card's whole point, so it anchors the left
+              edge at full size instead of being squeezed into a gutter. The
+              exchange takes the middle, and every supporting number lives on
+              one strip underneath rather than being strewn down a rail. */}
+          {leadRow ? (
+            <div
+              className={[
+                'trade-display__verdict',
+                `trade-display__verdict--${verdictTone}`,
+                leadRow.tone === 'positive'
+                  ? 'trade-display__verdict--positive'
+                  : leadRow.tone === 'negative'
+                    ? 'trade-display__verdict--negative'
+                    : '',
+              ].filter(Boolean).join(' ')}
+            >
+              {verdictLabel ? (
+                <span className="trade-display__verdict-word">{verdictLabel}</span>
+              ) : null}
+              <span className="trade-display__verdict-value">{leadRow.value}</span>
+              <span className="trade-display__verdict-label">{leadRow.label}</span>
+              {leadRow.mirror ? (
+                <span className="trade-display__verdict-mirror">
+                  {leadRow.mirror.label} {leadRow.mirror.value}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="trade-display__exchange">
+            {partnerLine ? (
+              <span className="trade-display__partner">{partnerLine}</span>
+            ) : null}
+            <div className="trade-display__swap">
+              <TradeSide side={sendSide} tone="send" />
+              <span className="trade-display__direction" aria-hidden="true">→</span>
+              <TradeSide side={getSide} tone="get" />
+            </div>
+          </div>
+
+          {/* Their side of the question gets its own column, weighted to
+              balance the verdict: number first, band word under it. Both the
+              percent and the word come from the shared acceptance map. */}
+          <div className="trade-display__odds">
+            {acceptanceProbability != null && acceptanceValue ? (
+              <>
+                <span className="trade-display__odds-eyebrow">They accept</span>
+                <span className="trade-display__odds-value">{acceptanceValue}</span>
+                <span className="trade-display__odds-band">{acceptanceBand}</span>
+                <span className="trade-display__acceptance-track" aria-hidden="true">
+                  <span
+                    className="trade-display__acceptance-fill"
+                    style={{ width: `${Math.max(0, Math.min(100, acceptanceProbability))}%` }}
+                  />
+                </span>
+              </>
+            ) : (
+              <TradeAcceptanceChip label={acceptanceLabel} probability={acceptanceProbability} />
+            )}
+          </div>
+
+          <div className="trade-display__strip">
+            {supportRows.map((row) => (
+              <span
+                className={[
+                  'trade-display__stat',
+                  row.tone === 'positive'
+                    ? 'trade-display__stat--positive'
+                    : row.tone === 'negative'
+                      ? 'trade-display__stat--negative'
+                      : '',
+                ].filter(Boolean).join(' ')}
+                key={`${row.label}-${row.value}`}
+              >
+                <span className="trade-display__stat-label">{row.label}</span>
+                <span className="trade-display__stat-value">{row.value}</span>
+                {row.mirror ? (
+                  <span className="trade-display__stat-mirror">
+                    {row.mirror.label} {row.mirror.value}
+                  </span>
+                ) : null}
+              </span>
+            ))}
+            {generatedAt ? (
+              <span className="trade-display__generated">generated at {generatedAt}</span>
+            ) : null}
+          </div>
+        </div>
+      ) : (
       <div className="trade-display__body">
         <div className="trade-display__swap">
           <TradeSide dense={tone === 'compact'} side={sendSide} tone="send" />
@@ -265,6 +376,7 @@ function TradeLayout({
           {generatedAt ? <span className="trade-display__generated">generated at {generatedAt}</span> : null}
         </div>
       </div>
+      )}
 
       {(whyTrigger || footer) ? (
         <div className="trade-display__footer">
