@@ -22,8 +22,14 @@
 
 .season-band__items {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  gap: 12px 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 11px 14px;
+}
+
+/* The championship price is the reason this module exists, so it takes the
+   full first row on its own rather than sharing a row with an average seed. */
+.season-band__item--strong {
+  grid-column: 1 / -1;
 }
 
 .season-band__item {
@@ -33,11 +39,11 @@
   min-width: 0;
 }
 
-/* Every item after the first sits behind a hairline so the strip reads as one
-   thought with parts, rather than separate tiles. */
-.season-band__item + .season-band__item {
-  padding-left: 18px;
-  border-left: 1px solid var(--border-subtle);
+/* In a 384px rail the items sit two-up, so the strip reads as one block with
+   parts rather than a stack of tiles. */
+.season-band__item--strong {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .season-band__label {
@@ -70,15 +76,4 @@
   line-height: 1;
 }
 
-@media (max-width: 560px) {
-  .season-band__items {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
 
-  /* The hairline only makes sense between items on one line. */
-  .season-band__item + .season-band__item {
-    padding-left: 0;
-    border-left: none;
-  }
-}

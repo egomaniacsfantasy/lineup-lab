@@ -3,6 +3,7 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { MatchupDistributions } from '../components/matchup/MatchupDistributions';
 import { SeasonBand } from '../components/matchup/SeasonBand';
+import { HubDeals } from '../components/matchup/HubDeals';
 import { PlayerChip } from '../components/player/PlayerChip';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeRow } from '../components/trade-display/TradeDisplay';
@@ -1611,23 +1612,45 @@ function MatchupLive({
     [engine.roster, matchup.opponentTeam.roster],
   );
 
+  /* Your win probability over time.
+     This used to match history entries on `matchupId`, which changes every
+     week, so the panel only ever saw the handful of reprices inside the
+     current week and told people there was no movement while the League chart
+     showed plenty. `teamSnapshots` carries the same number keyed by ROSTER id,
+     which is stable, and the store writes one for every recorded entry.
+     Points are merged by timestamp, snapshot first, with the old per-matchup
+     lookup kept as a fallback for history written before snapshots existed. */
   const matchupHistorySeries = useMemo(() => {
-    if (!lineHistory?.length || !bootstrap) return [];
-    const activeMatchup = bootstrap.matchups.find((item) => item.rosterId === (userRosterId ?? -1));
-    if (!activeMatchup || userRosterId == null) return [];
-    return lineHistory
-      .map((entry): OddsChartPoint | null => {
-        const line = entry.lines.find((candidate: LineHistoryEntry['lines'][number]) => candidate.matchupId === activeMatchup.matchupId);
-        const side = line?.sides[String(userRosterId)];
-        if (!side) return null;
-        return {
+    if (!lineHistory?.length || !bootstrap || userRosterId == null) return [];
+    const activeMatchup = bootstrap.matchups.find((item) => item.rosterId === userRosterId);
+    const byTime = new Map<number, OddsChartPoint>();
+
+    for (const entry of lineHistory) {
+      const line = activeMatchup
+        ? entry.lines.find((candidate: LineHistoryEntry['lines'][number]) => candidate.matchupId === activeMatchup.matchupId)
+        : undefined;
+      const side = line?.sides[String(userRosterId)];
+      if (side) {
+        byTime.set(entry.computedAt, {
           x: entry.computedAt,
           y: side.winProbability,
           title: entry.trigger ?? 'reprice',
-        } satisfies OddsChartPoint;
-      })
-      .filter((entry): entry is OddsChartPoint => entry !== null)
-      .sort((left, right) => left.x - right.x);
+        });
+      }
+    }
+
+    for (const entry of lineHistory) {
+      const snapshot = entry.teamSnapshots?.find((row) => row.rosterId === userRosterId);
+      if (snapshot?.winProbThisWeek == null) continue;
+      const at = snapshot.computedAt ?? entry.computedAt;
+      byTime.set(at, {
+        x: at,
+        y: snapshot.winProbThisWeek,
+        title: snapshot.trigger ?? entry.trigger ?? 'reprice',
+      });
+    }
+
+    return [...byTime.values()].sort((left, right) => left.x - right.x);
   }, [bootstrap, lineHistory, userRosterId]);
 
   /* Your starters carrying an injury tag, straight from the payload's
@@ -1982,8 +2005,6 @@ function MatchupLive({
           </div>
         </section>
 
-        {userFuture ? <SeasonBand future={userFuture} /> : null}
-
         {scoringNote ? <SeasonalNotice>{scoringNote}</SeasonalNotice> : null}
         {unpricedStarterCount > 0 ? (
           <SeasonalNotice>
@@ -2185,6 +2206,8 @@ function MatchupLive({
 
             {headToHead ? <HeadToHeadStrip summary={headToHead} /> : null}
 
+            {isConnected ? <HubDeals /> : null}
+
             <div className="matchup-page__insight-grid">
               {isConnected ? (
                 marketRows.length > 0 ? (
@@ -2311,6 +2334,8 @@ function MatchupLive({
           </section>
 
           <aside className="matchup-page__rail">
+            {userFuture ? <SeasonBand future={userFuture} /> : null}
+
             {biggestSwing ? (
               <section className="matchup-page__module matchup-page__module--rail-call">
                 <div className="matchup-page__module-row">
@@ -2810,6 +2835,7 @@ export function MatchupPage() {
         userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}
         isConnected={connectedMatchup !== null}
         isPriced={Boolean(pricing?.available)}
+        lineHistory={lineHistory}
         lineMovement={connectedMatchup ? lineMovement : null}
         matchup={connectedMatchup ?? MOCK_MATCHUP}
         scoringNote={pricing?.available ? pricing.scoringNote ?? null : null}

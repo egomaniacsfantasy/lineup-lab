@@ -35,6 +35,7 @@ import {
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
 import { signedDeltaClass } from '../utils/deltaTone';
+import { analysisVerdict, deltaTone, signedPct } from '../utils/tradeVerdict';
 import { formatAmericanOdds } from '../utils/formatOdds';
 import {
   useDynastyTradesExperimental,
@@ -63,14 +64,6 @@ function normalizeMarketPosition(value: string | null | undefined): Exclude<Mark
   return null;
 }
 
-function analysisVerdict(youDeltaTitle: number) {
-  if (youDeltaTitle >= 4) return { label: 'Steal', stamp: 'STEAL.', tone: 'good' };
-  if (youDeltaTitle >= 1.5) return { label: 'Good value', stamp: 'GOOD VALUE.', tone: 'good' };
-  if (youDeltaTitle > -1.5) return { label: 'Fair', stamp: 'FAIR DEAL.', tone: 'neutral' };
-  if (youDeltaTitle > -4) return { label: 'Overpay', stamp: 'OVERPAY.', tone: 'bad' };
-  return { label: 'Big overpay', stamp: 'BIG OVERPAY.', tone: 'bad' };
-}
-
 function railPosition(youDeltaTitle: number) {
   return 0.5 + 0.5 * Math.tanh(youDeltaTitle / 6);
 }
@@ -82,16 +75,6 @@ function priceRailStyle(position: number): CSSProperties {
     '--trade-price-fill-left': `${Math.min(50, pct)}%`,
     '--trade-price-fill-width': `${Math.abs(pct - 50)}%`,
   } as CSSProperties;
-}
-
-function signedPct(value: number) {
-  return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
-}
-
-function deltaTone(value: number): 'positive' | 'negative' | 'neutral' {
-  if (value > 0) return 'positive';
-  if (value < 0) return 'negative';
-  return 'neutral';
 }
 
 function formatGeneratedAt(value?: number) {
@@ -280,7 +263,13 @@ function TradeDealsView() {
   const [readSourceLabel, setReadSourceLabel] = useState('neutral file');
   const [scoutingFile, setScoutingFile] = useState<ManagerFile | null>(null);
   const [showRead, setShowRead] = useState(false);
-  const [marketManagerFilter, setMarketManagerFilter] = useState<number | null>(null);
+  const [marketManagerFilter, setMarketManagerFilter] = useState<number | null>(() => {
+    /* Deep link target for the hub's trade finder: /market?manager=3 lands
+       straight on that manager's deals instead of the empty picker. */
+    const raw = new URLSearchParams(window.location.search).get('manager');
+    const parsed = raw != null ? Number(raw) : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  });
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
   const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);

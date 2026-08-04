@@ -564,6 +564,24 @@ function buildHistory() {
       '5': entry.playoffProb[5],
       '6': entry.playoffProb[6],
     },
+    /* The store writes one of these per team per recorded entry, keyed by
+       roster id. The matchup line-movement chart reads them, so without them
+       here the panel can only ever say there has been no movement. */
+    teamSnapshots: ([1, 2, 3, 4, 5, 6] as const).map((rosterId) => {
+      const pair = rosterId <= 2
+        ? entry.matchupLines[MATCHUP_IDS.user]
+        : rosterId <= 4
+          ? entry.matchupLines[MATCHUP_IDS.apollo]
+          : entry.matchupLines[MATCHUP_IDS.poseidon];
+      return {
+        rosterId,
+        computedAt: entry.at,
+        trigger: entry.trigger,
+        winProbThisWeek: rosterId % 2 === 1 ? pair[0] : pair[1],
+        titleOdds: null,
+        playoffOdds: null,
+      };
+    }),
   }));
 }
 
