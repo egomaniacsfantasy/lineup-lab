@@ -263,13 +263,27 @@ function TradeDealsView() {
   const [readSourceLabel, setReadSourceLabel] = useState('neutral file');
   const [scoutingFile, setScoutingFile] = useState<ManagerFile | null>(null);
   const [showRead, setShowRead] = useState(false);
-  const [marketManagerFilter, setMarketManagerFilter] = useState<number | null>(() => {
-    /* Deep link target for the hub's trade finder: /market?manager=3 lands
-       straight on that manager's deals instead of the empty picker. */
-    const raw = new URLSearchParams(window.location.search).get('manager');
-    const parsed = raw != null ? Number(raw) : Number.NaN;
-    return Number.isFinite(parsed) ? parsed : null;
-  });
+  const [marketManagerFilter, setMarketManagerFilter] = useState<number | null>(null);
+  const deepLinkAppliedRef = useRef(false);
+
+  /* Deep link from the hub: /market?manager=3 opens that manager's deals
+     instead of the empty picker. It sets the builder partner as well as the
+     filter, the way applyMarketManagerFilter does, because the deals heading
+     names the partner and read "this manager" when only the filter was set.
+     This has to live above the component's early return: putting it next to
+     that handler changed hook order between renders and blanked the page. */
+  useEffect(() => {
+    if (deepLinkAppliedRef.current || partners.length === 0) return;
+    const raw = params.get('manager');
+    const rosterId = raw != null ? Number(raw) : Number.NaN;
+    if (!Number.isFinite(rosterId) || !partners.some((team) => team.rosterId === rosterId)) {
+      deepLinkAppliedRef.current = true;
+      return;
+    }
+    deepLinkAppliedRef.current = true;
+    setMarketManagerFilter(rosterId);
+    setPartnerRosterId(rosterId);
+  }, [params, partners]);
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
   const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
@@ -858,6 +872,7 @@ function TradeDealsView() {
     setMarketManagerFilter(rosterId);
     choosePartner(rosterId);
   };
+
 
   const marketLoaderLabel = showingManagerMarket
     ? `Simulating trades with ${partners.find((team) => team.rosterId === marketManagerFilter)?.teamName ?? 'this manager'}`
