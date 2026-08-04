@@ -17,6 +17,7 @@
 import crypto from 'node:crypto';
 import { getActiveProjections } from '../projections/store.js';
 import { cached } from '../cache.js';
+import { closedFormWinProb, buildLiveTeamDistribution } from './liveWinProb.js';
 
 const SEASON_SIMS = 10_000; // player-level season Monte Carlo — the ONE sim behind every value: Futures, trades, movers
 const MATCHUP_SIMS = 5_000; // seeded player-level sims for the headline matchup win%
@@ -1696,6 +1697,84 @@ export function simulateSeasonLive(baseline, liveDists) {
   }
 
   return buildSeasonResult(teams, { sims, regularWeeks, playoffCounts, titleCounts, winSums, seedSums, currentWeekWins, currentWeekTeams });
+}
+
+/**
+ * LIVE engine, part 3: the projection inputs the live cycle needs — the pregame
+ * projectionMap (with any user overlay) and the deterministic seed — built the
+ * SAME way priceLeague builds them, so the baseline + live futures line up with
+ * the static sim. No liveLocks: the current week is re-rolled from the game clock,
+ * not locked. Returns null off-season (no projections).
+ */
+export function buildLiveProjectionInputs(ctx) {
+  const active = ctx.projections ?? getActiveProjections();
+  if (!active) return null;
+  const { league, teams, week, overlay } = ctx;
+  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+  const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
+  applyOverlay(projectionMap, overlay);
+  const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
+  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  return { projectionMap, slotLabels, seed, version: active.version };
+}
+
+/**
+ * LIVE engine, part 4: compute the live overlay for one league in one cycle.
+ *  - builds each team's LIVE distribution from starters (pregame projection scaled
+ *    by the game clock + points already scored),
+ *  - closed-form win% for every current-week matchup (the same {moneyline,
+ *    winProbability, projection, spread, total} line shape as the static price),
+ *  - simulateSeasonLive off the cached baseline for the full futures.
+ * `live` supplies the per-player resolvers the engine stays decoupled from:
+ *   pointsForPlayer(id) -> points scored so far, fForPlayer(id) -> fraction remaining.
+ * Returns { at, week, sides:{matchupId:{rosterId:lineFields}}, futures }.
+ */
+export function priceLiveOverlay(ctx, inputs, live, baseline) {
+  const { teams, matchups, week, catalog } = ctx;
+  const { projectionMap } = inputs;
+  const pointsForPlayer = live.pointsForPlayer ?? (() => 0);
+  const fForPlayer = live.fForPlayer ?? (() => 1);
+
+  // Live {mean, variance} per roster (variance shrinks as games finish).
+  const liveDistByRoster = new Map();
+  for (const t of teams) {
+    liveDistByRoster.set(
+      t.rosterId,
+      buildLiveTeamDistribution(
+        t.starters,
+        (id) => playerDistribution(id, projectionMap, catalog[id], week),
+        (id) => pointsForPlayer(id),
+        (id) => fForPlayer(id),
+      ),
+    );
+  }
+
+  const byMatchup = new Map();
+  matchups.forEach((m) => {
+    if (m.matchupId == null) return;
+    const list = byMatchup.get(m.matchupId) ?? [];
+    list.push(m);
+    byMatchup.set(m.matchupId, list);
+  });
+
+  const sides = {};
+  byMatchup.forEach((pair, matchupId) => {
+    if (pair.length !== 2) return;
+    const [a, b] = pair;
+    const da = liveDistByRoster.get(a.rosterId);
+    const db = liveDistByRoster.get(b.rosterId);
+    if (!da || !db) return;
+    const distA = { mean: da.mean, sigma: Math.sqrt(da.variance) };
+    const distB = { mean: db.mean, sigma: Math.sqrt(db.variance) };
+    const wpA = closedFormWinProb(da, db);
+    sides[matchupId] = {
+      [a.rosterId]: lineFromDistributions(distA, distB, wpA),
+      [b.rosterId]: lineFromDistributions(distB, distA, 1 - wpA),
+    };
+  });
+
+  const futures = baseline ? simulateSeasonLive(baseline, liveDistByRoster) : null;
+  return { at: Date.now(), week, sides, futures };
 }
 
 /**
