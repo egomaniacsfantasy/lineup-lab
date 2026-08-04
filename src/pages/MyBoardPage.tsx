@@ -835,8 +835,8 @@ export function MyBoardPage() {
                 role="tab"
                 title={
                   option.key === 'consensus'
-                    ? 'Agreement-weighted numbers (what everyone sees and what prices)'
-                    : 'Pure model, before any admin agreement tilt'
+                    ? 'The numbers everyone sees, with admin edits applied. These are what price your league.'
+                    : 'The raw projections, before any admin edits.'
                 }
                 type="button"
               >
