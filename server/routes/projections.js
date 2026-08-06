@@ -112,6 +112,14 @@ projectionsRouter.get('/', async (_req, res) => {
 // the whole projections dataset. Individual scores never leave the server.
 projectionsRouter.get('/consensus', async (req, res) => {
   try {
+    // full=1 -> the true consensus across ALL raters (no self-exclude), which is
+    // what the BOARD polls so every open tab converges on an admin's live edits.
+    // Without it, we exclude the caller's own rows (the agreement-page pattern
+    // where the client blends its own live value in on top).
+    if (req.query.full === '1') {
+      res.json({ consensus: await getConsensus(null) });
+      return;
+    }
     let userId = null;
     try { userId = await getRequestUserId(req); } catch { /* anonymous -> full consensus */ }
     res.json({ consensus: await getConsensus(userId) });

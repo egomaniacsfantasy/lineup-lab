@@ -547,6 +547,40 @@ export function MyBoardPage() {
     };
   }, [reloadToken]);
 
+  // Agreement edits have no realtime push: the editor's own tab updates instantly
+  // on save (reloadToken), but other open boards would sit stale until reload. Poll
+  // the (light) full-consensus map every 15s and merge it in, so an admin's edits
+  // converge onto EVERY open board within ~15s. Also cures the 2s server cache
+  // masking rapid successive edits on the editor's own tab.
+  useEffect(() => {
+    let alive = true;
+    const pull = () => {
+      fetch('/api/projections/consensus?full=1')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((payload: { consensus?: Record<string, Record<string, { avg: number; n: number }>> } | null) => {
+          if (!alive || !payload?.consensus) return;
+          const map = payload.consensus;
+          setProjectionData((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  players: prev.players.map((p) => ({
+                    ...p,
+                    consensus: map[p.position]?.[p.name] ?? null,
+                  })),
+                }
+              : prev,
+          );
+        })
+        .catch(() => {});
+    };
+    const t = window.setInterval(pull, 15_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, []);
+
   /* Only admins edit agreement, so only admins need their saved values. The
      server averages every collaborator's row per player; this shows yours. */
   useEffect(() => {
