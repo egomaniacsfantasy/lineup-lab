@@ -2618,15 +2618,12 @@
     align-items: start;
   }
 
+  /* The rail scrolls WITH the page, not inside itself. It used to be sticky
+     with its own max-height and overflow-y, which made the hub two separate
+     scrollers: the season band could scroll away under your cursor while the
+     lineup beside it sat still. One page, one scrollbar. */
   .matchup-page__rail {
-    position: sticky;
-    /* the scroller's 80px header padding already insets the sticky
-       rectangle, so 16px here pins the rail 96px from the viewport top */
-    top: 16px;
-    /* Sizes to its modules rather than being padded out to full height.
-       The rail is sticky, so it stays in view instead of ending early. */
-    max-height: calc(100dvh - 112px);
-    overflow-y: auto;
+    align-self: start;
   }
 
   /* The start/sit call now lives in the rail, so the digest is the only
