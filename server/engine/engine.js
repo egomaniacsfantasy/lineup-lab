@@ -1213,7 +1213,7 @@ export function laneAcceptReasons({ opp, give, get, priced, catalog, framing = '
  *  1. best free-agent claim that upgrades a user starter slot
  *  2. best mutually-positive 1-for-1 trade lane against a real roster
  */
-function computeMovers(ctx) {
+export function computeMovers(ctx) {
   const { league, teams, matchups, projections, projectionMap, distByRoster, week, catalog, seed, userDisplayWinProb = null } = ctx;
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return [];
@@ -1251,14 +1251,17 @@ function computeMovers(ctx) {
         return { players: [{ mean: d.mean, sigmaUp: d.sigma, sigmaDown: d.sigma }] };
       })();
 
-  // Your CURRENT starters this week, slot by slot (the exact lineup the matchup
-  // line prices). A candidate takes the weakest current starter it can legally
-  // replace; an empty / 0-projected slot is the easiest to beat.
-  const userStarterIds = (userMatchup?.starters?.length ? userMatchup.starters : userTeam.starters) ?? [];
-  const starterSlots = userStarterIds.map((id, i) => ({
+  // Your lineup slot by slot, INCLUDING empty required slots. Built from the full
+  // roster via the optimal assignment so an unfilled K/DEF (you own none yet) is a
+  // real mean-0 target. Critical: the provider strips '0' placeholders out of
+  // `starters`, so an empty slot disappears from that array entirely — mapping over
+  // it would hide the missing kicker/defense and drop it from the waiver search.
+  const userLineup = optimalLineup(userTeam.players, slotLabels, projectionMap, catalog, week).lineup;
+  const currentByIndex = userLineup.map((e) => e.playerId); // null for an unfilled slot
+  const starterSlots = userLineup.map((entry, i) => ({
     index: i,
-    slot: slotLabels[i] ?? 'FLEX',
-    mean: (id && id !== '0' && projectionMap.has(id)) ? weekMeanOf(id) : 0,
+    slot: entry.slot,
+    mean: entry.projection ?? 0,
   }));
 
   let bestClaim = null;
@@ -1284,9 +1287,12 @@ function computeMovers(ctx) {
   if (bestClaim) {
     // Before = your current lineup as priced now. After = that same lineup with
     // the claim dropped into that slot (fills the empty spot, or replaces the
-    // weakest current starter it beats).
-    const afterStarterIds = userStarterIds.map((id, i) => (i === bestClaim.targetIndex ? bestClaim.candidate.playerId : id));
-    const baseParams = starterParams(userStarterIds, projectionMap, catalog, week);
+    // weakest current starter it beats). Empty slots (null) drop out of the sim.
+    const baseStarterIds = currentByIndex.filter(Boolean);
+    const afterStarterIds = currentByIndex
+      .map((id, i) => (i === bestClaim.targetIndex ? bestClaim.candidate.playerId : id))
+      .filter(Boolean);
+    const baseParams = starterParams(baseStarterIds, projectionMap, catalog, week);
     const afterParams = starterParams(afterStarterIds, projectionMap, catalog, week);
     // Common random numbers: draw the opponent's totals ONCE and reuse them for
     // before and after, so the win-prob delta is the swap, not sim noise.
