@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  detectEspnExtension,
+  detectConnector,
   requestEspnSession,
-  ESPN_EXTENSION_STORE_URL,
+  connectorSupported,
+  CONNECTOR_STORE_URL,
 } from '../../utils/espnExtension';
 import {
   connectEspn,
@@ -207,7 +208,7 @@ export function EspnConnect({
     let timer = 0;
 
     const look = async () => {
-      const found = await detectEspnExtension();
+      const found = await detectConnector();
       if (cancelled) return;
       setExtensionReady(found);
       if (!found) timer = window.setTimeout(look, 1500);
@@ -335,19 +336,26 @@ export function EspnConnect({
               ) : null}
 
               <div className="espn-connect__fallback-card">
-                <p className="espn-connect__fallback-title">Private league? Use the connector</p>
+                <p className="espn-connect__fallback-title">This league is private</p>
                 <p className="espn-connect__method-note">
-                  ESPN keeps your league session in a cookie that no website is
+                  ESPN keeps your league sign-in in a cookie that no website is
                   allowed to read, including this one. The connector is a small
-                  read-only extension that hands it over. Your ESPN password
-                  never leaves ESPN, and we only ever read your league.
+                  read-only add-on that hands it over. We never see your ESPN
+                  password.
                 </p>
 
-                {extensionReady ? (
+                {!connectorSupported() ? (
+                  <p className="espn-connect__method-note">
+                    Connecting a private league needs a computer, because phone
+                    browsers cannot run the connector. Do it once on a laptop
+                    and this league then works on every device, including this
+                    one.
+                  </p>
+                ) : extensionReady ? (
                   <>
                     <p className="espn-connect__method-title">Connector installed</p>
                     <ol className="espn-connect__steps">
-                      <li>Make sure you are signed in to ESPN in this browser.</li>
+                      <li>Be signed in to ESPN in this browser.</li>
                       <li>Press connect. That is the whole thing.</li>
                     </ol>
                     <button
@@ -365,13 +373,13 @@ export function EspnConnect({
                 ) : (
                   <>
                     <ol className="espn-connect__steps">
-                      <li>Add the connector to this browser.</li>
+                      <li>Add the connector. Takes about five seconds.</li>
                       <li>Come back here. This page notices on its own.</li>
                     </ol>
-                    {ESPN_EXTENSION_STORE_URL ? (
+                    {CONNECTOR_STORE_URL ? (
                       <a
                         className="espn-connect__submit"
-                        href={ESPN_EXTENSION_STORE_URL}
+                        href={CONNECTOR_STORE_URL}
                         rel="noreferrer"
                         target="_blank"
                       >
@@ -379,12 +387,12 @@ export function EspnConnect({
                       </a>
                     ) : (
                       <p className="espn-connect__method-note">
-                        The connector listing is not published yet.
+                        The connector is not published yet.
                       </p>
                     )}
                     <p className="espn-connect__method-note">
-                      Waiting for the connector. Desktop only for now: ESPN does
-                      not allow this on a phone browser.
+                      You only ever do this once. After it is linked, Odds Gods
+                      keeps your league in sync on its own, on every device.
                     </p>
                   </>
                 )}

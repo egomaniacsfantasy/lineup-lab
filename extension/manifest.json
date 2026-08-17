@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Odds Gods ESPN Connector",
-  "version": "1.1.0",
-  "description": "Connect your private ESPN fantasy league to Odds Gods. Read-only, and your ESPN password never leaves ESPN.",
+  "version": "1.0.0",
+  "description": "Connect your ESPN fantasy league to Odds Gods. Read-only. Your ESPN password never leaves ESPN.",
   "permissions": ["cookies"],
   "host_permissions": ["https://*.espn.com/*"],
   "background": { "service_worker": "background.js" },
@@ -20,5 +20,6 @@
       "js": ["content.js"],
       "run_at": "document_start"
     }
-  ]
+  ],
+  "icons": { "128": "icon128.png" }
 }
