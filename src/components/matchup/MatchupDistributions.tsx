@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import type { DensityHistogram, MatchupHistograms } from '../../types/matchup';
 import './MatchupDistributions.css';
 
@@ -159,6 +159,14 @@ export function MatchupDistributions({ histograms }: { histograms: MatchupHistog
   // Exact win% from the recentered samples — identical to the matchup line.
   const winProb = histograms.winProb;
   const winsPerHundred = Math.round(winProb * 100);
+
+  /* On a phone this is the tallest module in the column and the least
+     actionable, so it starts collapsed there. The detail is ALWAYS rendered
+     and the collapse is done in CSS, scoped to the phone breakpoint: a first
+     pass gated the content on this state and hid the toggle on desktop, which
+     left the charts unreachable at desktop width. State can no longer
+     disagree with the breakpoint. */
+  const [open, setOpen] = useState(false);
   const avgMargin = histograms.margin.mean;
   const marginSize = Math.abs(avgMargin).toFixed(1);
   const averageLine = Number(marginSize) === 0
@@ -176,6 +184,21 @@ export function MatchupDistributions({ histograms }: { histograms: MatchupHistog
       </p>
       <p className="mhist-group__average">{averageLine}</p>
 
+      <button
+        aria-expanded={open}
+        className="mhist-group__toggle"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        {open ? 'Hide the detail' : 'Show how the week spreads out'}
+      </button>
+
+      <div
+        className={[
+          'mhist-group__detail',
+          open ? '' : 'mhist-group__detail--collapsed',
+        ].filter(Boolean).join(' ')}
+      >
       <MarginChart
         histogram={histograms.margin}
         label={`How much you win or lose by. You win ${winsPerHundred} times out of 100.`}
@@ -189,6 +212,7 @@ export function MatchupDistributions({ histograms }: { histograms: MatchupHistog
       <p className="mhist-group__note">
         From {histograms.sims.toLocaleString()} simulations of this week.
       </p>
+      </div>
     </div>
   );
 }

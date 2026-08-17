@@ -153,3 +153,40 @@
   font-size: 11px;
   opacity: 0.8;
 }
+
+/* Only surfaces on phones, where the module opens collapsed. */
+.mhist-group__toggle {
+  justify-self: start;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  color: var(--text-amber);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mhist-group__toggle:hover {
+  text-decoration: underline;
+}
+
+.mhist-group__detail {
+  display: grid;
+  gap: 10px;
+}
+
+/* The collapse only exists on phones. Above the breakpoint the detail always
+   shows and the toggle is gone, so no state can strand the charts. */
+@media (max-width: 899px) {
+  .mhist-group__detail--collapsed {
+    display: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .mhist-group__toggle {
+    display: none;
+  }
+}

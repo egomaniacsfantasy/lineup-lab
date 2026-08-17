@@ -2005,6 +2005,12 @@ function MatchupLive({
           </div>
         </section>
 
+        {userFuture ? (
+          <div className="matchup-page__season--mobile">
+            <SeasonBand future={userFuture} />
+          </div>
+        ) : null}
+
         {scoringNote ? <SeasonalNotice>{scoringNote}</SeasonalNotice> : null}
         {unpricedStarterCount > 0 ? (
           <SeasonalNotice>
@@ -2334,7 +2340,11 @@ function MatchupLive({
           </section>
 
           <aside className="matchup-page__rail">
-            {userFuture ? <SeasonBand future={userFuture} /> : null}
+            {userFuture ? (
+              <div className="matchup-page__season--rail">
+                <SeasonBand future={userFuture} />
+              </div>
+            ) : null}
 
             {biggestSwing ? (
               <section className="matchup-page__module matchup-page__module--rail-call">

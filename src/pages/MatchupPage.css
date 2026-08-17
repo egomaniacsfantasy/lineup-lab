@@ -2742,3 +2742,26 @@
   font-family: var(--font-ui);
   font-size: 12px;
 }
+
+/* Season band placement.
+   Desktop wants it at the top of the rail; a phone wants it between the
+   matchup hero and the lineup table, and the hero lives inside the main
+   column, so no single DOM position serves both. Two instances, exactly one
+   displayed. display:none keeps the hidden copy out of the a11y tree. */
+.matchup-page__season--mobile {
+  display: block;
+}
+
+.matchup-page__season--rail {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .matchup-page__season--mobile {
+    display: none;
+  }
+
+  .matchup-page__season--rail {
+    display: block;
+  }
+}
