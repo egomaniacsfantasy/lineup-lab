@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import test from 'node:test';
 import {
-  buildEspnLaunchCode,
   espnSessionPasteError,
   parseEspnLeagueInput,
   parseEspnSessionPaste,
@@ -90,19 +90,20 @@ test('paste state: neither ESPN session value present', () => {
   );
 });
 
-test('builds runnable ESPN launch code that captures readable ESPN values', () => {
-  const code = buildEspnLaunchCode('https://oddsgods.net/connect');
-  assert.equal(code.startsWith('javascript:'), true);
-  assert.match(code, /fantasy\\.espn\\.com/);
-  assert.match(code, /document\.cookie/);
-  assert.match(code, /espn_s2=/);
-  assert.match(code, /SWID=/);
-  assert.match(code, /espnCapture/);
-  assert.match(code, /espnLeagueId/);
-  assert.match(code, /location\.href = url\.toString\(\)/);
-  assert.match(code, /https:\/\/oddsgods\.net\/connect/);
-  assert.equal(code.includes('React has ' + 'blocked'), false);
-  assert.equal(code.includes('throw new ' + 'Error'), false);
+test('no bookmarklet or document.cookie path can come back', async () => {
+  /* ESPN sets espn_s2 HttpOnly, so document.cookie can never contain it. The
+     old buildEspnLaunchCode built a javascript: bookmarklet that read
+     document.cookie, which meant it dead-ended for every user, every time.
+     The previous version of this test asserted the bookmarklet CONTAINED
+     document.cookie, so it passed happily while the feature was impossible.
+     Reading that cookie needs the extension or a native webview. */
+  const source = await fsp.readFile('src/utils/espnConnect.js', 'utf8');
+  assert.equal(/export function buildEspnLaunchCode/.test(source), false);
+  assert.equal(/javascript:/.test(source), false);
+
+  const connect = await fsp.readFile('src/components/league/EspnConnect.tsx', 'utf8');
+  assert.equal(/document\.cookie/.test(connect), false);
+  assert.equal(/launch code/i.test(connect), false);
 });
 
 test('ESPN connect flow does not mention invisible login artifacts', () => {

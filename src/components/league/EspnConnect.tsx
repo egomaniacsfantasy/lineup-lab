@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  detectEspnExtension,
+  requestEspnSession,
+  ESPN_EXTENSION_STORE_URL,
+} from '../../utils/espnExtension';
 import {
   connectEspn,
   LeagueApiError,
@@ -8,11 +13,8 @@ import {
 } from '../../services/leagueApi';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import {
-  buildEspnLaunchCode,
-  espnSessionPasteError,
   espnLoginEnabled,
   parseEspnLeagueInput,
-  parseEspnSessionPaste,
 } from '../../utils/espnConnect';
 import './EspnConnect.css';
 
@@ -47,29 +49,18 @@ export function EspnConnect({
   const [leagueInput, setLeagueInput] = useState(initialLeagueInput);
   const [privateLeagueId, setPrivateLeagueId] = useState(initialLeagueInput);
   const [privateSeason, setPrivateSeason] = useState(initialSeason);
-  const [cookiePaste, setCookiePaste] = useState(initialPaste);
   const [showFallback, setShowFallback] = useState(Boolean(initialPaste));
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginOtp, setLoginOtp] = useState('');
   const [loginChallengeId, setLoginChallengeId] = useState<string | null>(null);
-  const [copiedConnector, setCopiedConnector] = useState(false);
+  const [extensionReady, setExtensionReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const autoTriedPaste = useRef(false);
 
   const leagueInputRef = useRef({ leagueId: '', season: '' });
   leagueInputRef.current = parseEspnLeagueInput(leagueInput);
 
-  const connectorReturnUrl = useMemo(() => {
-    if (typeof window === 'undefined') return '/connect';
-    return `${window.location.origin}/connect`;
-  }, []);
-
-  const launchCode = useMemo(
-    () => buildEspnLaunchCode(connectorReturnUrl),
-    [connectorReturnUrl],
-  );
 
   // Core connect. Cookies are optional (public leagues need none).
   const doConnect = async (creds?: { espnS2: string; swid: string }) => {
@@ -127,18 +118,6 @@ export function EspnConnect({
     void doConnect();
   };
 
-  const connectFromPaste = () => {
-    const { creds, missing } = parseEspnSessionPaste(cookiePaste);
-    void trackEspnConnectEvent('paste_submit', {
-      missing: missing.join(',') || 'none',
-      hasLeague: Boolean(privateLeagueId || leagueInputRef.current.leagueId),
-    });
-    if (!creds) {
-      setError(espnSessionPasteError(missing) ?? 'Paste the connector output and try again.');
-      return;
-    }
-    void doConnect(creds);
-  };
 
   const connectWithLogin = async () => {
     const id = privateLeagueId || leagueInputRef.current.leagueId;
@@ -219,14 +198,41 @@ export function EspnConnect({
     void trackEspnConnectEvent('open_espn', { hasLeague: Boolean(id) });
   };
 
-  const copyConnector = async () => {
+
+  /* Poll for the connector so the install step flips to "installed" the moment
+     the user finishes, without asking them to reload the page. Cheap: the
+     extension answers a postMessage ping or it does not. */
+  useEffect(() => {
+    let cancelled = false;
+    let timer = 0;
+
+    const look = async () => {
+      const found = await detectEspnExtension();
+      if (cancelled) return;
+      setExtensionReady(found);
+      if (!found) timer = window.setTimeout(look, 1500);
+    };
+
+    void look();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  const connectWithExtension = async () => {
+    setError(null);
+    setIsLoading(true);
+    void trackEspnConnectEvent('extension_request', {});
     try {
-      await navigator.clipboard.writeText(launchCode);
-      setCopiedConnector(true);
-      void trackEspnConnectEvent('connector_copy', {});
-    } catch {
-      setCopiedConnector(false);
-      setError('Could not copy the launch code. Select the code box below, copy it, then paste it into ESPN.');
+      const session = await requestEspnSession();
+      if (!session.espnS2 || !session.swid) {
+        setError('The connector could not find an ESPN session. Sign in to ESPN in this browser, then try again.');
+        return;
+      }
+      await doConnect({ espnS2: session.espnS2, swid: session.swid });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -234,20 +240,6 @@ export function EspnConnect({
     void trackEspnConnectEvent('view', { hasCapture: Boolean(initialPaste) });
   }, [initialPaste]);
 
-  useEffect(() => {
-    if (!initialPaste || autoTriedPaste.current) return;
-    autoTriedPaste.current = true;
-    const parsed = parseEspnSessionPaste(initialPaste);
-    if (parsed.creds) {
-      void doConnect(parsed.creds);
-      return;
-    }
-    setShowFallback(true);
-    setError(espnSessionPasteError(parsed.missing));
-    // doConnect is intentionally not a dependency; this effect is a one-shot
-    // handoff from the ESPN launch code back into the connector.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPaste]);
 
   return (
     <section aria-labelledby="espn-connect-title" className="espn-connect">
@@ -282,8 +274,8 @@ export function EspnConnect({
               value={leagueInput}
             />
             <span className="espn-connect__hint">
-              Public leagues connect with just the URL. If ESPN says the league
-              is private, we&apos;ll show the secure fallback.
+              Public leagues connect with just the URL. Private ones need the
+              connector, which is a one-time setup.
             </span>
           </label>
 
@@ -297,7 +289,7 @@ export function EspnConnect({
                 <div className="espn-connect__login-card">
                   <p className="espn-connect__fallback-title">Log in with ESPN</p>
                   <p className="espn-connect__cookies-note">
-                    Read-only. Your password is used once and never stored.
+                    Read-only, and we never ask for your ESPN password.
                   </p>
                   <label className="espn-connect__field">
                     <span className="espn-connect__label">ESPN email</span>
@@ -343,54 +335,59 @@ export function EspnConnect({
               ) : null}
 
               <div className="espn-connect__fallback-card">
-                <p className="espn-connect__fallback-title">Use the ESPN-page connector</p>
-                <div className="espn-connect__capture-demo" aria-hidden="true">
-                  <span className="espn-connect__capture-phone">
-                    <span />
-                  </span>
-                  <span className="espn-connect__capture-arrow">→</span>
-                  <span className="espn-connect__capture-ticket">Odds Gods</span>
-                </div>
-                <div className="espn-connect__method">
-                  <p className="espn-connect__method-title">One-time ESPN capture</p>
-                  <ol className="espn-connect__steps">
-                    <li>Tap Copy launch code.</li>
-                    <li>Open your ESPN league in this browser.</li>
-                    <li>Paste the code into the address bar and hit Enter. Odds Gods fills the box below.</li>
-                  </ol>
-                  <button className="espn-connect__submit" onClick={copyConnector} type="button">
-                    {copiedConnector ? 'Launch code copied' : 'Copy launch code'}
-                  </button>
-                  <textarea
-                    aria-label="Odds Gods ESPN launch code"
-                    className="espn-connect__input espn-connect__code"
-                    onChange={() => undefined}
-                    readOnly
-                    rows={2}
-                    value={launchCode}
-                  />
-                </div>
-                <button className="espn-connect__linkbtn" onClick={openEspnLeague} type="button">
-                  Open ESPN league ↗
-                </button>
-                <label className="espn-connect__field">
-                  <span className="espn-connect__label">Connector output</span>
-                  <textarea
-                    className="espn-connect__input espn-connect__textarea"
-                    onChange={(event) => setCookiePaste(event.target.value)}
-                    placeholder="The connector fills this automatically. If it copied text instead, paste it here."
-                    rows={5}
-                    value={cookiePaste}
-                  />
-                </label>
-                <button
-                  className="espn-connect__submit"
-                  disabled={isLoading}
-                  onClick={connectFromPaste}
-                  type="button"
-                >
-                  {isLoading ? 'Checking ESPN…' : 'Connect captured ESPN login'}
-                </button>
+                <p className="espn-connect__fallback-title">Private league? Use the connector</p>
+                <p className="espn-connect__method-note">
+                  ESPN keeps your league session in a cookie that no website is
+                  allowed to read, including this one. The connector is a small
+                  read-only extension that hands it over. Your ESPN password
+                  never leaves ESPN, and we only ever read your league.
+                </p>
+
+                {extensionReady ? (
+                  <>
+                    <p className="espn-connect__method-title">Connector installed</p>
+                    <ol className="espn-connect__steps">
+                      <li>Make sure you are signed in to ESPN in this browser.</li>
+                      <li>Press connect. That is the whole thing.</li>
+                    </ol>
+                    <button
+                      className="espn-connect__submit"
+                      disabled={isLoading}
+                      onClick={connectWithExtension}
+                      type="button"
+                    >
+                      {isLoading ? 'Checking ESPN…' : 'Connect my ESPN league'}
+                    </button>
+                    <button className="espn-connect__linkbtn" onClick={openEspnLeague} type="button">
+                      Sign in to ESPN first ↗
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <ol className="espn-connect__steps">
+                      <li>Add the connector to this browser.</li>
+                      <li>Come back here. This page notices on its own.</li>
+                    </ol>
+                    {ESPN_EXTENSION_STORE_URL ? (
+                      <a
+                        className="espn-connect__submit"
+                        href={ESPN_EXTENSION_STORE_URL}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Add the connector ↗
+                      </a>
+                    ) : (
+                      <p className="espn-connect__method-note">
+                        The connector listing is not published yet.
+                      </p>
+                    )}
+                    <p className="espn-connect__method-note">
+                      Waiting for the connector. Desktop only for now: ESPN does
+                      not allow this on a phone browser.
+                    </p>
+                  </>
+                )}
               </div>
 
               <button
@@ -414,7 +411,7 @@ export function EspnConnect({
 
           <p className="espn-connect__privacy">
             {espnLoginEnabled
-              ? 'Read-only. Your password is used once and never stored.'
+              ? 'Read-only, and we never ask for your ESPN password.'
               : 'Read-only. Your password is never requested or stored.'}
           </p>
         </form>

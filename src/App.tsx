@@ -14,6 +14,7 @@ import { DemoPage, LandingPage } from './pages/LandingPage';
 import { DesignBoardRowPage } from './pages/DesignBoardRowPage';
 import { DesignChartPage } from './pages/DesignChartPage';
 import { DesignFixturePage } from './pages/DesignFixturePage';
+import { EspnConnect } from './components/league/EspnConnect';
 import { LeaguePage } from './pages/LeaguePage';
 import { MatchupPage } from './pages/MatchupPage';
 import { MorePage } from './pages/MorePage';
@@ -76,6 +77,18 @@ function PublicRoutes() {
               <Route path="/signin" element={<AuthLanding />} />
               <Route element={<AppShell />}>
                 <Route path="/demo" element={<DemoPage />} />
+                {/* Dev-only: the real /connect is auth-gated, so the ESPN flow
+                    could not be reviewed at all without credentials. */}
+                {import.meta.env.DEV ? (
+                  <Route
+                    path="/design/espn-connect"
+                    element={
+                      <div style={{ padding: 32, maxWidth: 720, margin: '0 auto' }}>
+                        <EspnConnect onConnected={() => undefined} />
+                      </div>
+                    }
+                  />
+                ) : null}
                 {import.meta.env.DEV ? <Route path="/design/board-row/:variant" element={<DesignBoardRowPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/chart/:variant" element={<DesignChartPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/:scene" element={<DesignFixturePage />} /> : null}

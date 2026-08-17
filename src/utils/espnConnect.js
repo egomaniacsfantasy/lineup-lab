@@ -94,33 +94,12 @@ export function espnSessionPasteError(missing = []) {
   return null;
 }
 
-export function buildEspnLaunchCode(returnUrl) {
-  const target = JSON.stringify(String(returnUrl || ''));
-  const script = `(() => {
-    const send = ${target};
-    const onEspn = /(^|\\.)fantasy\\.espn\\.com$/i.test(location.hostname);
-    if (!onEspn) {
-      alert('Open your ESPN fantasy league first, then run the Odds Gods code again.');
-      return;
-    }
-    const blob = document.cookie || '';
-    const leagueId = new URLSearchParams(location.search).get('leagueId') || '';
-    const seasonId = new URLSearchParams(location.search).get('seasonId') || '';
-    const hasBoth = /espn_s2=/i.test(blob) && /SWID=/i.test(blob);
-    const url = new URL(send);
-    if (leagueId) url.searchParams.set('espnLeagueId', leagueId);
-    if (seasonId) url.searchParams.set('espnSeason', seasonId);
-    url.searchParams.set('espnCapture', blob);
-    if (hasBoth) {
-      location.href = url.toString();
-      return;
-    }
-    navigator.clipboard?.writeText(blob).finally(() => {
-      alert('ESPN did not expose everything Odds Gods needs on this page. Return to Odds Gods; the paste box will tell you exactly what is missing.');
-      location.href = url.toString();
-    });
-  })()`;
-  return `javascript:${script.replace(/\s+/g, ' ')}`;
-}
+/* buildEspnLaunchCode was removed on 2026-08-04.
+   It built an address-bar snippet that read document.cookie to find espn_s2.
+   ESPN sets espn_s2 HttpOnly, so document.cookie can NEVER contain it: the
+   flow could not succeed even once, and every user who followed it was told
+   "ESPN did not expose everything" and dead-ended. Reading an HttpOnly cookie
+   needs the connector extension or a native webview. Do not reintroduce a
+   paste or address-bar capture path. */
 
 export const espnLoginEnabled = import.meta.env?.VITE_ESPN_LOGIN_ENABLED !== 'false';
