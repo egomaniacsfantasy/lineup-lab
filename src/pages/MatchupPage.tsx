@@ -3,6 +3,7 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { MatchupDistributions } from '../components/matchup/MatchupDistributions';
 import { SeasonBand } from '../components/matchup/SeasonBand';
+import { shareCard } from '../utils/shareCard';
 import { HubDeals } from '../components/matchup/HubDeals';
 import { PlayerChip } from '../components/player/PlayerChip';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
@@ -2002,6 +2003,33 @@ function MatchupLive({
                 {engine.activeLine.yours.total.toFixed(1)}
               </span>
             </span>
+
+            {/* The book's job is to settle the group chat, so the line has to
+                leave the app in one tap. Every value below is the same one
+                rendered above it. */}
+            <button
+              className="matchup-page__share"
+              onClick={() => {
+                void shareCard({
+                  eyebrow: `Week ${matchup.week}`,
+                  you: matchup.yourTeam.teamName,
+                  them: matchup.opponentTeam.teamName,
+                  yourPrice: formatAmericanOdds(engine.activeLine.yours.moneyline),
+                  theirPrice: formatAmericanOdds(engine.activeLine.opponent.moneyline),
+                  yourWinPct: engine.activeLine.yours.winProbability,
+                  // Served margin mean, the same sentence the distributions
+                  // module prints. Omitted when the sim has not run.
+                  note: matchup.histograms
+                    ? matchup.histograms.margin.mean > 0
+                      ? `On average you win by ${Math.abs(matchup.histograms.margin.mean).toFixed(1)}.`
+                      : `On average you lose by ${Math.abs(matchup.histograms.margin.mean).toFixed(1)}.`
+                    : null,
+                });
+              }}
+              type="button"
+            >
+              Share the line
+            </button>
           </div>
         </section>
 

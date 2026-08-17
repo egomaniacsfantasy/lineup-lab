@@ -2765,3 +2765,25 @@
     display: block;
   }
 }
+
+/* Share the line. Quiet until wanted: the hero is about the number, not the
+   button, but it has to be reachable without a menu. */
+.matchup-page__share {
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.matchup-page__share:hover,
+.matchup-page__share:focus-visible {
+  border-color: rgba(232, 84, 29, 0.5);
+  color: var(--text-amber);
+}
