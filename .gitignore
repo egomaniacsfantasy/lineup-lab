@@ -35,3 +35,12 @@ server/data/
 .env
 .env.*
 !.env.example
+
+# Capacitor iOS: the web bundle is copied in at build time, and SwiftPM/Xcode
+# artifacts are machine-local. The Xcode project itself IS tracked.
+ios/App/App/public/
+ios/App/build/
+ios/DerivedData/
+ios/App/Pods/
+*.xcuserdatad
+xcuserdata/
