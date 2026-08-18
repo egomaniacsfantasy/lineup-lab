@@ -2959,3 +2959,137 @@
     font-size: 9px;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+   Deals first.
+
+   The tab used to open on an instruction above a nine-tile grid, which meant
+   the first screen of a trade finder had no trades on it. Three views instead,
+   in the order the questions actually get asked: what has the book got, who
+   would say yes, and what if I build my own.
+   --------------------------------------------------------------------------- */
+.trade-cc__views {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+}
+
+.trade-cc__view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trade-cc__view--active {
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  color: var(--text-amber);
+}
+
+.trade-cc__view-count {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--amber) 26%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-cc__deals {
+  display: grid;
+  gap: 10px;
+}
+
+.trade-cc__finder--hidden {
+  display: none;
+}
+
+
+/* The manager tiles were three across on a phone, which left about 96px for a
+   name and produced "FANTASYGODCASTA'..." and "LUKEWILLIAMS340...". Two across
+   with the name allowed to wrap fits the same names whole. An ellipsis is not
+   a layout. */
+@media (max-width: 1023px) {
+  .trade-cc__manager-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trade-cc__manager-card-name {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
+  }
+}
+
+
+.trade-cc__builder--hidden {
+  display: none;
+}
+
+/* An empty board is a state, not a dead end: the thing that fills it is one
+   tap away, so it is on the screen rather than on another tab. */
+.trade-cc__deals-empty {
+  display: grid;
+  gap: 12px;
+  padding: 18px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--bg-surface);
+}
+
+.trade-cc__deals-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.trade-cc__scan-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-pill);
+  background: rgba(232, 84, 29, 0.16);
+  color: var(--text-amber);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.trade-cc__scan-secondary {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

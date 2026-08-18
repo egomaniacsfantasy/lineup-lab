@@ -1448,3 +1448,48 @@
     display: inline;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+   The Board header on a phone.
+
+   The hero is a space-between row: the copy on the left, the Cards/Table
+   toggle on the right. At 402px that hands the copy about half the width, so
+   "Franco's projections · PPR" and "Updated Aug 18 · 389 players" each wrapped
+   onto two and three lines beside a toggle sitting in its own empty half. Four
+   lines of chrome before the first player.
+
+   Stacked, the title gets the full width and reads on one line, the two meta
+   lines fit without wrapping, and the toggle becomes a full-width segmented
+   control — the same shape the Trades tab now uses, so the two tabs stop
+   inventing separate vocabularies for the same control.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .board-page__hero {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .board-page__title {
+    font-size: 26px;
+    line-height: 1.05;
+  }
+
+  .board-page__caption {
+    margin-top: 6px;
+    font-size: 13px;
+  }
+
+  .board-page__view-toggle,
+  .board-page__rapid-switch {
+    width: 100%;
+  }
+
+  .board-page__view-toggle > *,
+  .board-page__rapid-switch > * {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}

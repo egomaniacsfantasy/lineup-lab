@@ -59,6 +59,7 @@ import './TradePage.css';
 import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
+import { oddsPairDelta } from '../utils/noTradeMath';
 
 type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
@@ -97,6 +98,14 @@ function initials(name: string) {
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'TM';
 }
+
+type MarketView = 'deals' | 'managers' | 'build';
+
+const MARKET_VIEWS: { id: MarketView; label: string }[] = [
+  { id: 'deals', label: 'Deals' },
+  { id: 'managers', label: 'By manager' },
+  { id: 'build', label: 'Build' },
+];
 
 function recordText(record: { wins: number; losses: number; ties?: number }) {
   return record.ties ? `${record.wins}-${record.losses}-${record.ties}` : `${record.wins}-${record.losses}`;
@@ -288,6 +297,36 @@ function TradeDealsView() {
     setMarketManagerFilter(rosterId);
     setPartnerRosterId(rosterId);
   }, [params, partners]);
+  /* Deal-first. The tab opened on an instruction ("Pick a manager and the book
+     builds the deals...") above a nine-tile grid, so the first screen of a
+     trade finder contained no trades. The book already prices deals across the
+     whole league on every repricing — those are what you came for, so they
+     lead, and picking a manager becomes the second question rather than the
+     toll gate. */
+  const [marketView, setMarketView] = useState<MarketView>('deals');
+  /* Every trade the book already priced across the league, newest read first.
+     Nothing is computed here — titleOddsBefore/After are served, and turning a
+     pair into a delta is the same display transform the hub already makes. */
+  const leagueDeals = useMemo(() => {
+    if (!bootstrap || !pricing?.available) return [];
+    return (pricing.movers ?? [])
+      .filter((mover) => mover.kind === 'trade')
+      .map((mover) => {
+        const getIdsForCard = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
+        const giveIdsForCard = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
+        const partner = bootstrap.teams.find((team) => team.rosterId === mover.partnerRosterId) ?? null;
+        return {
+          signature: `${mover.partnerRosterId ?? 'x'}:${giveIdsForCard.join('+')}>${getIdsForCard.join('+')}`,
+          mover,
+          partner,
+          getIds: getIdsForCard,
+          giveIds: giveIdsForCard,
+          delta: oddsPairDelta(mover.titleOddsBefore, mover.titleOddsAfter),
+          acceptance: mover.acceptanceProbability ?? null,
+        };
+      })
+      .filter((deal) => deal.getIds.length > 0 && deal.giveIds.length > 0);
+  }, [bootstrap, pricing]);
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
   const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
@@ -939,30 +978,117 @@ function TradeDealsView() {
     <div className="trade-page">
       <h1 className="visually-hidden">Market</h1>
 
-      <section className="trade-cc__finder">
-        <div className="trade-cc__finder-head">
-          <div>
-            <div className="trade-cc__market-kicker">
-              <p className="trade-cc__kicker">Trade finder</p>
-            </div>
-            <h2 className="trade-cc__title">Find a trade.</h2>
-            <p className="trade-cc__finder-sub">
-              Pick a manager and the book builds the deals they would actually say yes to.
-            </p>
-            {managerSuggestionsError && showingManagerMarket ? (
-              <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
-            ) : null}
-          </div>
+      {/* Three questions, in the order people actually ask them: what has the
+          book got, who would say yes, and what if I build my own. */}
+      <div className="trade-cc__views" role="tablist" aria-label="Trade views">
+        {MARKET_VIEWS.map((view) => (
           <button
-            aria-expanded={showRead}
-            className="trade-cc__partner-read trade-cc__partner-read--inline"
-            disabled={marketManagerFilter == null || isPricing || counterLoading}
-            onClick={() => setShowRead((current) => !current)}
+            aria-selected={marketView === view.id}
+            className={[
+              'trade-cc__view',
+              marketView === view.id ? 'trade-cc__view--active' : '',
+            ].filter(Boolean).join(' ')}
+            key={view.id}
+            onClick={() => setMarketView(view.id)}
+            role="tab"
             type="button"
           >
-            {showRead ? 'Hide read' : 'How they trade'}
+            {view.label}
+            {view.id === 'deals' && leagueDeals.length > 0 ? (
+              <span className="trade-cc__view-count">{leagueDeals.length}</span>
+            ) : null}
           </button>
-        </div>
+        ))}
+      </div>
+
+      {marketView === 'deals' ? (
+        <section className="trade-cc__deals">
+          {leagueDeals.length > 0 ? (
+            <div className="trade-cc__market-grid">
+              {leagueDeals.map((deal) => {
+                const verdict = analysisVerdict(deal.delta);
+                return (
+                  <TradeCard
+                    acceptanceBand={getAcceptanceLingo(deal.acceptance)?.label ?? null}
+                    acceptanceLabel={deal.acceptance != null ? acceptanceGaugeLabel(deal.acceptance) : null}
+                    acceptanceProbability={deal.acceptance}
+                    acceptanceValue={formatAcceptancePercent(deal.acceptance)}
+                    getSide={tradeSideFromIds('You get', deal.getIds, bootstrap.players)}
+                    impactRows={[
+                      {
+                        label: 'Your title',
+                        value: signedPct(deal.delta),
+                        tone: deltaTone(deal.delta),
+                        emphasis: 'lead',
+                      },
+                    ]}
+                    key={deal.signature}
+                    onClick={() => {
+                      if (deal.partner) applyMarketManagerFilter(deal.partner.rosterId);
+                      setMarketView('build');
+                    }}
+                    /* Which manager this is with is the first thing you need
+                       and the deals view is the only place it is not implied
+                       by a picker you just tapped. */
+                    partnerLine={deal.partner?.teamName ?? 'A manager'}
+                    sendSide={tradeSideFromIds('You send', deal.giveIds, bootstrap.players)}
+                    verdictLabel={verdict.label}
+                    verdictTone={verdict.tone as 'good' | 'neutral' | 'bad'}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            /* The scan lives on the Hub by an earlier decision, and the guard in
+               test/noTradeMath.test.mjs holds this module to it. So the empty
+               state offers the thing this tab can actually do instead. */
+            <div className="trade-cc__deals-empty">
+              <p className="trade-cc__empty-lane">
+                {pricing?.available
+                  ? 'The book has no league-wide deals on the board right now. Asking a manager directly runs a fresh look at their roster.'
+                  : 'Pricing your league. Deals arrive with the first repricing.'}
+              </p>
+              {pricing?.available ? (
+                <div className="trade-cc__deals-empty-actions">
+                  <button
+                    className="trade-cc__scan-button"
+                    onClick={() => setMarketView('managers')}
+                    type="button"
+                  >
+                    Pick a manager
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      <section
+        className={[
+          'trade-cc__finder',
+          marketView === 'managers' ? '' : 'trade-cc__finder--hidden',
+        ].filter(Boolean).join(' ')}
+      >
+        {/* The read is about a specific manager, so it appears once there is
+            one. Rendering it disabled above an empty heading left a dead row
+            at the top of the view where the title used to be. */}
+        {managerSuggestionsError && showingManagerMarket ? (
+          <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
+        ) : null}
+        {marketManagerFilter != null ? (
+          <div className="trade-cc__finder-head">
+            <button
+              aria-expanded={showRead}
+              className="trade-cc__partner-read trade-cc__partner-read--inline"
+              disabled={isPricing || counterLoading}
+              onClick={() => setShowRead((current) => !current)}
+              type="button"
+            >
+              {showRead ? 'Hide read' : 'How they trade'}
+            </button>
+          </div>
+        ) : null}
         <div className="trade-cc__filter-stack">
           <div className="trade-cc__filter-row">
             <span className="trade-cc__filter-label">Managers</span>
@@ -1186,6 +1312,7 @@ function TradeDealsView() {
       <section
         className={[
           'trade-cc__builder',
+          marketView === 'build' ? '' : 'trade-cc__builder--hidden',
           builderCollapsed ? 'trade-cc__builder--collapsed' : '',
           builderIdle ? 'trade-cc__builder--idle' : '',
         ].filter(Boolean).join(' ')}
