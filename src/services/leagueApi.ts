@@ -573,7 +573,12 @@ export function startEspnLogin(body: {
      dead one. The worker gives up at 30s, so 60s here is past any honest
      answer it could still be about to send. */
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
+  /* The worker enforces its own budget (LOGIN_TIMEOUT_MS) and answers with a
+     real reason when it expires, so the client's job is only to stop an
+     infinite wait — not to cut the worker off mid-answer. Measured round trips
+     are 33-37s at the current 30s worker budget, so this sits well clear of it
+     and of a raised one. */
+  const timer = setTimeout(() => controller.abort(), 120_000);
   return get<EspnLoginResult>('/api/espn/login/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
