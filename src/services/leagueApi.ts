@@ -492,7 +492,19 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
   const [url, decorated] = withContext(path, init);
   const fixture = await maybeHandleDesignFixtureRequest(url, decorated);
   if (fixture !== null) return fixture as T;
-  const response = await fetch(url, decorated);
+
+  /* A deploy restarts the API, and every request in that window comes back 502
+     from the platform rather than from us. That is a few seconds of a bad
+     gateway presented to the user as a failure they did something to cause.
+     One retry after a short pause covers a restart; anything still failing
+     after that is a real fault and is reported as one. Retrying is only safe
+     for reads, so a request with a method is left alone. */
+  const isRead = !decorated.method || decorated.method.toUpperCase() === 'GET';
+  let response = await fetch(url, decorated);
+  if (isRead && [502, 503, 504].includes(response.status)) {
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    response = await fetch(url, decorated);
+  }
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
