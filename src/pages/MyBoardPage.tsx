@@ -16,7 +16,7 @@ import { supabase } from '../services/supabase';
 import { isAgreementAdmin } from '../utils/admin';
 import { toPlayer } from '../adapters/connectedLeague';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
-import { fetchBoard, type BoardRow } from '../services/leagueApi';
+import { apiUrl, fetchBoard, type BoardRow } from '../services/leagueApi';
 import {
   tiltFromConsensus,
   adjustFP,
@@ -532,7 +532,7 @@ export function MyBoardPage() {
 
   useEffect(() => {
     let alive = true;
-    fetch('/api/projections')
+    fetch(apiUrl('/api/projections'))
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
       .then((payload: ProjectionDataset) => {
         if (!alive) return;
@@ -555,7 +555,7 @@ export function MyBoardPage() {
   useEffect(() => {
     let alive = true;
     const pull = () => {
-      fetch('/api/projections/consensus?full=1')
+      fetch(apiUrl('/api/projections/consensus?full=1'))
         .then((r) => (r.ok ? r.json() : null))
         .then((payload: { consensus?: Record<string, Record<string, { avg: number; n: number }>> } | null) => {
           if (!alive || !payload?.consensus) return;
@@ -793,7 +793,7 @@ export function MyBoardPage() {
     setAgreeSaved((current) => ({ ...current, [id]: normalized }));
     setSaving((current) => ({ ...current, [id]: 'ok' }));
     setSaveMessages((current) => ({ ...current, [id]: saveConfirmation(Number(normalized)) }));
-    void fetch('/api/projections/refresh-adjusted', { method: 'POST' }).catch(() => null);
+    void fetch(apiUrl('/api/projections/refresh-adjusted'), { method: 'POST' }).catch(() => null);
     setReloadToken((current) => current + 1);
     window.setTimeout(() => {
       setSaveMessages((current) => {

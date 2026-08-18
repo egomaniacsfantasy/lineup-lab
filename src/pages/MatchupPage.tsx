@@ -16,7 +16,7 @@ import type { PricedFuture } from '../services/leagueApi';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
-import { type ApiCatalogPlayer, type LineHistoryEntry } from '../services/leagueApi';
+import { apiUrl, type ApiCatalogPlayer, type LineHistoryEntry } from '../services/leagueApi';
 import { fetchSleeperHeadToHeadSummary, type SleeperHeadToHeadSummary } from '../services/headToHead';
 import { useMatchupEngine, type SitCost } from '../hooks/useMatchupEngine';
 import { useNflSchedule } from '../hooks/useNflSchedule';
@@ -1290,7 +1290,7 @@ function MatchupLive({
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch('/api/projections', { signal: controller.signal })
+    fetch(apiUrl('/api/projections'), { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : null))
       .then((payload: VolatilityProjectionSet | null) => {
         if (payload?.players?.length) {

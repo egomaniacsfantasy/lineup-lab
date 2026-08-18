@@ -1,3 +1,5 @@
+import { apiUrl } from './leagueApi';
+
 export interface TeamGameContext {
   team: string;
   week: number;
@@ -22,7 +24,7 @@ export async function fetchNflSchedule(season: number, week: number) {
     season: String(season),
     week: String(week),
   });
-  const response = await fetch(`/api/nfl/schedule?${params.toString()}`);
+  const response = await fetch(apiUrl(`/api/nfl/schedule?${params.toString()}`));
   if (!response.ok) {
     return { available: false } satisfies NflScheduleResponse;
   }

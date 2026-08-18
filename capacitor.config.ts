@@ -23,6 +23,21 @@ const config: CapacitorConfig = {
     androidScheme: 'https',
     iosScheme: 'https',
   },
+  plugins: {
+    /**
+     * The bundle is served from https://localhost, so every call to the real
+     * API is cross-origin and WKWebView enforces CORS on it. The server sends
+     * no CORS headers, so a plain fetch is blocked before it leaves the phone.
+     *
+     * Enabling CapacitorHttp routes fetch/XMLHttpRequest through the native
+     * HTTP stack, which is not a browser and not subject to CORS. That keeps
+     * the fix entirely inside the shell: no server change, no new origin to
+     * maintain, nothing for the engine or its routes to care about.
+     */
+    CapacitorHttp: {
+      enabled: true,
+    },
+  },
 };
 
 export default config;

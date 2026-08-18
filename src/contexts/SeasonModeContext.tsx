@@ -16,6 +16,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { apiUrl } from '../services/leagueApi';
 
 export type SeasonState = 'IN_SEASON' | 'LEAGUE_PLAYOFFS' | 'COMPLETE';
 
@@ -94,7 +95,7 @@ export function SeasonModeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    fetch('/api/state')
+    fetch(apiUrl('/api/state'))
       .then((response) => response.json())
       .then((state) => {
         if (cancelled) return;

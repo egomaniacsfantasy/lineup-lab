@@ -1,25 +1,188 @@
+import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import logo from '../assets/og-logo.png';
+import { useReel } from '../hooks/useReel';
+import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
+import { formatAmericanOdds } from '../utils/formatOdds';
+import {
+  LINE_FRAMES,
+  START_SIT_FRAMES,
+  TRADE_FRAMES,
+  type TradeFrame,
+} from './landingReel';
 import { MatchupPage } from './MatchupPage';
 import styles from './LandingPage.module.css';
 
-/**
- * Logged out.
- *
- * One screen, no scroll, nothing to read. The mark carries it, one line says
- * what this is, and there are exactly two things you can do. Everything else
- * that used to live here — the animated board cards, the markets grid, the
- * second CTA — was product demo aimed at someone who has not agreed to
- * anything yet, and it made the first impression feel like a brochure.
- */
+/* The three hero widgets play a reel of authored frames (see landingReel.ts).
+   They are illustrative, not priced: nothing on this page computes anything.
+   The cards run on different intervals so they never flip in unison, which is
+   what makes a set of animated cards read as a machine rather than a market. */
+
+function LineCard() {
+  const frame = LINE_FRAMES[useReel(LINE_FRAMES.length, 3600)];
+  const moved = frame.move !== 0;
+
+  return (
+    <article className={styles.boardCard}>
+      <div className={styles.boardCardHead}>
+        <span>Week 8 · head-to-head</span>
+        <span className={styles.boardLive}>Live line</span>
+      </div>
+      <div className={styles.boardFaceoff}>
+        <div>
+          <p className={styles.boardTeam}>{frame.you.team}</p>
+          <p className={styles.boardNumber} key={frame.you.moneyline}>
+            {formatAmericanOdds(frame.you.moneyline)}
+          </p>
+        </div>
+        <span className={styles.boardVs}>VS</span>
+        <div className={styles.boardFaceoffRight}>
+          <p className={styles.boardTeam}>{frame.them.team}</p>
+          <p className={styles.boardNumberDim} key={frame.them.moneyline}>
+            {formatAmericanOdds(frame.them.moneyline)}
+          </p>
+        </div>
+      </div>
+      <div aria-hidden="true" className={styles.boardBar}>
+        <span style={{ width: `${frame.you.prob}%` }} />
+      </div>
+      <div className={styles.boardBarLabels}>
+        <span>{frame.you.prob.toFixed(1)}% you</span>
+        <span>{frame.them.prob.toFixed(1)}% them</span>
+      </div>
+      <p className={styles.boardTicker} key={frame.note}>
+        <span className={styles.boardTickerNote}>{frame.note}</span>
+        {moved ? (
+          <span
+            className={frame.move > 0 ? styles.boardTickerUp : styles.boardTickerDown}
+          >
+            {frame.move > 0 ? '▲' : '▼'} {Math.abs(frame.move).toFixed(1)}%
+          </span>
+        ) : null}
+      </p>
+    </article>
+  );
+}
+
+function ReelFace({
+  slug,
+  name,
+  position,
+}: {
+  slug: string;
+  name: string;
+  position: string;
+}) {
+  return (
+    <span className={styles.reelFace}>
+      <PlayerHeadshot
+        className={styles.reelAvatar}
+        fallbackClassName={styles.reelAvatarFallback}
+        imageClassName={styles.reelAvatarImage}
+        name={name}
+        position={position}
+        slug={slug}
+      />
+      <span className={styles.reelName}>{name}</span>
+    </span>
+  );
+}
+
+function StartSitCard() {
+  const frame = START_SIT_FRAMES[useReel(START_SIT_FRAMES.length, 4700, 900)];
+
+  return (
+    <article className={styles.boardCard}>
+      <div className={styles.boardCardHead}>
+        <span>Who do I start?</span>
+        <span>{frame.sit.position}</span>
+      </div>
+      {/* Keyed on the frame, not the card: the content crossfades while the
+          card itself persists, so the bars below can ease rather than jump. */}
+      <div className={styles.reelSwap} key={frame.sit.slug}>
+        <span className={styles.boardTag}>Sit</span>
+        <ReelFace {...frame.sit} />
+        <span aria-hidden="true" className={styles.boardArrow}>→</span>
+        <span className={styles.boardTagStart}>Start</span>
+        <ReelFace {...frame.start} />
+      </div>
+      <p className={styles.boardMove}>
+        <s>{formatAmericanOdds(frame.beforeMoneyline)}</s>
+        <span aria-hidden="true"> → </span>
+        <strong>{formatAmericanOdds(frame.afterMoneyline)}</strong>
+        <em>+{frame.delta.toFixed(1)}%</em>
+      </p>
+    </article>
+  );
+}
+
+function TradeSideFaces({ side }: { side: TradeFrame['send'] }) {
+  return (
+    <span className={styles.reelStack}>
+      {side.map((player) => (
+        <ReelFace key={player.slug} {...player} />
+      ))}
+    </span>
+  );
+}
+
+function TradeCard() {
+  const frame = TRADE_FRAMES[useReel(TRADE_FRAMES.length, 5600, 1800)];
+
+  return (
+    <article className={styles.boardCard}>
+      <div className={styles.boardCardHead}>
+        <span>Trade finder</span>
+        <span>{frame.partner}</span>
+      </div>
+      {/* Two rows, not one wrapping line: packages are lopsided by nature
+          (2-for-1, 1-for-2) and inline wrapping orphans the Get tag. */}
+      <div className={styles.reelTrade} key={frame.partner}>
+        <div className={styles.reelTradeRow}>
+          <span className={styles.boardTag}>Send</span>
+          <TradeSideFaces side={frame.send} />
+        </div>
+        <div className={styles.reelTradeRow}>
+          <span className={styles.boardTagStart}>Get</span>
+          <TradeSideFaces side={frame.get} />
+        </div>
+      </div>
+      <div className={styles.boardAccept}>
+        <div aria-hidden="true" className={styles.boardAcceptBar}>
+          <span style={{ width: `${frame.acceptance}%` }} />
+        </div>
+        <span className={styles.boardAcceptLabel}>
+          {formatAcceptancePercent(frame.acceptance)} they take it
+          {' · '}
+          {getAcceptanceLingo(frame.acceptance)?.label}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function HeroBoard() {
+  return (
+    <div aria-label="What the book prices" className={styles.heroBoard}>
+      <LineCard />
+      <StartSitCard />
+      <TradeCard />
+    </div>
+  );
+}
+
+
 export function LandingPage() {
   return (
     <main className={styles.page}>
-      <div className={styles.stage}>
+      {/* Two entries, one displayed. A phone gets the mark and two choices and
+          nothing to scroll; a desktop has the room for the board to sell the
+          product, so it keeps the reel. Rendering both and hiding one is the
+          only way to give each breakpoint the layout it actually wants, and
+          display:none keeps the hidden copy out of the a11y tree. */}
+      <div className={styles.mobileStage}>
         <img alt="Odds Gods" className={styles.mark} src={logo} />
-
         <h1 className={styles.wordmark}>Odds Gods</h1>
         <p className={styles.tagline}>Fantasy football, priced like a sportsbook.</p>
-
         <div className={styles.actions}>
           <a className={styles.primaryCta} href="/signin">Get started</a>
           <a className={styles.signInLink} href="/signin">
@@ -27,6 +190,31 @@ export function LandingPage() {
           </a>
         </div>
       </div>
+
+      <section className={styles.hero}>
+        <div className={styles.heroCopy}>
+          <img alt="Odds Gods" className={styles.heroLogo} src={logo} />
+          <div className={styles.kicker}>FANTASY FOOTBALL · PRICED LIKE A SPORTSBOOK</div>
+          <h1 className={styles.headline}>Every decision has a price.</h1>
+          <p className={styles.sub}>
+            Connect your league and the book opens: your matchup as a
+            moneyline, every start or sit as a probability swing, every trade
+            with the odds the other manager actually says yes.
+          </p>
+          <div className={styles.ctaRow}>
+            <a className={styles.primaryCta} href="/signin">Get started</a>
+            <a className={styles.signInLink} href="/signin">
+              Already have an account? <span>Sign in</span>
+            </a>
+          </div>
+          <div className={styles.proofStrip}>
+            <span>Built for Sleeper. Works with ESPN.</span>
+            <span className={styles.dot}>·</span>
+            <span>10,000 season sims. 5,000 per matchup.</span>
+          </div>
+        </div>
+        <HeroBoard />
+      </section>
 
       <footer className={styles.footer}>
         <span>© 2026 Odds Gods</span>

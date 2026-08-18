@@ -476,7 +476,15 @@ export function setProjectionOverlay(encoded: string | null) {
  * does not exist and EVERY request fails. The native build sets
  * VITE_API_BASE_URL to the real API so the same code works in both.
  */
-const API_BASE = (import.meta.env?.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+declare const __API_BASE__: string | undefined;
+
+/* `import.meta.env?.VITE_API_BASE_URL` looked right and shipped dead: Vite only
+   substitutes the exact text `import.meta.env.VITE_API_BASE_URL`, so the `?.`
+   defeated it and the bundle kept a runtime lookup on an empty object. Every
+   native request then fell back to a relative path and failed. __API_BASE__ is
+   a define, so it is a literal by the time it reaches the bundle, and the
+   typeof guard keeps this module importable outside a Vite build. */
+const API_BASE = (typeof __API_BASE__ === 'string' ? __API_BASE__ : '').replace(/\/$/, '');
 
 export function apiUrl(path: string) {
   if (!API_BASE) return path;
@@ -581,7 +589,7 @@ export function startEspnLogin(body: {
 }
 
 export function trackEspnConnectEvent(event: string, payload: Record<string, unknown> = {}) {
-  return fetch('/api/telemetry/event', {
+  return fetch(apiUrl('/api/telemetry/event'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
