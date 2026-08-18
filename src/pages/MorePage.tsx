@@ -23,10 +23,11 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
 };
 
 export function MorePage() {
-  const { bootstrap, stored, disconnect } = useLeagueConnection();
+  const { bootstrap, stored, disconnect, refresh, isLoading, error } = useLeagueConnection();
   const { user, signOut } = useAuth();
   const { format, toggleFormat } = useOddsFormat();
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate();
   const dynastyTradesExperimental = useDynastyTradesExperimental();
   const playerVotesEnabled = usePlayerVotesEnabled();
@@ -103,6 +104,43 @@ export function MorePage() {
           Log out
         </button>
       </section>
+
+      {/* A phone has no header at all now, so sync state and the control for it
+          live here. This is the only place either exists on a phone. */}
+      {stored ? (
+        <section className="more-page__section">
+          <p className="more-page__eyebrow">League sync</p>
+          <div className="more-page__card more-page__labs-card">
+            <div>
+              <h3 className="more-page__card-title">
+                {isRefreshing || isLoading
+                  ? 'Syncing…'
+                  : bootstrap
+                    ? 'Synced'
+                    : 'Not synced'}
+              </h3>
+              <p className="more-page__card-body">
+                {isRefreshing || isLoading
+                  ? `Reading your ${providerLabel ?? 'league'}.`
+                  : bootstrap
+                    ? `Last read at ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}.`
+                    : error ?? 'We could not reach your league.'}
+              </p>
+            </div>
+            <button
+              className="more-page__format"
+              disabled={isRefreshing || isLoading}
+              onClick={() => {
+                setIsRefreshing(true);
+                void refresh().finally(() => setIsRefreshing(false));
+              }}
+              type="button"
+            >
+              Sync
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {/* The header carries identity and state only on a phone, so the two
           display controls that used to sit up there live here now. */}

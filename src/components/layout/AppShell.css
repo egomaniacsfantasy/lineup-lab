@@ -34,3 +34,12 @@
     padding-bottom: 0;
   }
 }
+
+
+/* With no header on a phone the scroller reserves nothing for it, but content
+   still has to clear the Dynamic Island, so the inset stays. */
+@media (max-width: 1023px) {
+  .app-content {
+    padding-top: env(safe-area-inset-top);
+  }
+}

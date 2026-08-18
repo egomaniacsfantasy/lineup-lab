@@ -401,3 +401,22 @@
     gap: var(--space-sm);
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+   No header on a phone.
+
+   It cost ~104px of every screen — 60px plus the Dynamic Island inset — to
+   carry a logo, the week, the odds format and an avatar. The logo is on the
+   app icon and the splash, the week is already stated on the Hub's own
+   matchup card, and the other two had somewhere better to live. On a 812px
+   screen that is an eighth of the app given to chrome that answered nothing.
+
+   Nothing became unreachable: account and log out were already in More, and
+   sync state and "Sync now" moved there beside them.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .app-header {
+    display: none;
+  }
+}
