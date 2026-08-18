@@ -13,6 +13,17 @@ import UIKit
  Setting them here is the only place they can actually be set.
  */
 class MainViewController: CAPBridgeViewController {
+    /* Capacitor 8 does not discover plugins that live in the app target — it
+       only knows the ones its own tooling registered, which is why the bridge
+       answered "EspnAuth plugin is not implemented on ios" for a class that was
+       demonstrably compiled into the binary. capacitorDidLoad is the hook for
+       app-local plugins, and it has to happen here rather than in viewDidLoad
+       because the bridge does not exist yet at that point. */
+    override func capacitorDidLoad() {
+        super.capacitorDidLoad()
+        bridge?.registerPluginType(EspnAuthPlugin.self)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         configureScrollView()

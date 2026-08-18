@@ -99,13 +99,10 @@ body {
 }
 
 @media (max-width: 1023px) {
-  html,
-  body {
-    position: fixed;
-    inset: 0;
-    overflow: hidden;
-  }
-
+  /* `position: fixed` on body was a way to stop the page bouncing before the
+     native side did it properly. It is redundant now that the web view's own
+     scroll view has bounces off, and on device it broke hit testing: the tab
+     bar rendered in the right place and simply did not respond to a tap. */
   .app-content {
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
