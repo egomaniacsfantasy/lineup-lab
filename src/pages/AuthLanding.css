@@ -356,3 +356,13 @@
     height: 60px;
   }
 }
+
+/* Readable before anyone has an account, which is the whole point. */
+.auth-landing__build {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}

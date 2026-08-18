@@ -8,7 +8,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
+        /* This is the real root, not the storyboard. Info.plist names Main as
+           the scene storyboard, but this scene delegate builds the window in
+           code and hardcoded CAPBridgeViewController, so pointing the
+           storyboard at a subclass changed nothing: MainViewController was
+           never instantiated, capacitorDidLoad never ran, and the plugin was
+           therefore never registered. */
+        window?.rootViewController = MainViewController()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)

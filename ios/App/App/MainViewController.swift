@@ -21,7 +21,9 @@ class MainViewController: CAPBridgeViewController {
        because the bridge does not exist yet at that point. */
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
-        bridge?.registerPluginType(EspnAuthPlugin.self)
+        /* registerPluginType hands the bridge a type to instantiate, which did
+           not publish a header for it. An instance is registered directly. */
+        bridge?.registerPluginInstance(EspnAuthPlugin())
     }
 
     override func viewDidLoad() {

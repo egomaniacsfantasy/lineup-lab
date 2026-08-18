@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from 'react';
+import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { useAuth } from '../contexts/AuthContext';
 import './AuthLanding.css';
+
+declare const __BUILD_STAMP__: string | undefined;
+const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
 
 export function AuthLanding() {
   const { signUp, signIn } = useAuth();
@@ -100,6 +104,15 @@ export function AuthLanding() {
             {mode === 'signup'
               ? 'Free during the beta. One account, all your leagues.'
               : 'Welcome back. Your leagues are waiting.'}
+          </p>
+
+          {/* The build line needs to be readable without an account. It was
+              behind the tab bar, then behind the connect screen, and both of
+              those need a login — so the one question worth asking first
+              ("what is this device running?") could only be answered last. */}
+          <p className="auth-landing__build">
+            Build {buildStamp}
+            {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
           </p>
         </section>
       </div>
