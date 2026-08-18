@@ -2877,3 +2877,85 @@
 .trade-page > * {
   min-width: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Managers become a grid of tiles on a phone.
+
+   As a list, twelve managers ran 12 x 89px — about 1,070px, nearly three
+   screens of scrolling before a single deal. They are a price board: a name, a
+   record and a title price. That fits a tile, and twelve tiles fit one screen.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .trade-cc__manager-grid {
+    /* Three tracks have to fit the container, gaps included: 3 x 84 + 2 x 6 =
+       264 inside 299. At 96 the arithmetic came to 304 and auto-fit quietly
+       gave two columns instead. */
+    --manager-min: 84px;
+    gap: 6px;
+  }
+
+  .trade-cc__manager-card {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 1px;
+    padding: 8px 4px;
+    text-align: center;
+    /* Grid items default to min-width: auto, so the card's own content was
+       widening the track and forcing two columns instead of three. */
+    min-width: 0;
+  }
+
+  /* This is a grid, not a flex row, so flex-direction did nothing to it. */
+  .trade-cc__manager-card-id {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .trade-cc__manager-card-copy {
+    align-items: center;
+    text-align: center;
+    min-width: 0;
+  }
+
+  .trade-cc__manager-card-name {
+    display: block;
+    overflow: hidden;
+    max-width: 76px;
+    font-size: 10px;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .trade-cc__manager-card-meta {
+    font-size: 9.5px;
+    line-height: 1.1;
+  }
+
+  .trade-cc__manager-card-price {
+    align-items: center;
+    text-align: center;
+  }
+
+  .trade-cc__manager-card-stat-label {
+    font-size: 8px;
+    line-height: 1.1;
+  }
+
+  .trade-cc__manager-card-stat-value {
+    font-size: 14px;
+    line-height: 1.05;
+  }
+
+  .trade-cc__team-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 9px;
+  }
+}

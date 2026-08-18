@@ -24,7 +24,6 @@
   /* The bar sits below this in the flex column now rather than on top of it,
      so there is nothing to reserve space for. */
   padding-bottom: var(--space-md);
-  scrollbar-gutter: stable;
 }
 
 @media (min-width: 1024px) {
@@ -65,5 +64,25 @@
   body {
     max-width: 100%;
     overflow-x: hidden;
+  }
+}
+
+
+/* No scrollbars on touch. The overlay bar iOS draws is a desktop convention
+   that reads as a wrapped web page, and `scrollbar-gutter: stable` was also
+   reserving 6px of width for a bar that is never wanted here. Scrolling still
+   works exactly as it did; it just stops announcing itself. */
+@media (max-width: 1023px) {
+  .app-content,
+  .app-content * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .app-content::-webkit-scrollbar,
+  .app-content *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 }

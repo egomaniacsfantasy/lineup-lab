@@ -165,7 +165,7 @@ function ManagerReadCard({
 }) {
   return (
     <div className="trade-cc__read-card">
-      <p className="trade-cc__read-title">Your read on {name}</p>
+      <p className="trade-cc__read-title">How they trade on {name}</p>
       <ReadSlider
         label="Trade-friendliness"
         hint="0 = stubborn hoarder · 10 = wheeler-dealer"
@@ -956,7 +956,7 @@ function TradeDealsView() {
             onClick={() => setShowRead((current) => !current)}
             type="button"
           >
-            {showRead ? 'Hide read' : 'Your read'}
+            {showRead ? 'Hide read' : 'How they trade'}
           </button>
         </div>
         <div className="trade-cc__filter-stack">
@@ -1263,7 +1263,7 @@ function TradeDealsView() {
                     onClick={() => setShowRead((v) => !v)}
                     type="button"
                   >
-                    {showRead ? 'Hide read' : 'Your read'}
+                    {showRead ? 'Hide read' : 'How they trade'}
                   </button>
                 ) : null}
               </div>
