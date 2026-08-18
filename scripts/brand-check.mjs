@@ -20,7 +20,6 @@ const TARGETS = [
   'src/components/charts/OddsChart.tsx',
   'src/components/charts/OddsChart.css',
   'src/pages/LandingPage.tsx',
-  'src/pages/landingReel.ts',
   'src/components/matchup/MatchupDistributions.tsx',
   'src/components/matchup/MatchupDistributions.css',
   'src/components/trade-display/TradeDisplay.tsx',
