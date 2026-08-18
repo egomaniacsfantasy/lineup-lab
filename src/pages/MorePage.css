@@ -183,3 +183,13 @@
   color: var(--text-muted);
   cursor: default;
 }
+
+/* Quiet, but findable when someone needs to know what a device is running. */
+.more-page__build {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}

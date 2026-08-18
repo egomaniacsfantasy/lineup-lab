@@ -13,6 +13,13 @@ export default defineConfig({
     __API_BASE__: JSON.stringify(process.env.VITE_API_BASE_URL ?? ''),
     __ESPN_EXTENSION_URL__: JSON.stringify(process.env.VITE_ESPN_EXTENSION_URL ?? ''),
     __ESPN_LOGIN_ENABLED__: JSON.stringify(process.env.VITE_ESPN_LOGIN_ENABLED ?? ''),
+    /* Stamped at build time so a device can say which bundle it is running.
+       Two rounds of this session were spent on symptoms that had already been
+       fixed, because a phone was running an older bundle than the server and
+       nothing on screen could tell us. */
+    __BUILD_STAMP__: JSON.stringify(
+      new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC',
+    ),
   },
   server: {
     port: 3000,

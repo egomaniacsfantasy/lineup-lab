@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { resolveApiUrl } from '../services/apiBase.ts';
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
@@ -881,7 +882,7 @@ function TradeDealsView() {
   const renderTeamAvatar = (team: NonNullable<typeof selectedPartner>) => (
     <span className="trade-cc__team-avatar" aria-hidden="true">
       {team.avatarUrl ? (
-        <img alt="" src={team.avatarUrl} />
+        <img alt="" src={resolveApiUrl(team.avatarUrl) ?? undefined} />
       ) : (
         <span>{initials(team.teamName)}</span>
       )}

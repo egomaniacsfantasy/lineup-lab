@@ -25,3 +25,15 @@ export function apiUrl(path: string) {
   if (!API_BASE) return path;
   return path.startsWith('/') ? `${API_BASE}${path}` : path;
 }
+
+
+/**
+ * Some API responses carry root-relative paths of their own — Sleeper avatars
+ * come back as `/api/img/avatar/...` built on the server, which cannot know
+ * the origin the native app will run under. Anything already absolute is left
+ * alone, so this is safe to apply to a value that may be either.
+ */
+export function resolveApiUrl(value: string | null | undefined) {
+  if (!value) return value ?? null;
+  return value.startsWith('/') ? apiUrl(value) : value;
+}

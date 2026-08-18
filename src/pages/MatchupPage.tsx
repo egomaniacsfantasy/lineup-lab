@@ -38,6 +38,7 @@ import {
 import { formatAcceptancePercent, formatAcceptanceRead } from '../utils/acceptanceLingo';
 import { resolveWaiverClaimPlayer } from '../utils/marketMoverClaim';
 import { PROVIDER_LABEL } from '../utils/provider';
+import { resolveApiUrl } from '../services/apiBase.ts';
 import { shareText, type ShareResult } from '../utils/share';
 import {
   marketMoverSignature,
@@ -285,7 +286,7 @@ function TeamCrest({
         aria-hidden="true"
         className={['olympus-crest', isUser ? 'olympus-crest--user' : ''].filter(Boolean).join(' ')}
       >
-        <img alt="" className="olympus-crest__avatar" src={avatarUrl} />
+        <img alt="" className="olympus-crest__avatar" src={resolveApiUrl(avatarUrl) ?? undefined} />
       </span>
     );
   }

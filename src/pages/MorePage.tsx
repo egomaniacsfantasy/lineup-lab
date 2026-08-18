@@ -22,6 +22,9 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
   'half-ppr': 'HALF',
 };
 
+declare const __BUILD_STAMP__: string | undefined;
+const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
+
 export function MorePage() {
   const { bootstrap, stored, disconnect, refresh, isLoading, error } = useLeagueConnection();
   const { user, signOut } = useAuth();
@@ -252,6 +255,11 @@ export function MorePage() {
           />
         </section>
       ) : null}
+      {/* Which bundle this device is actually running. Stale builds cost this
+          project real hours: a phone can hold an old bundle while the server is
+          current, and every symptom then looks unfixed. */}
+      <p className="more-page__build">Build {buildStamp}</p>
+
       <WelcomeCard isOpen={isWelcomeOpen} onDismiss={() => setIsWelcomeOpen(false)} />
     </div>
   );

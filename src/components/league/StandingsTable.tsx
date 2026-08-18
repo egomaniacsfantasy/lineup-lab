@@ -1,5 +1,6 @@
 import type { ApiTeam } from '../../services/leagueApi';
 import './StandingsTable.css';
+import { resolveApiUrl } from '../../services/apiBase.ts';
 
 function recordLabel(r: { wins: number; losses: number; ties: number }) {
   return r.ties > 0 ? `${r.wins}-${r.losses}-${r.ties}` : `${r.wins}-${r.losses}`;
@@ -58,7 +59,7 @@ export function StandingsTable({
               <span className="standings__cell standings__cell--rank">{index + 1}</span>
               <span className="standings__cell standings__cell--team">
                 {team.avatarUrl ? (
-                  <img alt="" className="standings__avatar" src={team.avatarUrl} />
+                  <img alt="" className="standings__avatar" src={resolveApiUrl(team.avatarUrl) ?? undefined} />
                 ) : (
                   <span className="standings__avatar standings__avatar--blank" aria-hidden="true" />
                 )}

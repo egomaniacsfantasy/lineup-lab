@@ -1,4 +1,5 @@
 import './TeamAvatar.css';
+import { resolveApiUrl } from '../../services/apiBase.ts';
 
 interface TeamAvatarProps {
   name: string;
@@ -26,7 +27,7 @@ export function TeamAvatar({ name, avatarUrl, className = '' }: TeamAvatarProps)
           onError={(event) => {
             event.currentTarget.style.display = 'none';
           }}
-          src={avatarUrl}
+          src={resolveApiUrl(avatarUrl) ?? undefined}
         />
       ) : (
         <span className="team-avatar__fallback">{initialsFor(name) || 'OG'}</span>
