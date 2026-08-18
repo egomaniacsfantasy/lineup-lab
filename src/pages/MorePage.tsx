@@ -49,11 +49,6 @@ export function MorePage() {
       };
   const toolLinks = [
     {
-      title: 'Draft tools',
-      body: 'Draft-slot boards and availability windows.',
-      path: '/draft',
-    },
-    {
       title: 'Board · Sheet view',
       body: 'Player board plus the power-user spreadsheet view.',
       path: '/rankings?view=sheet',

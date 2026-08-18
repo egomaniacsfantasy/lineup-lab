@@ -8,7 +8,6 @@ import { PlayoffSettings } from '../components/league/PlayoffSettings';
 import { StandingsTable } from '../components/league/StandingsTable';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
-import { DraftWrappedCard } from '../components/season/DraftWrappedCard';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
 import { SeasonHeadline } from '../components/season/SeasonHeadline';
 import { WeekDetailModal } from '../components/season/WeekDetailModal';
@@ -22,7 +21,6 @@ import {
   toWeekMatchups,
 } from '../adapters/connectedLeague';
 import {
-  MOCK_DRAFT_WRAPPED,
   MOCK_LEAGUE,
   MOCK_LEAGUE_FUTURES,
   MOCK_SCHEDULE_PREVIEW,
@@ -30,9 +28,7 @@ import {
   MOCK_TRADE_TARGET_GROUPS,
   MOCK_WEEK_MATCHUPS,
 } from '../mocks';
-import { formatAmericanOdds } from '../utils/formatOdds';
 import { PROVIDER_LABEL } from '../utils/provider';
-import { shareText } from '../utils/share';
 import './ConnectPage.css';
 import './LeaguePage.css';
 
@@ -158,20 +154,6 @@ export function LeaguePage() {
         : item,
     );
   }, [bootstrap, connectedSeason, liveBoardLine]);
-
-  const handleShareDraftWrapped = async () => {
-    const message = `My 2026 season outlook: ${MOCK_DRAFT_WRAPPED.projectedRecord}, ${formatAmericanOdds(
-      MOCK_DRAFT_WRAPPED.championshipOdds,
-    )} to win it all.`;
-    try {
-      await shareText({
-        title: 'Draft wrapped',
-        text: message,
-      });
-    } catch {
-      // Native share is optional; the card remains useful without it.
-    }
-  };
 
   const setLeagueView = (view: LeagueView) => {
     if (view === 'this-week') {
@@ -397,10 +379,6 @@ export function LeaguePage() {
                 recordRange={MOCK_SEASON_OUTLOOK.recordRange}
                 recordValue={`${MOCK_SEASON_OUTLOOK.projectedRecord.wins}-${MOCK_SEASON_OUTLOOK.projectedRecord.losses}`}
                 title="Your futures"
-              />
-              <DraftWrappedCard
-                draftWrapped={MOCK_DRAFT_WRAPPED}
-                onShare={handleShareDraftWrapped}
               />
             </>
           )}

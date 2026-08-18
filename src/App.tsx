@@ -9,7 +9,6 @@ import {
 import { OddsFormatProvider } from './contexts/OddsFormatContext';
 import { AuthLanding } from './pages/AuthLanding';
 import { ConnectPage } from './pages/ConnectPage';
-import { DraftPage } from './pages/DraftPage';
 import { DemoPage, LandingPage } from './pages/LandingPage';
 import { DesignBoardRowPage } from './pages/DesignBoardRowPage';
 import { DesignChartPage } from './pages/DesignChartPage';
@@ -49,7 +48,6 @@ function AppRoutes() {
               <Route element={<RequireLeague />}>
                 <Route path="/matchup" element={<MatchupPage />} />
                 <Route path="/season" element={<SeasonPage />} />
-                <Route path="/draft" element={<DraftPage />} />
                 <Route path="/trade" element={<Navigate replace to="/market?view=deals" />} />
                 <Route path="/market" element={<TradePage />} />
                 <Route path="/rankings" element={<MyBoardPage />} />

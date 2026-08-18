@@ -49,12 +49,15 @@ function drawShareImage() {
   ctx.fill();
 
   ctx.fillStyle = '#a9aea4';
-  ctx.font = '700 28px Saira, sans-serif';
+  ctx.font = '700 28px Hanken Grotesk, sans-serif';
   ctx.letterSpacing = '4px';
   ctx.fillText('WEEK 7 RECAP', 150, 190);
 
   ctx.fillStyle = '#f4f5f2';
-  ctx.font = '700 84px Oswald, sans-serif';
+  /* Was Oswald, which this app has never loaded, so the headline of a card
+     people post publicly has been silently falling back to the system face.
+     The rest of this card is already Hanken Grotesk. */
+  ctx.font = '800 84px Hanken Grotesk, sans-serif';
   ctx.fillText('You closed at -180.', 150, 300);
   ctx.fillText('You won by 12.', 150, 385);
 
@@ -78,14 +81,14 @@ function drawShareImage() {
     ctx.arc(x, y, 12, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#a9aea4';
-    ctx.font = '700 24px Saira, sans-serif';
+    ctx.font = '700 24px Hanken Grotesk, sans-serif';
     ctx.fillText(point.label, x - 24, y + 56);
     ctx.fillStyle = '#f4f5f2';
     ctx.fillText(String(point.value), x - 34, y - 28);
   });
 
   ctx.fillStyle = '#a9aea4';
-  ctx.font = '700 22px Saira, sans-serif';
+  ctx.font = '700 22px Hanken Grotesk, sans-serif';
   ctx.fillText('FINAL SCORE', 150, 725);
   ctx.fillText('BIGGEST CONTRIBUTOR', 405, 725);
   ctx.fillText('BEST DECISION', 710, 725);
@@ -97,7 +100,7 @@ function drawShareImage() {
   ctx.fillText('London > Smith', 710, 770);
 
   ctx.fillStyle = '#a9aea4';
-  ctx.font = '700 24px Saira, sans-serif';
+  ctx.font = '700 24px Hanken Grotesk, sans-serif';
   ctx.fillText('ODDS GODS', 90, 965);
   ctx.fillText('lineuplab.oddsgods.net', 690, 965);
 
