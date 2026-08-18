@@ -22,6 +22,8 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
   'half-ppr': 'HALF',
 };
 
+import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
+
 declare const __BUILD_STAMP__: string | undefined;
 const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
 
@@ -258,7 +260,10 @@ export function MorePage() {
       {/* Which bundle this device is actually running. Stale builds cost this
           project real hours: a phone can hold an old bundle while the server is
           current, and every symptom then looks unfixed. */}
-      <p className="more-page__build">Build {buildStamp}</p>
+      <p className="more-page__build">
+        Build {buildStamp}
+        {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
+      </p>
 
       <WelcomeCard isOpen={isWelcomeOpen} onDismiss={() => setIsWelcomeOpen(false)} />
     </div>

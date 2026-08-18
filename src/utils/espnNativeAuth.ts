@@ -30,13 +30,23 @@ interface EspnAuthPlugin {
 
 const EspnAuth = registerPlugin<EspnAuthPlugin>('EspnAuth');
 
+/* isPluginAvailable() only answers yes when the native bridge has published a
+   header for the plugin, which makes a registration problem indistinguishable
+   from "not native" — and silently falls back to asking for a password. On a
+   native platform we offer the sheet and let the call itself fail loudly if the
+   plugin is missing. */
 export function isNativeEspnAuthAvailable() {
+  return Capacitor.isNativePlatform();
+}
+
+/** Whether the native bridge actually published the plugin. Diagnostics only. */
+export function isEspnPluginRegistered() {
   return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('EspnAuth');
 }
 
 export async function signInToEspnNatively(leagueId: string, season: string) {
-  if (!isNativeEspnAuthAvailable()) {
-    return { status: 'failed', reason: 'unavailable' } satisfies EspnNativeAuthResult;
+  if (!Capacitor.isNativePlatform()) {
+    return { status: 'failed', reason: 'not-native' } satisfies EspnNativeAuthResult;
   }
   try {
     return await EspnAuth.signIn({ leagueId, season });
