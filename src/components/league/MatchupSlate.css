@@ -445,3 +445,50 @@
     text-align: left;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+   The League board on a phone.
+
+   Measured at 402x874: 1741px, and 801 of it is the aside — a "Selected
+   matchup" panel and a week-at-a-glance list sitting *below* all six board
+   rows. On a desktop that aside is a sticky column beside the board, which is
+   why it works there and fails here: stacked, it is a detail about one row
+   that you can only reach by scrolling past every row, and it is showing
+   before you have selected anything.
+
+   So on a phone the selected matchup comes first, because it is the answer to
+   the tap you just made, and the glance goes: it is a second reading of the
+   same six rows that are already on the screen underneath it.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .matchup-slate__layout {
+    gap: 10px;
+  }
+
+  /* Reordering the detail above the board was tried and reverted: with a
+     matchup selected by default it put a 571px panel in front of the thing the
+     tab is named after. The board leads; the detail follows it. */
+  .matchup-slate__aside {
+    gap: 10px;
+  }
+
+  /* Six rows restated as a list, directly under the six rows. */
+  .matchup-slate__glance {
+    display: none;
+  }
+
+  .matchup-slate__detail,
+  .matchup-slate__feed {
+    padding: 12px;
+  }
+
+  .matchup-slate__rows {
+    gap: 6px;
+  }
+
+  .matchup-slate__board-note {
+    padding-block: 6px;
+    font-size: 11.5px;
+  }
+}

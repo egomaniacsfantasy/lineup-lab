@@ -3147,3 +3147,86 @@
     font-size: 11px;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+   The Hub, condensed.
+
+   Measured at 402x874 on the live fixture: 3276px of scroll, which is 3.75
+   screens to read one week. The cost is not in any single module, it is in the
+   16px gap repeated between eight of them, 18px of padding inside each, and a
+   season chart given 545px on a phone where it is the last thing you scroll to
+   and the least thing you act on.
+
+   Nothing is removed. The gaps come down to 10px, the module padding to 12px,
+   the lineup rows lose the 7px of vertical padding they were carrying twice
+   over, and the chart is capped at a height it still reads at. The page keeps
+   every number it had.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .matchup-page {
+    padding: 10px 14px 96px;
+    gap: 10px;
+  }
+
+  .matchup-page__main,
+  .matchup-page__rail,
+  .matchup-page__insight-grid,
+  .matchup-page__frame {
+    gap: 10px;
+  }
+
+  .matchup-page__module {
+    padding: 12px;
+  }
+
+  .matchup-page__module--slot-board {
+    padding: 12px;
+  }
+
+  .matchup-page__module--hero {
+    padding: 16px 14px;
+  }
+
+  /* The lineup is the longest module on the page and every row was paying 7px
+     top and bottom around content that already has its own line-height. */
+  .matchup-page__slot-card {
+    padding: 5px 2px;
+  }
+
+  .matchup-page__module-row {
+    margin-bottom: 8px;
+  }
+
+  /* The season chart is the last thing you reach and the least thing you act
+     on, and it was taking more height than the head-to-head and the call
+     combined. Capped, it still reads as a shape. */
+  .matchup-page__module--rail-chart {
+    max-height: 320px;
+    overflow: hidden;
+  }
+}
+
+/* Nine slot rows at 70px is 630px, the largest single block on the Hub. The
+   height is three stacked lines each carrying its own generous leading; the
+   type sizes stay, the leading comes in, and the projection stops reserving
+   room for a number that never needs it. */
+@media (max-width: 1023px) {
+  .matchup-page__slot-card {
+    row-gap: 1px;
+  }
+
+  .matchup-page__row-name,
+  .matchup-page__row-secondary {
+    line-height: 1.15;
+  }
+
+  .matchup-page__slot-projection {
+    font-size: 15px;
+    line-height: 1.05;
+  }
+
+  .matchup-page__slot-center {
+    padding-block: 0;
+  }
+}

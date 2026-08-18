@@ -787,3 +787,99 @@
   color: var(--text-dim);
   text-decoration: underline;
 }
+
+
+/* ---------------------------------------------------------------------------
+   The deal card, condensed for a phone.
+
+   One deal ran past a full screen: a 36px delta under its own eyebrow, six
+   player rows at 38px each inside their own padded, bordered, rounded boxes,
+   and two supporting metrics on a row apiece. Roughly 500pt to say "send these
+   three, get these three, your title goes up 0.7%".
+
+   Nothing here removes information. The header puts the verdict and the number
+   on one line instead of two. The player rows keep the headshot, the name, the
+   team and the position and lose the box drawn around each of them, because a
+   list of six boxes is five borders more than a list needs. The supporting
+   metrics share a row. Around 300pt for the same six facts, which is the
+   difference between comparing two deals on a screen and scrolling between
+   them.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .trade-display__tHead {
+    gap: 0;
+    padding: 10px 13px 9px;
+  }
+
+  /* The verdict word and the number are one statement, so they share a line. */
+  .trade-display__tLine {
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 7px;
+  }
+
+  .trade-display__tTitle {
+    font-size: 27px;
+  }
+
+  .trade-display__tWord,
+  .trade-display__tTitleLabel {
+    font-size: 10px;
+  }
+
+  .trade-display__tBody {
+    gap: 1px;
+    padding: 8px 13px 2px;
+  }
+
+  /* A row inside a list does not need its own container. Dropping the border
+     and fill takes 6px of padding and a hairline off each of six rows, and the
+     rows still separate perfectly well on spacing alone. */
+  .trade-display--card .ui-player-line {
+    min-height: 30px;
+    padding: 3px 4px;
+    border-radius: 8px;
+    background: none;
+    gap: 8px;
+  }
+
+  .trade-display--card .ui-player-line__name {
+    font-size: 13.5px;
+  }
+
+  .trade-display--card .ui-player-line__subtitle {
+    font-size: 10.5px;
+  }
+
+  .trade-display__asset-list {
+    gap: 3px;
+  }
+
+  .trade-display__asset {
+    min-height: 32px;
+    padding: 5px 8px;
+    border-radius: 10px;
+  }
+
+  .trade-display__eyebrow {
+    font-size: 9.5px;
+  }
+
+  .trade-display__body {
+    gap: 8px;
+  }
+
+  /* Playoffs and This week are two numbers, not two rows. */
+  .trade-display__impact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+  }
+
+  .trade-display__impact-row--primary,
+  .trade-display__impact-row--secondary {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+}
