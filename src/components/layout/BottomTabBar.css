@@ -88,3 +88,8 @@
     display: none;
   }
 }
+
+/* Same reason as the header: keep the tabs above the home indicator. */
+.bottom-tab-bar {
+  padding-bottom: max(var(--space-xs, 6px), env(safe-area-inset-bottom));
+}

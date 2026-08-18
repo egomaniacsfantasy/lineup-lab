@@ -169,23 +169,6 @@ function HeroBoard() {
   );
 }
 
-const markets = [
-  {
-    stat: 'FLOOR · MEDIAN · CEILING',
-    title: 'Verdicts that know the score',
-    body: 'Start/sit calls with range, matchup, and game-state context.',
-  },
-  {
-    stat: '23% TO ACCEPT',
-    title: 'Trade pricing against the actual human',
-    body: 'Fairness, title movement, and acceptance tied to the manager across from you.',
-  },
-  {
-    stat: 'PICK 4 · 31.2%',
-    title: 'Draft odds',
-    body: 'Slot odds, player availability, and a shareable receipt.',
-  },
-];
 
 export function LandingPage() {
   return (
@@ -214,35 +197,8 @@ export function LandingPage() {
         <HeroBoard />
       </section>
 
-      <section className={styles.section}>
-        <div className={styles.sectionHead}>
-          <p className={styles.sectionKicker}>THE MARKETS</p>
-          <h2>Every decision gets a number.</h2>
-        </div>
-        <div className={styles.marketGrid}>
-          {markets.map((market) => (
-            <article className={styles.beat} key={market.title}>
-              <p className={styles.marketStat}>
-                {market.stat} <span>example</span>
-              </p>
-              <h3 className={styles.beatTitle}>{market.title}</h3>
-              <p className={styles.beatBody}>{market.body}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className={styles.close}>
-        <h2>The book is open.</h2>
-        <div className={styles.ctaRow}>
-          <a className={styles.closeCta} href="/signin">Get started</a>
-        </div>
-      </section>
-
       <footer className={styles.footer}>
-        <strong>ODDS GODS</strong>
         <span>© 2026 Odds Gods</span>
-        <a href="/signin">Sign in</a>
       </footer>
     </main>
   );

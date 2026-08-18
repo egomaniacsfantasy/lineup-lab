@@ -21,6 +21,7 @@ import {
   type LeaguePricing,
   type LineHistoryEntry,
   type ScheduleWeek,
+  apiUrl,
 } from '../services/leagueApi';
 import {
   type CachedLeaguePricingSnapshot,
@@ -681,7 +682,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       let delay = 60 * 60_000;
 
       try {
-        const health = await fetch('/api/health').then((r) => r.json());
+        const health = await fetch(apiUrl('/api/health')).then((r) => r.json());
         delay = health.gameWindow ? 5 * 60_000 : 60 * 60_000;
 
         const data = await fetchBootstrap(stored.leagueId, stored.userId);

@@ -3,6 +3,7 @@
  * point for Franco's XLSX — drop file, resolve unmatched, confirm.
  * Protected by ADMIN_PASSWORD on the server; no user system in v1.
  */
+import { apiUrl } from '../services/leagueApi';
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import './AdminProjectionsPage.css';
@@ -77,7 +78,7 @@ export function AdminProjectionsPage() {
 
   const refreshLive = useCallback(async () => {
     try {
-      const res = await fetch('/api/live/status');
+      const res = await fetch(apiUrl('/api/live/status'));
       if (res.ok) setLive(await res.json());
     } catch {
       // best effort

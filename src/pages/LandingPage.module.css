@@ -796,3 +796,55 @@
     transition: none;
   }
 }
+
+/* Logged out, on a phone: one screen, one ask.
+   The three board cards stack on mobile and turn the page into a scroll of
+   demo content before anyone has agreed to anything. The live line alone
+   carries the thesis (your matchup, as a price), so the other two only appear
+   where there is room to set them beside the copy. */
+@media (max-width: 900px) {
+  .page {
+    min-height: 100dvh;
+  }
+
+  .hero {
+    gap: 22px;
+    padding-top: 28px;
+    padding-bottom: 28px;
+  }
+
+  .heroBoard {
+    gap: 0;
+  }
+
+  .boardCard:nth-child(2),
+  .boardCard:nth-child(3) {
+    display: none;
+  }
+
+  .boardCard {
+    margin: 0;
+  }
+
+  .headline {
+    font-size: clamp(38px, 12vw, 56px);
+  }
+
+  .sub {
+    font-size: 15px;
+  }
+
+  .proofStrip {
+    font-size: 12px;
+  }
+
+  .footer {
+    padding: 18px 0 24px;
+  }
+}
+
+/* The logged-out page has no app chrome, so it owns its own safe area. */
+.page {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}

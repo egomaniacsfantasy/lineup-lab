@@ -318,3 +318,11 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* index.html sets viewport-fit=cover, so in the iOS shell a fixed header
+   paints under the Dynamic Island. env() resolves to 0px on the web, so this
+   costs the browser nothing. */
+.app-header {
+  padding-top: env(safe-area-inset-top);
+  height: calc(var(--shell-header-height) + env(safe-area-inset-top));
+}

@@ -359,7 +359,7 @@ export interface LiveStatus {
 /** Is live in-game mode on right now (tells the client to poll ~30s). Public. */
 export async function fetchLiveStatus(): Promise<LiveStatus> {
   try {
-    const res = await fetch('/api/live/status');
+    const res = await fetch(apiUrl('/api/live/status'));
     if (!res.ok) return { on: false, at: 0 };
     return (await res.json()) as LiveStatus;
   } catch {
@@ -369,7 +369,7 @@ export async function fetchLiveStatus(): Promise<LiveStatus> {
 
 /** Admin: turn live in-game mode on/off. */
 export async function setLiveModeAdmin(on: boolean, password: string): Promise<LiveStatus> {
-  const res = await fetch('/api/admin/live', {
+  const res = await fetch(apiUrl('/api/admin/live'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
     body: JSON.stringify({ on }),
@@ -467,6 +467,22 @@ export function setProjectionOverlay(encoded: string | null) {
 }
 
 /** Decorate a request path + init with the active provider + overlay context. */
+/**
+ * Where /api lives.
+ *
+ * On the web this is empty, so paths stay relative and resolve against
+ * whatever host is serving the app. Inside the iOS shell the bundle is served
+ * from capacitor://localhost, where a relative /api resolves to an origin that
+ * does not exist and EVERY request fails. The native build sets
+ * VITE_API_BASE_URL to the real API so the same code works in both.
+ */
+const API_BASE = (import.meta.env?.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
+export function apiUrl(path: string) {
+  if (!API_BASE) return path;
+  return path.startsWith('/') ? `${API_BASE}${path}` : path;
+}
+
 function withContext(path: string, init: RequestInit = {}): [string, RequestInit] {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
   // Opt-out sentinel: fetch the house (pure-Franco) line for side-by-side baselines.
@@ -474,12 +490,12 @@ function withContext(path: string, init: RequestInit = {}): [string, RequestInit
   delete headers['x-skip-overlay'];
   if (overlayHeader && !skipOverlay) headers['x-olympus-overlay'] = overlayHeader;
 
-  if (apiContext.provider !== 'espn') return [path, { ...init, headers }];
+  if (apiContext.provider !== 'espn') return [apiUrl(path), { ...init, headers }];
 
   const separator = path.includes('?') ? '&' : '?';
-  const url = `${path}${separator}provider=espn&season=${encodeURIComponent(
+  const url = apiUrl(`${path}${separator}provider=espn&season=${encodeURIComponent(
     apiContext.season ?? '',
-  )}`;
+  )}`);
   if (apiContext.espnS2) headers['x-espn-s2'] = apiContext.espnS2;
   if (apiContext.swid) headers['x-espn-swid'] = apiContext.swid;
   return [url, { ...init, headers }];
