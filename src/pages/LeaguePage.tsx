@@ -11,8 +11,10 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
 import { SeasonHeadline } from '../components/season/SeasonHeadline';
 import { WeekDetailModal } from '../components/season/WeekDetailModal';
+import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useSeasonMode } from '../hooks/useSeasonMode';
+import { isAgreementAdmin } from '../utils/admin';
 import {
   getUserTeam,
   toLeagueConnection,
@@ -38,11 +40,23 @@ import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
 type LeagueView = 'this-week' | 'standings' | 'futures' | 'schedule';
 
+/**
+ * Standings is deliberately not in here. Wins, PF and PA are already on ESPN
+ * and Sleeper, rendered better and without our sync lag, so re-showing them
+ * spent a quarter of the tab strip on the one surface that says nothing only
+ * we can say. The table stays in the codebase because its real job was never
+ * the user's: it reads each team's record and points the same way the sim
+ * seeds playoffs, which makes it a check on the sim. So it is now what it
+ * always was — an admin diagnostic. See ADMIN_LEAGUE_VIEWS.
+ */
 const LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
   { key: 'this-week', label: 'This week' },
-  { key: 'standings', label: 'Standings' },
   { key: 'futures', label: 'Futures' },
   { key: 'schedule', label: 'Schedule' },
+];
+
+const ADMIN_LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
+  { key: 'standings', label: 'Standings' },
 ];
 
 function flowFromHash(hash: string): ConnectFlow | null {
@@ -72,7 +86,15 @@ export function LeaguePage() {
   const [showWizard, setShowWizard] = useState(false);
   const [manualFlow, setManualFlow] = useState<ConnectFlow>('none');
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
-  const activeView = parseLeagueView(searchParams.get('view'));
+  const { user } = useAuth();
+  const isAdmin = isAgreementAdmin(user?.email);
+  const visibleViews = isAdmin ? [...LEAGUE_VIEWS, ...ADMIN_LEAGUE_VIEWS] : LEAGUE_VIEWS;
+  const requestedView = parseLeagueView(searchParams.get('view'));
+  /* A hidden tab still has a URL. Without this, ?view=standings rendered the
+     table for anyone who typed it or kept an old bookmark, which would make
+     the gate decorative. */
+  const activeView =
+    visibleViews.some((view) => view.key === requestedView) ? requestedView : 'this-week';
   const isReconnectState = Boolean(stored && !bootstrap && !isLoading && error);
   const hasConnectHash = location.hash.startsWith('#connect');
   const isWizardOpen = showWizard || hasConnectHash || isReconnectState;
@@ -319,7 +341,7 @@ export function LeaguePage() {
       ) : null}
 
       <div className="league-page__view-tabs" role="tablist" aria-label="League market views">
-        {LEAGUE_VIEWS.map((view) => (
+        {visibleViews.map((view) => (
           <button
             aria-selected={activeView === view.key}
             className={[

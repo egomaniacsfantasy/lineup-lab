@@ -1889,6 +1889,12 @@ function MatchupLive({
       />
 
       <div className="matchup-page__frame">
+        {userFuture ? (
+          <div className="matchup-page__season--band">
+            <SeasonBand future={userFuture} />
+          </div>
+        ) : null}
+
         <section className="matchup-page__main">
         {isPreview ? (
           <div className="matchup-page__preview-banner" role="status">
@@ -2087,12 +2093,6 @@ function MatchupLive({
             </button>
           </div>
         </section>
-
-        {userFuture ? (
-          <div className="matchup-page__season--mobile">
-            <SeasonBand future={userFuture} />
-          </div>
-        ) : null}
 
         {scoringNote ? <SeasonalNotice>{scoringNote}</SeasonalNotice> : null}
         {unpricedStarterCount > 0 ? (
@@ -2458,12 +2458,6 @@ function MatchupLive({
           </section>
 
           <aside className="matchup-page__rail">
-            {userFuture ? (
-              <div className="matchup-page__season--rail">
-                <SeasonBand future={userFuture} />
-              </div>
-            ) : null}
-
             {biggestSwing ? (
               <section className="matchup-page__module matchup-page__module--rail-call">
                 <div className="matchup-page__module-row">

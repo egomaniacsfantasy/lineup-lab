@@ -2744,26 +2744,52 @@
 }
 
 /* Season band placement.
-   Desktop wants it at the top of the rail; a phone wants it between the
-   matchup hero and the lineup table, and the hero lives inside the main
-   column, so no single DOM position serves both. Two instances, exactly one
-   displayed. display:none keeps the hidden copy out of the a11y tree. */
-.matchup-page__season--mobile {
+   This was two instances — a static card at the top of the desktop rail, a
+   sticky band on the phone — with display:none choosing one. Only the phone
+   copy was ever sticky, so on desktop the championship and playoff odds
+   scrolled away: the number you most want while reading a lineup was the
+   first one to leave the screen. One instance now, sticky at every width, in
+   the main column above the hero.
+
+   `--bg-base` was used twice in the gradient below and is defined nowhere,
+   which made the whole `background` declaration invalid at computed-value
+   time — the band had no background at all and the page scrolled visibly
+   through the numbers. The token is `--bg`. */
+.matchup-page__season--band {
   display: block;
+  /* A child of the frame, not of the main column, so the bar spans the rail
+     too. Inside main it stopped at the 986px column edge and read as a heading
+     for the lineup rather than something watching the whole page. */
+  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  /* Opaque, not a fade. The gradient used to reach fully transparent exactly
+     at the bar's bottom edge, so the last ~24px were seeing through to
+     whatever row was passing underneath — a half-lit lineup row smeared under
+     the championship price, which reads as a rendering fault rather than a
+     soft edge. The fade was there to soften a bar that had no edge of its own;
+     the playoff meter is that edge now, so the background can just be the page
+     colour and the meter can end it. */
+  background: var(--bg);
 }
 
-.matchup-page__season--rail {
-  display: none;
-}
-
-@media (min-width: 1200px) {
-  .matchup-page__season--mobile {
-    display: none;
-  }
-
-  .matchup-page__season--rail {
-    display: block;
-  }
+/* The rule under the bar was decorative. It now carries the playoff
+   probability as a width, so the one line that was pure ornament becomes the
+   only stat you can read without reading — the same move the matchup card
+   makes with its win-probability bar. */
+.matchup-page__season--band::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--amber) 0,
+    var(--amber-bright, #ff8049) var(--season-meter, 0%),
+    color-mix(in srgb, var(--border-subtle) 90%, transparent) var(--season-meter, 0%)
+  );
+  opacity: 0.85;
 }
 
 /* Share the line. Quiet until wanted: the hero is about the number, not the
@@ -2934,45 +2960,6 @@
     min-width: 0;
   }
 
-  .matchup-page__season--mobile {
-    order: -1;
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    /* `--bg-base` is not a token — it is used twice here and defined nowhere,
-       which makes the whole `background` declaration invalid at computed-value
-       time. The band has therefore had no background at all: the gradient that
-       was supposed to make it read as a solid surface fading into the page
-       never painted, so the page scrolled visibly through the numbers. The
-       token is `--bg`. */
-    background:
-      linear-gradient(
-        180deg,
-        var(--bg) 0%,
-        color-mix(in srgb, var(--bg) 92%, transparent) 62%,
-        transparent 100%
-      );
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-
-  /* The rule under the bar was decorative. It now carries the playoff
-     probability as a width, so the one line that was pure ornament becomes the
-     only stat you can read without reading — the same move the matchup card
-     makes with its win-probability bar. */
-  .matchup-page__season--mobile::after {
-    content: '';
-    position: absolute;
-    inset: auto 0 0;
-    height: 2px;
-    background: linear-gradient(
-      90deg,
-      var(--amber) 0,
-      var(--amber-bright, #ff8049) var(--season-meter, 0%),
-      color-mix(in srgb, var(--border-subtle) 90%, transparent) var(--season-meter, 0%)
-    );
-    opacity: 0.85;
-  }
 }
 
 

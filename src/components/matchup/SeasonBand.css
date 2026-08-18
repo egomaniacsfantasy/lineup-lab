@@ -1,230 +1,172 @@
-/* A strip, not a row of cards. It sits directly under the matchup hero and
-   must never outrank it: the week is why you opened the app, the season is
-   why you stayed. */
+/* The season, as one line watching over the matchup.
+
+   This was a 194px stacked card: below the head-to-head on a phone, and a
+   static tile in the desktop rail. Both said the season is a footnote to a
+   single week. It is the other way round — the week is one sample of the
+   season — so it moved above the matchup, collapsed to a single row, and now
+   stays there while you scroll at every width. The desktop copy used to scroll
+   away, which meant the number you most want while reading a lineup was the
+   first one to leave the screen.
+
+   The "Your season" label is gone. A championship price, a playoff percentage
+   and a seed do not need to be told what they are.
+
+   A surface, not floating text: the bar sat transparent and read as a
+   spreadsheet row, so a faint gradient gives it edges to be composed inside. */
 .season-band {
-  display: grid;
-  gap: 9px;
-  padding: 13px 16px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  background: var(--bg-surface);
-  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.1);
+  display: block;
+  position: relative;
+  padding: 7px 12px 9px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-surface) 78%, transparent),
+    transparent
+  );
 }
 
+/* The eyebrow was the "Your season" label. */
 .season-band__eyebrow {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  display: none;
 }
 
+/* The rule under the bar carries the playoff probability as a width, so the
+   one line that was pure ornament becomes the only stat you can read without
+   reading — the same move the matchup card makes with its win-probability bar.
+   It lives on this element rather than the page wrapper because custom
+   properties inherit downward, and this is where the value is set. */
+.season-band::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--amber) 0,
+    var(--amber-bright, #ff8049) var(--season-meter, 0%),
+    color-mix(in srgb, var(--border-subtle) 90%, transparent) var(--season-meter, 0%)
+  );
+  opacity: 0.85;
+}
+
+/* Nothing in this row may push the row wider than the screen. */
 .season-band__items {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 11px 14px;
-}
-
-/* The championship price is the reason this module exists, so it takes the
-   full first row on its own rather than sharing a row with an average seed. */
-.season-band__item--strong {
-  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 0;
+  overflow: hidden;
 }
 
 .season-band__item {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 1 auto;
   gap: 1px;
-  align-content: start;
   min-width: 0;
 }
 
-/* In a 384px rail the items sit two-up, so the strip reads as one block with
-   parts rather than a stack of tiles. */
+/* No dividers between the supporting stats. Three hairlines across four small
+   numbers was most of the visual noise, and even spacing separates them
+   perfectly well. */
+.season-band__item + .season-band__item {
+  margin-left: 14px;
+}
+
+/* The title price is the reason the bar exists, so it gets the accent, the
+   glow the matchup hero already uses, and a rule of its own separating it from
+   everything it outranks. */
 .season-band__item--strong {
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-subtle);
+  margin-right: 14px;
+  padding-right: 14px;
+  border-right: 1px solid var(--border-subtle);
 }
 
-.season-band__label {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.season-band__item--strong .season-band__label {
+  color: var(--text-amber);
+  opacity: 0.9;
 }
 
-.season-band__value {
-  color: var(--text-dim);
-  font-family: var(--font-num);
-  font-size: 19px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-  line-height: 1.1;
-}
-
-/* Championship is the differentiator, so it carries the price face the rest
-   of the product uses for a market price, and the accent. */
 .season-band__item--strong .season-band__value {
   color: var(--text-amber);
   font-family: var(--font-price);
   font-size: 27px;
   font-weight: var(--font-price-weight);
-  line-height: 1;
+  line-height: 0.95;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--amber) 45%, transparent);
 }
 
-
-
-/* ---------------------------------------------------------------------------
-   Phone: the season reads as one line watching over the matchup.
-
-   It was a 194px stacked card sitting below the head-to-head, which made the
-   season look like an afterthought to a single week. It is the opposite: the
-   week is one sample of the season. So it moves above the matchup, collapses
-   to a single row, and stays there while you scroll — the championship price
-   in the price face, the three supporting numbers small beside it.
-
-   The "Your season" label goes. A championship price, a playoff percentage and
-   a seed do not need to be told what they are.
-   --------------------------------------------------------------------------- */
-@media (max-width: 1199px) {
-  /* A surface, not floating text. The bar sat transparent on the page, so four
-     numbers and three hairlines were the entire design and it read as a
-     spreadsheet row. A faint inset panel gives it edges to be composed inside. */
-  .season-band {
-    display: block;
-    padding: 7px 12px 9px;
-    border: 0;
-    border-radius: 0;
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--bg-surface) 78%, transparent),
-      transparent
-    );
-  }
-
-  .season-band__eyebrow {
-    display: none;
-  }
-
-  /* The rule under the bar carries the playoff probability as a width, so the
-     one line that was pure ornament becomes the only stat you can read without
-     reading — the same move the matchup card makes with its win-probability
-     bar. It lives here rather than on the wrapper because custom properties
-     inherit downward, and this is the element the value is set on. */
-  .season-band {
-    position: relative;
-  }
-
-  .season-band::after {
-    content: '';
-    position: absolute;
-    inset: auto 0 0;
-    height: 2px;
-    background: linear-gradient(
-      90deg,
-      var(--amber) 0,
-      var(--amber-bright, #ff8049) var(--season-meter, 0%),
-      color-mix(in srgb, var(--border-subtle) 90%, transparent) var(--season-meter, 0%)
-    );
-    opacity: 0.85;
-  }
-
-  .season-band__items {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: flex-end;
-    gap: 0;
-    overflow: hidden;
-  }
-
-  .season-band__item {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    flex: 0 1 auto;
-    gap: 1px;
-    min-width: 0;
-  }
-
-  /* No dividers between the supporting stats. Three hairlines across four
-     small numbers was most of the visual noise, and even spacing separates
-     them perfectly well. */
-  .season-band__item + .season-band__item {
-    margin-left: 14px;
-  }
-
-  /* The title price is the reason the bar exists, so it gets the accent, the
-     glow the matchup hero already uses, and a rule of its own separating it
-     from everything it outranks. */
-  .season-band__item--strong {
-    grid-column: auto;
-    margin-right: 14px;
-    padding-right: 14px;
-    padding-bottom: 0;
-    border-bottom: 0;
-    border-right: 1px solid var(--border-subtle);
-  }
-
-  .season-band__item--strong .season-band__label {
-    color: var(--text-amber);
-    opacity: 0.9;
-  }
-
-  .season-band__item--strong .season-band__value {
-    font-size: 27px;
-    line-height: 0.95;
-    color: var(--text-amber);
-    text-shadow: 0 0 18px color-mix(in srgb, var(--amber) 45%, transparent);
-  }
-
-  /* Label above value, so every stat states what it is before it states the
-     number. "+1304" on its own said nothing about being a title price. */
-  .season-band__label {
-    order: 1;
-    font-size: 8.5px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    line-height: 1.2;
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-
-  .season-band__value {
-    order: 2;
-    font-size: 15px;
-    line-height: 1.05;
-    white-space: nowrap;
-    color: var(--text-primary);
-  }
+/* Label above value, so every stat states what it is before it states the
+   number. "+1304" on its own said nothing about being a title price. */
+.season-band__label {
+  order: 1;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-/* One label, two lengths: the full wording where there is room, the short one
-   on the phone's single line. Truncating the full labels instead put an
-   ellipsis on every stat and still overflowed. */
-.season-band__label-short {
+.season-band__value {
+  order: 2;
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+/* One label, two lengths: the short one on the phone's single line, the full
+   wording on desktop where the same row has ~900px more to spend. Truncating
+   the full labels instead put an ellipsis on every stat and still overflowed. */
+.season-band__label-full {
   display: none;
 }
 
-@media (max-width: 1199px) {
-  .season-band__label-full {
-    display: none;
+.season-band__label-short {
+  display: inline;
+}
+
+/* Desktop is the same one-line band, not a different component — it just has
+   room to breathe, so the type comes up a step and the labels say their whole
+   name. */
+@media (min-width: 1200px) {
+  .season-band {
+    padding: 10px 16px 12px;
   }
 
-  .season-band__label-short {
+  .season-band__label-full {
     display: inline;
   }
 
-  /* Nothing in this row may push the row wider than the screen. */
-  .season-band__items {
-    overflow: hidden;
+  .season-band__label-short {
+    display: none;
   }
 
-  .season-band__item {
-    flex: 0 1 auto;
-    min-width: 0;
+  .season-band__item + .season-band__item {
+    margin-left: 22px;
+  }
+
+  .season-band__item--strong {
+    margin-right: 22px;
+    padding-right: 22px;
+  }
+
+  .season-band__label {
+    font-size: 9.5px;
+  }
+
+  .season-band__value {
+    font-size: 17px;
+  }
+
+  .season-band__item--strong .season-band__value {
+    font-size: 30px;
   }
 }
