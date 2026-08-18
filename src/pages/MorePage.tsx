@@ -4,6 +4,7 @@ import { LeagueSettings } from '../components/league/LeagueSettings';
 import { WelcomeCard } from '../components/onboarding/WelcomeCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { useOddsFormat } from '../contexts/OddsFormatContext';
 import {
   useDynastyTradesExperimental,
   usePlayerVotesEnabled,
@@ -11,12 +12,20 @@ import {
 } from '../hooks/useLabsFlags';
 import { toLeagueConnection } from '../adapters/connectedLeague';
 import { PROVIDER_LABEL } from '../utils/provider';
+import type { ScoringFormat } from '../types';
 import './MorePage.css';
 import '../components/league/LeagueSettings.css';
+
+const SCORING_LABELS: Record<ScoringFormat, string> = {
+  standard: 'STD',
+  ppr: 'PPR',
+  'half-ppr': 'HALF',
+};
 
 export function MorePage() {
   const { bootstrap, stored, disconnect } = useLeagueConnection();
   const { user, signOut } = useAuth();
+  const { format, toggleFormat } = useOddsFormat();
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
   const navigate = useNavigate();
   const dynastyTradesExperimental = useDynastyTradesExperimental();
@@ -93,6 +102,42 @@ export function MorePage() {
         >
           Log out
         </button>
+      </section>
+
+      {/* The header carries identity and state only on a phone, so the two
+          display controls that used to sit up there live here now. */}
+      <section className="more-page__section">
+        <p className="more-page__eyebrow">Display</p>
+        <div className="more-page__card more-page__labs-card">
+          <div>
+            <h3 className="more-page__card-title">Odds format</h3>
+            <p className="more-page__card-body">
+              {format === 'american'
+                ? 'Prices read as betting odds.'
+                : 'Prices read as win percentages.'}
+            </p>
+          </div>
+          <button
+            className="more-page__format"
+            onClick={toggleFormat}
+            type="button"
+          >
+            {format === 'american' ? '+/\u2212' : '%'}
+          </button>
+        </div>
+        {bootstrap ? (
+          <div className="more-page__card more-page__labs-card">
+            <div>
+              <h3 className="more-page__card-title">Scoring</h3>
+              <p className="more-page__card-body">
+                Read from {providerLabel ?? 'your platform'}. Change it there, not here.
+              </p>
+            </div>
+            <span className="more-page__format more-page__format--static">
+              {SCORING_LABELS[bootstrap.league.scoringFamily]}
+            </span>
+          </div>
+        ) : null}
       </section>
 
       {groups.map((group) => (

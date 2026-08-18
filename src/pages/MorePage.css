@@ -148,3 +148,38 @@
   transform: translateX(22px);
   background: var(--text-primary);
 }
+
+/* The odds-format control and the scoring readout moved down from the header
+   when the phone header was cut back to identity and state. Same footprint as
+   the labs toggle so the cards in this page stay on one rhythm. */
+.more-page__format {
+  display: inline-flex;
+  min-width: 52px;
+  min-height: 44px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding-inline: var(--space-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface-soft);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.more-page__format:hover {
+  border-color: var(--amber);
+  color: var(--text-amber);
+}
+
+/* Scoring is read from the host platform, so it reports rather than invites. */
+.more-page__format--static {
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+}

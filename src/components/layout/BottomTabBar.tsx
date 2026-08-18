@@ -104,7 +104,6 @@ export function BottomTabBar() {
               }
               to={tab.path}
             >
-              <span className="bottom-tab-bar__indicator" aria-hidden="true" />
               <span className="bottom-tab-bar__icon">{tab.icon}</span>
               <span className="bottom-tab-bar__label">
                 {tab.label}

@@ -44,7 +44,10 @@
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  min-width: fit-content;
+  /* This was min-width: fit-content, which meant the actions row could not
+     shrink and simply overlapped the wordmark on a phone. It may shrink; the
+     phone rules below remove enough of it that it never needs to. */
+  min-width: 0;
 }
 
 .app-header__status {
@@ -340,4 +343,50 @@
   height: 32px;
   flex: none;
   display: block;
+}
+
+/* ---------------------------------------------------------------------------
+   Phone and tablet header: identity and state only.
+
+   Below 1024px the primary nav lives in the bottom tab bar, and what was left
+   up here was a desktop actions row with the nav cut out of it: brand, LIVE,
+   Admin, week, sync, scoring, odds format and the account menu, eight things
+   inside 393pt. The wordmark wrapped onto two lines and the Admin pill landed
+   on top of it.
+
+   What stays is what you cannot act on from anywhere else: the mark, the week,
+   and who you are. Admin already has a card in More. Scoring and odds format
+   moved into More > Display. Sync moved onto the avatar as a dot, with
+   "Sync now" in the account menu.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .app-header__brand-title {
+    display: none;
+  }
+
+  .app-header__admin,
+  .app-header__scoring-pill,
+  .app-header__odds-toggle,
+  .app-header__sync,
+  .app-header__replay-chip {
+    display: none;
+  }
+
+  /* The week is the one piece of state worth permanent space, so it gets to be
+     legible rather than 9px of tracking-heavy uppercase. */
+  .app-header__status {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-soft);
+    white-space: nowrap;
+  }
+
+  .app-header__inner {
+    gap: var(--space-sm);
+  }
+
+  .app-header__actions {
+    gap: var(--space-sm);
+  }
 }

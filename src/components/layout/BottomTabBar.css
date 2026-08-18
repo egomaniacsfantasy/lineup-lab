@@ -1,3 +1,5 @@
+/* Height lives on the shell as --shell-tabbar-height so the bar and the space
+   the scroller reserves for it cannot drift apart. */
 .bottom-tab-bar {
   position: fixed;
   inset: auto 0 0;
@@ -6,8 +8,10 @@
   background: var(--bg-surface);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
-  padding-bottom: env(safe-area-inset-bottom, var(--space-sm));
   box-shadow: var(--shadow-card);
+  /* One declaration, not two. This was previously set twice — once with a
+     fallback and once with max() — and the pair fought over the inset. */
+  padding-bottom: max(var(--space-xs), env(safe-area-inset-bottom));
 }
 
 .bottom-tab-bar__grid {
@@ -18,44 +22,45 @@
 .bottom-tab-bar__link {
   position: relative;
   display: flex;
-  min-height: 66px;
+  min-height: var(--shell-tabbar-height, 56px);
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   color: var(--text-muted);
   transition: color var(--transition-fast);
+  /* iOS paints a grey box over the whole cell on touch without this, which
+     reads as the bar glitching rather than responding. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-tab-bar__link:active {
+  opacity: 0.7;
 }
 
 .bottom-tab-bar__link--active {
   color: var(--text-amber);
 }
 
-.bottom-tab-bar__indicator {
-  position: absolute;
-  top: var(--space-xs);
-  width: 20px;
-  height: 3px;
-  border-radius: var(--radius-pill);
-  background: var(--amber);
-  opacity: 0;
-  transform: translateY(2px);
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
-}
-
-.bottom-tab-bar__link--active .bottom-tab-bar__indicator {
-  opacity: 1;
-  transform: translateY(0);
-}
-
+/* The active tab used to be marked by a 20x3 dash floating above the icon,
+   detached from it and from the label. The icon itself now carries the state:
+   amber, sitting in a soft amber field. */
 .bottom-tab-bar__icon {
-  width: 20px;
-  height: 20px;
+  display: grid;
+  width: 40px;
+  height: 26px;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  transition: background var(--transition-fast);
+}
+
+.bottom-tab-bar__link--active .bottom-tab-bar__icon {
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
 }
 
 .bottom-tab-bar__icon svg {
-  width: 100%;
-  height: 100%;
+  width: 20px;
+  height: 20px;
   stroke: currentColor;
   stroke-width: 1.5;
   stroke-linecap: round;
@@ -72,6 +77,10 @@
   letter-spacing: 0.02em;
 }
 
+.bottom-tab-bar__link--active .bottom-tab-bar__label {
+  font-weight: 700;
+}
+
 .bottom-tab-bar__badge {
   padding: 1px 4px;
   border: 1px solid rgba(255, 128, 73, 0.32);
@@ -83,13 +92,15 @@
   letter-spacing: 0.06em;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .bottom-tab-bar__icon,
+  .bottom-tab-bar__link {
+    transition: none;
+  }
+}
+
 @media (min-width: 1024px) {
   .bottom-tab-bar {
     display: none;
   }
-}
-
-/* Same reason as the header: keep the tabs above the home indicator. */
-.bottom-tab-bar {
-  padding-bottom: max(var(--space-xs, 6px), env(safe-area-inset-bottom));
 }

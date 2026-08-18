@@ -198,3 +198,60 @@
     display: none;
   }
 }
+
+/* Sync state rides on the avatar instead of taking a labelled control in the
+   header. The trigger is the positioning context for it. */
+.account-menu__trigger {
+  position: relative;
+}
+
+.account-menu__sync-dot {
+  position: absolute;
+  top: 2px;
+  left: 20px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--bg-surface, #0d0f11);
+  border-radius: 50%;
+}
+
+.account-menu__sync-dot--ok {
+  background: #2fd47a;
+}
+
+.account-menu__sync-dot--busy {
+  background: var(--amber, #e8541d);
+  animation: account-menu-pulse 1.1s ease-in-out infinite;
+}
+
+.account-menu__sync-dot--issue {
+  background: #ff5c5c;
+}
+
+@keyframes account-menu-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-menu__sync-dot--busy {
+    animation: none;
+  }
+}
+
+/* Sync now carries a second line reporting when it last succeeded, or why it
+   did not, since the header no longer has room to say so. */
+.account-menu__action-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted, #7c8079);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.account-menu__action:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

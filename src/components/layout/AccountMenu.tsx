@@ -23,9 +23,11 @@ function leagueLabel(league: StoredConnection, activeName?: string | null) {
  */
 export function AccountMenu() {
   const { user, signOut } = useAuth();
-  const { leagues, stored, bootstrap, switchLeague } = useLeagueConnection();
+  const { leagues, stored, bootstrap, switchLeague, refresh, isLoading, error } =
+    useLeagueConnection();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +49,29 @@ export function AccountMenu() {
   if (!user) return null;
 
   const initial = (user.email?.[0] ?? 'U').toUpperCase();
+  /* On a phone the header carries no sync control, so the avatar reports it:
+     green synced, amber working, red needs attention. */
+  const syncState = !stored
+    ? null
+    : isRefreshing || isLoading
+      ? 'busy'
+      : bootstrap
+        ? 'ok'
+        : error
+          ? 'issue'
+          : null;
+  const syncLabel =
+    syncState === 'busy'
+      ? 'Syncing your league'
+      : syncState === 'ok'
+        ? `Synced${bootstrap ? ` at ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}` : ''}`
+        : syncState === 'issue'
+          ? error ?? 'We could not reload this league.'
+          : '';
+  const onSyncNow = () => {
+    setIsRefreshing(true);
+    void refresh().finally(() => setIsRefreshing(false));
+  };
   const activeName = bootstrap?.league.name ?? stored?.leagueName ?? null;
   const activeLabel = stored ? leagueLabel(stored, activeName) : 'No league yet';
 
@@ -68,6 +93,12 @@ export function AccountMenu() {
         <span className="account-menu__avatar" aria-hidden="true">
           {initial}
         </span>
+        {syncState ? (
+          <span
+            aria-hidden="true"
+            className={`account-menu__sync-dot account-menu__sync-dot--${syncState}`}
+          />
+        ) : null}
         <span className="account-menu__league-name">{activeLabel}</span>
         <svg
           className="account-menu__chevron"
@@ -132,6 +163,18 @@ export function AccountMenu() {
           ) : null}
 
           <div className="account-menu__actions">
+            {stored ? (
+              <button
+                className="account-menu__action"
+                disabled={syncState === 'busy'}
+                onClick={onSyncNow}
+                role="menuitem"
+                type="button"
+              >
+                {syncState === 'busy' ? 'Syncing…' : 'Sync now'}
+                <span className="account-menu__action-note">{syncLabel}</span>
+              </button>
+            ) : null}
             <button
               className="account-menu__action"
               onClick={onAddLeague}

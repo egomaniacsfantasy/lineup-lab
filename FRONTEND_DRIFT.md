@@ -347,3 +347,28 @@ not touched.
   Measure after a reload with a known-zero pick count, and query the DOM in a
   later tick than the click: React has not flushed in the same tick, so a
   same-tick query returns null even when the block renders correctly.
+
+- Two of the four content cuts proposed for the phone pass did not survive
+  measurement, and are recorded here rather than quietly dropped. "Content is
+  clipped by the tab bar" was wrong: the scroller already reserved 80px against
+  a 75px bar, so the end of the scroll cleared it. What the screenshot showed
+  was mid-scroll content under a translucent fixed bar, which is intended. The
+  clearance was thin (5px on web) and is now 15px, but there was no clipping
+  bug. "The season band stacks five stats" was also wrong — `season-band__items`
+  has been a two-column grid the whole time.
+- The phone header hides `.app-header__sync` and the "Not synced" chip. Sync
+  state is on the avatar dot and "Sync now" is in the account menu, so nothing
+  is unreachable, but the affordance is now two taps instead of one and there
+  is no pull-to-refresh to fall back on.
+- The "Unmanaged team, no read." line is hidden below 1024px. The information
+  survives on desktop and via the crest tooltip; on a phone the only signal
+  that scouting is unavailable is that the crest does not respond to a tap.
+- Only the Hub was QA'd on device. The MCP simulator integration is broken by
+  `xcode-select` pointing away from Xcode, which needs the user's password, so
+  there is no way to tap or scroll the running app from here. League, Trades,
+  Board and More are unverified at phone size in the native shell.
+- A whole-page overlap sweep reports ~24 collisions on /demo. They are false
+  positives: the sweep compares bounding boxes of different instances of the
+  same class across a scrolling container. Confirmed clean visually. If that
+  sweep is ever promoted into a test it needs to compare within a common
+  offsetParent, not across the document.

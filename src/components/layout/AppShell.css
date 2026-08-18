@@ -1,6 +1,9 @@
 .app-shell {
   --shell-header-height: calc(var(--space-2xl) + var(--space-sm));
-  --shell-tabbar-reserve: calc(var(--space-2xl) + var(--space-xl));
+  /* The bar measures itself from this, and the scroller reserves this plus a
+     gap, so shrinking the bar can never leave the last row under the blur. */
+  --shell-tabbar-height: 56px;
+  --shell-tabbar-reserve: calc(var(--shell-tabbar-height) + var(--space-lg));
   position: relative;
   isolation: isolate;
   display: flex;

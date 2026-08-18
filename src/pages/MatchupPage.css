@@ -2787,3 +2787,119 @@
   border-color: rgba(232, 84, 29, 0.5);
   color: var(--text-amber);
 }
+
+/* ---------------------------------------------------------------------------
+   Faceoff alignment.
+
+   Each side is its own grid, so its three rows — identity, price, projection —
+   were sized independently. An opponent with an extra line of meta ("Unmanaged
+   team, no read.") made that column's identity taller and pushed its price
+   down, so the two prices sat about 60px apart and read as a rendering fault.
+
+   Subgrid puts both sides on the parent's rows, so the prices share a baseline
+   no matter how the names wrap. Without subgrid support nothing changes.
+   --------------------------------------------------------------------------- */
+@supports (grid-template-rows: subgrid) {
+  .matchup-page__faceoff {
+    grid-template-rows: auto auto auto;
+  }
+
+  .matchup-page__faceoff-side {
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+  }
+
+  .matchup-page__faceoff-vs {
+    grid-row: span 3;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Two lines is enough for any team name at this width; past that it is the
+     ellipsis's job, not the layout's. */
+  .matchup-page__team-name {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 18px;
+  }
+
+  /* "Unmanaged team · 0-0" already says it, and the crest is visibly not
+     tappable. The sentence stays on desktop where there is room for it. */
+  .matchup-page__faceoff-identity--opp .matchup-page__meta-copy + .matchup-page__meta-copy {
+    display: none;
+  }
+
+  /* Staatliches has no true 1: it draws an I-shape, so a price reads as +I56
+     rather than +156. At desktop sizes that is styling; at 48px on a phone it
+     reads as a typo. Saira 600 is the face the edge deltas already use. */
+  .matchup-page__hero-number {
+    font-family: var(--font-num);
+    font-size: 40px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Lineup board on a phone.
+
+   The board is three columns — you, position, them — and at 375px each player
+   card got 98px. Inside the card the headshot (38px) and the numbers (52px,
+   min-width) are fixed, so the name track collapsed to 0 and the name painted
+   straight over the projection. Two players' names sat on top of their own
+   scores.
+
+   The headshot is the least load-bearing part here: the name identifies the
+   player and the card is already in that player's column. Dropping it and
+   stacking name over projection gives the name real width again.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .matchup-page__slot-board-grid {
+    grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .matchup-page__slot-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    min-height: 0;
+    padding: 8px 10px;
+    border-radius: 12px;
+  }
+
+  .matchup-page__slot-headshot {
+    display: none;
+  }
+
+  .matchup-page__slot-numbers {
+    justify-items: start;
+    min-width: 0;
+  }
+
+  .matchup-page__slot-card--right .matchup-page__slot-numbers,
+  .matchup-page__slot-card--opponent .matchup-page__slot-numbers {
+    justify-items: end;
+  }
+
+  .matchup-page__row-name {
+    display: block;
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .matchup-page__slot-projection {
+    font-size: 15px;
+  }
+
+  /* nowrap with nothing to shrink into: this cue is wider than the 119px card
+     and painted across the opponent's column. It may wrap here. */
+  .matchup-page__slot-bench-cue {
+    font-size: 10px;
+    white-space: normal;
+  }
+}

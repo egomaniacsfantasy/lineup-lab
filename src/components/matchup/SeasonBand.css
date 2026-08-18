@@ -77,3 +77,15 @@
 }
 
 
+
+/* Same reason as the matchup price: Staatliches renders 1 as an I-shape, so
+   the championship price read as +I304 on a phone. Saira keeps the accent and
+   the weight, and draws a 1. */
+@media (max-width: 1023px) {
+  .season-band__item--strong .season-band__value {
+    font-family: var(--font-num);
+    font-size: 24px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}

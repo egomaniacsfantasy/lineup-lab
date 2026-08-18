@@ -1355,3 +1355,64 @@ Net: the 3-a-side card went 300px to 228px, and on that card the verdict and
 exchange columns now measure the same height, so the composition reads as
 deliberate instead of top-heavy. Verified at 1512 / 820 / 375px with no label
 truncation, no card overflow and no page horizontal scroll.
+
+## The phone shell: header, tab bar, and the lineup board
+
+The iOS build had never been designed, only reflowed. Below 1024px the header
+was the desktop actions row with the nav cut out of it: brand, LIVE, Admin,
+week, sync, scoring, odds format and the account menu — eight things inside
+393pt. `.app-header__actions` carried `min-width: fit-content`, so it could not
+shrink and simply painted over the wordmark, which was itself wrapping onto two
+lines. That was the overlap in Andre's screenshot; it was structural, not
+spacing.
+
+The phone header is now identity and state: the mark, the week, and the avatar.
+Nothing was deleted — Admin already had a card in More, scoring and odds format
+moved into More > Display, and sync moved onto the avatar as a coloured dot
+with "Sync now" in the account menu. The week gets to be legible (12px/700)
+instead of 9px of tracking-heavy uppercase, because it is the one piece of
+state worth permanent space.
+
+The tab bar's active state was a 20x3 dash floating above the icon at
+`top: 6px`, attached to neither the icon nor the label; that is what read as
+glitching. The icon now carries the state itself, amber in a 16% amber field.
+The bar also declared `padding-bottom` twice, once with a fallback and once
+with `max()`, so the two fought over the home-indicator inset. Height moved to
+`--shell-tabbar-height` on the shell so the bar and the space the scroller
+reserves for it cannot drift: 75px bar against an 80px reserve (5px of
+clearance) became 65px against 80px, and 23px on device.
+
+Two real defects came out of measuring rather than looking:
+
+- The faceoff sides were independent grids, so an opponent with an extra line
+  of meta pushed its price down and the two prices sat ~60px apart. `subgrid`
+  puts both sides on the parent's rows and they now share a baseline whatever
+  the names do.
+- The lineup board is three columns, and at 375px each player card got 98px.
+  Inside the card the headshot (38px) and the numbers (52px min-width) are
+  fixed, so the name track collapsed to **0px** and names painted directly over
+  their own projections. The headshot is the least load-bearing part — the card
+  is already in that player's column — so on a phone it goes, the name gets
+  real width, and the card stacks name over projection at 119px.
+
+Staatliches has no true 1: it draws an I-shape, so prices read as `+I56` and
+`+I304`. At desktop sizes that is styling; at 40px on a phone it reads as a
+typo. Below 1024px the price face is Saira 600, which the edge deltas already
+use.
+
+### What the competitors actually do
+
+Measured at 375x812 rather than eyeballed, because the instinct was that we
+were far less dense than the field and that turned out to be half wrong:
+
+| Surface | Repeating data row | Dominant small type |
+| --- | --- | --- |
+| Sleeper | 32px | 11px |
+| FantasyPros | 37px | 11–12px |
+| ESPN | 44px | 10–12px |
+| Odds Gods | 36px | 12px |
+
+Our list rows are already Sleeper-class and tighter than ESPN. The bloat is not
+in the rows, it is in the hero elements and card padding — a 48px price, a 27px
+championship value, and module gaps sized for a 384px desktop rail. That is
+where the next pass should go, not into shrinking the rows.
