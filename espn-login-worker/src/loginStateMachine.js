@@ -148,6 +148,21 @@ export async function createLoginMachine({
     return chromium.launch({
       headless: true,
       proxy: config.proxyServer ? { server: config.proxyServer } : undefined,
+      /* The worker runs in a small container and the logs show it running out
+         of memory. --disable-dev-shm-usage is the important one: /dev/shm is
+         64MB in a container, Chromium puts its shared memory there by default,
+         and it dies when that fills — which looks exactly like the hangs and
+         half-finished logins we have been seeing. The rest drop subsystems a
+         login form has no use for. */
+      args: [
+        '--disable-dev-shm-usage',
+        '--no-sandbox',
+        '--disable-gpu',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-features=site-per-process,TranslateUI,BackForwardCache',
+        '--js-flags=--max-old-space-size=256',
+      ],
     });
   },
   validateSession = validateEspnSession,
@@ -164,7 +179,7 @@ export async function createLoginMachine({
     if (!cookies) {
       return fallback(
         REASON.ESPN_REJECTED,
-        'ESPN login finished, but Fantasy did not return a usable session. Use the ESPN-site connector instead.',
+        'ESPN accepted the sign-in but did not hand back a league session. This is usually a sign-in prompt we could not clear, such as a code or a security check.',
       );
     }
 

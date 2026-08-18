@@ -92,7 +92,7 @@ export function ConnectPage() {
       </div>
 
       <p className="connect-page__demo">
-        Read-only. We never ask for your password.
+        Read-only. We only ever read your league, never change it.
       </p>
 
       {/* Signed in with no league, this screen is the whole app — and with the

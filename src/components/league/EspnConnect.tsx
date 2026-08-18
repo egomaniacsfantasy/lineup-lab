@@ -301,7 +301,11 @@ export function EspnConnect({
                     <span className="espn-connect__login-lockup">Sign in</span>
                   </div>
                   <p className="espn-connect__cookies-note">
-                    Read-only. Your password goes to ESPN, never to us.
+                    {/* It does reach us: it is posted to our server, which signs
+                        in on your behalf. What is true is that it is used once,
+                        stored nowhere, and redacted from our logs. */}
+                    Read-only. Your password is used once to sign in, stored
+                    nowhere, and kept out of our logs.
                   </p>
                   <label className="espn-connect__field">
                     <span className="espn-connect__label">ESPN email</span>
@@ -436,9 +440,11 @@ export function EspnConnect({
           ) : null}
 
           <p className="espn-connect__privacy">
+            {/* These branches were the wrong way round: the copy promising we
+                never ask for a password was the one shown when we do. */}
             {espnLoginEnabled
-              ? 'Read-only, and we never ask for your ESPN password.'
-              : 'Read-only. Your password is never requested or stored.'}
+              ? 'Read-only. If you sign in, your password is used once and never stored.'
+              : 'Read-only. We never ask for your ESPN password.'}
           </p>
         </form>
       ) : null}

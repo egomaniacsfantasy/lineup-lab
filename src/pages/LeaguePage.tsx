@@ -206,7 +206,7 @@ export function LeaguePage() {
             </div>
 
             <p className="connect-page__demo">
-              Read-only. We never ask for your password.
+              Read-only. We only ever read your league, never change it.
             </p>
           </div>
         ) : null}
