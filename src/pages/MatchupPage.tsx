@@ -472,6 +472,45 @@ type MirroredSlotRow = {
   edgeDelta: number;
 };
 
+/* Which positions a lineup slot will actually accept. Comparing a quarterback
+   against a kicker answers a question nobody asked: you compare two players
+   because you are choosing between them for one slot, so the only useful
+   partners are the ones that could take the same slot. */
+const SLOT_ELIGIBILITY: Record<string, readonly string[]> = {
+  QB: ['QB'],
+  RB: ['RB'],
+  WR: ['WR'],
+  TE: ['TE'],
+  K: ['K'],
+  DEF: ['DEF'],
+  FLX: ['RB', 'WR', 'TE'],
+  FLEX: ['RB', 'WR', 'TE'],
+  WRRB_FLEX: ['RB', 'WR'],
+  REC_FLEX: ['WR', 'TE'],
+  SUPER_FLEX: ['QB', 'RB', 'WR', 'TE'],
+};
+
+function slotAccepts(slotLabel: string, position: string | undefined) {
+  if (!position) return false;
+  const accepted = SLOT_ELIGIBILITY[slotLabel.toUpperCase()];
+  // An unmapped slot (a bench row, a league with a custom slot) should not
+  // silently block everything, so it accepts anything.
+  if (!accepted) return true;
+  return accepted.includes(position.toUpperCase());
+}
+
+/* Both directions: each player has to be able to take the other's slot, so a
+   flex running back can be weighed against a running back, and a quarterback
+   in a superflex is not offered against a tight end. */
+function slotsAreComparable(
+  slotA: string,
+  positionA: string | undefined,
+  slotB: string,
+  positionB: string | undefined,
+) {
+  return slotAccepts(slotA, positionB) && slotAccepts(slotB, positionA);
+}
+
 function buildMirroredSlotRows(
   yourRoster: RosterSlot[],
   opponentRoster: RosterSlot[],
@@ -1277,6 +1316,10 @@ function MatchupLive({
   const [isBenchOpen, setIsBenchOpen] = useState(false);
   const benchRef = useRef<HTMLDetailsElement | null>(null);
   const [compareSelection, setCompareSelection] = useState<Player[]>([]);
+  /* The slot the first pick came out of. Eligibility is a property of the slot,
+     not of the player: the same running back is a different question in an RB
+     slot and in a flex. */
+  const [compareSlot, setCompareSlot] = useState<string | null>(null);
   const [compareModalPlayers, setCompareModalPlayers] = useState<[Player, Player] | null>(null);
   const [compareBoardPlayers, setCompareBoardPlayers] = useState<Player[] | null>(null);
   const [compareSource, setCompareSource] = useState<'slip' | 'edge' | null>(null);
@@ -1493,8 +1536,13 @@ function MatchupLive({
      straight projection comparison, never an invented number. */
   const canPick = () => true;
 
-  const handleComparePick = (player: Player) => {
+  const handleComparePick = (player: Player, slotLabel?: string) => {
     if (!canPick()) return;
+    if (compareSelection.length === 0 && slotLabel) setCompareSlot(slotLabel);
+    if (compareSelection.some((candidate) => candidate.id === player.id)
+      && compareSelection.length === 1) {
+      setCompareSlot(null);
+    }
     // The next thing you need is the bench option, so take them to it rather
     // than leaving them to find a collapsed drawer further down the page.
     if (!compareSelection.some((candidate) => candidate.id === player.id)) {
@@ -1688,12 +1736,28 @@ function MatchupLive({
 
   const firstPick = compareSelection[0];
   const decisionSlotCount = engine.roster.filter((slot) => slot.alternatives.length > 0).length;
+  /* How many starters could actually take the same slot as the first pick.
+     Zero is a real answer and worth saying out loud: with one quarterback on
+     the roster there is no second quarterback to weigh, and leaving every card
+     dimmed with no explanation reads as the app being broken. */
+  const comparableStarterCount = (() => {
+    if (!firstPick || !compareSlot) return null;
+    return slotComparisonRows.filter((row) => {
+      const starter = row.yourSlot?.starter;
+      if (!starter || starter.id === firstPick.id) return false;
+      return slotsAreComparable(compareSlot, firstPick.position, row.slotLabel, starter.position);
+    }).length;
+  })();
+
   const compareHint = (() => {
     if (firstPick) {
+      if (comparableStarterCount === 0) {
+        return `Nobody else can take ${firstPick.shortName}'s slot, so there is nothing to weigh them against. Tap them again to clear it.`;
+      }
       const options = eligiblePartnerIds?.size ?? 0;
       return options > 0
-        ? `Now pick anyone to weigh against ${firstPick.shortName}. ${options} bench ${options === 1 ? 'option' : 'options'} can swap straight in.`
-        : `Now pick anyone to weigh against ${firstPick.shortName}.`;
+        ? `Now pick anyone who could take the same slot as ${firstPick.shortName}. ${options} bench ${options === 1 ? 'option' : 'options'} can swap straight in.`
+        : `Now pick anyone who could take the same slot as ${firstPick.shortName}.`;
     }
     if (decisionSlotCount === 0) {
       return 'No bench options this week. Every slot is the only play you have.';
@@ -2092,8 +2156,19 @@ function MatchupLive({
                   const isSelected = starter
                     ? compareSelection.some((candidate) => candidate.id === starter.id)
                     : false;
-                  const isPickable = starter ? canPick() : false;
-                  const isMuted = false;
+                  /* With nothing picked yet every starter is fair game. Once
+                     one is picked, only players who could take that same slot
+                     stay live; the rest dim rather than disappear, so the
+                     lineup does not reshuffle under your thumb. */
+                  const firstPick = compareSelection[0] ?? null;
+                  const isEligible =
+                    !firstPick ||
+                    isSelected ||
+                    (starter != null &&
+                      compareSlot != null &&
+                      slotsAreComparable(compareSlot, firstPick.position, row.slotLabel, starter.position));
+                  const isPickable = starter ? canPick() && isEligible : false;
+                  const isMuted = Boolean(firstPick) && !isEligible;
                   const youLead = row.edgeDelta > 0;
 
                   return (
@@ -2107,7 +2182,7 @@ function MatchupLive({
                           isMuted ? 'matchup-page__slot-card--muted' : '',
                         ].filter(Boolean).join(' ')}
                         disabled={!isPickable}
-                        onClick={() => starter && handleComparePick(starter)}
+                        onClick={() => starter && handleComparePick(starter, row.slotLabel)}
                         type="button"
                       >
                         {row.yourSlot ? (

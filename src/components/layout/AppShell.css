@@ -86,3 +86,28 @@
     display: none;
   }
 }
+
+
+/* No rubber band. Dragging past the top revealed a band of empty page above
+   the app, which is the tell that gives away a web view: native lists bounce
+   against their own content, not against nothing. overscroll-behavior stops
+   the scroll chaining to the document, and the document itself is fixed so
+   there is nothing behind it to reveal. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+@media (max-width: 1023px) {
+  html,
+  body {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .app-content {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
