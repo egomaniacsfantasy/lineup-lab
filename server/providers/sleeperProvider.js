@@ -203,7 +203,12 @@ export const sleeperProvider = {
     return (raw ?? []).map((u) => ({
       ownerId: u.user_id,
       ownerName: u.display_name,
-      teamName: u.metadata?.team_name || `${u.display_name}'s Team`,
+      /* Sleeper only has a team name when the manager set one. Manufacturing
+         "fantasygodcasta's Team" out of a username invents a longer string
+         than the platform itself shows, and it was the reason two rows in the
+         picker needed three lines and still ended in an ellipsis. The handle
+         is how Sleeper refers to them, so it is how we refer to them. */
+      teamName: u.metadata?.team_name || u.display_name,
       avatarUrl: u.avatar ? `/api/img/avatar/${u.avatar}` : null,
     }));
   },

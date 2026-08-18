@@ -3093,3 +3093,226 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+
+/* ---------------------------------------------------------------------------
+   Vertical condensation, phone.
+
+   The whole tab is a scrolling problem. Nine manager tiles at ~150px each is
+   1350px of picker before a single trade, and the deals a pick loads landed
+   below all of it. Every rule here buys height back without giving anything
+   up: the same facts, fewer pixels between them.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  /* One column of rows, not a grid of tiles. A row can give the name real size
+     and still cost a third of the height, because a tile pays twice — once in
+     padding and once in the gap between its own stacked halves. */
+  .trade-cc__manager-grid,
+  .trade-cc__manager-grid--roomy,
+  .trade-cc__manager-grid--dense {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .trade-cc__manager-card,
+  .trade-cc__manager-grid--dense .trade-cc__manager-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 54px;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: 12px;
+  }
+
+  /* The headshot was 32px next to a 15px name, which read as a favicon beside
+     a caption. The person is the row. */
+  .trade-cc__manager-card .trade-cc__team-avatar,
+  .trade-cc__manager-grid--dense .trade-cc__team-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .trade-cc__manager-card-id {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .trade-cc__manager-card-copy {
+    gap: 1px;
+  }
+
+  .trade-cc__manager-card-name,
+  .trade-cc__manager-grid--dense .trade-cc__manager-card-name {
+    font-size: 16px;
+    line-height: 1.1;
+  }
+
+  .trade-cc__manager-card-meta {
+    font-size: 11.5px;
+  }
+
+  /* The price sat under its own label in a column of its own width. Label and
+     value on one baseline is the same information on one line. */
+  .trade-cc__manager-card-price,
+  .trade-cc__manager-grid--dense .trade-cc__manager-card-price {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .trade-cc__manager-card-stat-value,
+  .trade-cc__manager-grid--dense .trade-cc__manager-card-stat-value {
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  /* A per-row call to action on every row is noise when the whole row is the
+     button, and it was never centred against anything. */
+  .trade-cc__manager-card-cta,
+  .trade-cc__manager-card-roster {
+    display: none;
+  }
+
+  /* Trade personas are a desktop study, not a thing you read on a phone while
+     deciding whether to text someone about a running back. */
+  .trade-cc__partner-read,
+  .trade-cc__finder-head {
+    display: none;
+  }
+
+  .trade-cc__filter-row {
+    gap: 6px;
+  }
+
+  .trade-cc__filter-label {
+    font-size: 9.5px;
+  }
+}
+
+/* The chosen manager, as one line. Replaces the grid so the deals that the
+   choice loads are the next thing on screen instead of a screen below it. */
+.trade-cc__manager-chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--amber);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(232, 84, 29, 0.2), rgba(232, 84, 29, 0.08));
+}
+
+.trade-cc__manager-chosen-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.trade-cc__manager-chosen-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.trade-cc__manager-chosen-name {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 17px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+
+.trade-cc__manager-chosen-meta {
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-cc__manager-change {
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.trade-cc__empty-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+
+/* The row's identity block was inheriting a centred alignment from the tile
+   layout it used to be, which pushed the avatar into the middle of the row and
+   left the name a narrow column to wrap inside. Three lines for a name that
+   fits on two the moment it starts at the left edge. */
+@media (max-width: 1023px) {
+  .trade-cc__manager-card {
+    text-align: left;
+  }
+
+  .trade-cc__manager-card-id {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-content: start;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .trade-cc__manager-card-copy {
+    justify-items: start;
+    text-align: left;
+    width: 100%;
+  }
+
+  /* No clamp. A clamp is an ellipsis with extra steps, and the names that
+     needed one were names we were inventing. */
+  .trade-cc__manager-card-name {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* The price column only needs its own number, not a third of the row. */
+  .trade-cc__manager-card-price {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .trade-cc__manager-card-stat-label {
+    font-size: 9px;
+  }
+}
+
+
+/* The picker already sits on the page. Wrapping it in a bordered, padded card
+   as well drew a box around a box and cost 32px of width and 28px of height
+   for nothing. */
+@media (max-width: 1023px) {
+  .trade-cc__finder {
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .trade-cc__filter-stack {
+    gap: 10px;
+  }
+}

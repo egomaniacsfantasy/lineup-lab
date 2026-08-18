@@ -102,9 +102,9 @@ function initials(name: string) {
 type MarketView = 'deals' | 'managers' | 'build';
 
 const MARKET_VIEWS: { id: MarketView; label: string }[] = [
-  { id: 'deals', label: 'Deals' },
+  { id: 'deals', label: 'Trade finder' },
   { id: 'managers', label: 'By manager' },
-  { id: 'build', label: 'Build' },
+  { id: 'build', label: 'Build trades' },
 ];
 
 function recordText(record: { wins: number; losses: number; ties?: number }) {
@@ -910,10 +910,10 @@ function TradeDealsView() {
     resetOutputs();
   };
 
-  const applyMarketManagerFilter = (rosterId: number) => {
+  const applyMarketManagerFilter = (rosterId: number | null) => {
     if (isPricing || counterLoading) return;
     setMarketManagerFilter(rosterId);
-    choosePartner(rosterId);
+    if (rosterId != null) choosePartner(rosterId);
   };
 
 
@@ -1045,8 +1045,16 @@ function TradeDealsView() {
             <div className="trade-cc__deals-empty">
               <p className="trade-cc__empty-lane">
                 {pricing?.available
-                  ? 'The book has no league-wide deals on the board right now. Asking a manager directly runs a fresh look at their roster.'
+                  ? 'No league-wide deals on the board yet. Asking a manager directly runs a fresh simulation against their roster.'
                   : 'Pricing your league. Deals arrive with the first repricing.'}
+              </p>
+              {/* True as written: the server holds a scan for five minutes, so
+                  leaving this screen does not throw the work away. It is not a
+                  background job — nothing will tell you when it lands. */}
+              <p className="trade-cc__empty-note">
+                A scan simulates every roster in the league, so it takes a moment.
+                You can leave this tab and come back. The result is held for five
+                minutes and returns instantly.
               </p>
               {pricing?.available ? (
                 <div className="trade-cc__deals-empty-actions">
@@ -1096,6 +1104,32 @@ function TradeDealsView() {
                 partners as well as the viewport: few managers get roomy
                 rows, a 20-team league packs tighter so the board never
                 pushes the builder off the page. */}
+            {selectedPartner && marketManagerFilter != null ? (
+              /* Once a manager is chosen the other eight are noise, and leaving
+                 them on screen pushed the deals they load a full screen down —
+                 you had to scroll to find out anything had happened at all. */
+              <div className="trade-cc__manager-chosen">
+                <span className="trade-cc__manager-chosen-id">
+                  {renderTeamAvatar(selectedPartner)}
+                  <span className="trade-cc__manager-chosen-copy">
+                    <span className="trade-cc__manager-chosen-name">{selectedPartner.teamName}</span>
+                    <span className="trade-cc__manager-chosen-meta">
+                      {recordText(selectedPartner.record)}
+                      {futuresByRoster.get(selectedPartner.rosterId)?.championOdds != null
+                        ? ` · title ${formatAmericanOdds(futuresByRoster.get(selectedPartner.rosterId)!.championOdds)}`
+                        : ''}
+                    </span>
+                  </span>
+                </span>
+                <button
+                  className="trade-cc__manager-change"
+                  onClick={() => applyMarketManagerFilter(null)}
+                  type="button"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
             <div
               className={[
                 'trade-cc__manager-grid',
@@ -1135,6 +1169,7 @@ function TradeDealsView() {
                 </button>
               ))}
             </div>
+            )}
           </div>
 
           <div className="trade-cc__filter-row">
@@ -1180,6 +1215,12 @@ function TradeDealsView() {
           <div className="trade-cc__finder-loader-inline">
             <SimulationLoader label={marketLoaderLabel} size="compact" variant="trade" />
           </div>
+        ) : null}
+        {managerSuggestionsLoading ? (
+          <p className="trade-cc__empty-note">
+            Simulating every deal worth making with them. You can leave and come
+            back. The result is held for five minutes.
+          </p>
         ) : null}
 
         {visibleMarketCount > 0 ? (
