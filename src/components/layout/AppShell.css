@@ -7,8 +7,10 @@
   position: relative;
   isolation: isolate;
   display: flex;
-  min-height: 100vh;
-  height: 100vh;
+  /* dvh, not vh: in a WKWebView 100vh includes the strip behind the status bar,
+     so the shell was always taller than what you can actually see. */
+  min-height: 100dvh;
+  height: 100dvh;
   flex-direction: column;
 }
 
@@ -37,9 +39,18 @@
 
 
 /* With no header on a phone the scroller reserves nothing for it, but content
-   still has to clear the Dynamic Island, so the inset stays. */
+   still has to clear the Dynamic Island.
+
+   The inset sits on the shell rather than inside the scroller. Inside, it was
+   added to the content height while the scroller kept the full screen height,
+   so every page overflowed by exactly the inset and scrolled a little even
+   when it had nothing to scroll. */
 @media (max-width: 1023px) {
-  .app-content {
+  .app-shell {
     padding-top: env(safe-area-inset-top);
+  }
+
+  .app-content {
+    padding-top: 0;
   }
 }

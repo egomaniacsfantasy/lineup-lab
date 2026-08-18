@@ -87,6 +87,10 @@ function PublicRoutes() {
                     }
                   />
                 ) : null}
+                {/* The connect screen is auth-gated, so it could not be reviewed
+                    or measured without credentials — which is how it shipped
+                    scrolling on both axes. */}
+                {import.meta.env.DEV ? <Route path="/design/connect" element={<ConnectPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/board-row/:variant" element={<DesignBoardRowPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/chart/:variant" element={<DesignChartPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/:scene" element={<DesignFixturePage />} /> : null}

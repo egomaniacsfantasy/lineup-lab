@@ -81,3 +81,16 @@
   object-fit: contain;
   pointer-events: none;
 }
+
+
+/* The photos are cutouts, so the dark plate behind them was drawing a circle
+   nobody asked for. The image floats; only the team badge keeps a disc, and it
+   keeps one because it has to separate itself from the photo it overlaps. */
+.player-headshot {
+  background: transparent;
+  border: 0;
+}
+
+.player-headshot__image {
+  border-radius: 0;
+}

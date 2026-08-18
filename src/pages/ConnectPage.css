@@ -153,3 +153,52 @@
 .connect-page__back:hover {
   color: var(--text-primary);
 }
+
+
+/* ---------------------------------------------------------------------------
+   Phone: this screen is two choices and a sentence. It should never scroll.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .connect-page {
+    gap: 20px;
+    /* The shell already clears the Dynamic Island, so this is spacing rather
+       than a safety margin — the copy was sitting hard against the top. */
+    padding: 32px 20px 24px;
+  }
+
+  /* Measured rather than eyeballed: the Sleeper file is 577x120 and its ink
+     fills 94% of the canvas height, while the ESPN file is a 120x120 square
+     whose ink fills 23% — the rest is transparent padding. Sizing both boxes
+     the same could therefore never make the two marks the same size, which is
+     why one looked oversized and the other looked tiny.
+
+     Both are sized so the *ink* lands at ~24px. ESPN needs a box roughly four
+     times taller to get there, and the negative margin pulls that transparent
+     overhang back out of the row so the two rows still match. */
+  .connect-page__provider-logo {
+    flex: 0 0 auto;
+    object-position: left center;
+    max-width: none;
+  }
+
+  .connect-page__provider-logo--sleeper {
+    width: auto;
+    height: 26px;
+  }
+
+  .connect-page__provider-logo--espn {
+    width: 104px;
+    height: 104px;
+    margin-block: -39px;
+  }
+
+  .connect-page__provider {
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .connect-page__title {
+    font-size: clamp(1.9rem, 8vw, 2.4rem);
+  }
+}

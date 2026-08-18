@@ -83,6 +83,11 @@ export function BottomTabBar() {
         path: '/connect',
       }));
 
+  /* Before a league is synced the bar holds a single "Connect" tab, which is a
+     navigation control that navigates nowhere — the screen it points at is the
+     screen you are on. */
+  if (tabs.length < 2) return null;
+
   return (
     <nav className="bottom-tab-bar" aria-label="Primary">
       <div

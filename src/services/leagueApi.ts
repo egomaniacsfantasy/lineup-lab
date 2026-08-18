@@ -496,9 +496,16 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await response.json().catch(() => null);
 
   if (!response.ok) {
+    /* When the server hands back JSON it carries a message worth showing, so
+       show it. When it does not — an unhandled exception reaches Express's
+       default handler, which answers with an HTML page — body is null and the
+       old code printed one generic sentence for every possible failure. That
+       sentence is unreportable: it cannot be told apart from a timeout, a bad
+       gateway or a crash. The status goes in so it can be. */
     throw new LeagueApiError(
-      body?.error ?? 'request_failed',
-      body?.message ?? 'Something went wrong talking to the league service.',
+      body?.error ?? `request_failed_${response.status}`,
+      body?.message ??
+        `The league service answered ${response.status}. If this keeps happening, that status is the thing to report.`,
     );
   }
 
