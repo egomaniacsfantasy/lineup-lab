@@ -14,6 +14,10 @@ import {
 } from '../../services/leagueApi';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import {
+  isNativeEspnAuthAvailable,
+  signInToEspnNatively,
+} from '../../utils/espnNativeAuth';
+import {
   espnLoginEnabled,
   parseEspnLeagueInput,
 } from '../../utils/espnConnect';
@@ -62,6 +66,29 @@ export function EspnConnect({
   const leagueInputRef = useRef({ leagueId: '', season: '' });
   leagueInputRef.current = parseEspnLeagueInput(leagueInput);
 
+
+  /* The native path. ESPN's own sign-in page opens in a sheet, the user signs
+     in there, and the session cookie comes back readable because a native
+     cookie store is not bound by HttpOnly. No password reaches us, no
+     extension, no headless browser. */
+  const signInWithEspnNatively = async () => {
+    const id = privateLeagueId || leagueInputRef.current.leagueId;
+    const season = privateSeason || leagueInputRef.current.season || CURRENT_SEASON;
+    if (id.length === 0) {
+      setError('Paste an ESPN league URL or league ID.');
+      return;
+    }
+    setError(null);
+    const result = await signInToEspnNatively(id, season);
+    if (result.status === 'ok' && result.espnS2 && result.swid) {
+      void trackEspnConnectEvent('native_signin_ok', {});
+      await doConnect({ espnS2: result.espnS2, swid: result.swid });
+      return;
+    }
+    if (result.status === 'cancelled') return;
+    void trackEspnConnectEvent('native_signin_failed', { reason: result.reason ?? 'unknown' });
+    setError('That sign-in did not finish. Try again, or use the connector on a computer.');
+  };
 
   // Core connect. Cookies are optional (public leagues need none).
   const doConnect = async (creds?: { espnS2: string; swid: string }) => {
@@ -286,7 +313,29 @@ export function EspnConnect({
                 This ESPN league is private.
               </p>
 
-              {espnLoginEnabled ? (
+              {isNativeEspnAuthAvailable() ? (
+                <div className="espn-connect__login-card">
+                  <div className="espn-connect__login-brand">
+                    <img
+                      alt="ESPN"
+                      className="espn-connect__login-mark"
+                      src="/providers/espn-logo.png"
+                    />
+                    <span className="espn-connect__login-lockup">Sign in</span>
+                  </div>
+                  <p className="espn-connect__cookies-note">
+                    Opens ESPN's own sign-in. Your password goes to ESPN and
+                    never passes through us.
+                  </p>
+                  <button
+                    className="espn-connect__submit"
+                    onClick={() => void signInWithEspnNatively()}
+                    type="button"
+                  >
+                    Sign in with ESPN
+                  </button>
+                </div>
+              ) : espnLoginEnabled ? (
                 <div className="espn-connect__login-card">
                   {/* Asking for someone's ESPN password inside an unbranded dark
                       box reads exactly like phishing. Their mark, on their red,
