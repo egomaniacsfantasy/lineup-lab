@@ -1259,3 +1259,86 @@
     width: 15%;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Board density on a phone.
+
+   Measured at 375x812: the hero took 177px and the filter bar 206px, so 481px
+   — 59% of the screen — went by before the first player row. Sleeper and
+   FantasyPros are showing data by about a quarter of the way down.
+
+   Almost none of that was data. A max-width: 1099px rule turned the hero into
+   a column, which gave the Cards/Table toggle a 47px band and a 20px gap of
+   its own; the seven position chips carried 14px of side padding each, which
+   was enough to wrap them onto a second 34px row.
+
+   The rows themselves are untouched. They measure 36px against Sleeper's 32px
+   and are already competitive — the weight was all in the chrome above them.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .board-page__hero {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .board-page__title {
+    font-size: 22px;
+  }
+
+  .board-page__view-toggle {
+    flex: none;
+  }
+
+  .board-page__view-pill {
+    padding: 7px 12px;
+    font-size: 12px;
+  }
+
+  .board-page__filter-bar {
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 10px;
+  }
+
+  /* 14px of side padding on each of seven chips is what pushed them onto a
+     second row. At 9px they all fit on one. */
+  .board-page__chip {
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+
+  .board-page__position-row {
+    gap: 6px;
+  }
+
+  /* Sort and search shared 89px as two stacked rows. Side by side they cost
+     41px, and the search still takes every pixel the sort does not. */
+  .board-page__filter-tools {
+    width: 100%;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .board-page__search {
+    min-width: 0;
+    flex: 1;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  /* The tab bar already says Board and the title already says what this is, so
+     the eyebrow is the third time of asking. */
+  .board-page__eyebrow {
+    display: none;
+  }
+
+  /* Two meta lines carried 74px between them for two short strings. */
+  .board-page__caption,
+  .board-page__freshness {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+}

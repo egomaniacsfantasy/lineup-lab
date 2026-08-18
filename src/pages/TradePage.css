@@ -2822,3 +2822,58 @@
     padding-block: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Trade finder density on a phone.
+
+   Measured at 375x812: 296px — 36% of the screen — before the first manager
+   card, and 163px of that was the finder head. The head is already a two
+   column grid (copy, then the read control) but a max-width: 520px rule
+   collapsed it to one column, so "Your read" took an 18px gap and a 44px band
+   of its own directly under the copy it belongs beside.
+
+   The manager cards themselves are left alone. They measure 81px for a 40px
+   avatar, two lines of identity and a price, which is close to the floor for
+   what they carry — an earlier note claiming 178px was a screenshot read at 2x
+   scale, not a measurement.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .trade-cc__finder-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  /* The control keeps its 44px touch target; it just stops claiming a row. */
+  .trade-cc__partner-read {
+    margin: 0;
+  }
+
+  .trade-cc__market-headline,
+  .trade-cc__finder-head h2 {
+    font-size: 24px;
+  }
+
+  .trade-cc__finder-blurb,
+  .trade-cc__market-sub {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+}
+
+/* The market page is a grid, and a grid item defaults to min-width: auto — so
+   a child that cannot shrink below its min-content width pushes the track
+   wider than the container instead of being constrained by it. That is how
+   .trade-page ended up 378px inside a 337px content box on a 375px phone,
+   hanging 19px off the right edge. .app-content clips overflow-x, so it was
+   silently cutting content off rather than showing a scrollbar. */
+.market-page,
+.trade-page {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.market-page > *,
+.trade-page > * {
+  min-width: 0;
+}

@@ -366,10 +366,21 @@
 
   .app-header__admin,
   .app-header__scoring-pill,
-  .app-header__odds-toggle,
   .app-header__sync,
   .app-header__replay-chip {
     display: none;
+  }
+
+  /* The odds format stays. It is a view control, not a setting: in a product
+     whose whole surface is prices, switching between +156 and 39% is something
+     you do while reading, and burying it in More made you leave the screen you
+     were reading to do it. Sleeper keeps controls of this frequency as a small
+     chip rather than a full control, so it becomes one. It is still in
+     More > Display for anyone who looks there first. */
+  .app-header__odds-toggle {
+    min-height: 30px;
+    padding-inline: 9px;
+    font-size: 11px;
   }
 
   /* The week is the one piece of state worth permanent space, so it gets to be
