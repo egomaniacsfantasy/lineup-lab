@@ -77,6 +77,13 @@ export async function createServer({
       challengeStore,
     }));
 
+  /* Pay for the browser launch here, at boot, rather than inside whichever
+     user happens to sign in first. Failure is non-fatal: the machine will try
+     again on demand, and health already reports whether a browser exists. */
+  void machine.warmup?.().catch((error) => {
+    console.error('[espn-login] warmup failed:', error?.message ?? error);
+  });
+
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://worker.local');

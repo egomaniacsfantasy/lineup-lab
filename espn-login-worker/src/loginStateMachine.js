@@ -112,6 +112,15 @@ async function captureCookies(context) {
   return { espnS2, swid };
 }
 
+/* We are here to type into a login form, not to render ESPN. The fantasy
+   league page is a full single-page app — scripts, fonts, images, video
+   embeds, analytics — and on a half-CPU instance simply loading it consumed
+   the entire login budget before a field could be found. Everything that
+   cannot carry a login form is refused at the network layer. */
+const BLOCKED_RESOURCE_TYPES = new Set(['image', 'media', 'font', 'stylesheet']);
+const BLOCKED_HOST_PATTERN =
+  /(googletagmanager|google-analytics|doubleclick|scorecardresearch|chartbeat|nielsen|adobedtm|omtrdc|krxd|moatads|amazon-adsystem|taboola|outbrain|branch\.io|braze|optimizely)/i;
+
 async function createContext({ browser, config }) {
   const context = await browser.newContext({
     userAgent: config.userAgent,
@@ -120,6 +129,14 @@ async function createContext({ browser, config }) {
     timezoneId: 'America/New_York',
   });
   context.setDefaultTimeout(config.loginTimeoutMs);
+
+  await context.route('**/*', (route) => {
+    const request = route.request();
+    if (BLOCKED_RESOURCE_TYPES.has(request.resourceType())) return route.abort();
+    if (BLOCKED_HOST_PATTERN.test(request.url())) return route.abort();
+    return route.continue();
+  });
+
   return context;
 }
 
@@ -173,8 +190,12 @@ export async function createLoginMachine({
     )}&seasonId=${encodeURIComponent(season)}`;
 
     try {
-      await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
-      const emailField = await firstVisible(page, EMAIL_SELECTORS, 4_000);
+      /* 'commit' returns as soon as the navigation is committed rather than
+         waiting for a whole SPA to reach DOMContentLoaded. The wait that
+         matters is the one for the email field, which is right below, so
+         waiting twice for the same page only spent budget. */
+      await page.goto(targetUrl, { waitUntil: 'commit' });
+      const emailField = await firstVisible(page, EMAIL_SELECTORS, 12_000);
       if (!emailField) {
         const earlyFailure = await classifyFailure(page);
         if (earlyFailure) {
@@ -273,5 +294,12 @@ export async function createLoginMachine({
     browser = null;
   }
 
-  return { startLogin, continueOtp, close };
+  /* Launching chromium is the single most expensive step, and it was happening
+     lazily inside the first user's login — so one person always paid for it
+     out of their own budget. The server calls this at boot instead. */
+  async function warmup() {
+    await getBrowser();
+  }
+
+  return { startLogin, continueOtp, close, warmup };
 }
