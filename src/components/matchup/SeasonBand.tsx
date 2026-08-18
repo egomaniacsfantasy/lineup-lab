@@ -1,4 +1,5 @@
 import type { PricedFuture } from '../../services/leagueApi';
+import type { CSSProperties } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import './SeasonBand.css';
 
@@ -30,6 +31,7 @@ export function SeasonBand({ future }: { future: PricedFuture }) {
 
   items.push({
     label: 'Championship',
+    short: 'Title',
     value: formatAmericanOdds(future.championOdds),
     strong: true,
   });
@@ -57,7 +59,18 @@ export function SeasonBand({ future }: { future: PricedFuture }) {
   if (items.length === 0) return null;
 
   return (
-    <section aria-label="Your season" className="season-band">
+    <section
+      aria-label="Your season"
+      className="season-band"
+      /* The rule under the bar is the playoff probability drawn as a width.
+         Served field, rendered as a bar the way the matchup card already draws
+         win probability. Nothing is computed here. */
+      style={
+        future.playoffProb != null
+          ? ({ '--season-meter': `${Math.max(0, Math.min(100, Math.round(future.playoffProb)))}%` } as CSSProperties)
+          : undefined
+      }
+    >
       <span className="season-band__eyebrow">Your season</span>
       <div className="season-band__items">
         {items.map((item) => (
