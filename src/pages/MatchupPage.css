@@ -2852,15 +2852,29 @@
   }
 
   .matchup-page__slot-card {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 2px 6px;
     min-height: 0;
-    padding: 8px 10px;
+    padding: 8px 8px;
     border-radius: 12px;
   }
 
+  /* The headshot comes back. Dropping it was the wrong trade: it is how you
+     recognise a player at a glance, and the card is unreadable as a list of
+     names. It fits by being smaller and spanning both rows rather than
+     competing with the name for a single row's width. */
   .matchup-page__slot-headshot {
-    display: none;
+    width: 24px;
+    height: 24px;
+    grid-row: span 2;
+    align-self: center;
+  }
+
+  .matchup-page__slot-headshot .player-headshot__image,
+  .matchup-page__slot-headshot .player-headshot__fallback {
+    width: 24px;
+    height: 24px;
+    font-size: 9px;
   }
 
   .matchup-page__slot-numbers {
@@ -2871,6 +2885,17 @@
   .matchup-page__slot-card--right .matchup-page__slot-numbers,
   .matchup-page__slot-card--opponent .matchup-page__slot-numbers {
     justify-items: end;
+  }
+
+  .matchup-page__slot-card--right,
+  .matchup-page__slot-card--opponent {
+    grid-template-columns: minmax(0, 1fr) 24px;
+  }
+
+  .matchup-page__slot-card--right .matchup-page__slot-headshot,
+  .matchup-page__slot-card--opponent .matchup-page__slot-headshot {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
 
   .matchup-page__row-name {
