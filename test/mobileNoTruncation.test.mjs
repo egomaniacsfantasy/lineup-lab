@@ -80,7 +80,10 @@ function collectTruncated() {
    a browser, so the native inset is stamped in the way the shell reads it. */
 function measureTopBarrier() {
   const shell = document.querySelector('.app-shell');
-  const band = document.querySelector('.matchup-page__season--mobile');
+    /* `.season-band` is the component's own root. The page-level wrapper around
+     it is being renamed by other work in flight, and this guard is about where
+     the band lands on screen, not what the wrapper is called. */
+  const band = document.querySelector('.season-band');
   const before = getComputedStyle(shell, '::before');
   return {
     shellPaddingTop: parseFloat(getComputedStyle(shell).paddingTop),
@@ -149,6 +152,13 @@ async function openHub(scene, device) {
   return page;
 }
 
+/* The season band only renders once pricing has resolved, so a fixed wait is a
+   coin flip: this guard failed on a pre-push with "the season band starts at
+   null" minutes after passing locally. Wait for the thing being measured. */
+async function waitForBand(page) {
+  await page.waitForSelector('.season-band', { timeout: 20_000 });
+}
+
 for (const device of DEVICES) for (const scene of ['matchup', 'matchup-live']) {
   test(`nothing on the ${scene} Hub is truncated on ${device.name}`, async () => {
     const page = await openHub(scene, device);
@@ -168,8 +178,11 @@ for (const device of DEVICES) for (const scene of ['matchup', 'matchup-live']) {
 }
 
 for (const device of DEVICES) test(`nothing paints into the status bar on ${device.name}`, async () => {
-  const page = await openHub('matchup', device);
+  /* `matchup` is the unpriced fixture and has no futures, so it never renders
+     a band. `matchup-live` is the scene where there is something to land. */
+  const page = await openHub('matchup-live', device);
   try {
+    await waitForBand(page);
     const m = await page.evaluate(measureTopBarrier);
     const top = device.safeTop;
     assert.equal(m.shellPaddingTop, top, 'the shell must reserve the whole inset');

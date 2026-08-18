@@ -109,6 +109,36 @@ export function EspnConnect({
     setError(null);
     try {
       const result = await connectEspn(id, connectSeason, creds);
+
+      /* Do not ask a question we already have the answer to. The SWID cookie
+         is the ESPN member id, and the server matched it against each team's
+         owners, so a signed-in user's own team is known before the picker is
+         drawn. It still draws for a public league (no cookie to match) and for
+         someone who co-owns two teams in one league. */
+      const known = result.yourRosterId != null
+        ? result.teams.find((team) => team.rosterId === result.yourRosterId)
+        : undefined;
+      if (known?.ownerId) {
+        onConnected({
+          provider: 'espn',
+          leagueId: id,
+          leagueName: result.league.name,
+          userId: known.ownerId,
+          username: known.ownerName ?? known.teamName,
+          displayName: known.ownerName ?? known.teamName,
+          allLeagueIds: [id],
+          season: connectSeason,
+          espnS2: null,
+          swid: null,
+        });
+        void trackEspnConnectEvent('success', {
+          leagueId: id,
+          season: connectSeason,
+          teamPicked: true,
+        });
+        return;
+      }
+
       setStep({
         name: 'pick-team',
         leagueId: id,

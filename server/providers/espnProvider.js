@@ -356,6 +356,35 @@ export function createEspnProvider({ season, espnS2, swid }) {
 }
 
 /**
+ * Which team belongs to the person who signed in.
+ *
+ * ESPN's SWID cookie is not just a session artefact — it is the member's own
+ * id, the same GUID that appears in `members[].id` and in every team's
+ * `owners[]`. So the moment we ask "which team is yours?" we are already
+ * holding the answer; we simply were not looking at it. The cookie and the
+ * payload disagree about braces and case, so both are normalised before
+ * comparison.
+ *
+ * Two cases stay a question rather than an answer, and both are real: a public
+ * league needs no sign-in, so there is no SWID to match, and a person who
+ * co-owns two teams in one league genuinely has to say which one they mean.
+ */
+export function normalizeSwid(value) {
+  if (typeof value !== 'string') return null;
+  const bare = value.trim().replace(/^\{+|\}+$/g, '');
+  return bare ? `{${bare.toUpperCase()}}` : null;
+}
+
+export function findOwnedRosterId(teams, swid) {
+  const me = normalizeSwid(swid);
+  if (!me) return null;
+  const owned = (teams ?? []).filter((team) =>
+    [team.ownerId, ...(team.coOwners ?? [])].some((owner) => normalizeSwid(owner) === me),
+  );
+  return owned.length === 1 ? owned[0].rosterId : null;
+}
+
+/**
  * Connect probe: fetch a league's name + teams so the user can pick theirs.
  * Surfaces the private-league case distinctly so the UI can ask for cookies.
  */
@@ -366,7 +395,11 @@ export async function espnConnect({ season, leagueId, espnS2, swid }) {
     provider.getRosters(leagueId),
   ]);
   if (!league) return null;
+  /* The request may carry cookies, or the league may already be linked and the
+     cookies living in the server store — the same fallback espnGet makes. */
+  const identity = swid ?? getEspnCreds(leagueId)?.swid ?? null;
   return {
+    yourRosterId: findOwnedRosterId(teams, identity),
     league: {
       id: league.id,
       name: league.name,

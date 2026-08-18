@@ -520,10 +520,15 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
        old code printed one generic sentence for every possible failure. That
        sentence is unreportable: it cannot be told apart from a timeout, a bad
        gateway or a crash. The status goes in so it can be. */
+    /* The server now carries the real failure in `detail`. Showing it beats
+       hiding it: "The league provider did not respond" sent us to look at
+       Sleeper when the fault was ours, twice. The friendly line still leads. */
+    const friendly =
+      body?.message ??
+      `The league service answered ${response.status}. If this keeps happening, that status is the thing to report.`;
     throw new LeagueApiError(
       body?.error ?? `request_failed_${response.status}`,
-      body?.message ??
-        `The league service answered ${response.status}. If this keeps happening, that status is the thing to report.`,
+      body?.detail && body.detail !== friendly ? `${friendly} (${body.detail})` : friendly,
     );
   }
 
@@ -562,6 +567,10 @@ export function connectEspn(
   return get<{
     league: { id: string; name: string; season: string; totalTeams: number; scoringFamily: string };
     teams: EspnTeamSummary[];
+    /* The roster the signed-in ESPN account owns, matched from the SWID
+       cookie. null when there is nothing to match (a public league, no
+       sign-in) or when the match is ambiguous (someone co-owning two teams). */
+    yourRosterId: number | null;
   }>(`/api/espn/connect/${encodeURIComponent(leagueId)}?season=${encodeURIComponent(season)}`, {
     headers,
   });
