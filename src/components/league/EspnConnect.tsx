@@ -87,7 +87,13 @@ export function EspnConnect({
     }
     if (result.status === 'cancelled') return;
     void trackEspnConnectEvent('native_signin_failed', { reason: result.reason ?? 'unknown' });
-    setError('That sign-in did not finish. Try again, or use the connector on a computer.');
+    /* Say which failure it was. "That sign-in did not finish" covered a missing
+       plugin, a rejected call and a sheet that closed with no cookie, so three
+       different problems produced one sentence that fitted none of them and
+       could not be reported back. */
+    setError(
+      `Sign-in could not start: ${result.reason ?? 'unknown'}. Tell me that reason and I can fix it directly.`,
+    );
   };
 
   // Core connect. Cookies are optional (public leagues need none).

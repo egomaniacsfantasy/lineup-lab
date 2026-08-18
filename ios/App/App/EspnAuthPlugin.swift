@@ -34,14 +34,23 @@ public class EspnAuthPlugin: CAPPlugin, CAPBridgedPlugin {
         let season = call.getString("season") ?? ""
 
         guard !leagueId.isEmpty else {
-            call.reject("A league id is required.")
+            call.resolve(["status": "failed", "reason": "no-league-id"])
             return
         }
 
         DispatchQueue.main.async { [weak self] in
-            guard let self, let bridge = self.bridge,
-                  let host = bridge.viewController else {
-                call.reject("No view controller to present from.")
+            guard let self else {
+                call.resolve(["status": "failed", "reason": "plugin-released"])
+                return
+            }
+            /* bridge.viewController is nil on some presentation paths, so fall
+               back to whatever is on screen rather than refusing outright. */
+            let host = self.bridge?.viewController
+                ?? UIApplication.shared.connectedScenes
+                    .compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController }
+                    .first
+            guard let host else {
+                call.resolve(["status": "failed", "reason": "no-host-controller"])
                 return
             }
 
