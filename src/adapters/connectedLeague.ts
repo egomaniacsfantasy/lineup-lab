@@ -26,6 +26,7 @@ import type {
   RosterSlot,
   SlotLabel,
 } from '../types';
+import { apiUrl } from '../services/apiBase.ts';
 import type { LeagueFutureRow, LeagueWeekMatchup } from '../mocks/league';
 import type { ScheduleGridItem } from '../components/season/ScheduleGrid';
 
@@ -73,9 +74,9 @@ export function toPlayer(id: string, catalog: Record<string, ApiCatalogPlayer>):
     team,
     headshotUrl:
       entry?.position === 'DEF'
-        ? `/api/img/logo/${id.toLowerCase()}`
-        : `/api/img/headshot/${id}`,
-    teamLogoUrl: `/api/img/logo/${team.toLowerCase()}`,
+        ? apiUrl(`/api/img/logo/${id.toLowerCase()}`)
+        : apiUrl(`/api/img/headshot/${id}`),
+    teamLogoUrl: apiUrl(`/api/img/logo/${team.toLowerCase()}`),
     bye: 0,
     isActive: entry?.status !== 'Inactive',
     injuryStatus: entry?.injuryStatus ?? undefined,

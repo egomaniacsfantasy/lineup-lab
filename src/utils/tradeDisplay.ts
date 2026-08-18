@@ -3,9 +3,10 @@ import type { ApiCatalogPlayer, LeagueBootstrap, MarketMover } from '../services
 import type { Player } from '../types';
 import type { SuggestedPackage } from '../mocks/tradeTargets';
 import { toPlayer } from '../adapters/connectedLeague.ts';
+import { apiUrl } from '../services/apiBase.ts';
 
 function teamLogoUrl(team: string | null | undefined) {
-  return team ? `/api/img/logo/${team.toLowerCase()}` : null;
+  return team ? apiUrl(`/api/img/logo/${team.toLowerCase()}`) : null;
 }
 
 export function tradeAssetFromPlayer(player: Player): TradeAssetItem {

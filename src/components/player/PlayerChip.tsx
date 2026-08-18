@@ -1,4 +1,5 @@
 import type { Player, Position } from '../../types';
+import { apiUrl } from '../../services/apiBase.ts';
 import { PlayerHeadshot } from './PlayerHeadshot';
 import './PlayerChip.css';
 
@@ -26,7 +27,8 @@ export function PlayerChip({
   tone = 'default',
 }: PlayerChipProps) {
   const position = player.position ?? 'WR';
-  const teamLogoUrl = player.teamLogoUrl || (player.team ? `/api/img/logo/${player.team.toLowerCase()}` : '');
+  const teamLogoUrl =
+    player.teamLogoUrl || (player.team ? apiUrl(`/api/img/logo/${player.team.toLowerCase()}`) : '');
 
   return (
     <span

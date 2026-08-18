@@ -16,7 +16,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { apiUrl } from '../services/leagueApi';
+import { apiUrl } from '../services/apiBase.ts';
 
 export type SeasonState = 'IN_SEASON' | 'LEAGUE_PLAYOFFS' | 'COMPLETE';
 

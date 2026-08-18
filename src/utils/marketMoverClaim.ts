@@ -1,4 +1,5 @@
 import type { ApiCatalogPlayer } from '../services/leagueApi';
+import { apiUrl } from '../services/apiBase.ts';
 import type { Player, Position } from '../types';
 
 function shortName(fullName: string) {
@@ -43,9 +44,9 @@ export function resolveWaiverClaimPlayer(
     team,
     headshotUrl:
       position === 'DEF'
-        ? `/api/img/logo/${mover.playerId.toLowerCase()}`
-        : `/api/img/headshot/${mover.playerId}`,
-    teamLogoUrl: `/api/img/logo/${team.toLowerCase()}`,
+        ? apiUrl(`/api/img/logo/${mover.playerId.toLowerCase()}`)
+        : apiUrl(`/api/img/headshot/${mover.playerId}`),
+    teamLogoUrl: apiUrl(`/api/img/logo/${team.toLowerCase()}`),
     bye: 0,
     isActive: entry?.status !== 'Inactive',
     injuryStatus: entry?.injuryStatus ?? undefined,

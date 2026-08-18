@@ -4,6 +4,7 @@
  */
 import { maybeHandleDesignFixtureRequest } from '../dev/designFixtures';
 import type { MatchupHistograms } from '../types/matchup';
+import { apiUrl } from './apiBase.ts';
 
 export interface ProviderUser {
   id: string;
@@ -466,31 +467,9 @@ export function setProjectionOverlay(encoded: string | null) {
   overlayHeader = encoded;
 }
 
+export { apiUrl } from './apiBase.ts';
+
 /** Decorate a request path + init with the active provider + overlay context. */
-/**
- * Where /api lives.
- *
- * On the web this is empty, so paths stay relative and resolve against
- * whatever host is serving the app. Inside the iOS shell the bundle is served
- * from capacitor://localhost, where a relative /api resolves to an origin that
- * does not exist and EVERY request fails. The native build sets
- * VITE_API_BASE_URL to the real API so the same code works in both.
- */
-declare const __API_BASE__: string | undefined;
-
-/* `import.meta.env?.VITE_API_BASE_URL` looked right and shipped dead: Vite only
-   substitutes the exact text `import.meta.env.VITE_API_BASE_URL`, so the `?.`
-   defeated it and the bundle kept a runtime lookup on an empty object. Every
-   native request then fell back to a relative path and failed. __API_BASE__ is
-   a define, so it is a literal by the time it reaches the bundle, and the
-   typeof guard keeps this module importable outside a Vite build. */
-const API_BASE = (typeof __API_BASE__ === 'string' ? __API_BASE__ : '').replace(/\/$/, '');
-
-export function apiUrl(path: string) {
-  if (!API_BASE) return path;
-  return path.startsWith('/') ? `${API_BASE}${path}` : path;
-}
-
 function withContext(path: string, init: RequestInit = {}): [string, RequestInit] {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
   // Opt-out sentinel: fetch the house (pure-Franco) line for side-by-side baselines.

@@ -251,9 +251,9 @@ function boardPlayer(row: BoardRow, catalog?: Parameters<typeof toPlayer>[1]): P
     team: row.team || 'FA',
     headshotUrl:
       row.position === 'DEF'
-        ? `/api/img/logo/${(row.team || row.playerId).toLowerCase()}`
-        : `/api/img/headshot/${row.playerId}`,
-    teamLogoUrl: `/api/img/logo/${(row.team || 'fa').toLowerCase()}`,
+        ? apiUrl(`/api/img/logo/${(row.team || row.playerId).toLowerCase()}`)
+        : apiUrl(`/api/img/headshot/${row.playerId}`),
+    teamLogoUrl: apiUrl(`/api/img/logo/${(row.team || 'fa').toLowerCase()}`),
     bye: 0,
     isActive: true,
   };

@@ -1,4 +1,4 @@
-import { apiUrl } from './leagueApi';
+import { apiUrl } from './apiBase.ts';
 
 export interface TeamGameContext {
   team: string;

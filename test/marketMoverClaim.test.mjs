@@ -16,11 +16,19 @@ async function loadClaimModule() {
     },
     fileName: sourcePath,
   }).outputText;
+  /* The transpiled copy runs from the OS temp dir, so its relative imports
+     cannot resolve. Point the one runtime import at the real module by
+     absolute URL rather than stubbing it, so this exercises the same apiUrl
+     the app ships. */
+  const resolved = transpiled.replace(
+    "'../services/apiBase.ts'",
+    JSON.stringify(pathToFileURL(path.join(process.cwd(), 'src/services/apiBase.ts')).href),
+  );
   const tempPath = path.join(
     os.tmpdir(),
     `marketMoverClaim.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.mjs`,
   );
-  fs.writeFileSync(tempPath, transpiled, 'utf8');
+  fs.writeFileSync(tempPath, resolved, 'utf8');
   try {
     return await import(`${pathToFileURL(tempPath).href}?t=${Date.now()}`);
   } finally {

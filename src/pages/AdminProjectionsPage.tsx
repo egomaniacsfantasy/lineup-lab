@@ -53,7 +53,7 @@ export function AdminProjectionsPage() {
 
   const adminFetch = useCallback(
     (path: string, init: RequestInit = {}) =>
-      fetch(path, {
+      fetch(apiUrl(path), {
         ...init,
         headers: { ...(init.headers ?? {}), 'x-admin-password': password },
       }),
