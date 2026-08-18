@@ -100,3 +100,39 @@ test('the admin wrapper really does apply apiUrl', async () => {
     'adminFetch must wrap its path in apiUrl',
   );
 });
+
+test('no source reads import.meta.env through an optional chain', async () => {
+  /* Vite substitutes the exact text `import.meta.env.SOMETHING`. Written as
+     `import.meta.env?.SOMETHING` it is not substituted, so the bundle keeps a
+     runtime lookup on an object that is empty in production and the value is
+     always undefined. This shipped three times: the API base (the iOS app
+     rendered an empty shell), the ESPN connector store URL (publishing the
+     extension and setting the env var would have changed nothing), and the
+     ESPN login flag (which could never be turned off). It reads as
+     defensive, which is exactly why it keeps coming back. */
+  const offenders = [];
+  for (const file of await sourceFiles('src')) {
+    const source = await fsp.readFile(file, 'utf8');
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    for (const match of code.matchAll(/import\.meta\.env\s*\?\./g)) {
+      offenders.push(`${file}:${code.slice(0, match.index).split('\n').length}`);
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `these are never substituted by Vite and will read undefined in production:\n${offenders.join('\n')}`,
+  );
+});
+
+test('every VITE_ flag the deploy sets is actually wired to a define', async () => {
+  /* Render carries VITE_ESPN_LOGIN_ENABLED and will carry
+     VITE_ESPN_EXTENSION_URL. A flag set on the deploy that no define reads is
+     worse than no flag: it looks configured and does nothing. */
+  const viteConfig = await fsp.readFile('vite.config.ts', 'utf8');
+  for (const flag of ['VITE_API_BASE_URL', 'VITE_ESPN_EXTENSION_URL', 'VITE_ESPN_LOGIN_ENABLED']) {
+    assert.match(viteConfig, new RegExp(`process\\.env\\.${flag}`), `${flag} has no define`);
+  }
+});

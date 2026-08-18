@@ -11,6 +11,8 @@ export default defineConfig({
    */
   define: {
     __API_BASE__: JSON.stringify(process.env.VITE_API_BASE_URL ?? ''),
+    __ESPN_EXTENSION_URL__: JSON.stringify(process.env.VITE_ESPN_EXTENSION_URL ?? ''),
+    __ESPN_LOGIN_ENABLED__: JSON.stringify(process.env.VITE_ESPN_LOGIN_ENABLED ?? ''),
   },
   server: {
     port: 3000,

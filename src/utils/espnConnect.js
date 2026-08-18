@@ -1,3 +1,4 @@
+/* global __ESPN_LOGIN_ENABLED__ */
 export function parseEspnLeagueInput(raw) {
   const value = raw.trim();
   if (!value) return { leagueId: '', season: '' };
@@ -102,4 +103,9 @@ export function espnSessionPasteError(missing = []) {
    needs the connector extension or a native webview. Do not reintroduce a
    paste or address-bar capture path. */
 
-export const espnLoginEnabled = import.meta.env?.VITE_ESPN_LOGIN_ENABLED !== 'false';
+/* Was `import.meta.env?.VITE_ESPN_LOGIN_ENABLED !== 'false'`. The left side was
+   always undefined, so this was always true: the flag on Render did nothing,
+   and setting it to 'false' could not have turned the flow off. */
+const espnLoginFlag =
+  typeof __ESPN_LOGIN_ENABLED__ === 'string' ? __ESPN_LOGIN_ENABLED__ : '';
+export const espnLoginEnabled = espnLoginFlag !== 'false';

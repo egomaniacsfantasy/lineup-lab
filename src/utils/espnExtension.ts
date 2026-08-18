@@ -94,7 +94,15 @@ export function requestEspnSession(timeoutMs = 5000): Promise<EspnSession> {
 }
 
 /** Chrome Web Store listing. Set once the listing is published. */
-export const CONNECTOR_STORE_URL = import.meta.env?.VITE_ESPN_EXTENSION_URL ?? '';
+declare const __ESPN_EXTENSION_URL__: string | undefined;
+
+/* Was `import.meta.env?.VITE_ESPN_EXTENSION_URL`. Vite only substitutes the
+   exact text without the optional chain, so this read an empty object and the
+   store link was permanently blank — setting the env var on Render would have
+   changed nothing, and the connect screen would keep saying the connector is
+   unpublished after it had been published. */
+export const CONNECTOR_STORE_URL =
+  typeof __ESPN_EXTENSION_URL__ === 'string' ? __ESPN_EXTENSION_URL__ : '';
 
 /** Connecting needs a desktop browser that can run the connector. */
 export function connectorSupported() {
