@@ -2830,15 +2830,6 @@
   .matchup-page__faceoff-identity--opp .matchup-page__meta-copy + .matchup-page__meta-copy {
     display: none;
   }
-
-  /* Staatliches has no true 1: it draws an I-shape, so a price reads as +I56
-     rather than +156. At desktop sizes that is styling; at 48px on a phone it
-     reads as a typo. Saira 600 is the face the edge deltas already use. */
-  .matchup-page__hero-number {
-    font-size: 40px;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0;
-  }
 }
 
 /* ---------------------------------------------------------------------------

@@ -40,10 +40,12 @@
   --font-ui: "Hanken Grotesk", sans-serif;
   --font-num: "Saira", "Hanken Grotesk", sans-serif;
 
-  /* The face a market price is set in. Staatliches has no true 1 — it draws an
-     I-shape — which reads as styling at desktop sizes and as a typo on a
-     phone. One token so the swap below cannot miss a surface; four separate
-     classes had to be found by hand the first time. */
+  /* The face a market price is set in, on every surface and every width.
+     Staatliches has no true 1 — it draws an I-shape — and a phone-only swap to
+     Saira was tried and rejected on sight: the price face is the brand, and
+     Saira read as a different product. The token stays because the face is
+     worth owning in one place; four classes had to be found by hand when it
+     was not. Any future fix for the 1 belongs here, not in four files. */
   --font-price: var(--font-display);
   --font-price-weight: 400;
   /* Legacy role aliases (existing rules reference these) */
@@ -136,15 +138,5 @@
   --transition-fast: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --transition-base: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --transition-slow: 360ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Below the desktop breakpoint every market price switches to Saira, which
-   draws a 1. Weight rises with it because Staatliches ships one weight and
-   Saira at 400 would read lighter than the face it replaces. */
-@media (max-width: 1023px) {
-  :root {
-    --font-price: var(--font-num);
-    --font-price-weight: 600;
-  }
 }
 
