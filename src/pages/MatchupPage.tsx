@@ -77,6 +77,7 @@ import { managerLine } from '../utils/managerLine';
 import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
+import { shortInjuryStatus } from '../utils/playerNames.ts';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
@@ -1771,7 +1772,7 @@ function MatchupLive({
       : null;
     const status =
       player.injuryStatus && !['active', 'healthy'].includes(player.injuryStatus.toLowerCase())
-        ? player.injuryStatus
+        ? (compact ? shortInjuryStatus(player.injuryStatus) : player.injuryStatus)
         : null;
 
     return [compact ? null : player.team, gameMeta, status, extra]

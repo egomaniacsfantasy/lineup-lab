@@ -48,3 +48,22 @@ test('a missing or non-http logo is null', () => {
   assert.equal(teamLogo({ logo: 'javascript:alert(1)' }), null);
   assert.equal(teamLogo({ logo: 123 }), null);
 });
+
+/* Injury status on a compact lineup row. "vs NYG · Questionable" does not fit
+   402px and arrived as "vs NYG · Questiona...". */
+import { shortInjuryStatus } from '../src/utils/playerNames.ts';
+
+test('a long status becomes the letter every fantasy app uses', () => {
+  assert.equal(shortInjuryStatus('Questionable'), 'Q');
+  assert.equal(shortInjuryStatus('questionable'), 'Q');
+  assert.equal(shortInjuryStatus('Doubtful'), 'D');
+  assert.equal(shortInjuryStatus('Out'), 'OUT');
+  assert.equal(shortInjuryStatus('Injured Reserve'), 'IR');
+  assert.equal(shortInjuryStatus('Suspended'), 'SUS');
+});
+
+test('an unknown status is passed through rather than mangled', () => {
+  assert.equal(shortInjuryStatus('Limited'), 'Limited');
+  assert.equal(shortInjuryStatus(null), null);
+  assert.equal(shortInjuryStatus(''), null);
+});

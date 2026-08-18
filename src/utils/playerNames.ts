@@ -21,3 +21,30 @@ export function defenseShortName(fullName: string) {
 export function playerShortName(fullName: string, position: string | null | undefined) {
   return position === 'DEF' ? defenseShortName(fullName) : personShortName(fullName);
 }
+
+/**
+ * Injury status, short enough for a lineup row.
+ *
+ * "vs NYG · Questionable" does not fit the compact meta line on a phone, so it
+ * arrived as "vs NYG · Questiona...". Every fantasy product on the market
+ * writes these as a letter for exactly this reason, and a Q beside a player is
+ * not less information than "Questiona..." — it is the same information, whole.
+ */
+const STATUS_SHORT: Record<string, string> = {
+  questionable: 'Q',
+  doubtful: 'D',
+  out: 'OUT',
+  ir: 'IR',
+  'injured reserve': 'IR',
+  suspended: 'SUS',
+  pup: 'PUP',
+  probable: 'P',
+  'day-to-day': 'DTD',
+  'day to day': 'DTD',
+};
+
+export function shortInjuryStatus(status: string | null | undefined) {
+  if (!status) return null;
+  const key = status.trim().toLowerCase();
+  return STATUS_SHORT[key] ?? status.trim();
+}
