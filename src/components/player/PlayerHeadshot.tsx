@@ -21,6 +21,8 @@ interface PlayerHeadshotProps {
   className?: string;
   imageClassName?: string;
   fallbackClassName?: string;
+  /** Overrides player.teamLogoUrl for callers that carry the team separately. */
+  teamLogoUrl?: string | null;
 }
 
 function getPositionTone(position: Position | string | undefined) {
@@ -50,6 +52,7 @@ export function PlayerHeadshot({
   className = '',
   imageClassName = '',
   fallbackClassName = '',
+  teamLogoUrl,
 }: PlayerHeadshotProps) {
   const resolvedSlug = slug ?? player?.slug ?? player?.id ?? '';
   const manifestEntry = resolvedSlug ? getPlayerManifestEntry(resolvedSlug) : null;
@@ -62,6 +65,12 @@ export function PlayerHeadshot({
         ? getPlayerAvatarUrl(player)
         : getManifestHeadshotUrl(resolvedSlug);
   const [hasImageError, setHasImageError] = useState(hasCachedImageFailure(headshotUrl));
+  const [hasBadgeError, setHasBadgeError] = useState(false);
+  /* A defence already IS its team logo, so badging it with the same mark twice
+     says nothing. Everyone else gets the team in the corner, which is how you
+     read a roster at a glance without waiting to parse the abbreviation. */
+  const badgeUrl =
+    resolvedPosition === 'DEF' ? null : (teamLogoUrl ?? player?.teamLogoUrl ?? null);
   const initials =
     resolvedSlug
       ? getManifestInitials(resolvedSlug, displayName)
@@ -103,6 +112,14 @@ export function PlayerHeadshot({
           src={headshotUrl}
         />
       )}
+      {badgeUrl && !hasBadgeError ? (
+        <img
+          alt=""
+          className="player-headshot__team"
+          onError={() => setHasBadgeError(true)}
+          src={badgeUrl}
+        />
+      ) : null}
     </span>
   );
 }

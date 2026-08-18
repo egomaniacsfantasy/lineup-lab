@@ -12,6 +12,7 @@
     "prebuild": "npm run copy-scan",
     "build": "tsc -b && vite build",
     "build:ios": "VITE_API_BASE_URL=\"${VITE_API_BASE_URL:-https://oddsgods.net}\" npm run build && npx cap sync ios",
+    "ios:sim": "npm run build:ios && xcodebuild -project ios/App/App.xcodeproj -scheme App -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/oddsgods-dd CODE_SIGNING_ALLOWED=NO build >/dev/null && xcrun simctl install booted /tmp/oddsgods-dd/Build/Products/Debug-iphonesimulator/App.app && xcrun simctl terminate booted net.oddsgods.app 2>/dev/null; xcrun simctl launch booted net.oddsgods.app",
     "brand-check": "node scripts/brand-check.mjs",
     "copy-scan": "node test/copyScan.test.mjs",
     "lint": "node scripts/lint.mjs && npm run copy-scan",
