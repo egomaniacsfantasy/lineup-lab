@@ -103,9 +103,10 @@
 
 .odds-chart__value {
   color: var(--text-primary);
-  font-family: var(--font-display);
+  font-family: var(--font-price);
   font-size: clamp(28px, 4vw, 34px);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   line-height: 0.95;
 }
 

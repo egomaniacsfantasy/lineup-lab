@@ -497,7 +497,7 @@
 
 .trade-cc__manager-card-stat-value {
   color: var(--amber-bright);
-  font-family: var(--font-display);
+  font-family: var(--font-price);
   font-size: 27px;
   line-height: 1;
   font-weight: 800;
@@ -2809,5 +2809,16 @@
 
   .trade-cc__partner-read--inline {
     justify-self: start;
+  }
+}
+
+/* 29px tall is under the 44pt Apple asks for and it is a real control, so it
+   gets a thumb-sized target on touch without growing the pill it draws. */
+@media (max-width: 1023px) {
+  .trade-cc__partner-read {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding-block: 0;
   }
 }

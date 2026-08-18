@@ -498,9 +498,9 @@
 
 .matchup-page__hero-number {
   color: var(--amber-bright);
-  font-family: var(--font-display);
+  font-family: var(--font-price);
   font-size: 48px;
-  font-weight: 400;
+  font-weight: var(--font-price-weight);
   letter-spacing: 0.01em;
   line-height: 0.95;
   text-shadow: 0 0 24px rgba(232, 84, 29, 0.35);
@@ -2835,9 +2835,7 @@
      rather than +156. At desktop sizes that is styling; at 48px on a phone it
      reads as a typo. Saira 600 is the face the edge deltas already use. */
   .matchup-page__hero-number {
-    font-family: var(--font-num);
     font-size: 40px;
-    font-weight: 600;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
   }

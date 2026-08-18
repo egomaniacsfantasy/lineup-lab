@@ -70,9 +70,9 @@
    of the product uses for a market price, and the accent. */
 .season-band__item--strong .season-band__value {
   color: var(--text-amber);
-  font-family: var(--font-display);
+  font-family: var(--font-price);
   font-size: 27px;
-  font-weight: 400;
+  font-weight: var(--font-price-weight);
   line-height: 1;
 }
 
@@ -83,9 +83,7 @@
    the weight, and draws a 1. */
 @media (max-width: 1023px) {
   .season-band__item--strong .season-band__value {
-    font-family: var(--font-num);
     font-size: 24px;
-    font-weight: 600;
     font-variant-numeric: tabular-nums;
   }
 }

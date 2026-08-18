@@ -372,3 +372,21 @@ not touched.
   same class across a scrolling container. Confirmed clean visually. If that
   sweep is ever promoted into a test it needs to compare within a common
   offsetParent, not across the document.
+
+- "Nothing scrolls horizontally on mobile" is now a hard rule, and the check
+  that had been used for it was too weak. `documentElement.scrollWidth` was 0
+  on every page while the Board's sheet view scrolled sideways by 78px inside
+  `.board-page__table-wrap`: an inner `overflow-x: auto` container scrolls
+  without the document ever reporting overflow. `test/mobileNoHorizontalScroll`
+  now walks every element for a computed `overflow-x` of auto/scroll with real
+  overflow, across all four design scenes at 375px.
+- That test has a known blind spot worth remembering: with an empty local
+  `server/data`, the Board renders zero rows, so the scene-level sweep passed
+  even with the sheet-view fix reverted. Only the companion test — which
+  injects worst-case player names into the table — actually caught it. Any
+  future layout guard for a data surface has to supply its own data.
+- The price face was fixed four times in four files before it was made a token.
+  `--font-price` now carries it, so the phone swap is one declaration; the
+  first pass patched `matchup-page__hero-number` and the season band and missed
+  `trade-cc__manager-card-stat-value` and `odds-chart__value`, both of which
+  were still drawing +26I and 6I% on a phone.

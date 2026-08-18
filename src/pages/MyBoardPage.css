@@ -1197,3 +1197,65 @@
 .board-page__th--sorted::after {
   content: ' ↓';
 }
+
+/* ---------------------------------------------------------------------------
+   Sheet view on a phone.
+
+   Nothing may scroll horizontally on mobile. The six columns measured 417px
+   against 339px of available width — but 168px of that was cell padding
+   (12px 14px on every cell), not data. Tightening the padding and dropping the
+   type to 11px, which is where Sleeper and FantasyPros run their dense rows,
+   fits all six columns with room to spare. No column is dropped and nothing is
+   clipped; the table simply stops being upholstered.
+
+   Pinned by boardTableFitsPhone in test/mobileNoHorizontalScroll.test.mjs.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .board-page__th,
+  .board-page__td {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+
+  .board-page__th {
+    font-size: 10px;
+    letter-spacing: 0.02em;
+  }
+
+  .board-page__table-name {
+    font-size: 12px;
+  }
+
+  .board-page__table-meta {
+    font-size: 10px;
+  }
+
+  /* Fitting on padding alone would still be at the mercy of the longest player
+     name, because every cell is nowrap. Fixed layout makes the columns a
+     function of the table width instead of the content, so no name can ever
+     push this into a horizontal scroll — it ellipsizes instead. */
+  .board-page__table {
+    table-layout: fixed;
+  }
+
+  .board-page__th,
+  .board-page__td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .board-page__th:nth-child(1),
+  .board-page__td:nth-child(1) {
+    width: 8%;
+  }
+
+  .board-page__th:nth-child(2),
+  .board-page__td:nth-child(2) {
+    width: 32%;
+  }
+
+  .board-page__th:nth-child(n + 3),
+  .board-page__td:nth-child(n + 3) {
+    width: 15%;
+  }
+}
