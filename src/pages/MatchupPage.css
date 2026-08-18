@@ -2917,3 +2917,67 @@
     white-space: normal;
   }
 }
+
+/* The season line leads the Hub and stays put while the week scrolls under it.
+   The gradient is what makes it read as watching over rather than as a bar
+   bolted to the top: solid where the numbers are, fading to nothing beneath,
+   so content passes under it instead of hitting an edge. */
+@media (max-width: 1199px) {
+  /* .matchup-page__main is a grid, and a grid item defaults to min-width: auto,
+     so a negative inline margin here widened the track and pushed the entire
+     Hub off the right edge. The band stays inside its column. */
+  .matchup-page__main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .matchup-page__main > * {
+    min-width: 0;
+  }
+
+  .matchup-page__season--mobile {
+    order: -1;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background:
+      linear-gradient(
+        180deg,
+        var(--bg-base) 0%,
+        color-mix(in srgb, var(--bg-base) 92%, transparent) 62%,
+        transparent 100%
+      );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .matchup-page__season--mobile::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--amber) 42%, transparent),
+      transparent
+    );
+  }
+}
+
+
+/* The Hub is the week. The trade finder is a whole tab of its own, and putting
+   a second entrance to it halfway down the Hub made the Hub longer without
+   making it say more. */
+@media (max-width: 1023px) {
+  .matchup-page__module--hub-deals,
+  .hub-deals {
+    display: none;
+  }
+
+  /* "Lineup vs lineup" over a lineup facing a lineup. The modules are legible
+     from their own contents, and each title was costing a line plus its margin
+     in a column that is already too long. */
+  .matchup-page__module-title {
+    display: none;
+  }
+}

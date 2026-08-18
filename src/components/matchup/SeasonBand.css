@@ -77,3 +77,117 @@
 }
 
 
+
+/* ---------------------------------------------------------------------------
+   Phone: the season reads as one line watching over the matchup.
+
+   It was a 194px stacked card sitting below the head-to-head, which made the
+   season look like an afterthought to a single week. It is the opposite: the
+   week is one sample of the season. So it moves above the matchup, collapses
+   to a single row, and stays there while you scroll — the championship price
+   in the price face, the three supporting numbers small beside it.
+
+   The "Your season" label goes. A championship price, a playoff percentage and
+   a seed do not need to be told what they are.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1199px) {
+  .season-band {
+    display: block;
+    padding: 8px 12px 9px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .season-band__eyebrow {
+    display: none;
+  }
+
+  .season-band__items {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 0;
+  }
+
+  /* Value over label, not beside it. Side by side, four stats plus the price
+     could not fit 375px without an ellipsis on every label — and a truncated
+     label is worse than a small one. Stacked, each stat is a narrow column and
+     the whole row still reads as one line of information. */
+  .season-band__item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    min-width: 0;
+  }
+
+  /* Everything after the price is separated by a hairline rather than a gap,
+     so the row reads as one object instead of four loose numbers. */
+  .season-band__item + .season-band__item {
+    margin-left: 9px;
+    padding-left: 9px;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .season-band__item--strong {
+    grid-column: auto;
+    padding-bottom: 0;
+    border-bottom: 0;
+    margin-right: auto;
+  }
+
+  .season-band__item--strong .season-band__label {
+    display: none;
+  }
+
+  .season-band__item--strong .season-band__value {
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  .season-band__label {
+    order: 2;
+    font-size: 8.5px;
+    letter-spacing: 0.06em;
+    line-height: 1.25;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .season-band__value {
+    order: 1;
+    font-size: 15px;
+    line-height: 1.1;
+    white-space: nowrap;
+    color: var(--text-primary);
+  }
+}
+
+
+/* One label, two lengths: the full wording where there is room, the short one
+   on the phone's single line. Truncating the full labels instead put an
+   ellipsis on every stat and still overflowed. */
+.season-band__label-short {
+  display: none;
+}
+
+@media (max-width: 1199px) {
+  .season-band__label-full {
+    display: none;
+  }
+
+  .season-band__label-short {
+    display: inline;
+  }
+
+  /* Nothing in this row may push the row wider than the screen. */
+  .season-band__items {
+    overflow: hidden;
+  }
+
+  .season-band__item {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+}

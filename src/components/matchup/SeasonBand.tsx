@@ -23,7 +23,10 @@ function formatPercent(value: number) {
  * hole between playoffs and the title.
  */
 export function SeasonBand({ future }: { future: PricedFuture }) {
-  const items: { label: string; value: string; strong?: boolean }[] = [];
+  /* `short` is the label as it reads on one line on a phone. Truncating the
+     full labels there put an ellipsis on every one of them and still ran the
+     row off the screen. */
+  const items: { label: string; short?: string; value: string; strong?: boolean }[] = [];
 
   items.push({
     label: 'Championship',
@@ -32,11 +35,11 @@ export function SeasonBand({ future }: { future: PricedFuture }) {
   });
 
   if (future.playoffProb != null) {
-    items.push({ label: 'Make playoffs', value: formatPercent(future.playoffProb) });
+    items.push({ label: 'Make playoffs', short: 'Playoffs', value: formatPercent(future.playoffProb) });
   }
 
   if (future.finalsProb != null) {
-    items.push({ label: 'Reach the final', value: formatPercent(future.finalsProb) });
+    items.push({ label: 'Reach the final', short: 'Final', value: formatPercent(future.finalsProb) });
   }
 
   const projected = future.projRecord
@@ -44,11 +47,11 @@ export function SeasonBand({ future }: { future: PricedFuture }) {
       ? `${future.projWins.toFixed(1)}-${future.projLosses.toFixed(1)}`
       : null);
   if (projected) {
-    items.push({ label: 'Projected finish', value: projected });
+    items.push({ label: 'Projected finish', short: 'Finish', value: projected });
   }
 
   if (future.avgSeed != null) {
-    items.push({ label: 'Average seed', value: future.avgSeed.toFixed(1) });
+    items.push({ label: 'Average seed', short: 'Seed', value: future.avgSeed.toFixed(1) });
   }
 
   if (items.length === 0) return null;
@@ -65,7 +68,10 @@ export function SeasonBand({ future }: { future: PricedFuture }) {
             ].filter(Boolean).join(' ')}
             key={item.label}
           >
-            <span className="season-band__label">{item.label}</span>
+            <span className="season-band__label">
+              <span className="season-band__label-full">{item.label}</span>
+              <span className="season-band__label-short">{item.short ?? item.label}</span>
+            </span>
             <span className="season-band__value">{item.value}</span>
           </div>
         ))}
