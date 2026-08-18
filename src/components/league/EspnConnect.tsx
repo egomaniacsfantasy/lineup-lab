@@ -344,7 +344,18 @@ export function EspnConnect({
                   password.
                 </p>
 
-                {!connectorSupported() ? (
+                {!connectorSupported() && espnLoginEnabled ? (
+                  /* The sign-in above IS the phone path. This paragraph used to
+                     say a private league needs a computer full stop, directly
+                     under a form that connects one from a phone — the screen
+                     contradicted itself. The connector is the fallback now, not
+                     the requirement. */
+                  <p className="espn-connect__method-note">
+                    Signing in above is all a phone needs. If it does not go
+                    through, the connector is a one-time setup on a computer,
+                    after which this league works on every device.
+                  </p>
+                ) : !connectorSupported() ? (
                   <p className="espn-connect__method-note">
                     Connecting a private league needs a computer, because phone
                     browsers cannot run the connector. Do it once on a laptop

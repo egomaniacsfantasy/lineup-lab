@@ -7,11 +7,13 @@ import { useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
+import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import './ConnectPage.css';
 
 export function ConnectPage() {
   const { stored, connect } = useLeagueConnection();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const hasEspnCapture = searchParams.has('espnCapture') || searchParams.has('espnLeagueId');
@@ -92,6 +94,19 @@ export function ConnectPage() {
       <p className="connect-page__demo">
         Read-only. We never ask for your password.
       </p>
+
+      {/* Signed in with no league, this screen is the whole app — and with the
+          tab bar hidden until a league exists, there was no way off it and no
+          way out of the account. */}
+      {user ? (
+        <button
+          className="connect-page__signout"
+          onClick={() => void signOut()}
+          type="button"
+        >
+          Log out of {user.email}
+        </button>
+      ) : null}
     </div>
   );
 }

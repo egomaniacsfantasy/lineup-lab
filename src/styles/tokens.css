@@ -38,11 +38,11 @@
   /* ── Typography ── */
   --font-display: "Staatliches", "Arial Narrow", sans-serif;
   --font-ui: "Hanken Grotesk", sans-serif;
-  /* Numbers are set in the same face as every label and body string, so a
-     stat reads as part of the sentence around it rather than as a second
-     typeface bolted on. American odds are the deliberate exception and keep
-     Staatliches, below. */
-  --font-num: "Hanken Grotesk", sans-serif;
+  /* Every digit is the same width, so columns of numbers line up down the page
+     and nothing shifts sideways as a value updates live — which matters in a
+     product whose numbers move. American odds are the deliberate exception and
+     keep Staatliches, below. */
+  --font-num: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* The face a market price is set in, on every surface and every width.
      Staatliches has no true 1 — it draws an I-shape — and a phone-only swap to

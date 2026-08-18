@@ -54,3 +54,16 @@
     padding-top: 0;
   }
 }
+
+/* A hard guarantee, not a diagnosis: nothing on a phone scrolls sideways.
+   Every horizontal overflow found so far has been fixed at its cause, but
+   WKWebView will also scroll the page on its own to follow a caret in a long
+   input, which no amount of layout correctness prevents. The audit test still
+   hunts real causes; this stops the symptom reaching a thumb either way. */
+@media (max-width: 1023px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}

@@ -202,3 +202,72 @@
     font-size: clamp(1.9rem, 8vw, 2.4rem);
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The connect screens carry the whole first impression, and they were a form
+   on a flat background sitting against the top of the screen.
+
+   The content centres in whatever height is left, and the background moves —
+   slowly enough that you would not catch it doing so, which is the point. Two
+   amber fields drifting under a dark base, no images, no extra requests.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .connect-page {
+    min-height: 100%;
+    justify-content: center;
+  }
+}
+
+.connect-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      42rem 28rem at 18% 22%,
+      color-mix(in srgb, var(--amber) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      34rem 24rem at 82% 74%,
+      color-mix(in srgb, var(--amber-bright, #ff8049) 11%, transparent),
+      transparent 68%
+    );
+  animation: connect-drift 38s ease-in-out infinite alternate;
+}
+
+@keyframes connect-drift {
+  from {
+    transform: translate3d(-3%, -2%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(3%, 2%, 0) scale(1.08);
+  }
+}
+
+/* Motion is decoration here, so it goes when the system asks for less of it. */
+@media (prefers-reduced-motion: reduce) {
+  .connect-page::before {
+    animation: none;
+  }
+}
+
+/* Quiet, but present: the only way out of the account from this screen. */
+.connect-page__signout {
+  align-self: center;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.connect-page__signout:hover {
+  color: var(--text-primary);
+}
