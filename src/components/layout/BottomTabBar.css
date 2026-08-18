@@ -1,9 +1,14 @@
 /* Height lives on the shell as --shell-tabbar-height so the bar and the space
    the scroller reserves for it cannot drift apart. */
+/* Not fixed. The shell is a flex column with the scroller above this, so the
+   bar is simply the last row of the layout — which means it cannot be
+   positioned against a frame that disagrees with the visible area, the way a
+   fixed element can inside a webview. It also stops the scroller having to
+   reserve empty space for a bar that overlaps it. */
 .bottom-tab-bar {
-  position: fixed;
-  inset: auto 0 0;
+  position: relative;
   z-index: 21;
+  flex: none;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   backdrop-filter: blur(var(--glass-blur));

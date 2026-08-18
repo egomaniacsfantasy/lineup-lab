@@ -21,9 +21,9 @@
   overflow-y: auto;
   overflow-x: clip;
   padding-top: var(--shell-header-height);
-  padding-bottom: calc(
-    var(--shell-tabbar-reserve) + env(safe-area-inset-bottom, var(--space-sm))
-  );
+  /* The bar sits below this in the flex column now rather than on top of it,
+     so there is nothing to reserve space for. */
+  padding-bottom: var(--space-md);
   scrollbar-gutter: stable;
 }
 

@@ -16,7 +16,14 @@ const config: CapacitorConfig = {
     // The book is a dark surface. Without this the status bar and the
     // rubber-band overscroll flash white on every scroll.
     backgroundColor: '#0d0f11',
-    contentInset: 'always',
+    /* 'always' made WKWebView add its own content inset on top of
+       viewport-fit=cover and the safe-area padding the layout already applies.
+       Three symptoms, one cause: a black band above the app, a page that was
+       permanently a little taller than the screen and so always scrolled
+       vertically, and a fixed bottom bar positioned against a frame that no
+       longer matched the visible area, so it would not stay put. 'never' hands
+       the insets back to CSS, which is where they are handled. */
+    contentInset: 'never',
   },
   server: {
     // ESPN and our API are https; block anything that is not.
