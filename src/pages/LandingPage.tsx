@@ -1,4 +1,5 @@
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
+import logo from '../assets/og-logo.png';
 import { useReel } from '../hooks/useReel';
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { formatAmericanOdds } from '../utils/formatOdds';
@@ -175,6 +176,7 @@ export function LandingPage() {
     <main className={styles.page}>
       <section className={styles.hero}>
         <div className={styles.heroCopy}>
+          <img alt="Odds Gods" className={styles.heroLogo} src={logo} />
           <div className={styles.kicker}>FANTASY FOOTBALL · PRICED LIKE A SPORTSBOOK</div>
           <h1 className={styles.headline}>Every decision has a price.</h1>
           <p className={styles.sub}>

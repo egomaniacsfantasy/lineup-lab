@@ -326,3 +326,18 @@
   padding-top: env(safe-area-inset-top);
   height: calc(var(--shell-header-height) + env(safe-area-inset-top));
 }
+
+/* The mark sits with the wordmark so the brand reads on every screen of the
+   app, not just the logged-out page. */
+.app-header__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.app-header__brand-mark {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: block;
+}

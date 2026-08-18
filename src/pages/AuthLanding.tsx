@@ -28,6 +28,7 @@ export function AuthLanding() {
     <div className="auth-landing">
       <div className="auth-landing__inner">
         <section className="auth-landing__panel">
+          <img alt="" className="auth-landing__mark" src="/og-logo.png" />
           <h1 className="auth-landing__wordmark">ODDS GODS</h1>
           <div className="auth-landing__tabs" role="tablist">
             <button

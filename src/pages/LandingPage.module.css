@@ -848,3 +848,20 @@
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* The mark leads the page. It is the first thing on the screen above the
+   kicker, and it carries the brand before a word is read. */
+.heroLogo {
+  width: 78px;
+  height: 78px;
+  margin-bottom: 20px;
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .heroLogo {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
+  }
+}

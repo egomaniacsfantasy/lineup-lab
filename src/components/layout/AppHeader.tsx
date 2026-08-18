@@ -69,6 +69,7 @@ export function AppHeader() {
     <header className="app-header">
       <div className="app-header__inner">
         <div className="app-header__brand" aria-label="Odds Gods">
+          <img alt="" className="app-header__brand-mark" src="/og-logo.png" />
           <span className="app-header__brand-title">ODDS GODS</span>
         </div>
 

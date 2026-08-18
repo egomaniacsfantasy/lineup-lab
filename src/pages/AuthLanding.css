@@ -341,3 +341,18 @@
     display: none;
   }
 }
+
+/* First screen a phone user sees. The mark leads it. */
+.auth-landing__mark {
+  width: 72px;
+  height: 72px;
+  display: block;
+  margin: 0 auto 14px;
+}
+
+@media (max-width: 560px) {
+  .auth-landing__mark {
+    width: 60px;
+    height: 60px;
+  }
+}
