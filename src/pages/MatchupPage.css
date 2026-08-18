@@ -3573,3 +3573,53 @@
     display: none;
   }
 }
+
+/* One meta line, two lengths — the full string where there is room, the
+   opponent and any injury status on a phone. */
+.matchup-page__meta-compact {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .matchup-page__meta-full {
+    display: none;
+  }
+
+  .matchup-page__meta-compact {
+    display: inline;
+  }
+
+  /* ---------------------------------------------------------------------------
+     The lineup rows stop being cards.
+
+     Each player sat in a bordered, padded, rounded box, and two of those boxes
+     plus a middle column left 119px per player — which is why the names, the
+     meta and the projection were all fighting. Sleeper and ESPN both draw this
+     screen as flat rows for exactly this reason: when two rosters share a
+     width, the card chrome is the first thing that has to go.
+
+     Dropping the border, fill, radius and most of the padding hands roughly
+     20px back to each side, and the row reads as a comparison rather than as
+     two objects that happen to be near each other.
+     --------------------------------------------------------------------------- */
+  .matchup-page__slot-card {
+    padding: 7px 2px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+
+  .matchup-page__slot-card--picked,
+  .matchup-page__slot-card--winner {
+    background: none;
+  }
+
+  /* A hairline per row instead of a box per player. */
+  .matchup-page__slot-board-grid > * {
+    border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
+  }
+
+  .matchup-page__slot-board-grid {
+    gap: 0 8px;
+  }
+}

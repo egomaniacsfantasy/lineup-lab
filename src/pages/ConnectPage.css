@@ -214,7 +214,22 @@
 @media (max-width: 1023px) {
   .connect-page {
     min-height: 100%;
-    justify-content: center;
+    /* `safe center` centres only while the content fits. Plain `center` on a
+       flex container whose content is taller than the container overflows in
+       BOTH directions, so the top of a long screen — the ESPN flow — was
+       pushed above the container and drew over the clock and the battery.
+       Overflowing content now aligns to the start instead. */
+    justify-content: safe center;
+  }
+}
+
+/* Belt and braces for the same failure: whatever the alignment does, nothing
+   on this screen starts above the top of the safe area. */
+@supports not (justify-content: safe center) {
+  @media (max-width: 1023px) {
+    .connect-page {
+      justify-content: flex-start;
+    }
   }
 }
 

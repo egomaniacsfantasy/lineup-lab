@@ -288,9 +288,20 @@ export function EspnConnect({
 
               {espnLoginEnabled ? (
                 <div className="espn-connect__login-card">
-                  <p className="espn-connect__fallback-title">Log in with ESPN</p>
+                  {/* Asking for someone's ESPN password inside an unbranded dark
+                      box reads exactly like phishing. Their mark, on their red,
+                      at the top of the panel, so it is obvious whose sign-in
+                      this is. */}
+                  <div className="espn-connect__login-brand">
+                    <img
+                      alt="ESPN"
+                      className="espn-connect__login-mark"
+                      src="/providers/espn-logo.png"
+                    />
+                    <span className="espn-connect__login-lockup">Sign in</span>
+                  </div>
                   <p className="espn-connect__cookies-note">
-                    Read-only, and we never ask for your ESPN password.
+                    Read-only. Your password goes to ESPN, never to us.
                   </p>
                   <label className="espn-connect__field">
                     <span className="espn-connect__label">ESPN email</span>
@@ -338,10 +349,8 @@ export function EspnConnect({
               <div className="espn-connect__fallback-card">
                 <p className="espn-connect__fallback-title">This league is private</p>
                 <p className="espn-connect__method-note">
-                  ESPN keeps your league sign-in in a cookie that no website is
-                  allowed to read, including this one. The connector is a small
-                  read-only add-on that hands it over. We never see your ESPN
-                  password.
+                  ESPN keeps your sign-in in a cookie no website may read. The
+                  connector hands that one cookie over, read-only.
                 </p>
 
                 {!connectorSupported() && espnLoginEnabled ? (
@@ -351,9 +360,7 @@ export function EspnConnect({
                      contradicted itself. The connector is the fallback now, not
                      the requirement. */
                   <p className="espn-connect__method-note">
-                    Signing in above is all a phone needs. If it does not go
-                    through, the connector is a one-time setup on a computer,
-                    after which this league works on every device.
+                    Signing in above is all a phone needs.
                   </p>
                 ) : !connectorSupported() ? (
                   <p className="espn-connect__method-note">

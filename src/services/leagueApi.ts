@@ -567,11 +567,31 @@ export function startEspnLogin(body: {
   otp?: string;
   challengeId?: string;
 }): Promise<EspnLoginResult> {
+  /* A fetch with no timeout waits forever, and this one drives a headless
+     browser through a login, so "forever" is a real outcome: the button sat on
+     CONNECTING with nothing behind it and no way to tell a slow sign-in from a
+     dead one. The worker gives up at 30s, so 60s here is past any honest
+     answer it could still be about to send. */
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
   return get<EspnLoginResult>('/api/espn/login/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+    signal: controller.signal,
+  })
+    .catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return {
+          status: 'fallback',
+          reason: 'timeout',
+          message:
+            'ESPN sign-in did not answer in time. Try again, or use the connector on a computer.',
+        } satisfies EspnLoginResult;
+      }
+      throw error;
+    })
+    .finally(() => clearTimeout(timer));
 }
 
 export function trackEspnConnectEvent(event: string, payload: Record<string, unknown> = {}) {

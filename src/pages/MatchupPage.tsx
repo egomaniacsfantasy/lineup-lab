@@ -1704,19 +1704,27 @@ function MatchupLive({
   const eligibleCount =
     compareSelection.length >= 1 ? eligiblePartnerIds?.size ?? 0 : null;
 
-  const lineupMetaFor = (player: Player, extra?: string | null) => {
+  /* `compact` is the phone version of this line. At 71px the full string
+     ("DET · vs MIN · Sun 1:00 PM") needed 145px and ellipsised on every row.
+     The team abbreviation is redundant now that the headshot carries the team
+     badge, and a kickoff time is the least scannable part of a lineup you are
+     comparing side by side, so both go. Opponent and injury status stay,
+     because those are the two things that change a start-or-sit. */
+  const lineupMetaFor = (player: Player, extra?: string | null, compact = false) => {
     const context = getPlayerContext(player, gameContextSource);
     const gameMeta = context.contextAvailable
       ? context.bye
         ? 'BYE'
-        : `${context.matchup} · ${context.kickoff}`
+        : compact
+          ? context.matchup
+          : `${context.matchup} · ${context.kickoff}`
       : null;
     const status =
       player.injuryStatus && !['active', 'healthy'].includes(player.injuryStatus.toLowerCase())
         ? player.injuryStatus
         : null;
 
-    return [player.team, gameMeta, status, extra]
+    return [compact ? null : player.team, gameMeta, status, extra]
       .filter(Boolean)
       .join(' · ');
   };
@@ -2113,7 +2121,12 @@ function MatchupLive({
                             <span className="matchup-page__slot-copy">
                               <span className="matchup-page__row-name">{row.yourSlot.starter.shortName}</span>
                               <span className="matchup-page__row-secondary">
-                                {lineupMetaFor(row.yourSlot.starter)}
+                                <span className="matchup-page__meta-full">
+                                  {lineupMetaFor(row.yourSlot.starter)}
+                                </span>
+                                <span className="matchup-page__meta-compact">
+                                  {lineupMetaFor(row.yourSlot.starter, null, true)}
+                                </span>
                                 {optionCount > 0 ? (
                                   <span className="matchup-page__slot-bench-cue">
                                     {' '}⇄ {optionCount} on the bench
@@ -2165,7 +2178,14 @@ function MatchupLive({
                             </span>
                             <span className="matchup-page__slot-copy matchup-page__slot-copy--right">
                               <span className="matchup-page__row-name">{row.opponentSlot.starter.shortName}</span>
-                              <span className="matchup-page__row-secondary">{lineupMetaFor(row.opponentSlot.starter)}</span>
+                              <span className="matchup-page__row-secondary">
+                                <span className="matchup-page__meta-full">
+                                  {lineupMetaFor(row.opponentSlot.starter)}
+                                </span>
+                                <span className="matchup-page__meta-compact">
+                                  {lineupMetaFor(row.opponentSlot.starter, null, true)}
+                                </span>
+                              </span>
                             </span>
                             <PlayerHeadshot
                               className="matchup-page__slot-headshot matchup-page__slot-headshot--opp"
