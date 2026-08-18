@@ -12,7 +12,7 @@ import { OddsChart, type OddsChartPoint } from '../components/charts/OddsChart';
 import { Card, Chip } from '../components/ui/DesignPrimitives';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
-import type { PricedFuture } from '../services/leagueApi';
+import type { LeaguePricing, PricedFuture } from '../services/leagueApi';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
@@ -1088,6 +1088,8 @@ interface MatchupLiveProps {
   isConnected: boolean;
   /** The user's own futures row, for the season band under the hero. */
   userFuture?: PricedFuture | null;
+  /** Recorded title price per week, for the band's trend line. */
+  titleHistory?: LeaguePricing['titleHistory'] | null;
   isPriced?: boolean;
   lineMovement?: { from: number; to: number; at: number } | null;
   lineHistory?: LineHistoryEntry[] | null;
@@ -1222,6 +1224,7 @@ function MatchupLive({
   matchup,
   isConnected,
   userFuture = null,
+  titleHistory = null,
   isPriced = false,
   lineMovement = null,
   lineHistory = null,
@@ -1891,7 +1894,7 @@ function MatchupLive({
       <div className="matchup-page__frame">
         {userFuture ? (
           <div className="matchup-page__season--band">
-            <SeasonBand future={userFuture} />
+            <SeasonBand future={userFuture} history={titleHistory} />
           </div>
         ) : null}
 
@@ -2976,6 +2979,7 @@ export function MatchupPage() {
       <MatchupLive
         movers={movers}
         userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}
+        titleHistory={pricing?.available ? pricing.titleHistory ?? null : null}
         isConnected={connectedMatchup !== null}
         isPriced={Boolean(pricing?.available)}
         lineHistory={lineHistory}

@@ -52,7 +52,11 @@
 .season-band__items {
   display: flex;
   flex-wrap: nowrap;
-  align-items: flex-end;
+  /* Centred, not bottom-aligned. flex-end pinned every small stat's baseline
+     to the championship block's, which is 10px taller — so the four supporting
+     numbers sat 20.7px from the top of the bar and 12px from the bottom, low
+     in their own row while looking deliberate enough to miss. */
+  align-items: center;
   gap: 0;
   overflow: hidden;
 }
@@ -168,5 +172,80 @@
 
   .season-band__item--strong .season-band__value {
     font-size: 30px;
+  }
+}
+
+/* The season's shape, in the space the numbers were not using.
+   The row of stats ends around a third of the way across a desktop bar, and
+   the rest was empty. This is the one thing in the band that is not a snapshot
+   of right now — the engine has recorded the title price every week all season
+   and nothing has ever drawn it. Right-aligned so the bar reads left to right
+   as: what you are worth, then how you got here. */
+.season-band__trend {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .season-band__trend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    padding-left: 22px;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .season-band__trend-label {
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .season-band__spark {
+    width: 132px;
+    height: 24px;
+    overflow: visible;
+  }
+
+  .season-band__spark-line {
+    fill: none;
+    stroke: var(--text-muted);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Sign drives the colour. --green/--red are reserved for money and market
+     movement, which is exactly what a title price doing something over eight
+     weeks is. Up is the manager's title chance rising. */
+  .season-band__trend--up .season-band__spark-line {
+    stroke: var(--green);
+  }
+
+  .season-band__trend--down .season-band__spark-line {
+    stroke: var(--red);
+  }
+
+  .season-band__trend-delta {
+    font-family: var(--font-num);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+    white-space: nowrap;
+    color: var(--text-muted);
+  }
+
+  .season-band__trend--up .season-band__trend-delta {
+    color: var(--green);
+  }
+
+  .season-band__trend--down .season-band__trend-delta {
+    color: var(--red);
   }
 }

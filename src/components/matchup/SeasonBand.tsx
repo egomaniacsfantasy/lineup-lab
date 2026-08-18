@@ -1,6 +1,7 @@
-import type { PricedFuture } from '../../services/leagueApi';
+import type { LeaguePricing, PricedFuture } from '../../services/leagueApi';
 import type { CSSProperties } from 'react';
-import { formatAmericanOdds } from '../../utils/formatOdds';
+import { formatAmericanOdds, impliedProbability } from '../../utils/formatOdds';
+import { displayedDelta, formatSignedDisplayedDeltaValue } from '../../utils/displayDelta';
 import './SeasonBand.css';
 
 /* Matches LeagueFutures so the same team reads the same on both tabs. */
@@ -23,7 +24,71 @@ function formatPercent(value: number) {
  * served today and rendered nowhere, which left the futures ladder with a
  * hole between playoffs and the title.
  */
-export function SeasonBand({ future }: { future: PricedFuture }) {
+/* The sparkline's own box. Small enough to sit inside a 62px bar, wide enough
+   that eight weeks of movement is a shape rather than a zigzag. */
+const SPARK_W = 132;
+const SPARK_H = 24;
+
+/**
+ * The recorded title price per week, as a line.
+ *
+ * `titleHistory` is served and, until now, rendered nowhere — the engine has
+ * been recording this all season with nothing reading it. Nothing is computed
+ * here: the odds are Franco's, and the only transforms are the two the
+ * frontend is allowed to make, American odds to their implied percentage and
+ * an after-minus-before pair. The line is plotted on the percentage rather
+ * than the price so that up means better, which a moneyline does not: +1304
+ * shortening to +390 is the line going the manager's way while the number
+ * falls.
+ */
+function titleTrend(future: PricedFuture, history: LeaguePricing['titleHistory'] | null) {
+  const key = String(future.rosterId);
+  const points = (history ?? [])
+    .filter((entry) => entry.odds?.[key] != null)
+    .sort((a, b) => a.week - b.week)
+    .map((entry) => ({ week: entry.week, odds: entry.odds[key] }));
+
+  /* One recorded week is a dot, not a trend, and drawing it would imply a
+     movement we have not observed. */
+  if (points.length < 2) return null;
+
+  const probs = points.map((p) => impliedProbability(p.odds));
+  const min = Math.min(...probs);
+  const max = Math.max(...probs);
+  const span = max - min;
+  const inset = 2;
+  const usable = SPARK_H - inset * 2;
+
+  const path = probs
+    .map((prob, i) => {
+      const x = (i / (probs.length - 1)) * SPARK_W;
+      /* A flat season is a flat line through the middle, not a divide by zero. */
+      const y = span === 0 ? SPARK_H / 2 : inset + usable - ((prob - min) / span) * usable;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  const delta = displayedDelta(first.odds, last.odds, { mapValue: impliedProbability });
+
+  return {
+    path,
+    delta,
+    deltaText: formatSignedDisplayedDeltaValue(delta),
+    firstWeek: first.week,
+    lastWeek: last.week,
+    direction: delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat',
+  };
+}
+
+export function SeasonBand({
+  future,
+  history = null,
+}: {
+  future: PricedFuture;
+  history?: LeaguePricing['titleHistory'] | null;
+}) {
   /* `short` is the label as it reads on one line on a phone. Truncating the
      full labels there put an ellipsis on every one of them and still ran the
      row off the screen. */
@@ -55,6 +120,8 @@ export function SeasonBand({ future }: { future: PricedFuture }) {
   if (future.avgSeed != null) {
     items.push({ label: 'Average seed', short: 'Seed', value: future.avgSeed.toFixed(1) });
   }
+
+  const trend = titleTrend(future, history);
 
   if (items.length === 0) return null;
 
@@ -88,6 +155,24 @@ export function SeasonBand({ future }: { future: PricedFuture }) {
             <span className="season-band__value">{item.value}</span>
           </div>
         ))}
+        {trend ? (
+          <div className={`season-band__trend season-band__trend--${trend.direction}`}>
+            <span className="season-band__trend-label">
+              Title odds · Wk {trend.firstWeek}–{trend.lastWeek}
+            </span>
+            <svg
+              className="season-band__spark"
+              viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+              /* Decorative: the delta beside it states the same thing in words,
+                 so a screen reader gets the number rather than a path. */
+              aria-hidden="true"
+              focusable="false"
+            >
+              <polyline className="season-band__spark-line" points={trend.path} />
+            </svg>
+            <span className="season-band__trend-delta">{trend.deltaText}</span>
+          </div>
+        ) : null}
       </div>
     </section>
   );

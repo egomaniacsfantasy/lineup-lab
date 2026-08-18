@@ -794,6 +794,19 @@ function buildPricing(leagueId: string, pricingMode: 'empty' | 'live'): LeaguePr
             },
           ]
         : [],
+    /* Real recorded history is what the band's trend line draws. Eight weeks
+       of the user's title price shortening from +1180 to +390, so the design
+       fixture shows the shape a live league would. */
+    titleHistory: [
+      { week: 1, odds: { 1: 1180, 2: 700, 3: 520, 4: 760, 5: 640, 6: 1400 }, at: COMPUTED_AT - 7 * 7 * 24 * 60 * 60 * 1000 },
+      { week: 2, odds: { 1: 1040, 2: 660, 3: 470, 4: 800, 5: 610, 6: 1520 }, at: COMPUTED_AT - 6 * 7 * 24 * 60 * 60 * 1000 },
+      { week: 3, odds: { 1: 960, 2: 690, 3: 430, 4: 840, 5: 560, 6: 1610 }, at: COMPUTED_AT - 5 * 7 * 24 * 60 * 60 * 1000 },
+      { week: 4, odds: { 1: 880, 2: 640, 3: 400, 4: 880, 5: 520, 6: 1580 }, at: COMPUTED_AT - 4 * 7 * 24 * 60 * 60 * 1000 },
+      { week: 5, odds: { 1: 700, 2: 600, 3: 360, 4: 900, 5: 495, 6: 1660 }, at: COMPUTED_AT - 3 * 7 * 24 * 60 * 60 * 1000 },
+      { week: 6, odds: { 1: 560, 2: 540, 3: 320, 4: 870, 5: 470, 6: 1700 }, at: COMPUTED_AT - 2 * 7 * 24 * 60 * 60 * 1000 },
+      { week: 7, odds: { 1: 450, 2: 510, 3: 290, 4: 860, 5: 445, 6: 1720 }, at: COMPUTED_AT - 1 * 7 * 24 * 60 * 60 * 1000 },
+      { week: 8, odds: { 1: 390, 2: 485, 3: 261, 4: 852, 5: 429, 6: 1752 }, at: COMPUTED_AT - 0 * 7 * 24 * 60 * 60 * 1000 },
+    ],
     leagueMedian: { mean: 145.1, sigma: 18.4 },
     weeklyLines: [
       {
