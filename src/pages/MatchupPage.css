@@ -2949,7 +2949,7 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
   }
-
+}
 
 .matchup-page__slot-copy {
   display: grid;
