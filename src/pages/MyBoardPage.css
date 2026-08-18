@@ -1342,3 +1342,106 @@
     line-height: 1.35;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Board rows on a phone: one line each.
+
+   A max-width: 1099px rule stacked the identity above the value, which turned
+   every player into a two-part block. The Board is a list you scan — people
+   come here for the list — so each player is one row: rank, headshot, name and
+   team on the left, the headline number and its supporting line on the right.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .board-page__row-button {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+  }
+
+  .board-page__identity {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .board-page__rank {
+    font-size: 11px;
+    min-width: 16px;
+  }
+
+  .board-page__headshot {
+    width: 30px;
+    height: 30px;
+  }
+
+  .board-page__identity-copy {
+    display: grid;
+    gap: 0;
+    min-width: 0;
+  }
+
+  .board-page__name {
+    display: block;
+    overflow: hidden;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .board-page__meta {
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  /* The value column reads right to left: the number you sorted by, then the
+     two supporting figures on one line under it. */
+  .board-page__value {
+    display: grid;
+    justify-items: end;
+    gap: 0;
+    align-items: center;
+    padding-left: 0;
+    border-left: 0;
+    text-align: right;
+  }
+
+  .board-page__value-label {
+    display: none;
+  }
+
+  .board-page__headline {
+    font-size: 17px;
+    line-height: 1.1;
+  }
+
+  /* The supporting line is nowrap, so whatever width it wants it takes out of
+     the player's name. At 10px it left the name 103px against the 113px that
+     "Amon-Ra St. Brown" needs, and truncated the one thing on the row nobody
+     can infer. 9.5px hands that width back. */
+  .board-page__subline {
+    font-size: 9.5px;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+}
+
+
+/* One name, two lengths — full where there is room, abbreviated on the phone
+   row. Truncating instead put an ellipsis on nearly every long name. */
+.board-page__name-short {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .board-page__name-full {
+    display: none;
+  }
+
+  .board-page__name-short {
+    display: inline;
+  }
+}

@@ -473,6 +473,16 @@ function columnCountForSheet(statsCount: number) {
   return 6 + statsCount;
 }
 
+/* A phone row cannot hold "Amon-Ra St. Brown" beside a value and a projection
+   without truncating the one thing on the row you cannot infer. Dense lists in
+   Sleeper and ESPN abbreviate the first name for exactly this reason. Display
+   only — nothing about ordering or pricing changes. */
+function shortName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return fullName;
+  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+}
+
 export function MyBoardPage() {
   const { bootstrap } = useLeagueConnection();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1004,7 +1014,12 @@ export function MyBoardPage() {
                         />
                         <span className="board-page__identity-copy">
                           <span className="board-page__name-row">
-                            <span className="board-page__name">{player.board.name}</span>
+                            <span className="board-page__name">
+                              <span className="board-page__name-full">{player.board.name}</span>
+                              <span className="board-page__name-short">
+                                {shortName(player.board.name)}
+                              </span>
+                            </span>
                                       </span>
                           <span className="board-page__meta">
                             {player.board.position} · {player.board.team}
