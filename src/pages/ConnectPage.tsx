@@ -8,8 +8,12 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { useAuth } from '../contexts/AuthContext';
+import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import './ConnectPage.css';
+
+declare const __BUILD_STAMP__: string | undefined;
+const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
 
 export function ConnectPage() {
   const { stored, connect } = useLeagueConnection();
@@ -93,6 +97,15 @@ export function ConnectPage() {
 
       <p className="connect-page__demo">
         Read-only. We only ever read your league, never change it.
+      </p>
+
+      {/* The build line has to live here too. With no league connected there is
+          no tab bar and so no route to More, which is where it was: the one
+          screen you can always reach was the one screen that could not tell you
+          what it was running. */}
+      <p className="connect-page__build">
+        Build {buildStamp}
+        {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
       </p>
 
       {/* Signed in with no league, this screen is the whole app — and with the

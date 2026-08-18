@@ -75,7 +75,21 @@ export function MorePage() {
     },
     {
       title: 'League',
-      links: [leagueDestination],
+      /* Adding a second league had no entry of its own. The card here showed
+         the league you were already in, and the only "add" was in an account
+         menu that no longer exists on a phone — so connecting an ESPN league
+         next to a Sleeper one looked impossible, and the workaround was making
+         another account. */
+      links: bootstrap
+        ? [
+            leagueDestination,
+            {
+              title: 'Connect another league',
+              body: 'Add a Sleeper or ESPN league to this account and switch between them.',
+              path: '/league#connect',
+            },
+          ]
+        : [leagueDestination],
     },
     {
       title: 'Help',
