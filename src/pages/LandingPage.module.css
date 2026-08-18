@@ -130,3 +130,57 @@
   font-family: var(--font-ui);
   font-size: 11px;
 }
+
+/* Ambient motion.
+   Two very slow loops: a glow behind the mark that breathes, and the mark
+   itself drifting a few pixels. Long durations and tiny amplitudes on purpose
+   — it should read as the page being alive, not as an animation playing. */
+.stage {
+  position: relative;
+}
+
+.stage::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(70vh, 90vw, 620px);
+  height: min(70vh, 90vw, 620px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(232, 84, 29, 0.16) 0%,
+    rgba(232, 84, 29, 0.06) 42%,
+    transparent 68%
+  );
+  animation: breathe 9s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mark {
+  animation: drift 11s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+}
+
+@keyframes drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage::before,
+  .mark {
+    animation: none;
+  }
+}
