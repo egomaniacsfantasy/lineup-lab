@@ -15,8 +15,13 @@
   -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow: var(--shadow-card);
   /* One declaration, not two. This was previously set twice — once with a
-     fallback and once with max() — and the pair fought over the inset. */
-  padding-bottom: max(var(--space-xs), env(safe-area-inset-bottom));
+     fallback and once with max() — and the pair fought over the inset.
+
+     `--shell-safe-bottom` lets the value be supplied rather than only sensed,
+     which is what makes this testable at any device's insets instead of only
+     the one phone that happens to be plugged in. env() stays as the fallback,
+     so on a device nothing changes. */
+  padding-bottom: max(var(--space-xs), var(--shell-safe-bottom, env(safe-area-inset-bottom)));
 }
 
 .bottom-tab-bar__grid {

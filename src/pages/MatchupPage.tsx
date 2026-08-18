@@ -73,31 +73,13 @@ import type {
 } from '../types';
 import '../components/trade-display/TradeDisplay.css';
 import './MatchupPage.css';
+import { managerLine } from '../utils/managerLine';
+import { PreDraftHub } from '../components/matchup/PreDraftHub';
+import { isLeaguePreDraft } from '../utils/preDraft';
+import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
-function officialPlatformUrl({
-  provider,
-  leagueId,
-  season,
-  espnTeamId,
-}: {
-  provider: 'sleeper' | 'espn';
-  leagueId: string;
-  season?: string;
-  espnTeamId?: number | null;
-}) {
-  if (provider === 'sleeper') {
-    return `https://sleeper.com/leagues/${leagueId}`;
-  }
-
-  const seasonId = season ?? String(new Date().getFullYear());
-  const base = 'https://fantasy.espn.com/football';
-  if (espnTeamId != null) {
-    return `${base}/team?leagueId=${encodeURIComponent(leagueId)}&teamId=${espnTeamId}&seasonId=${encodeURIComponent(seasonId)}`;
-  }
-  return `${base}/league?leagueId=${encodeURIComponent(leagueId)}&seasonId=${encodeURIComponent(seasonId)}`;
-}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -1274,7 +1256,7 @@ function MatchupLive({
     [isConnected, nflSchedule],
   );
   const officialUrl = stored
-    ? officialPlatformUrl({
+    ? officialLeagueUrl({
         provider: stored.provider,
         leagueId: stored.leagueId,
         season: stored.season,
@@ -1955,7 +1937,7 @@ function MatchupLive({
                 <div>
                   <p className="matchup-page__team-name">{matchup.yourTeam.teamName}</p>
                   <p className="matchup-page__meta-copy">
-                    {matchup.yourTeam.managerName} · {matchup.yourTeam.record}
+                    {managerLine(matchup.yourTeam.managerName, matchup.yourTeam.record)}
                   </p>
                 </div>
               </div>
@@ -2022,7 +2004,7 @@ function MatchupLive({
                     {matchup.opponentTeam.teamName}
                   </button>
                   <p className="matchup-page__meta-copy">
-                    {matchup.opponentTeam.managerName} · {matchup.opponentTeam.record}
+                    {managerLine(matchup.opponentTeam.managerName, matchup.opponentTeam.record)}
                   </p>
                   {!matchup.opponentTeam.managerKey ? (
                     <p className="matchup-page__meta-copy">Unmanaged team, no read.</p>
@@ -2301,7 +2283,12 @@ function MatchupLive({
                         : null;
 
                       return renderLineupRow({
-                        meta: lineupMetaFor(benchRow.player, bestFitMeta),
+                        /* The starter rows have taken the compact meta since
+                           the truncation sweep; the bench rows were still
+                           building the full string, and with "Would start at
+                           FLX · +100 → +240" bolted on the end it ran 141px
+                           past a 200px column and ellipsised every time. */
+                        meta: lineupMetaFor(benchRow.player, bestFitMeta, true),
                         player: benchRow.player,
                         projection: benchRow.projection,
                         selected: compareSelection.some((candidate) => candidate.id === benchRow.player.id),
@@ -2343,7 +2330,17 @@ function MatchupLive({
                 marketRows.length > 0 ? (
                   <section className="matchup-page__module">
                     <div className="matchup-page__module-row">
-                      <h2 className="matchup-page__module-title">The market</h2>
+                      {/* The note was a second line under the title, and on a
+                          phone the title is hidden — which left it sitting
+                          under a lone refresh button saying "added to your
+                          lineup" with nothing to be added to. Beside the title
+                          it reads on both. */}
+                      <span className="matchup-page__module-heading">
+                        <h2 className="matchup-page__module-title">The market</h2>
+                        <p className="matchup-page__meta-copy">
+                          {marketScan.note ?? 'what each one does to your week'}
+                        </p>
+                      </span>
                       <div className="matchup-page__module-meta">
                         {marketScan.isScanning ? (
                           <SimulationLoader label="Scanning the market" size="compact" variant="scan" />
@@ -2363,9 +2360,6 @@ function MatchupLive({
                         )}
                       </div>
                     </div>
-                    <p className="matchup-page__meta-copy">
-                      {marketScan.note ?? 'added to your lineup'}
-                    </p>
                     {marketRows.map((mover) => (
                       <MarketMoverRow
                         acceptanceProbability={mover.acceptanceProbability}
@@ -2400,10 +2394,10 @@ function MatchupLive({
                 ) : isPriced ? (
                   <MatchupSuggestionEmpty
                     copy="Nothing on waivers beats what you'd already stream."
-                    meta={marketScan.note ?? (suggestionsAsOf ? `as of ${suggestionsAsOf}` : 'added to your lineup')}
+                    meta={marketScan.note ?? (suggestionsAsOf ? `as of ${suggestionsAsOf}` : 'what each one does to your week')}
                   />
                 ) : (
-                  <MatchupSuggestionSkeleton mode="market" title="The market" subtitle="added to your lineup" />
+                  <MatchupSuggestionSkeleton mode="market" title="The market" subtitle="what each one does to your week" />
                 )
               ) : !isConnected ? (
                 <section className="matchup-page__module">
@@ -2518,7 +2512,7 @@ function MatchupLive({
                       rel="noreferrer"
                       target="_blank"
                     >
-                      {stored.provider === 'espn' ? 'Open in ESPN ↗' : 'Open Sleeper ↗'}
+                      {stored.provider === 'espn' ? 'Open in ESPN ↗︎' : 'Open Sleeper ↗︎'}
                     </a>
                   ) : null}
                 </div>
@@ -2526,7 +2520,7 @@ function MatchupLive({
             ) : isConnected && showSuggestionSkeletons ? (
               <MatchupSuggestionSkeleton mode="edge" title="Who do I start?" subtitle="the book's answer" />
             ) : isConnected ? (
-              <section className="matchup-page__module matchup-page__module--rail-call">
+              <section className="matchup-page__module matchup-page__module--rail-call matchup-page__module--rail-call-clean">
                 <div className="matchup-page__module-row">
                   <h2 className="matchup-page__module-title">Who do I start?</h2>
                 </div>
@@ -2846,6 +2840,27 @@ export function MatchupPage() {
             : error ?? `We couldn't load your ${PROVIDER_LABEL[stored.provider]} league right now.`}
         </SeasonalNotice>
       </div>
+    );
+  }
+
+  /* Before a draft there is nothing to price, and the Hub's whole vocabulary is
+     prices. It has to leave rather than render zeroes. This sits after the
+     bootstrap guard above, so `bootstrap` is real by here. */
+  if (stored && bootstrap && isLeaguePreDraft(bootstrap)) {
+    return (
+      <PreDraftHub
+        bootstrap={bootstrap}
+        officialUrl={officialLeagueUrl({
+          provider: stored.provider,
+          leagueId: stored.leagueId,
+          season: stored.season,
+          espnTeamId:
+            stored.provider === 'espn'
+              ? bootstrap.teams.find((team) => team.isUser)?.rosterId ?? null
+              : null,
+        })}
+        provider={stored.provider}
+      />
     );
   }
 

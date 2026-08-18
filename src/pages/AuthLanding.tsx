@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { useAuth } from '../contexts/AuthContext';
 import './AuthLanding.css';
@@ -6,8 +6,55 @@ import './AuthLanding.css';
 declare const __BUILD_STAMP__: string | undefined;
 const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
 
+/**
+ * What this device thinks its safe area is.
+ *
+ * The whole shell is laid out from env(safe-area-inset-top), and a browser
+ * cannot answer whether that resolves in this WKWebView — env() is 0 in a
+ * browser by definition, so measuring it there proves nothing either way. The
+ * device has to say. This is the same reasoning as the build line beside it:
+ * put the question that decides everything else on the one screen you can
+ * reach without an account.
+ */
+function useViewportReadout() {
+  const [readout, setReadout] = useState<string | null>(null);
+
+  useEffect(() => {
+    const probe = document.createElement('div');
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.cssText = [
+      'position:fixed',
+      'top:0',
+      'left:0',
+      'width:1px',
+      'height:0',
+      'visibility:hidden',
+      'pointer-events:none',
+      'padding-top:env(safe-area-inset-top)',
+      'padding-bottom:env(safe-area-inset-bottom)',
+    ].join(';');
+    document.body.appendChild(probe);
+    const computed = window.getComputedStyle(probe);
+    const env = Math.round(parseFloat(computed.paddingTop) || 0);
+    const envBottom = Math.round(parseFloat(computed.paddingBottom) || 0);
+    probe.remove();
+
+    const pushed = window
+      .getComputedStyle(document.documentElement)
+      .getPropertyValue('--shell-safe-top')
+      .trim();
+
+    setReadout(
+      `env ${env}/${envBottom} · native ${pushed || 'none'} · ${window.innerWidth}x${window.innerHeight}`,
+    );
+  }, []);
+
+  return readout;
+}
+
 export function AuthLanding() {
   const { signUp, signIn } = useAuth();
+  const viewport = useViewportReadout();
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -113,6 +160,7 @@ export function AuthLanding() {
           <p className="auth-landing__build">
             Build {buildStamp}
             {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
+            {viewport ? ` · ${viewport}` : ''}
           </p>
         </section>
       </div>

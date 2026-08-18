@@ -46,11 +46,35 @@
    when it had nothing to scroll. */
 @media (max-width: 1023px) {
   .app-shell {
-    padding-top: env(safe-area-inset-top);
+    /* `--shell-safe-top` is pushed in by the native shell, which knows the
+       number from UIKit. env() is the fallback for the browser build, and for
+       any device where the push has not landed yet. max() rather than a plain
+       fallback so neither source can make the barrier thinner than the other
+       says it should be. */
+    padding-top: max(var(--shell-safe-top, 0px), env(safe-area-inset-top));
   }
 
   .app-content {
     padding-top: 0;
+  }
+
+  /* A hard edge under the status bar.
+
+     Nothing above this line belongs to the app. The season band is sticky, the
+     page scrolls beneath it, and anything that reaches the top of the scroller
+     paints into the strip the clock and the battery live in — which is how a
+     championship price ended up sitting next to the carrier signal. Padding
+     alone is a request; a fixed opaque strip is a barrier. It is outside the
+     scroller, so no amount of sticky, transform or rounding gets past it, and
+     it sits above every layer in the shell except the pricing curtain. */
+  .app-shell::before {
+    content: '';
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 100;
+    height: max(var(--shell-safe-top, 0px), env(safe-area-inset-top));
+    background: var(--bg);
+    pointer-events: none;
   }
 }
 

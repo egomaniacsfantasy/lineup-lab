@@ -52,3 +52,28 @@ input, select, textarea {
   border: none;
   outline: none;
 }
+
+/* ---------------------------------------------------------------------------
+   iOS zooms the page when you focus a text field smaller than 16px.
+
+   It does not zoom back. Everything after that first tap is measured against a
+   layout viewport bigger than the screen, and the symptoms look like six
+   unrelated layout bugs: the tab bar's labels fall off the bottom, the page
+   pans sideways so the content sits against the edges, and scrolling drags the
+   sticky season band up into the clock and the battery. One cause, and the
+   cause is a font size.
+
+   Reproduced on an iPhone 17 Pro simulator by tapping the Board's search field
+   at 14px: "PLAYER VALUE" became "LUE".
+
+   16px is also the size iOS asks for in its own guidelines, so this is not a
+   workaround so much as the rule being observed. Checkboxes, radios and range
+   sliders are not text entry and never trigger it.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}

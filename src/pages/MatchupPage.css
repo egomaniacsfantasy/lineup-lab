@@ -2939,598 +2939,17 @@
     position: sticky;
     top: 0;
     z-index: 20;
+    /* `--bg-base` is not a token — it is used twice here and defined nowhere,
+       which makes the whole `background` declaration invalid at computed-value
+       time. The band has therefore had no background at all: the gradient that
+       was supposed to make it read as a solid surface fading into the page
+       never painted, so the page scrolled visibly through the numbers. The
+       token is `--bg`. */
     background:
       linear-gradient(
         180deg,
-        var(--bg-base) 0%,
-        color-mix(in srgb, var(--bg-base) 92%, transparent) 62%,
-        transparent 100%
-      );
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-}
-
-.matchup-page__slot-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.matchup-page__slot-copy--right {
-  text-align: right;
-}
-
-.matchup-page__slot-headshot {
-  width: 38px;
-  height: 38px;
-  border: 2px solid rgba(232, 84, 29, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(244, 245, 242, 0.06);
-}
-
-/* Projections read as scores, not odds: white and heavy on your side,
-   dim on theirs. Orange stays reserved for deltas and affordances. */
-.matchup-page__slot-projection {
-  color: var(--text-primary);
-  font-family: var(--font-num);
-  font-size: 17px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.matchup-page__rail-stat strong {
-  color: var(--amber-bright);
-  font-family: var(--font-num);
-  font-size: 17px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.matchup-page__slot-empty {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
-}
-
-.matchup-page__bench-drawer {
-  margin-top: 14px;
-  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
-  padding-top: 12px;
-}
-
-.matchup-page__bench-summary {
-  cursor: pointer;
-  color: var(--amber-bright);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.matchup-page__bench-columns {
-  display: grid;
-  gap: 14px;
-  margin-top: 12px;
-}
-
-.matchup-page__h2h-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  min-height: 64px;
-  padding: 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent 56%),
-    color-mix(in srgb, var(--bg-inset) 84%, transparent);
-}
-
-.matchup-page__h2h-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.matchup-page__h2h-copy strong {
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.matchup-page__h2h-timeline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.matchup-page__h2h-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(244, 245, 242, 0.16);
-}
-
-.matchup-page__h2h-dot--win {
-  background: var(--green);
-}
-
-.matchup-page__h2h-dot--loss {
-  background: var(--red);
-}
-
-.matchup-page__h2h-dot--tie {
-  background: rgba(244, 245, 242, 0.44);
-}
-
-.matchup-page__module--rail-chart,
-.matchup-page__module--rail-glance {
-  padding: 16px;
-}
-
-/* Empty state compacts to a slim strip instead of reserving a tall box
-   for one sentence. */
-.matchup-page__rail-placeholder {
-  display: grid;
-  gap: 4px;
-  align-content: start;
-}
-
-.matchup-page__rail-placeholder strong {
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 19px;
-  line-height: 1.05;
-}
-
-.matchup-page__rail-stats {
-  display: grid;
-  gap: 10px;
-}
-
-/* The call: the one actionable start/sit decision, top of the rail. */
-.matchup-page__module--rail-call {
-  border-color: rgba(232, 84, 29, 0.24);
-  background:
-    radial-gradient(120% 140% at 100% 0%, rgba(232, 84, 29, 0.1), transparent 56%),
-    var(--bg-surface);
-}
-
-.matchup-page__rail-call-swap {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.matchup-page__rail-call-market {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-inset) 78%, transparent);
-}
-
-.matchup-page__rail-call-values {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  color: var(--text-primary);
-  font-family: var(--font-num);
-  font-size: 17px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.matchup-page__rail-call-values .matchup-page__edge-delta {
-  margin-left: auto;
-  font-size: 19px;
-}
-
-.matchup-page__rail-call-clean {
-  margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.matchup-page__risk-list {
-  display: grid;
-  gap: 8px;
-}
-
-.matchup-page__risk-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-inset) 72%, transparent);
-}
-
-.matchup-page__risk-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.matchup-page__risk-status {
-  color: var(--amber-bright);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.matchup-page__rail-stat-line {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.matchup-page__rail-stat-name {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.matchup-page__rail-stat {
-  display: grid;
-  gap: 4px;
-  padding: 12px 12px 10px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--bg-inset) 80%, transparent);
-}
-
-@media (min-width: 1200px) {
-  .matchup-page__frame {
-    grid-template-columns: minmax(640px, 1fr) 384px;
-    align-items: start;
-  }
-
-  /* The rail scrolls WITH the page, not inside itself. It used to be sticky
-     with its own max-height and overflow-y, which made the hub two separate
-     scrollers: the season band could scroll away under your cursor while the
-     lineup beside it sat still. One page, one scrollbar. */
-  .matchup-page__rail {
-    align-self: start;
-  }
-
-  /* The start/sit call now lives in the rail, so the digest is the only
-     occupant here and takes the full canvas rather than half of it. */
-  .matchup-page__insight-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (min-width: 900px) {
-  .matchup-page__bench-columns {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 430px) {
-  .matchup-page__edge-swap-card {
-    grid-template-areas:
-      'players'
-      'market'
-      'delta';
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .matchup-page__edge-delta {
-    justify-self: start;
-  }
-
-  .matchup-page__mover-row {
-    align-items: flex-start;
-  }
-
-  .matchup-page__market-trade {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    width: 100%;
-  }
-
-  .matchup-page__market-unit {
-    min-width: 0;
-  }
-
-  .matchup-page__market-unit-name {
-    font-size: 13px;
-  }
-
-  .matchup-page__mover-gain {
-    font-size: 20px;
-  }
-
-  .matchup-page__mover-accept {
-    width: 82px;
-  }
-
-  .matchup-page__mover-accept-band {
-    font-size: 10px;
-  }
-
-  .matchup-page__lock-summary {
-    align-items: flex-start;
-  }
-
-  .matchup-page__swap-chip-name {
-    display: none;
-  }
-}
-
-/* No-shared-slot compare: what each player costs you to sit. Both values are
-   the engine's resulting line for that slot's best bench option. */
-.matchup-page__compare-sit {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--bg-surface);
-}
-
-.matchup-page__compare-sit-row {
-  display: grid;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.matchup-page__compare-sit-name {
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.matchup-page__compare-sit-sub {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.matchup-page__compare-sit-value {
-  color: var(--text-amber);
-  font-family: var(--font-num);
-  font-size: 15px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.matchup-page__compare-sit-verdict {
-  margin: 2px 0 0;
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 12px;
-}
-
-/* Season band placement.
-   Desktop wants it at the top of the rail; a phone wants it between the
-   matchup hero and the lineup table, and the hero lives inside the main
-   column, so no single DOM position serves both. Two instances, exactly one
-   displayed. display:none keeps the hidden copy out of the a11y tree. */
-.matchup-page__season--mobile {
-  display: block;
-}
-
-.matchup-page__season--rail {
-  display: none;
-}
-
-@media (min-width: 1200px) {
-  .matchup-page__season--mobile {
-    display: none;
-  }
-
-  .matchup-page__season--rail {
-    display: block;
-  }
-}
-
-/* Share the line. Quiet until wanted: the hero is about the number, not the
-   button, but it has to be reachable without a menu. */
-.matchup-page__share {
-  margin-left: auto;
-  padding: 6px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: none;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 140ms ease, color 140ms ease;
-}
-
-.matchup-page__share:hover,
-.matchup-page__share:focus-visible {
-  border-color: rgba(232, 84, 29, 0.5);
-  color: var(--text-amber);
-}
-
-/* ---------------------------------------------------------------------------
-   Faceoff alignment.
-
-   Each side is its own grid, so its three rows — identity, price, projection —
-   were sized independently. An opponent with an extra line of meta ("Unmanaged
-   team, no read.") made that column's identity taller and pushed its price
-   down, so the two prices sat about 60px apart and read as a rendering fault.
-
-   Subgrid puts both sides on the parent's rows, so the prices share a baseline
-   no matter how the names wrap. Without subgrid support nothing changes.
-   --------------------------------------------------------------------------- */
-@supports (grid-template-rows: subgrid) {
-  .matchup-page__faceoff {
-    grid-template-rows: auto auto auto;
-  }
-
-  .matchup-page__faceoff-side {
-    grid-row: span 3;
-    grid-template-rows: subgrid;
-  }
-
-  .matchup-page__faceoff-vs {
-    grid-row: span 3;
-  }
-}
-
-@media (max-width: 1023px) {
-  /* Two lines is enough for any team name at this width; past that it is the
-     ellipsis's job, not the layout's. */
-  .matchup-page__team-name {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    font-size: 18px;
-  }
-
-  /* "Unmanaged team · 0-0" already says it, and the crest is visibly not
-     tappable. The sentence stays on desktop where there is room for it. */
-  .matchup-page__faceoff-identity--opp .matchup-page__meta-copy + .matchup-page__meta-copy {
-    display: none;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Lineup board on a phone.
-
-   The board is three columns — you, position, them — and at 375px each player
-   card got 98px. Inside the card the headshot (38px) and the numbers (52px,
-   min-width) are fixed, so the name track collapsed to 0 and the name painted
-   straight over the projection. Two players' names sat on top of their own
-   scores.
-
-   The headshot is the least load-bearing part here: the name identifies the
-   player and the card is already in that player's column. Dropping it and
-   stacking name over projection gives the name real width again.
-   --------------------------------------------------------------------------- */
-@media (max-width: 1023px) {
-  .matchup-page__slot-board-grid {
-    grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .matchup-page__slot-card {
-    grid-template-columns: 24px minmax(0, 1fr);
-    gap: 2px 6px;
-    min-height: 0;
-    padding: 8px 8px;
-    border-radius: 12px;
-  }
-
-  /* The headshot comes back. Dropping it was the wrong trade: it is how you
-     recognise a player at a glance, and the card is unreadable as a list of
-     names. It fits by being smaller and spanning both rows rather than
-     competing with the name for a single row's width. */
-  .matchup-page__slot-headshot {
-    width: 24px;
-    height: 24px;
-    grid-row: span 2;
-    align-self: center;
-  }
-
-  .matchup-page__slot-headshot .player-headshot__image,
-  .matchup-page__slot-headshot .player-headshot__fallback {
-    width: 24px;
-    height: 24px;
-    font-size: 9px;
-  }
-
-  .matchup-page__slot-numbers {
-    justify-items: start;
-    min-width: 0;
-  }
-
-  .matchup-page__slot-card--right .matchup-page__slot-numbers,
-  .matchup-page__slot-card--opponent .matchup-page__slot-numbers {
-    justify-items: end;
-  }
-
-  .matchup-page__slot-card--right,
-  .matchup-page__slot-card--opponent {
-    grid-template-columns: minmax(0, 1fr) 24px;
-  }
-
-  .matchup-page__slot-card--right .matchup-page__slot-headshot,
-  .matchup-page__slot-card--opponent .matchup-page__slot-headshot {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-
-  .matchup-page__row-name {
-    display: block;
-    overflow: hidden;
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .matchup-page__slot-projection {
-    font-size: 15px;
-  }
-
-  /* nowrap with nothing to shrink into: this cue is wider than the 119px card
-     and painted across the opponent's column. It may wrap here. */
-  .matchup-page__slot-bench-cue {
-    font-size: 10px;
-    white-space: normal;
-  }
-}
-
-/* The season line leads the Hub and stays put while the week scrolls under it.
-   The gradient is what makes it read as watching over rather than as a bar
-   bolted to the top: solid where the numbers are, fading to nothing beneath,
-   so content passes under it instead of hitting an edge. */
-@media (max-width: 1199px) {
-  /* .matchup-page__main is a grid, and a grid item defaults to min-width: auto,
-     so a negative inline margin here widened the track and pushed the entire
-     Hub off the right edge. The band stays inside its column. */
-  .matchup-page__main {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .matchup-page__main > * {
-    min-width: 0;
-  }
-
-  .matchup-page__season--mobile {
-    order: -1;
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    background:
-      linear-gradient(
-        180deg,
-        var(--bg-base) 0%,
-        color-mix(in srgb, var(--bg-base) 92%, transparent) 62%,
+        var(--bg) 0%,
+        color-mix(in srgb, var(--bg) 92%, transparent) 62%,
         transparent 100%
       );
     backdrop-filter: blur(10px);
@@ -3621,5 +3040,123 @@
 
   .matchup-page__slot-board-grid {
     gap: 0 8px;
+  }
+}
+
+
+/* ---------------------------------------------------------------------------
+   What hiding the module titles left behind.
+
+   Dropping the titles on a phone was right — "Lineup vs lineup" over a lineup
+   facing a lineup is a wasted line — but `display: none` takes the title out
+   and leaves its row standing. Two things followed from that, and both of them
+   were visible on the Hub:
+
+   An empty flex row still carries its 10px bottom margin, so every module whose
+   row held nothing but a title started 10px lower than its own padding said it
+   should. In a card with one sentence in it — "Your lineup is already the best
+   play." — that is the whole difference between centred and not.
+
+   And `justify-content: space-between` with one item left in the row puts that
+   item at the start, so the market card's refresh control stopped being a
+   control on the right of a heading and became a circle floating alone in the
+   top-left corner.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .matchup-page__module-row:has(> .matchup-page__module-title:only-child) {
+    display: none;
+  }
+
+  .matchup-page__module-row:has(> .matchup-page__module-title)
+    > .matchup-page__module-meta {
+    margin-left: auto;
+  }
+}
+
+/* The title and its note travel together, so the note survives the title being
+   hidden and keeps the row's two-item shape either way. */
+.matchup-page__module-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+/* One sentence, alone in a card that a grid row may have stretched. Centre it
+   in the box rather than let it hang from the top of it. */
+.matchup-page__module--rail-call-clean {
+  display: grid;
+  align-content: center;
+}
+
+
+/* ---------------------------------------------------------------------------
+   Market rows stop fighting over one line.
+
+   The row is `space-between`: the player on the left, the market read on the
+   right. On a 402pt phone the market read is a whole sentence — "50.0% 98.5%
+   to win this week (+48.5%)" — and it took what it needed, so the player got
+   what was left, which was enough for "B. Ro...". Truncating a player's name
+   to make room for a sentence about that player is the wrong trade, and an
+   ellipsis is not a layout.
+
+   Stacked, both get the full width and neither has to be cut.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .matchup-page__mover-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+  }
+
+  .matchup-page__mover-market {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .matchup-page__mover-market .matchup-page__price-shift {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Nothing in a market row truncates. */
+  .matchup-page__market-unit-name,
+  .matchup-page__mover-label {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}
+
+
+/* An ellipsis is not a layout.
+
+   The bench sits inside a disclosure, so it has vertical room the starter rows
+   do not, and its secondary line carries the one thing worth reading about a
+   bench player — which slot they would start in and what that does to the
+   line. Cutting that off mid-word to protect a single row height is the wrong
+   way round: the line wraps. */
+@media (max-width: 1023px) {
+  .matchup-page__lineup-row--bench .matchup-page__row-secondary {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+}
+
+
+/* The narrowest supported screen.
+
+   The two lineups share the width, so on a 320px iPhone SE each name gets
+   about 150px, and the longest of them ran 3-5px over and took an ellipsis for
+   it. A step down in size buys back more than the overflow costs, and a name
+   that fits at 11px beats a name cut at 12px. */
+@media (max-width: 360px) {
+  .matchup-page__row-name {
+    font-size: 11px;
   }
 }

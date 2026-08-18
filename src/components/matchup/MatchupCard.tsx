@@ -4,6 +4,7 @@ import { formatAmericanOdds, formatSpread } from '../../utils/formatOdds';
 import { Gloss } from '../ui/Gloss';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import './MatchupCard.css';
+import { managerLine } from '../../utils/managerLine';
 
 interface MatchupCardProps {
   matchup: MatchupData;
@@ -141,7 +142,7 @@ export function MatchupCard({ matchup, activeRoster, activeLine, isProvisional =
                 <p className="matchup-card__team-label">Your team</p>
                 <h3 className="matchup-card__team-name">{matchup.yourTeam.teamName}</h3>
                 <p className="matchup-card__team-record">
-                  {matchup.yourTeam.managerName} · {matchup.yourTeam.record}
+                  {managerLine(matchup.yourTeam.managerName, matchup.yourTeam.record)}
                 </p>
               </div>
             </div>
@@ -168,7 +169,7 @@ export function MatchupCard({ matchup, activeRoster, activeLine, isProvisional =
                 <p className="matchup-card__team-label">Opponent</p>
                 <h3 className="matchup-card__team-name">{matchup.opponentTeam.teamName}</h3>
                 <p className="matchup-card__team-record">
-                  {matchup.opponentTeam.managerName} · {matchup.opponentTeam.record}
+                  {managerLine(matchup.opponentTeam.managerName, matchup.opponentTeam.record)}
                 </p>
               </div>
             </div>

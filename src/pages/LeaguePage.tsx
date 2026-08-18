@@ -31,6 +31,9 @@ import {
 import { PROVIDER_LABEL } from '../utils/provider';
 import './ConnectPage.css';
 import './LeaguePage.css';
+import { PreDraftHub } from '../components/matchup/PreDraftHub';
+import { isLeaguePreDraft } from '../utils/preDraft';
+import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
 type LeagueView = 'this-week' | 'standings' | 'futures' | 'schedule';
@@ -76,6 +79,11 @@ export function LeaguePage() {
   const flow =
     flowFromHash(location.hash) ??
     (showWizard || hasConnectHash || isReconnectState ? manualFlow : 'none');
+
+  /* The same gate the Hub has. Before a draft this page is a board of twelve
+     0-0 teams all priced at +100 and a "Week 2 matchups" header for a week
+     nobody has played — the numbers are real arithmetic on nothing. */
+  const preDraft = bootstrap != null && isLeaguePreDraft(bootstrap);
 
   const connected = useMemo(() => {
     if (!bootstrap) return null;
@@ -260,6 +268,17 @@ export function LeaguePage() {
           Syncing your league from {PROVIDER_LABEL[stored.provider]}…
         </SeasonalNotice>
       </div>
+    );
+  }
+
+  if (stored && bootstrap && preDraft) {
+    return (
+      <PreDraftHub
+        bootstrap={bootstrap}
+        officialUrl={officialLeagueUrl(stored)}
+        provider={stored.provider}
+        scope="league"
+      />
     );
   }
 

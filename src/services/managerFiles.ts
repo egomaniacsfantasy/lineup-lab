@@ -176,7 +176,8 @@ export interface ManagerFile {
   version: string;
   provider: Provider;
   managerKey: string;
-  managerName: string;
+  /* null when the provider has no printable name for the manager. */
+  managerName: string | null;
   teamName: string;
   rosterId: number | null;
   avatarUrl: string | null;

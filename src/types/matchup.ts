@@ -53,7 +53,7 @@ export interface MatchupData {
 export interface TeamMatchupData {
   managerKey?: string | null;
   teamName: string;
-  managerName: string;
+  managerName: string | null;
   record: string;
   /** Sleeper team avatar (the league's "team logo"), proxied. */
   avatarUrl?: string | null;

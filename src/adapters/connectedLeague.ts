@@ -29,6 +29,7 @@ import type {
 import { apiUrl } from '../services/apiBase.ts';
 import type { LeagueFutureRow, LeagueWeekMatchup } from '../mocks/league';
 import type { ScheduleGridItem } from '../components/season/ScheduleGrid';
+import { playerShortName } from '../utils/playerNames.ts';
 
 const WEEKLY_SIGMA = 26; // fantasy team weekly stdev assumption for provisional lines
 
@@ -49,12 +50,6 @@ export function probabilityToAmerican(prob: number) {
     : Math.round((100 * (1 - p)) / p);
 }
 
-function shortName(fullName: string) {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length === 1) return fullName;
-  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
-}
-
 function toPosition(position: string | null): Position {
   return (['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(position ?? '')
     ? position
@@ -69,7 +64,7 @@ export function toPlayer(id: string, catalog: Record<string, ApiCatalogPlayer>):
   return {
     id,
     name,
-    shortName: entry?.position === 'DEF' ? name : shortName(name),
+    shortName: playerShortName(name, entry?.position),
     position: toPosition(entry?.position ?? null),
     team,
     headshotUrl:
@@ -149,7 +144,7 @@ export function toLeagueFutures(
       .sort((a, b) => b.titleProb - a.titleProb)
       .map((f) => ({
         teamName: f.teamName,
-        ownerName: bootstrap.teams.find((team) => team.rosterId === f.rosterId)?.ownerName,
+        ownerName: bootstrap.teams.find((team) => team.rosterId === f.rosterId)?.ownerName ?? undefined,
         rosterId: f.rosterId,
         avatarUrl: bootstrap.teams.find((team) => team.rosterId === f.rosterId)?.avatarUrl ?? null,
         record:
@@ -250,7 +245,7 @@ export function toWeekMatchups(
       matchupId: a.matchupId,
       teamARosterId: a.rosterId,
       teamA: teamA.teamName,
-      teamAOwnerName: teamA.ownerName,
+      teamAOwnerName: teamA.ownerName ?? undefined,
       teamAAvatarUrl: teamA.avatarUrl,
       teamARecord: recordLabel(teamA),
       teamAOdds: oddsA,
@@ -259,7 +254,7 @@ export function toWeekMatchups(
       teamAIsUser: teamA.isUser,
       teamBRosterId: b.rosterId,
       teamB: teamB.teamName,
-      teamBOwnerName: teamB.ownerName,
+      teamBOwnerName: teamB.ownerName ?? undefined,
       teamBAvatarUrl: teamB.avatarUrl,
       teamBRecord: recordLabel(teamB),
       teamBOdds: oddsB,

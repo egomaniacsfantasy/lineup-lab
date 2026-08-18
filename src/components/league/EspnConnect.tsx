@@ -22,6 +22,7 @@ import {
   parseEspnLeagueInput,
 } from '../../utils/espnConnect';
 import './EspnConnect.css';
+import { managerLine } from '../../utils/managerLine';
 
 interface EspnConnectProps {
   initialLeagueInput?: string;
@@ -444,7 +445,7 @@ export function EspnConnect({
                       {isLoading ? 'Checking ESPN…' : 'Connect my ESPN league'}
                     </button>
                     <button className="espn-connect__linkbtn" onClick={openEspnLeague} type="button">
-                      Sign in to ESPN first ↗
+                      Sign in to ESPN first ↗︎
                     </button>
                   </>
                 ) : (
@@ -460,7 +461,7 @@ export function EspnConnect({
                         rel="noreferrer"
                         target="_blank"
                       >
-                        Add the connector ↗
+                        Add the connector ↗︎
                       </a>
                     ) : (
                       <p className="espn-connect__method-note">
@@ -520,8 +521,10 @@ export function EspnConnect({
                   leagueId: step.leagueId,
                   leagueName: step.leagueName,
                   userId: team.ownerId ?? '',
-                  username: team.ownerName,
-                  displayName: team.ownerName,
+                  /* The connection needs a label. When ESPN has no printable
+                     name for the account, the team is how you know it. */
+                  username: team.ownerName ?? team.teamName,
+                  displayName: team.ownerName ?? team.teamName,
                   allLeagueIds: [step.leagueId],
                   season: step.season,
                   // Cookies now live (encrypted) on the server, keyed by league.
@@ -539,7 +542,10 @@ export function EspnConnect({
             >
               <span className="espn-connect__team-name">{team.teamName}</span>
               <span className="espn-connect__team-meta">
-                {team.ownerName} · {team.record.wins}-{team.record.losses}
+                {managerLine(
+                  team.ownerName,
+                  `${team.record.wins}-${team.record.losses}`,
+                )}
               </span>
             </button>
           ))}

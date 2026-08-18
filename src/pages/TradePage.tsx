@@ -56,6 +56,9 @@ import {
   tradeSideFromIds,
 } from '../utils/tradeDisplay';
 import './TradePage.css';
+import { PreDraftHub } from '../components/matchup/PreDraftHub';
+import { isLeaguePreDraft } from '../utils/preDraft';
+import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 
 type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
@@ -1439,6 +1442,7 @@ function TradeDealsView() {
 
 export function TradePage() {
   const [params, setParams] = useSearchParams();
+  const { stored, bootstrap } = useLeagueConnection();
 
   // Scouting no longer exists as a page; old /market?view=scouting links land on Deals.
   useEffect(() => {
@@ -1448,6 +1452,19 @@ export function TradePage() {
       setParams(nextParams, { replace: true });
     }
   }, [params, setParams]);
+
+  /* Nobody owns a player before a draft, so the finder was offering twelve
+     undrafted teams as trade partners and pricing a title for each of them. */
+  if (stored && bootstrap && isLeaguePreDraft(bootstrap)) {
+    return (
+      <PreDraftHub
+        bootstrap={bootstrap}
+        officialUrl={officialLeagueUrl(stored)}
+        provider={stored.provider}
+        scope="trades"
+      />
+    );
+  }
 
   return (
     <div className="market-page">

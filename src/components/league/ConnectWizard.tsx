@@ -9,6 +9,7 @@ import {
 } from '../../services/leagueApi';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import './ConnectWizard.css';
+import { isLeaguePreDraft } from '../../utils/preDraft';
 
 interface ConnectWizardProps {
   onConnected: (connection: StoredConnection) => void;
@@ -222,9 +223,7 @@ function ConfirmStep({
   onBack: () => void;
 }) {
   const userTeam = step.bootstrap.teams.find((t) => t.isUser) ?? null;
-  const isPreDraft =
-    step.league.status === 'pre_draft' ||
-    step.bootstrap.teams.every((t) => t.players.length === 0);
+  const isPreDraft = isLeaguePreDraft(step.bootstrap);
   const record = userTeam
     ? `${userTeam.record.wins}-${userTeam.record.losses}`
     : null;

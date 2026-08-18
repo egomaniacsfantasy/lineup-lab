@@ -89,6 +89,13 @@ final class EspnAuthViewController: UIViewController, WKNavigationDelegate {
     private var webView: WKWebView!
     private var settled = false
     private var pollTimer: Timer?
+    /* Recorded so a cancel can say what the sheet actually saw. "It did not
+       work" is not reportable; "42 cookies across these hosts, SWID yes,
+       espn_s2 no" points at one specific thing. */
+    private var lastCookieCount = 0
+    private var lastDomains = ""
+    private var sawEspnS2 = false
+    private var sawSwid = false
 
     init(leagueId: String, season: String) {
         self.leagueId = leagueId
@@ -148,7 +155,14 @@ final class EspnAuthViewController: UIViewController, WKNavigationDelegate {
     }
 
     @objc private func cancelTapped() {
-        finish(.cancelled)
+        /* A cancel after a successful sign-in is the interesting case: it means
+           the cookies were there and we did not recognise them. */
+        if sawEspnS2 || sawSwid || lastCookieCount > 0 {
+            finish(.failed(reason:
+                "cancelled after \(lastCookieCount) cookies [espn_s2:\(sawEspnS2) swid:\(sawSwid)] on \(lastDomains)"))
+        } else {
+            finish(.cancelled)
+        }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -162,10 +176,19 @@ final class EspnAuthViewController: UIViewController, WKNavigationDelegate {
 
             var espnS2: String?
             var swid: String?
-            for cookie in cookies where cookie.domain.contains("espn.com") {
-                if cookie.name == "espn_s2" { espnS2 = cookie.value }
-                if cookie.name.uppercased() == "SWID" { swid = cookie.value }
+            /* ESPN sets these on more than one host (espn.com, go.com,
+               registerdisney.go.com), and which one carries them depends on the
+               path the sign-in took. Matching only espn.com was a guess, so
+               take the cookie by name from any host and record what was seen. */
+            for cookie in cookies {
+                if cookie.name == "espn_s2", espnS2 == nil { espnS2 = cookie.value }
+                if cookie.name.uppercased() == "SWID", swid == nil { swid = cookie.value }
             }
+
+            self.lastCookieCount = cookies.count
+            self.lastDomains = Set(cookies.map(\.domain)).sorted().prefix(6).joined(separator: ",")
+            self.sawEspnS2 = espnS2 != nil
+            self.sawSwid = swid != nil
 
             guard let espnS2, let swid, !espnS2.isEmpty, !swid.isEmpty else { return }
             self.finish(.success(espnS2: espnS2, swid: swid))

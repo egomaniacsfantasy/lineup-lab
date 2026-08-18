@@ -17,12 +17,17 @@ async function loadClaimModule() {
     fileName: sourcePath,
   }).outputText;
   /* The transpiled copy runs from the OS temp dir, so its relative imports
-     cannot resolve. Point the one runtime import at the real module by
-     absolute URL rather than stubbing it, so this exercises the same apiUrl
-     the app ships. */
+     cannot resolve. Point every runtime import at the real module by absolute
+     URL rather than stubbing them, so this exercises the same code the app
+     ships. Rewriting them all rather than one by name means adding an import
+     to the module under test does not silently break this harness — which is
+     exactly what adding the shared name helper did. */
   const resolved = transpiled.replace(
-    "'../services/apiBase.ts'",
-    JSON.stringify(pathToFileURL(path.join(process.cwd(), 'src/services/apiBase.ts')).href),
+    /(from\s*)'(\.\.?\/[^']+)'/g,
+    (_match, prefix, specifier) =>
+      `${prefix}${JSON.stringify(
+        pathToFileURL(path.resolve(path.dirname(sourcePath), specifier)).href,
+      )}`,
   );
   const tempPath = path.join(
     os.tmpdir(),

@@ -156,7 +156,10 @@
   background: none;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  /* Not a preference: below 16px iOS zooms the page on focus and never zooms
+     back. A class beats the element-level floor in the reset, so the floor has
+     to be stated here too. */
+  font-size: max(16px, 13px);
   font-weight: 600;
   cursor: pointer;
 }

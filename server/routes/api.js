@@ -456,7 +456,12 @@ async function loadLeagueContext(provider, leagueId, userId) {
     const owner = r.ownerId ? usersByOwner.get(r.ownerId) : null;
     return {
       ...r,
-      ownerName: owner?.ownerName ?? 'Unmanaged team',
+      /* `?? 'Unmanaged team'` collapsed two different facts into one label. A
+         team can have an owner whose name we cannot honestly print (ESPN hands
+         back a machine handle for accounts that never set a display name), and
+         that team is managed — it just has nobody to name. Only a team with no
+         owner record at all is unmanaged. */
+      ownerName: owner ? owner.ownerName ?? null : 'Unmanaged team',
       teamName: owner?.teamName ?? `Roster ${r.rosterId}`,
       avatarUrl: owner?.avatarUrl ?? null,
       isUser:

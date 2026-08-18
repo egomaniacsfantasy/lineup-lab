@@ -1,12 +1,7 @@
 import type { ApiCatalogPlayer } from '../services/leagueApi';
 import { apiUrl } from '../services/apiBase.ts';
 import type { Player, Position } from '../types';
-
-function shortName(fullName: string) {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length <= 1) return fullName;
-  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
-}
+import { playerShortName } from './playerNames.ts';
 
 function toPosition(position: string | null | undefined): Position {
   return (['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(position ?? '')
@@ -39,7 +34,7 @@ export function resolveWaiverClaimPlayer(
   return {
     id: mover.playerId,
     name,
-    shortName: position === 'DEF' ? name : shortName(name),
+    shortName: playerShortName(name, position),
     position,
     team,
     headshotUrl:

@@ -952,7 +952,7 @@ export function MyBoardPage() {
               setSearchDraft(nextValue);
               updateSearchParam({ q: nextValue || null });
             }}
-            placeholder="Search player or team"
+            placeholder="Search players"
             type="search"
             value={searchDraft}
           />

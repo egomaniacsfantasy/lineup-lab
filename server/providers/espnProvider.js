@@ -107,6 +107,34 @@ function scoringFamily(scoringSettings) {
   return 'standard';
 }
 
+/* ESPN's `displayName` is an account handle, not a person. Real leagues come
+   back full of "espn40393983" and "ESPNFAN2938626819" — ESPN mints one for
+   every account that never set a display name, and it was being printed under
+   the team on the head-to-head as if it were a manager. The person's actual
+   name is sitting right beside it in firstName/lastName, so that wins.
+
+   When there is no real name and the handle is plainly machine-generated we
+   return null rather than the handle: a team with nothing under it reads as a
+   team, and a team with a serial number under it reads as a bug. */
+const SYNTHETIC_HANDLE = /^espn(fan)?[0-9]+$/i;
+
+export function memberName(member) {
+  const real = `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim();
+  if (real) return real;
+  const display = (member.displayName ?? '').trim();
+  if (display && !SYNTHETIC_HANDLE.test(display)) return display;
+  return null;
+}
+
+/* In ESPN's fantasy product the picture beside a team IS the team logo — there
+   is no separate member avatar in any view the API exposes. `logo` carries a
+   real URL whether the manager uploaded one or took a default from the logo
+   pack, so both are worth showing; only an absent or non-http value is not. */
+export function teamLogo(team) {
+  const url = typeof team.logo === 'string' ? team.logo.trim() : '';
+  return /^https?:\/\//i.test(url) ? url : null;
+}
+
 function rosterPositionsFromCounts(lineupSlotCounts = {}) {
   const positions = [];
   for (const [slotId, count] of Object.entries(lineupSlotCounts)) {
@@ -168,10 +196,7 @@ export function createEspnProvider({ season, espnS2, swid }) {
   const buildTeams = async (leagueId) => {
     const [blob, crosswalk] = await Promise.all([loadLeague(leagueId), getCrosswalk()]);
     const membersById = new Map(
-      (blob.members ?? []).map((m) => [
-        m.id,
-        m.displayName || `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Manager',
-      ]),
+      (blob.members ?? []).map((m) => [m.id, memberName(m)]),
     );
 
     return (blob.teams ?? []).map((team) => {
@@ -194,8 +219,9 @@ export function createEspnProvider({ season, espnS2, swid }) {
         rosterId: team.id,
         teamId: `${leagueId}:${team.id}`,
         ownerId,
-        ownerName: ownerId ? membersById.get(ownerId) ?? 'Manager' : 'Unmanaged team',
+        ownerName: ownerId ? membersById.get(ownerId) ?? null : 'Unmanaged team',
         teamName,
+        avatarUrl: teamLogo(team),
         coOwners: (team.owners ?? []).slice(1),
         players,
         starters,
@@ -241,6 +267,10 @@ export function createEspnProvider({ season, espnS2, swid }) {
         lastScoredWeek: Math.max(0, (blob.status?.latestScoringPeriod ?? 1) - 1),
         regularSeasonWeeks: s.scheduleSettings?.matchupPeriodCount ?? 14,
         leagueType: isKeeper ? 'keeper' : 'redraft',
+        /* Already in the mSettings blob we fetch. Before a draft it is the
+           only fact about the league worth printing, and we were throwing it
+           away. Epoch millis; 0 means unscheduled. */
+        draftAt: s.draftSettings?.date > 0 ? s.draftSettings.date : null,
         bestBall: false,
         divisions: s.scheduleSettings?.divisions?.length ?? null,
         // ESPN exposes reseeding directly on scheduleSettings. Absent -> null
@@ -264,7 +294,7 @@ export function createEspnProvider({ season, espnS2, swid }) {
         ownerId: t.ownerId,
         ownerName: t.ownerName,
         teamName: t.teamName,
-        avatarUrl: null,
+        avatarUrl: t.avatarUrl,
       }));
     },
 

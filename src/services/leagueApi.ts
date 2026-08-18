@@ -33,6 +33,9 @@ export interface ApiLeague extends ApiLeagueSummary {
   regularSeasonWeeks: number;
   leagueType: 'redraft' | 'keeper' | 'dynasty';
   bestBall: boolean;
+  /* When the draft is scheduled, epoch millis. null when the provider does not
+     say or the draft is unscheduled. */
+  draftAt?: number | null;
   // Number of divisions (≥2 means the sim seeds division winners first). null/1
   // = no divisions, seed purely by overall record.
   divisions: number | null;
@@ -49,7 +52,10 @@ export interface ApiTeam {
   rosterId: number;
   teamId: string;
   ownerId: string | null;
-  ownerName: string;
+  /* null when the manager has no printable name — ESPN hands back an
+     account handle for anyone who never set a display name, and the provider
+     drops those rather than print a serial number as a person. */
+  ownerName: string | null;
   teamName: string;
   avatarUrl: string | null;
   players: string[];
@@ -534,7 +540,8 @@ export interface EspnTeamSummary {
   rosterId: number;
   ownerId: string | null;
   teamName: string;
-  ownerName: string;
+  /* null when ESPN only offers a machine handle for this account. */
+  ownerName: string | null;
   record: { wins: number; losses: number; ties: number };
 }
 
