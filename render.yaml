@@ -36,6 +36,13 @@ services:
         value: "22.13.1"
       - key: ESPN_LOGIN_WORKER_ENABLED
         value: "true"
+      # Playwright installs browsers to ~/.cache by default, and Render does not
+      # carry that from build into runtime — so `playwright install chromium`
+      # succeeded at build time and the binary was gone at run time. Every login
+      # died ~0.9s in, before ESPN was ever contacted. 0 installs into
+      # node_modules, which lives in the project directory and does persist.
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: "0"
       - key: MAX_CONCURRENT_LOGINS
         value: "2"
       - key: MAX_LOGIN_QUEUE

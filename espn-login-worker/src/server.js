@@ -82,9 +82,28 @@ export async function createServer({
       const url = new URL(req.url ?? '/', 'http://worker.local');
 
       if (req.method === 'GET' && url.pathname === '/health') {
+        /* `enabled: true` while the browser binary is missing is a health check
+           that reports healthy for a service that cannot do its only job — which
+           is exactly what happened: every login failed ~0.9s in, and health said
+           ok the whole time. Report whether Playwright can actually see a
+           browser, so the next breakage is visible from outside. */
+        let browser = 'unknown';
+        try {
+          const [{ chromium }, fs] = await Promise.all([
+            import('playwright'),
+            import('node:fs'),
+          ]);
+          // executablePath() returns a path whether or not anything is there,
+          // so the path alone proves nothing — check the file.
+          const bin = chromium.executablePath();
+          browser = bin && fs.existsSync(bin) ? 'present' : 'missing';
+        } catch (error) {
+          browser = `missing:${String(error?.message ?? error).slice(0, 60)}`;
+        }
         send(res, 200, {
-          ok: true,
+          ok: browser === 'present',
           enabled: config.workerEnabled,
+          browser,
           running: queue.running,
           queued: queue.size,
         });
@@ -139,12 +158,23 @@ export async function createServer({
         message: error?.message,
         stack: error?.stack,
       });
+      /* Telling someone to go use the connector is right when ESPN refused
+         them and wrong when our own browser is missing — which is what
+         happened: `playwright install` ran at build time, Render did not carry
+         ~/.cache into runtime, and every login died before ESPN was contacted.
+         Sending a user to a one-time laptop setup to work around our deploy is
+         the worst answer available, so say plainly that it is us. */
+      const raw = String(error?.message ?? '');
+      const browserMissing =
+        raw.includes("doesn't exist at") || raw.includes('playwright install');
       send(
         res,
         500,
         fallback(
           REASON.NETWORK,
-          'ESPN login could not finish. Use the ESPN-site connector instead.',
+          browserMissing
+            ? 'ESPN sign-in is temporarily unavailable on our side. Nothing is wrong with your ESPN account. Try again shortly.'
+            : 'ESPN login could not finish. Use the ESPN-site connector instead.',
         ),
       );
     }
