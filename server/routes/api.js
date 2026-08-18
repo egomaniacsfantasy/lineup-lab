@@ -672,7 +672,11 @@ apiRouter.get('/league/:leagueId/playoff-settings', async (req, res, next) => {
     const provider = getProvider(req);
     const league = await provider.getLeague(req.params.leagueId);
     if (!league) {
-      res.status(404).json({ error: 'league_not_found' });
+      res.status(404).json({
+        error: 'league_not_found',
+        message:
+          "We couldn't find that league on this account. Reconnect it and try again.",
+      });
       return;
     }
     const override = readPlayoffSettings(req.params.leagueId);
@@ -759,7 +763,10 @@ apiRouter.post('/scouting/harvest', async (req, res, next) => {
 
     const leagueId = req.body?.leagueId ?? req.query.leagueId;
     if (!leagueId) {
-      res.status(400).json({ error: 'missing_league_id' });
+      res.status(400).json({
+        error: 'missing_league_id',
+        message: 'That request arrived without a league. Reload and try again.',
+      });
       return;
     }
 
@@ -792,7 +799,11 @@ apiRouter.get('/scouting/league/:leagueId', async (req, res, next) => {
     const ownerUserId = await getRequestUserId(req);
     const ctx = await loadLeagueContext(provider, req.params.leagueId, req.query.userId ?? null);
     if (!ctx) {
-      res.status(404).json({ error: 'league_not_found' });
+      res.status(404).json({
+        error: 'league_not_found',
+        message:
+          "We couldn't find that league on this account. Reconnect it and try again.",
+      });
       return;
     }
 
@@ -866,7 +877,11 @@ apiRouter.get('/scouting/league/:leagueId/superlatives', async (req, res, next) 
     const provider = getProvider(req);
     const ctx = await loadLeagueContext(provider, req.params.leagueId, req.query.userId ?? null);
     if (!ctx) {
-      res.status(404).json({ error: 'league_not_found' });
+      res.status(404).json({
+        error: 'league_not_found',
+        message:
+          "We couldn't find that league on this account. Reconnect it and try again.",
+      });
       return;
     }
     const managerKeys = new Set(ctx.teams.map((team) => team.ownerId).filter(Boolean));
@@ -1164,7 +1179,11 @@ apiRouter.get('/league/:leagueId/schedule', async (req, res, next) => {
     const league = await provider.getLeague(leagueId);
 
     if (!league) {
-      res.status(404).json({ error: 'league_not_found' });
+      res.status(404).json({
+        error: 'league_not_found',
+        message:
+          "We couldn't find that league on this account. Reconnect it and try again.",
+      });
       return;
     }
 
