@@ -3282,11 +3282,14 @@
 
   /* No clamp. A clamp is an ellipsis with extra steps, and the names that
      needed one were names we were inventing. */
+  /* `anywhere` breaks a word the moment it is convenient, which split
+     FANTASYGODCASTA across two lines inside a column wide enough to hold it.
+     `break-word` only breaks what genuinely cannot fit. */
   .trade-cc__manager-card-name {
     overflow: visible;
     text-overflow: clip;
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
   }
 
   /* The price column only needs its own number, not a third of the row. */
@@ -3314,5 +3317,125 @@
 
   .trade-cc__filter-stack {
     gap: 10px;
+  }
+}
+
+
+/* Measured, after guessing at this twice and being wrong twice.
+   `.trade-cc__manager-card` carries `justify-items: center` from its tile
+   days. As a grid item the identity block therefore shrank to its content
+   (124px) and was centred in a 278px track, which put 77px of nothing to the
+   left of every avatar and left the name a 76px column to wrap inside. It was
+   never a text-align problem, which is why setting text-align never fixed it.
+   Stretch the item and both go away. */
+@media (max-width: 1023px) {
+  .trade-cc__manager-card,
+  .trade-cc__manager-grid--dense .trade-cc__manager-card {
+    justify-items: stretch;
+  }
+
+  .trade-cc__manager-card-id {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .trade-cc__manager-card-price {
+    justify-self: end;
+  }
+}
+
+
+/* The finder's empty state was a paragraph on an empty page, which is the one
+   thing a tab called Trade finder must never be. It now leads with the four
+   managers the book prices as most likely to move, straight into their deals.
+   A finder should find. */
+.trade-cc__quick {
+  display: grid;
+  gap: 4px;
+}
+
+.trade-cc__quick-label {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.trade-cc__quick-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 5px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-inset) 70%, transparent);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.trade-cc__quick-row .trade-cc__team-avatar {
+  width: 32px;
+  height: 32px;
+}
+
+.trade-cc__quick-name {
+  overflow-wrap: break-word;
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+
+.trade-cc__quick-odds {
+  color: var(--text-amber);
+  font-family: var(--font-price);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+
+/* ---------------------------------------------------------------------------
+   Build trades.
+
+   The builder is mostly air: a section eyebrow, a headline, the team name, an
+   empty dashed dropzone sized for a roster it does not have yet, a search
+   field, and then the roster. Five pieces of chrome before the first player,
+   and the dropzone is the largest thing on screen while being the only thing
+   with nothing in it.
+   --------------------------------------------------------------------------- */
+@media (max-width: 1023px) {
+  .trade-cc__builder {
+    padding: 12px;
+  }
+
+  /* An empty tray does not need to be the size of a full one. */
+  .trade-cc__builder .trade-cc__empty-slot,
+  .trade-cc__builder .trade-cc__dropzone--empty {
+    min-height: 40px;
+    padding: 10px;
+    font-size: 12.5px;
+  }
+
+  .trade-cc__builder-title,
+  .trade-cc__side-title {
+    font-size: 20px;
+    line-height: 1.05;
+  }
+
+  .trade-cc__builder-kicker,
+  .trade-cc__side-kicker {
+    font-size: 9.5px;
+  }
+
+  .trade-cc__side {
+    padding: 10px;
+    gap: 8px;
   }
 }

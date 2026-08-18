@@ -1056,15 +1056,35 @@ function TradeDealsView() {
                 You can leave this tab and come back. The result is held for five
                 minutes and returns instantly.
               </p>
-              {pricing?.available ? (
-                <div className="trade-cc__deals-empty-actions">
-                  <button
-                    className="trade-cc__scan-button"
-                    onClick={() => setMarketView('managers')}
-                    type="button"
-                  >
-                    Pick a manager
-                  </button>
+              {pricing?.available && partners.length > 0 ? (
+                <div className="trade-cc__quick">
+                  <span className="trade-cc__quick-label">Start with</span>
+                  {[...partners]
+                    .sort((a, b) => {
+                      const oa = futuresByRoster.get(a.rosterId)?.championOdds ?? Number.MAX_SAFE_INTEGER;
+                      const ob = futuresByRoster.get(b.rosterId)?.championOdds ?? Number.MAX_SAFE_INTEGER;
+                      return oa - ob;
+                    })
+                    .slice(0, 4)
+                    .map((team) => (
+                      <button
+                        className="trade-cc__quick-row"
+                        key={`quick-${team.rosterId}`}
+                        onClick={() => {
+                          applyMarketManagerFilter(team.rosterId);
+                          setMarketView('managers');
+                        }}
+                        type="button"
+                      >
+                        {renderTeamAvatar(team)}
+                        <span className="trade-cc__quick-name">{team.teamName}</span>
+                        <span className="trade-cc__quick-odds">
+                          {futuresByRoster.get(team.rosterId)?.championOdds != null
+                            ? formatAmericanOdds(futuresByRoster.get(team.rosterId)!.championOdds)
+                            : ''}
+                        </span>
+                      </button>
+                    ))}
                 </div>
               ) : null}
             </div>
@@ -1099,7 +1119,11 @@ function TradeDealsView() {
         ) : null}
         <div className="trade-cc__filter-stack">
           <div className="trade-cc__filter-row">
-            <span className="trade-cc__filter-label">Managers</span>
+            <span className="trade-cc__filter-label">
+              {marketManagerFilter == null
+                ? 'Tap a manager to see the best deals with them'
+                : 'Manager'}
+            </span>
             {/* League sizes run 4 to 20, so density follows the number of
                 partners as well as the viewport: few managers get roomy
                 rows, a 20-team league packs tighter so the board never
