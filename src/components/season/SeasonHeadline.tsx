@@ -5,13 +5,17 @@ interface SeasonHeadlineProps {
   title: string;
   recordValue: string;
   recordLabel: string;
-  championshipOdds: number;
+  /* null when this team's futures have not been priced. A season outlook is
+     the most quotable thing on the screen, so the one number it must never do
+     is invent one: a connected user was being shown the demo league's
+     championship odds and playoff probability as their own. */
+  championshipOdds: number | null;
   recordRange?: {
     best: string;
     worst: string;
     median: string;
   };
-  playoffProbability: number;
+  playoffProbability: number | null;
   leagueRank: number;
   live?: boolean;
 }
@@ -54,7 +58,7 @@ export function SeasonHeadline({
         <div className="season-headline__metric">
           <span className="season-headline__label">Championship odds</span>
           <p className="season-headline__value season-headline__value--amber">
-            {formatAmericanOdds(championshipOdds)}
+            {championshipOdds != null ? formatAmericanOdds(championshipOdds) : 'Not priced'}
           </p>
           {recordRange ? (
             <p className="season-headline__range">Median {recordRange.median}</p>
@@ -65,12 +69,14 @@ export function SeasonHeadline({
       <div className="season-headline__bar-block">
         <div className="season-headline__bar-copy">
           <span className="season-headline__label">Playoff probability</span>
-          <span className="season-headline__bar-value">{playoffProbability.toFixed(1)}%</span>
+          <span className="season-headline__bar-value">
+            {playoffProbability != null ? `${playoffProbability.toFixed(1)}%` : 'Not priced yet'}
+          </span>
         </div>
         <div className="season-headline__bar" aria-hidden="true">
           <span
             className="season-headline__bar-fill"
-            style={{ width: `${playoffProbability}%` }}
+            style={{ width: `${playoffProbability ?? 0}%` }}
           />
         </div>
       </div>

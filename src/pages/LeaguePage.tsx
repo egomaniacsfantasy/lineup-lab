@@ -392,16 +392,11 @@ export function LeaguePage() {
         <>
           {connectedSeason ? (
             <SeasonHeadline
-              championshipOdds={
-                connectedSeason.userFuture?.championOdds ??
-                MOCK_SEASON_OUTLOOK.championshipOdds
-              }
+              /* No mock fallback for a real league. An unpriced team says so. */
+              championshipOdds={connectedSeason.userFuture?.championOdds ?? null}
               leagueRank={connectedSeason.rank}
               live={bootstrap !== null && bootstrap.league.status === 'in_season'}
-              playoffProbability={
-                connectedSeason.userFuture?.playoffProb ??
-                MOCK_SEASON_OUTLOOK.playoffProbability
-              }
+              playoffProbability={connectedSeason.userFuture?.playoffProb ?? null}
               recordLabel={connectedSeason.userFuture ? 'Projected wins' : 'Record'}
               recordValue={
                 connectedSeason.userFuture?.projWins != null
