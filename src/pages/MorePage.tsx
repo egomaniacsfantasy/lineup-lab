@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { LeagueSettings } from '../components/league/LeagueSettings';
 import { WelcomeCard } from '../components/onboarding/WelcomeCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,61 +26,6 @@ import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 
 declare const __BUILD_STAMP__: string | undefined;
 const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
-
-/**
- * The shell's real geometry, measured on whatever is running it.
- *
- * At 402x874 with the insets stamped, a browser puts the tab bar at 783 and
- * every label on screen. The device puts it at 832 and the labels below the
- * fold, which means the shell is taller than the viewport it is supposed to
- * fill — and that same slack is what lets the page scroll the season band up
- * into the clock. A browser cannot show you that; only the device can.
- */
-function useShellGeometry() {
-  const [readout, setReadout] = useState<string | null>(null);
-
-  useEffect(() => {
-    const read = () => {
-      const shell = document.querySelector('.app-shell');
-      const content = document.querySelector('.app-content');
-      const bar = document.querySelector('.bottom-tab-bar');
-      if (!shell) return;
-
-      /* What the unit actually resolves to here, rather than what it should. */
-      const probe = document.createElement('div');
-      probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:100dvh;visibility:hidden';
-      document.body.appendChild(probe);
-      const dvh = Math.round(probe.getBoundingClientRect().height);
-      probe.style.height = '100vh';
-      const vh = Math.round(probe.getBoundingClientRect().height);
-      probe.remove();
-
-      const r = (el: Element | null) =>
-        el ? Math.round(el.getBoundingClientRect().bottom) : -1;
-
-      const vv = window.visualViewport;
-      setReadout(
-        [
-          `inner ${window.innerWidth}x${window.innerHeight}`,
-          `client ${document.documentElement.clientWidth}x${document.documentElement.clientHeight}`,
-          vv ? `visual ${Math.round(vv.width)}x${Math.round(vv.height)} @${vv.scale.toFixed(2)}` : 'visual n/a',
-          `dvh ${dvh}`,
-          `vh ${vh}`,
-          `shell ${Math.round(shell.getBoundingClientRect().height)}`,
-          `contentB ${r(content)}`,
-          `barB ${r(bar)}`,
-          `doc ${document.documentElement.scrollWidth}x${document.documentElement.scrollHeight}`,
-          `dpr ${window.devicePixelRatio}`,
-        ].join(' · '),
-      );
-    };
-    read();
-    const timer = window.setTimeout(read, 600);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  return readout;
-}
 
 export function MorePage() {
   const { bootstrap, stored, disconnect, refresh, isLoading, error } = useLeagueConnection();
@@ -333,10 +278,6 @@ export function MorePage() {
         Build {buildStamp}
         {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
       </p>
-      {/* The shell measures correctly in a browser at every phone size and
-          wrong on the device, which is the one comparison a browser cannot
-          make for you. So the device reports its own geometry. */}
-      <p className="more-page__build">{useShellGeometry()}</p>
 
       <WelcomeCard isOpen={isWelcomeOpen} onDismiss={() => setIsWelcomeOpen(false)} />
     </div>

@@ -23,17 +23,23 @@ function leagueLabel(league: StoredConnection, activeName?: string | null) {
  */
 export function AccountMenu() {
   const { user, signOut } = useAuth();
-  const { leagues, stored, bootstrap, switchLeague, refresh, isLoading, error } =
+  const { leagues, stored, bootstrap, switchLeague, removeLeague, refresh, isLoading, error } =
     useLeagueConnection();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  /* Removing a league is destructive and one row away from switching to it, so
+     it asks once rather than trusting a small target next to a common one. */
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return undefined;
     const onClick = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setConfirmRemove(null);
+      }
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false);
@@ -128,35 +134,78 @@ export function AccountMenu() {
                 const isActive =
                   stored?.provider === league.provider &&
                   stored?.leagueId === league.leagueId;
+                const key = `${league.provider}:${league.leagueId}`;
+                const title = leagueLabel(league, isActive ? activeName : null);
+                const isConfirming = confirmRemove === key;
                 return (
-                  <button
+                  <div
                     className={[
-                      'account-menu__league',
-                      isActive ? 'account-menu__league--active' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    key={`${league.provider}:${league.leagueId}`}
-                    onClick={() => {
-                      if (!isActive) switchLeague(league.provider, league.leagueId);
-                      setOpen(false);
-                    }}
-                    role="menuitemradio"
-                    aria-checked={isActive}
-                    type="button"
+                      'account-menu__league-row',
+                      isActive ? 'account-menu__league-row--active' : '',
+                    ].filter(Boolean).join(' ')}
+                    key={key}
                   >
-                    <span className="account-menu__league-text">
-                      <span className="account-menu__league-title">
-                        {leagueLabel(league, isActive ? activeName : null)}
+                    <button
+                      className="account-menu__league"
+                      onClick={() => {
+                        if (!isActive) switchLeague(league.provider, league.leagueId);
+                        setOpen(false);
+                      }}
+                      role="menuitemradio"
+                      aria-checked={isActive}
+                      type="button"
+                    >
+                      {/* Two providers on one account look identical in a list
+                          of names. The badge is the first thing read. */}
+                      <span
+                        aria-hidden="true"
+                        className={`account-menu__badge account-menu__badge--${league.provider}`}
+                      >
+                        {title.trim().charAt(0).toUpperCase() || '?'}
                       </span>
-                      <span className="account-menu__league-sub">
-                        {PROVIDER_LABEL[league.provider]} · {league.displayName || 'you'}
+                      <span className="account-menu__league-text">
+                        <span className="account-menu__league-title">{title}</span>
+                        <span className="account-menu__league-sub">
+                          {PROVIDER_LABEL[league.provider]}
+                          {league.displayName ? ` · ${league.displayName}` : ''}
+                        </span>
                       </span>
-                    </span>
-                    {isActive ? (
-                      <span className="account-menu__league-dot" aria-hidden="true" />
-                    ) : null}
-                  </button>
+                      {isActive ? (
+                        <span className="account-menu__league-dot" aria-hidden="true" />
+                      ) : null}
+                    </button>
+                    {isConfirming ? (
+                      <span className="account-menu__confirm">
+                        <button
+                          className="account-menu__confirm-yes"
+                          onClick={() => {
+                            removeLeague(league);
+                            setConfirmRemove(null);
+                          }}
+                          type="button"
+                        >
+                          Remove
+                        </button>
+                        <button
+                          className="account-menu__confirm-no"
+                          onClick={() => setConfirmRemove(null)}
+                          type="button"
+                        >
+                          Keep
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        aria-label={`Remove ${title}`}
+                        className="account-menu__league-remove"
+                        onClick={() => setConfirmRemove(key)}
+                        title={`Remove ${title}`}
+                        type="button"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>

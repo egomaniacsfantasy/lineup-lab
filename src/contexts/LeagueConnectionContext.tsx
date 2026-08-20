@@ -94,6 +94,7 @@ interface LeagueConnectionValue {
   connect: (connection: StoredConnection) => void;
   switchLeague: (provider: StoredConnection['provider'], leagueId: string) => void;
   disconnect: () => void;
+  removeLeague: (league: StoredConnection) => void;
   refresh: () => Promise<void>;
   liveMode: { on: boolean; at: number };
   marketScan: {
@@ -628,8 +629,17 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     [leagues, stored, activateLocal],
   );
 
-  const disconnect = useCallback(() => {
-    const removing = stored;
+  /**
+   * Drop one league from the account.
+   *
+   * `disconnect` could only ever remove whichever league you happened to be
+   * looking at, so getting rid of a stale league meant switching into it
+   * first. Taking the league as an argument makes the switcher able to manage
+   * the list rather than only reorder it; `disconnect` becomes the special
+   * case where the league is the active one.
+   */
+  const removeLeague = useCallback((target: StoredConnection | null) => {
+    const removing = target;
     const remaining = removing
       ? leagues.filter((l) => leagueKey(l) !== leagueKey(removing))
       : leagues;
@@ -666,7 +676,9 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setPricingMeta(EMPTY_PRICING_META);
     setLineHistory(null);
     setError(null);
-  }, [stored, leagues, activateLocal]);
+  }, [leagues, activateLocal]);
+
+  const disconnect = useCallback(() => removeLeague(stored), [removeLeague, stored]);
 
   /**
    * Freshness loop: keep background repricing slow and deliberate so a tab
@@ -803,6 +815,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       connect,
       switchLeague,
       disconnect,
+      removeLeague,
       refresh,
       liveMode,
       marketScan: {
@@ -825,6 +838,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       connect,
       switchLeague,
       disconnect,
+      removeLeague,
       refresh,
       liveMode,
       isScanningMarket,
