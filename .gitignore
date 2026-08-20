@@ -44,3 +44,7 @@ ios/DerivedData/
 ios/App/Pods/
 *.xcuserdatad
 xcuserdata/
+
+# Chrome Web Store build output
+dist-extension/
+odds-gods-espn-connector-v*.zip

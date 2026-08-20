@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy — Odds Gods</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; padding:48px 20px 96px; background:#0d0f11; color:#e9e6e1;
+         font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:680px; margin:0 auto; }
+  h1 { font-size:30px; line-height:1.15; margin:0 0 6px; letter-spacing:.01em; }
+  h2 { font-size:17px; margin:34px 0 8px; color:#ff8049; }
+  p, li { color:#c9c4bd; }
+  ul { padding-left:20px; }
+  code { background:#1a1512; padding:1px 5px; border-radius:5px; font-size:14px; }
+  .updated { color:#8b857e; font-size:13px; margin:0 0 28px; }
+  a { color:#ff8049; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy</h1>
+  <p class="updated">Odds Gods and the Odds Gods ESPN Connector extension. Last updated 20 August 2026.</p>
+
+  <h2>The short version</h2>
+  <p>
+    The extension exists to do one thing: read your existing ESPN session cookie
+    from your own browser and hand it to the Odds Gods tab you already have open,
+    so we can load your ESPN league. It is not an advertising or analytics tool,
+    and it never sees an ESPN or Disney password.
+  </p>
+
+  <h2>What the extension reads</h2>
+  <ul>
+    <li>Two cookies from <code>fantasy.espn.com</code>: <code>espn_s2</code> and <code>SWID</code>.</li>
+  </ul>
+  <p>
+    ESPN marks <code>espn_s2</code> HttpOnly, which means no web page can read it.
+    That single restriction is the entire reason this extension exists. It reads
+    nothing else from ESPN, and it reads nothing at all from any other site.
+  </p>
+
+  <h2>What it does with them</h2>
+  <p>
+    It returns them to the Odds Gods tab that asked. The extension itself stores
+    nothing, keeps no history, and transmits nothing to us or to any third party.
+    It has no server of its own.
+  </p>
+  <p>
+    Odds Gods then sends those two values to its own server so it can request
+    your league from ESPN on your behalf. They are stored encrypted, keyed to
+    that league, so the league keeps syncing without asking you again.
+  </p>
+
+  <h2>When it runs</h2>
+  <p>
+    The content script runs only on Odds Gods pages. It does not run on ESPN, and
+    it does not run anywhere else on the web. It responds only to messages from
+    an Odds Gods page and only when that page asks.
+  </p>
+
+  <h2>What we never collect</h2>
+  <ul>
+    <li>Your ESPN or Disney password. Sign-in happens on ESPN's own pages.</li>
+    <li>Browsing history, page contents, or cookies from any other site.</li>
+    <li>Anything for advertising, profiling, or sale. We do not sell data.</li>
+  </ul>
+
+  <h2>Removing it</h2>
+  <p>
+    Uninstalling the extension immediately ends all access. To delete the stored
+    ESPN session on our side, remove that league from your account in Odds Gods,
+    which deletes the credentials held for it.
+  </p>
+
+  <h2>Contact</h2>
+  <p>Questions, or a deletion request: <a href="mailto:hello@oddsgods.net">hello@oddsgods.net</a></p>
+</main>
+</body>
+</html>
