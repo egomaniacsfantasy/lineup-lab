@@ -369,3 +369,108 @@
   border-color: color-mix(in srgb, #d50a0a 55%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, #d50a0a 18%, transparent);
 }
+
+
+/* ---------------------------------------------------------------------------
+   The ESPN walkthrough.
+
+   This was two lines of instruction that told you what to do and then had no
+   idea whether you had done it. Pressing Connect while signed out of ESPN was
+   the most common way it failed, and the error came back looking like a bad
+   league id, so people re-typed the URL instead of signing in.
+
+   The page can see the connector and the connector can see ESPN, so each step
+   reports its own state and only the last one is ever waiting on a press.
+   --------------------------------------------------------------------------- */
+.espn-connect__walk {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.espn-connect__walk-step {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg-inset) 60%, transparent);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+/* Done recedes, the live one is lit, and anything not yet reachable is dimmed
+   so the eye lands on the single step that is actually asking for something. */
+.espn-connect__walk-step--now {
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
+  background: linear-gradient(180deg, rgba(232, 84, 29, 0.14), rgba(232, 84, 29, 0.04));
+}
+
+.espn-connect__walk-step--wait {
+  opacity: 0.45;
+}
+
+.espn-connect__walk-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.espn-connect__walk-step--now .espn-connect__walk-mark {
+  background: color-mix(in srgb, var(--amber) 26%, transparent);
+  color: var(--text-amber);
+}
+
+.espn-connect__walk-step--done .espn-connect__walk-mark {
+  background: color-mix(in srgb, var(--green) 20%, transparent);
+  color: var(--green);
+}
+
+.espn-connect__walk-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.espn-connect__walk-title {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.espn-connect__walk-body {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.espn-connect__walk-action {
+  justify-self: start;
+  margin-top: 7px;
+  padding: 7px 13px;
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  background: rgba(232, 84, 29, 0.16);
+  color: var(--text-amber);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.espn-connect__walk-step .espn-connect__submit {
+  margin-top: 9px;
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="theme.css" />
+  <style>
+    body { width: 300px; padding: 14px; display: grid; gap: 12px; }
+    .head { display: flex; align-items: center; justify-content: space-between; }
+    .ver { font-family: var(--num); font-size: 10px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="head">
+    <span class="brand">
+      <img src="icon48.png" alt="" />
+      <span class="brand-name">Odds Gods</span>
+    </span>
+    <span class="ver" id="ver"></span>
+  </div>
+
+  <div class="status" id="status">
+    <span class="dot"></span>
+    <span>
+      <span class="status-title" id="statusTitle">Checking ESPN…</span>
+      <span class="status-note" id="statusNote">Reading your browser's ESPN session.</span>
+    </span>
+  </div>
+
+  <a class="btn btn--primary" id="primary" href="#">Open Odds Gods</a>
+  <a class="btn btn--quiet" id="secondary" href="#">Sign in to ESPN</a>
+
+  <p class="foot">
+    Reads two ESPN cookies, only when an Odds Gods tab asks. Never your password.
+    <a href="https://oddsgods.net/privacy.html" target="_blank" rel="noreferrer">Privacy</a>
+  </p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

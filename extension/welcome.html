@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connector installed — Odds Gods</title>
+  <link rel="stylesheet" href="theme.css" />
+  <style>
+    body { padding: 56px 20px 96px; }
+    main { max-width: 620px; margin: 0 auto; display: grid; gap: 26px; }
+    h1 { font-size: 30px; line-height: 1.1; letter-spacing: 0.01em; }
+    .lede { color: var(--soft); font-size: 15px; line-height: 1.6; }
+    ol { list-style: none; display: grid; gap: 12px; }
+    li {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+      padding: 15px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .n {
+      display: grid;
+      place-items: center;
+      width: 30px; height: 30px;
+      border-radius: 9px;
+      background: rgba(232, 84, 29, 0.18);
+      color: var(--amber-bright);
+      font-family: var(--num);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .t { display: block; font-size: 15px; font-weight: 700; }
+    .b { display: block; margin-top: 4px; color: var(--soft); font-size: 13.5px; line-height: 1.55; }
+    .pin { color: var(--amber-bright); font-weight: 700; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .actions .btn { width: auto; min-width: 190px; }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="brand">
+      <img src="icon48.png" alt="" />
+      <span class="brand-name">Odds Gods</span>
+    </span>
+
+    <div>
+      <h1>Connector installed.</h1>
+      <p class="lede">
+        Three things and your ESPN league is priced. You only ever do this once.
+      </p>
+    </div>
+
+    <ol>
+      <li>
+        <span class="n">1</span>
+        <span>
+          <span class="t">Pin it, so you can see it working</span>
+          <span class="b">
+            Click the <span class="pin">puzzle piece</span> in Chrome's toolbar, find
+            Odds Gods ESPN Connector, and click the pin. The icon tells you at a
+            glance whether ESPN is signed in.
+          </span>
+        </span>
+      </li>
+      <li>
+        <span class="n">2</span>
+        <span>
+          <span class="t">Sign in to ESPN</span>
+          <span class="b">
+            In this browser, in any tab. You sign in on ESPN's own page. Your
+            password never touches Odds Gods, and the connector never sees it.
+          </span>
+        </span>
+      </li>
+      <li>
+        <span class="n">3</span>
+        <span>
+          <span class="t">Come back and press Connect</span>
+          <span class="b">
+            Odds Gods notices the connector on its own, no reload. Paste your
+            league URL and press Connect. That is the last step.
+          </span>
+        </span>
+      </li>
+    </ol>
+
+    <div class="actions">
+      <a class="btn btn--primary" href="https://fantasy.espn.com" target="_blank" rel="noreferrer">
+        Sign in to ESPN
+      </a>
+      <a class="btn btn--quiet" href="https://oddsgods.net/league#connect" target="_blank" rel="noreferrer">
+        Go to Odds Gods
+      </a>
+    </div>
+
+    <p class="foot">
+      The connector reads two ESPN cookies and only when an Odds Gods tab asks for
+      them. It stores nothing and sends nothing anywhere else.
+      <a href="https://oddsgods.net/privacy.html" target="_blank" rel="noreferrer">Privacy</a>
+    </p>
+  </main>
+</body>
+</html>

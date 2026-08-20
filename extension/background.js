@@ -42,3 +42,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   return false;
 });
+
+/* Installing produced a puzzle-piece icon and nothing else: no confirmation it
+   worked, and no hint that ESPN still has to be signed in before any of this
+   does anything. Three steps, once, at the moment the question is live. */
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason !== 'install') return;
+  chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+});

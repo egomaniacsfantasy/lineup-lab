@@ -61,6 +61,11 @@ export function EspnConnect({
   const [loginOtp, setLoginOtp] = useState('');
   const [loginChallengeId, setLoginChallengeId] = useState<string | null>(null);
   const [extensionReady, setExtensionReady] = useState(false);
+  /* Whether ESPN is actually signed in, asked of the connector rather than
+     assumed. Pressing Connect with a signed-out ESPN was the single most
+     common way this failed, and the error came back looking like a broken
+     league id. null = not asked yet. */
+  const [espnSignedIn, setEspnSignedIn] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +101,28 @@ export function EspnConnect({
       `Sign-in could not start: ${result.reason ?? 'unknown'}. Tell me that reason and I can fix it directly.`,
     );
   };
+
+  useEffect(() => {
+    if (!extensionReady) return undefined;
+    let cancelled = false;
+    const check = () => {
+      void requestEspnSession()
+        .then((session) => {
+          if (!cancelled) setEspnSignedIn(Boolean(session?.espnS2 && session?.swid));
+        })
+        .catch(() => {
+          if (!cancelled) setEspnSignedIn(false);
+        });
+    };
+    check();
+    /* They will go and sign in with this tab still open, so the step has to
+       notice on its own rather than needing a reload to catch up. */
+    const timer = window.setInterval(check, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [extensionReady]);
 
   // Core connect. Cookies are optional (public leagues need none).
   const doConnect = async (creds?: { espnS2: string; swid: string }) => {
@@ -459,50 +486,111 @@ export function EspnConnect({
                     and this league then works on every device, including this
                     one.
                   </p>
-                ) : extensionReady ? (
-                  <>
-                    <p className="espn-connect__method-title">Connector installed</p>
-                    <ol className="espn-connect__steps">
-                      <li>Be signed in to ESPN in this browser.</li>
-                      <li>Press connect. That is the whole thing.</li>
-                    </ol>
-                    <button
-                      className="espn-connect__submit"
-                      disabled={isLoading}
-                      onClick={connectWithExtension}
-                      type="button"
-                    >
-                      {isLoading ? 'Checking ESPN…' : 'Connect my ESPN league'}
-                    </button>
-                    <button className="espn-connect__linkbtn" onClick={openEspnLeague} type="button">
-                      Sign in to ESPN first ↗︎
-                    </button>
-                  </>
                 ) : (
-                  <>
-                    <ol className="espn-connect__steps">
-                      <li>Add the connector. Takes about five seconds.</li>
-                      <li>Come back here. This page notices on its own.</li>
-                    </ol>
-                    {CONNECTOR_STORE_URL ? (
-                      <a
-                        className="espn-connect__submit"
-                        href={CONNECTOR_STORE_URL}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        Add the connector ↗︎
-                      </a>
-                    ) : (
-                      <p className="espn-connect__method-note">
-                        The connector is not published yet.
-                      </p>
-                    )}
-                    <p className="espn-connect__method-note">
-                      You only ever do this once. After it is linked, Odds Gods
-                      keeps your league in sync on its own, on every device.
-                    </p>
-                  </>
+                  /* Three steps, each showing whether it is actually done
+                     rather than telling you to do it and hoping. The page can
+                     see the connector, and the connector can see ESPN, so both
+                     tick themselves off and the only thing left to press is
+                     the last one. */
+                  <ol className="espn-connect__walk">
+                    <li
+                      className={[
+                        'espn-connect__walk-step',
+                        extensionReady ? 'espn-connect__walk-step--done' : 'espn-connect__walk-step--now',
+                      ].join(' ')}
+                    >
+                      <span className="espn-connect__walk-mark" aria-hidden="true">
+                        {extensionReady ? '✓' : '1'}
+                      </span>
+                      <span className="espn-connect__walk-copy">
+                        <span className="espn-connect__walk-title">
+                          {extensionReady ? 'Connector installed' : 'Add the connector'}
+                        </span>
+                        <span className="espn-connect__walk-body">
+                          {extensionReady
+                            ? 'Found it in this browser. Nothing to do here.'
+                            : 'A small Chrome add-on. It reads one ESPN cookie and nothing else. Takes about five seconds, once, ever.'}
+                        </span>
+                        {!extensionReady ? (
+                          CONNECTOR_STORE_URL ? (
+                            <a
+                              className="espn-connect__walk-action"
+                              href={CONNECTOR_STORE_URL}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Add the connector ↗︎
+                            </a>
+                          ) : (
+                            <span className="espn-connect__walk-body">
+                              The connector is not published yet.
+                            </span>
+                          )
+                        ) : null}
+                      </span>
+                    </li>
+
+                    <li
+                      className={[
+                        'espn-connect__walk-step',
+                        !extensionReady
+                          ? 'espn-connect__walk-step--wait'
+                          : espnSignedIn
+                            ? 'espn-connect__walk-step--done'
+                            : 'espn-connect__walk-step--now',
+                      ].join(' ')}
+                    >
+                      <span className="espn-connect__walk-mark" aria-hidden="true">
+                        {extensionReady && espnSignedIn ? '✓' : '2'}
+                      </span>
+                      <span className="espn-connect__walk-copy">
+                        <span className="espn-connect__walk-title">
+                          {extensionReady && espnSignedIn
+                            ? 'Signed in to ESPN'
+                            : 'Sign in to ESPN'}
+                        </span>
+                        <span className="espn-connect__walk-body">
+                          {extensionReady && espnSignedIn
+                            ? 'Your ESPN session is live in this browser.'
+                            : 'On ESPN\u2019s own site, in any tab. Your password never touches Odds Gods. Come back here afterwards, this page notices on its own.'}
+                        </span>
+                        {extensionReady && !espnSignedIn ? (
+                          <button
+                            className="espn-connect__walk-action"
+                            onClick={openEspnLeague}
+                            type="button"
+                          >
+                            Open ESPN ↗︎
+                          </button>
+                        ) : null}
+                      </span>
+                    </li>
+
+                    <li
+                      className={[
+                        'espn-connect__walk-step',
+                        extensionReady && espnSignedIn
+                          ? 'espn-connect__walk-step--now'
+                          : 'espn-connect__walk-step--wait',
+                      ].join(' ')}
+                    >
+                      <span className="espn-connect__walk-mark" aria-hidden="true">3</span>
+                      <span className="espn-connect__walk-copy">
+                        <span className="espn-connect__walk-title">Connect this league</span>
+                        <span className="espn-connect__walk-body">
+                          We read the league above and match your team automatically.
+                        </span>
+                        <button
+                          className="espn-connect__submit"
+                          disabled={isLoading || !extensionReady}
+                          onClick={connectWithExtension}
+                          type="button"
+                        >
+                          {isLoading ? 'Checking ESPN…' : 'Connect my ESPN league'}
+                        </button>
+                      </span>
+                    </li>
+                  </ol>
                 )}
               </div>
 
