@@ -193,3 +193,30 @@
   letter-spacing: 0.04em;
   text-align: center;
 }
+
+
+/* ---------------------------------------------------------------------------
+   More, on a desktop.
+
+   Two things were wasting the page. A two-column grid holding a single card
+   left half the row empty, which is most of what "lots of open space" was.
+   And three sections — sync state, odds format, scoring — restate controls the
+   desktop header already carries a few hundred pixels above them, so on a wide
+   screen they are the same switch twice.
+
+   What is left is what genuinely lives only here: the admin import, the sheet
+   view, adding a second league, and the walkthrough.
+   --------------------------------------------------------------------------- */
+@media (min-width: 640px) {
+  /* auto-fit rather than a fixed two: one card fills the row, two share it,
+     three wrap. A lone card no longer sits beside a hole. */
+  .more-page__grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .more-page__section--header-dupe {
+    display: none;
+  }
+}

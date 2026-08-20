@@ -23,6 +23,7 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
 };
 
 import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
+import { isAgreementAdmin } from '../utils/admin';
 
 declare const __BUILD_STAMP__: string | undefined;
 const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
@@ -36,7 +37,13 @@ export function MorePage() {
   const navigate = useNavigate();
   const dynastyTradesExperimental = useDynastyTradesExperimental();
   const playerVotesEnabled = usePlayerVotesEnabled();
+  /* The header's ADMIN pill and this link disagreed, so an account could be
+     shown ADMIN in the chrome and still have no way to reach the projections
+     import — the one screen the season actually depends on. One check now, the
+     same one the pill uses; the older signals stay as a fallback so a machine
+     that authenticated with the admin password keeps its link. */
   const isOwner =
+    isAgreementAdmin(user?.email) ||
     user?.app_metadata?.role === 'owner' ||
     user?.user_metadata?.role === 'owner' ||
     Boolean(window.localStorage.getItem('og.projections.adminpw'));
@@ -122,7 +129,7 @@ export function MorePage() {
       {/* A phone has no header at all now, so sync state and the control for it
           live here. This is the only place either exists on a phone. */}
       {stored ? (
-        <section className="more-page__section">
+        <section className="more-page__section more-page__section--header-dupe">
           <p className="more-page__eyebrow">League sync</p>
           <div className="more-page__card more-page__labs-card">
             <div>
@@ -158,7 +165,7 @@ export function MorePage() {
 
       {/* The header carries identity and state only on a phone, so the two
           display controls that used to sit up there live here now. */}
-      <section className="more-page__section">
+      <section className="more-page__section more-page__section--header-dupe">
         <p className="more-page__eyebrow">Display</p>
         <div className="more-page__card more-page__labs-card">
           <div>
