@@ -129,7 +129,10 @@ export function AccountMenu() {
 
           {leagues.length > 0 ? (
             <div className="account-menu__section">
-              <p className="account-menu__section-label">Your leagues</p>
+              <p className="account-menu__section-label">
+                Your leagues
+                <span className="account-menu__section-count">{leagues.length}</span>
+              </p>
               {leagues.map((league) => {
                 const isActive =
                   stored?.provider === league.provider &&
@@ -165,9 +168,16 @@ export function AccountMenu() {
                       </span>
                       <span className="account-menu__league-text">
                         <span className="account-menu__league-title">{title}</span>
+                        {/* The season, not the username. Connecting merges the
+                            current and previous season, so the same league
+                            appears twice under one name — four of thirteen
+                            rows on a real account — and the only thing that
+                            told them apart was a league id nobody sees. The
+                            username was on every row identically: it is always
+                            you, so it distinguished nothing. */}
                         <span className="account-menu__league-sub">
                           {PROVIDER_LABEL[league.provider]}
-                          {league.displayName ? ` · ${league.displayName}` : ''}
+                          {league.season ? ` · ${league.season}` : ''}
                         </span>
                       </span>
                       {isActive ? (

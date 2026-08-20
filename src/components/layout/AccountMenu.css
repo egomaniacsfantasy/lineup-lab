@@ -391,3 +391,23 @@
 .account-menu__confirm-no {
   color: var(--text-muted);
 }
+
+
+/* Thirteen leagues on one Sleeper account is normal, not an edge case, so the
+   list scrolls inside the popover rather than running off the screen. */
+.account-menu__section {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.account-menu__section-count {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
