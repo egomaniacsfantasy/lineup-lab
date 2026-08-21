@@ -2,7 +2,8 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { SeasonBand } from '../components/matchup/SeasonBand';
-import { shareCard } from '../utils/shareCard';
+import type { ShareCardLine } from '../utils/shareCard';
+import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 import { HubDeals } from '../components/matchup/HubDeals';
 import { PlayerChip } from '../components/player/PlayerChip';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
@@ -1733,6 +1734,21 @@ function MatchupLive({
       .join(' · ');
   };
 
+  /* Where the user sits for the rest of the season, ranked on the same
+     projected win totals the power table uses. Sorting, nothing more. */
+  const sharePower = useMemo(() => {
+    if (!power || power.length < 3) return null;
+    const ranked = [...power]
+      .filter((row) => row.projWins != null)
+      .sort((a, b) => (b.projWins ?? 0) - (a.projWins ?? 0));
+    const index = ranked.findIndex((row) => row.isUser);
+    return index === -1 ? null : { rank: index + 1, of: ranked.length };
+  }, [power]);
+
+  /* Held rather than fired: the button opens a preview so you can see the card
+     before it goes anywhere. */
+  const [sharePayload, setSharePayload] = useState<ShareCardLine | null>(null);
+
   const renderLineupRow = ({
     player,
     slotLabel,
@@ -2029,23 +2045,37 @@ function MatchupLive({
                 rendered above it. */}
             <button
               className="matchup-page__share"
-              onClick={() => {
-                void shareCard({
+              onClick={() => setSharePayload({
                   eyebrow: `Week ${matchup.week}`,
                   you: matchup.yourTeam.teamName,
                   them: matchup.opponentTeam.teamName,
                   yourPrice: formatAmericanOdds(engine.activeLine.yours.moneyline),
                   theirPrice: formatAmericanOdds(engine.activeLine.opponent.moneyline),
                   yourWinPct: engine.activeLine.yours.winProbability,
-                  // Served margin mean, the same sentence the distributions
-                  // module prints. Omitted when the sim has not run.
-                  note: matchup.histograms
-                    ? matchup.histograms.margin.mean > 0
-                      ? `On average you win by ${Math.abs(matchup.histograms.margin.mean).toFixed(1)}.`
-                      : `On average you lose by ${Math.abs(matchup.histograms.margin.mean).toFixed(1)}.`
+                  /* The same four numbers the season band prints above the
+                     matchup, formatted there and passed through here. */
+                  season: userFuture
+                    ? {
+                        title: formatAmericanOdds(userFuture.championOdds),
+                        playoffs:
+                          userFuture.playoffProb != null
+                            ? `${Math.round(userFuture.playoffProb)}%`
+                            : null,
+                        finish:
+                          userFuture.projRecord
+                          ?? (userFuture.projWins != null && userFuture.projLosses != null
+                            ? `${userFuture.projWins.toFixed(1)}-${userFuture.projLosses.toFixed(1)}`
+                            : null),
+                        seed: userFuture.avgSeed != null ? userFuture.avgSeed.toFixed(1) : null,
+                      }
                     : null,
-                });
-              }}
+                  /* Their standing only. A whole league table does not travel
+                     in a group chat; one position does. */
+                  power: sharePower,
+                  movement: lineMovement
+                    ? `Opened ${formatAmericanOdds(lineMovement.from)}, now ${formatAmericanOdds(lineMovement.to)}`
+                    : null,
+              })}
               type="button"
             >
               Share the line
@@ -2564,6 +2594,10 @@ function MatchupLive({
               : 'See the verdict'}
           </button>
         </div>
+      ) : null}
+
+      {sharePayload ? (
+        <ShareCardPreview line={sharePayload} onClose={() => setSharePayload(null)} />
       ) : null}
 
       {compareResult && compareModalPlayers ? (
