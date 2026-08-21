@@ -68,7 +68,7 @@ export function HubDeals() {
   if (!deals || deals.length === 0) return null;
 
   return (
-    <div className="hub-deals">
+    <section className="matchup-page__module hub-deals">
       {deals.map((deal) => (
         <button
           className="hub-deals__row"
@@ -96,6 +96,6 @@ export function HubDeals() {
           </span>
         </button>
       ))}
-    </div>
+    </section>
   );
 }

@@ -73,7 +73,6 @@ import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { shortInjuryStatus } from '../utils/playerNames.ts';
-import { TheField, type FieldTeam } from '../components/matchup/TheField';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
@@ -1062,7 +1061,6 @@ interface MatchupLiveProps {
   isConnected: boolean;
   /** The user's own futures row, for the season band under the hero. */
   userFuture?: PricedFuture | null;
-  field?: { teams: FieldTeam[]; sigma: number; median: number } | null;
   /** Recorded title price per week, for the band's trend line. */
   titleHistory?: LeaguePricing['titleHistory'] | null;
   isPriced?: boolean;
@@ -1183,7 +1181,6 @@ function MatchupLive({
   matchup,
   isConnected,
   userFuture = null,
-  field = null,
   titleHistory = null,
   isPriced = false,
   lineMovement = null,
@@ -2465,21 +2462,7 @@ function MatchupLive({
 
             {/* Trades earn a box of their own rather than a tier inside the
                 start/add widget, but a small one: two rows, above the field. */}
-            {isConnected ? (
-              <section className="matchup-page__module matchup-page__module--rail-deals">
-                <HubDeals />
-              </section>
-            ) : null}
-
-            {/* The histogram was 5,000 sims of one week drawn as a curve, which
-                restated the moneyline already at the top of the page. The field
-                answers the question the moneyline cannot: whether a low win
-                probability is your roster or your draw. */}
-            {isConnected && field && field.teams.length > 1 ? (
-              <section className="matchup-page__module matchup-page__module--rail-field">
-                <TheField median={field.median} sigma={field.sigma} teams={field.teams} />
-              </section>
-            ) : null}
+            {isConnected ? <HubDeals /> : null}
 
             <section className="matchup-page__module matchup-page__module--rail-chart">
               {matchupHistorySeries.length > 1 ? (
@@ -2749,43 +2732,6 @@ export function MatchupPage() {
     return () => window.clearInterval(timer);
   }, [marketScan.cooldownMs, marketScan.lastScannedAt]);
 
-  /* Every team's projection for this week, which the engine already prices
-     because every team is in a matchup. Sorting and subtraction only — the
-     projections and the sigma are both served. */
-  const field = useMemo(() => {
-    if (!bootstrap || !pricing?.available || !pricing.lines?.length) return null;
-    const userRosterId = bootstrap.teams.find((team) => team.isUser)?.rosterId ?? null;
-    const opponentRosterId = (() => {
-      const line = pricing.lines?.find((l) =>
-        Object.keys(l.sides).includes(String(userRosterId)),
-      );
-      if (!line || userRosterId == null) return null;
-      const other = Object.keys(line.sides).find((id) => id !== String(userRosterId));
-      return other != null ? Number(other) : null;
-    })();
-
-    const teams: FieldTeam[] = [];
-    for (const line of pricing.lines ?? []) {
-      for (const [rosterId, side] of Object.entries(line.sides)) {
-        const id = Number(rosterId);
-        const team = bootstrap.teams.find((t) => t.rosterId === id);
-        if (!team || !Number.isFinite(side.projection)) continue;
-        teams.push({
-          rosterId: id,
-          teamName: team.teamName,
-          projection: side.projection,
-          isUser: id === userRosterId,
-          isOpponent: id === opponentRosterId,
-        });
-      }
-    }
-    if (teams.length < 2 || !pricing.leagueMedian?.sigma) return null;
-    return {
-      teams,
-      sigma: pricing.leagueMedian?.sigma ?? 0,
-      median: pricing.leagueMedian?.mean ?? 0,
-    };
-  }, [bootstrap, pricing]);
 
   if (stored && !bootstrap) {
     if (isLoading) {
@@ -2942,7 +2888,6 @@ export function MatchupPage() {
       <MatchupLive
         movers={movers}
         userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}
-        field={field}
         titleHistory={pricing?.available ? pricing.titleHistory ?? null : null}
         isConnected={connectedMatchup !== null}
         isPriced={Boolean(pricing?.available)}
