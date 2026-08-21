@@ -1,0 +1,266 @@
+/* Its own rectangle, above the manager picker, because it answers its own
+   question: who anywhere in this league would improve my team. */
+.ldb {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  background: var(--bg-surface);
+  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
+}
+
+.ldb__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ldb__label {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.ldb__count {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.ldb__rows {
+  display: grid;
+  gap: 6px;
+}
+
+.ldb__row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+/* The whole row opens the deal. A wide surface beats a small target when the
+   row is already a single idea. */
+.ldb__open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 200px);
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg-inset) 45%, transparent);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.ldb__open:hover {
+  border-color: rgba(232, 84, 29, 0.45);
+  background: color-mix(in srgb, var(--bg-inset) 70%, transparent);
+}
+
+.ldb__side {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ldb__side--get {
+  justify-items: end;
+  text-align: right;
+}
+
+.ldb__faces {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ldb__face {
+  width: 30px;
+  height: 30px;
+}
+
+.ldb__face + .ldb__face {
+  margin-left: -9px;
+}
+
+.ldb__names {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ldb__arrow {
+  color: color-mix(in srgb, var(--amber) 75%, transparent);
+  font-size: 16px;
+}
+
+.ldb__read {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.ldb__partner {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ldb__numbers {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.ldb__delta {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ldb__delta--up { color: var(--green); }
+.ldb__delta--down { color: var(--red); }
+
+.ldb__accept {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.ldb__share {
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-3);
+  font-size: 15px;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.ldb__row:hover .ldb__share,
+.ldb__share:focus-visible {
+  opacity: 1;
+}
+
+.ldb__share:hover { color: var(--text-amber); }
+
+.ldb__empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Same shape as the row that is coming, at the width it will be, so nothing
+   jumps when the scan lands. Wider than the hub's because this panel is. */
+.ldb__ghost {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 200px);
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg-inset) 40%, transparent);
+}
+
+.ldb__ghost-side {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ldb__ghost-side--get { justify-content: flex-end; }
+
+.ldb__ghost-face {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-primary) 5%, transparent) 0%,
+    color-mix(in srgb, var(--text-primary) 11%, transparent) 50%,
+    color-mix(in srgb, var(--text-primary) 5%, transparent) 100%
+  );
+  background-size: 220% 100%;
+  animation: ldb-shimmer 1.5s ease-in-out infinite;
+}
+
+.ldb__ghost-face + .ldb__ghost-face { margin-left: -9px; }
+
+.ldb__ghost-arrow {
+  color: color-mix(in srgb, var(--amber) 40%, transparent);
+  font-size: 15px;
+}
+
+.ldb__ghost-meta {
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-primary) 4%, transparent) 0%,
+    color-mix(in srgb, var(--text-primary) 9%, transparent) 50%,
+    color-mix(in srgb, var(--text-primary) 4%, transparent) 100%
+  );
+  background-size: 220% 100%;
+  animation: ldb-shimmer 1.5s ease-in-out infinite;
+}
+
+.ldb__pending {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+}
+
+.ldb__pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: ldb-pulse 1.3s ease-in-out infinite;
+}
+
+@keyframes ldb-shimmer {
+  from { background-position: 220% 0; }
+  to { background-position: -220% 0; }
+}
+
+@keyframes ldb-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ldb__ghost-face,
+  .ldb__ghost-meta,
+  .ldb__pulse { animation: none; }
+}

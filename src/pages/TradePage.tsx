@@ -31,6 +31,7 @@ import {
 } from '../utils/tradeMarket';
 import {
   acceptanceGaugeLabel,
+  acceptanceWeightedValue,
   applyTradeDisplayPolicy,
 } from '../utils/tradeSuggestionDisplay';
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
@@ -61,6 +62,7 @@ import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { drawTradeCard, type TradeCardProposal, type TradeCardAsset } from '../utils/tradeCard';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
+import { LeagueDealBoard, type LeagueDealRow } from '../components/trade/LeagueDealBoard';
 
 type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
@@ -311,6 +313,47 @@ function TradeDealsView() {
   /* A proposal is an argument you make to another manager, so it has to be
      able to leave the app as a picture. */
   const [tradeCard, setTradeCard] = useState<TradeCardProposal | null>(null);
+  /* The league-wide board is its own question with its own answer, so it gets
+     its own request rather than sharing the manager pipeline. Sharing them is
+     what made a league-wide scan run and then filter every result away for not
+     belonging to a manager nobody had picked. */
+  const [leagueDeals, setLeagueDeals] = useState<TradeSuggestion[] | null>(null);
+
+  useEffect(() => {
+    if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
+    const key = `og.leagueDeals.${stored.leagueId}:${stored.userId}`;
+    try {
+      const cached = window.sessionStorage.getItem(key);
+      if (cached) {
+        setLeagueDeals(JSON.parse(cached) as TradeSuggestion[]);
+        return undefined;
+      }
+    } catch {
+      // storage unavailable; the scan just runs
+    }
+    let cancelled = false;
+    void fetchTradeSuggestions(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId: null,
+    })
+      .then((response) => {
+        if (cancelled) return;
+        const found = response.available ? response.suggestions ?? [] : [];
+        setLeagueDeals(found);
+        try {
+          window.sessionStorage.setItem(key, JSON.stringify(found));
+        } catch {
+          // ignore
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLeagueDeals([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stored?.leagueId, stored?.userId, bootstrap]);
+
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
   const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
@@ -334,6 +377,98 @@ function TradeDealsView() {
   const currentWeek = pricing?.week ?? bootstrap?.week ?? null;
   const { dismissedSignatures, dismiss, undo, restoreAll, pendingUndoSignature } =
     useDismissedTradeSuggestions(stored?.leagueId ?? null, currentWeek);
+  const [leagueScanLine, setLeagueScanLine] = useState(0);
+  useEffect(() => {
+    if (leagueDeals !== null) return undefined;
+    const timer = window.setInterval(() => setLeagueScanLine((n) => n + 1), 2600);
+    return () => window.clearInterval(timer);
+  }, [leagueDeals]);
+
+  /* One place that turns a suggestion into a card, so the league board and the
+     manager list cannot drift into describing the same deal differently. */
+  const shareSuggestion = (suggestion: TradeSuggestion) => {
+    if (!bootstrap) return;
+    const partner = bootstrap.teams.find(
+      (team) => team.rosterId === suggestion.partnerRosterId,
+    );
+    const asset = (id: string): TradeCardAsset => {
+      const player = toPlayer(id, bootstrap.players);
+      return {
+        name: player.name,
+        position: player.position,
+        team: player.team,
+        headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
+      };
+    };
+    const accept = acceptanceProbability(suggestion.partnerDelta, friendliness, relationship);
+    setTradeCard({
+      eyebrow: `Week ${bootstrap.week}`,
+      you: userTeam?.teamName ?? 'You',
+      them: partner?.teamName ?? 'Them',
+      yourAvatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
+      theirAvatar: resolveApiUrl(partner?.avatarUrl) ?? null,
+      send: suggestion.give.map((a) => asset(a.id)),
+      get: suggestion.get.map((a) => asset(a.id)),
+      titleDelta: signedPct(suggestion.youDelta),
+      titleUp: suggestion.youDelta >= 0,
+      acceptance: formatAcceptancePercent(accept),
+      acceptanceBand: getAcceptanceLingo(accept)?.label ?? null,
+      verdict: analysisVerdict(suggestion.youDelta).label,
+    });
+  };
+
+  const leagueDealRows = useMemo<LeagueDealRow[] | null>(() => {
+    if (!bootstrap || leagueDeals === null) return null;
+    return [...leagueDeals]
+      /* A board headed "best deals" cannot carry one that lowers your title
+         price. Acceptance weighting sorts it last rather than out, because a
+         bad deal they would happily take still scores above a good one they
+         would refuse. */
+      .filter((suggestion) => suggestion.youDelta > 0)
+      .map((suggestion) => {
+        const accept = acceptanceProbability(suggestion.partnerDelta, 5, 5);
+        return { suggestion, accept, weight: acceptanceWeightedValue({
+          valueGain: suggestion.youDelta,
+          acceptanceProbability: accept,
+        }) };
+      })
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 5)
+      .map(({ suggestion, accept }) => ({
+        key: tradeSignature({
+          leagueId: stored?.leagueId ?? '',
+          partnerRosterId: suggestion.partnerRosterId,
+          givePlayerIds: suggestion.give.map((asset) => asset.id),
+          getPlayerIds: suggestion.get.map((asset) => asset.id),
+        }),
+        partnerName:
+          bootstrap.teams.find((team) => team.rosterId === suggestion.partnerRosterId)?.teamName
+          ?? 'A manager',
+        send: suggestion.give.map((asset) => toPlayer(asset.id, bootstrap.players)),
+        get: suggestion.get.map((asset) => toPlayer(asset.id, bootstrap.players)),
+        delta: signedPct(suggestion.youDelta),
+        up: suggestion.youDelta >= 0,
+        acceptance: formatAcceptancePercent(accept),
+      }));
+  }, [bootstrap, leagueDeals, stored?.leagueId]);
+
+  const leagueDealByKey = useMemo(() => {
+    const map = new Map<string, TradeSuggestion>();
+    if (!stored) return map;
+    for (const suggestion of leagueDeals ?? []) {
+      map.set(
+        tradeSignature({
+          leagueId: stored.leagueId,
+          partnerRosterId: suggestion.partnerRosterId,
+          givePlayerIds: suggestion.give.map((asset) => asset.id),
+          getPlayerIds: suggestion.get.map((asset) => asset.id),
+        }),
+        suggestion,
+      );
+    }
+    return map;
+  }, [leagueDeals, stored]);
+
   const managerSuggestionEntries = useMemo(() => {
     if (!stored || !bootstrap || marketManagerFilter == null) return [];
 
@@ -385,11 +520,11 @@ function TradeDealsView() {
     relationship,
     stored,
   ]);
-  const showingManagerMarket = true;
+  const showingManagerMarket = marketManagerFilter != null;
   const visibleManagerSuggestions = showAllMarketCards
     ? managerSuggestionEntries
     : managerSuggestionEntries.slice(0, MAX_VISIBLE_MARKET_CARDS);
-  const visibleMarketCount = managerSuggestionEntries.length;
+  const visibleMarketCount = showingManagerMarket ? managerSuggestionEntries.length : 0;
   const hiddenMarketCount = showingManagerMarket
     ? managerSuggestionEntries.length - visibleManagerSuggestions.length
     : 0;
@@ -399,7 +534,7 @@ function TradeDealsView() {
   }, [marketManagerFilter, marketPositionFilter]);
 
   useEffect(() => {
-    if (!stored) {
+    if (!stored || marketManagerFilter == null) {
       setManagerSuggestions([]);
       setManagerSuggestionsUpdatedAt(null);
       setManagerSuggestionsError(null);
@@ -1003,6 +1138,20 @@ function TradeDealsView() {
           marketView === 'finder' ? '' : 'trade-cc__finder--hidden',
         ].filter(Boolean).join(' ')}
       >
+        <LeagueDealBoard
+          loading={leagueDeals === null}
+          onOpen={(key) => {
+            const found = leagueDealByKey.get(key);
+            if (found) loadSuggestedTrade(found);
+          }}
+          onShare={(key) => {
+            const found = leagueDealByKey.get(key);
+            if (found) shareSuggestion(found);
+          }}
+          rows={leagueDealRows}
+          scanLine={leagueScanLine}
+        />
+
         {/* The read is about a specific manager, so it appears once there is
             one. Rendering it disabled above an empty heading left a dead row
             at the top of the view where the title used to be. */}

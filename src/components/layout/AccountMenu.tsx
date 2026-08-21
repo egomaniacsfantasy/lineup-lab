@@ -5,6 +5,7 @@ import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import { PROVIDER_LABEL } from '../../utils/provider';
 import './AccountMenu.css';
+import { WelcomeCard } from '../onboarding/WelcomeCard';
 
 function leagueLabel(league: StoredConnection, activeName?: string | null) {
   return (
@@ -31,6 +32,9 @@ export function AccountMenu() {
   /* Removing a league is destructive and one row away from switching to it, so
      it asks once rather than trusting a small target next to a common one. */
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  /* More is admin-only now, and the walkthrough was the one thing in it that a
+     normal user might want. It follows the account rather than disappearing. */
+  const [showWelcome, setShowWelcome] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -243,6 +247,17 @@ export function AccountMenu() {
               + Add a league
             </button>
             <button
+              className="account-menu__action"
+              onClick={() => {
+                setOpen(false);
+                setShowWelcome(true);
+              }}
+              role="menuitem"
+              type="button"
+            >
+              How this works
+            </button>
+            <button
               className="account-menu__action account-menu__action--quiet"
               onClick={() => {
                 setOpen(false);
@@ -256,6 +271,8 @@ export function AccountMenu() {
           </div>
         </div>
       ) : null}
+
+      <WelcomeCard isOpen={showWelcome} onDismiss={() => setShowWelcome(false)} />
     </div>
   );
 }

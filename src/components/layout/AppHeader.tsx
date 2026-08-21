@@ -59,7 +59,12 @@ export function AppHeader() {
         { label: 'League', path: '/league' },
         ...(hideTrade ? [] : [{ label: 'Trades', path: '/market', badge: showExperimentalMarketTag ? 'experimental' : null }]),
         { label: 'Board', path: '/rankings' },
-        { label: 'More', path: '/more' },
+        /* Everything More carries is reachable somewhere better: account,
+           leagues and sync live in the avatar menu, and the sheet view is a
+           toggle on the Board itself. What is left is the admin import and the
+           labs flags, so it is a tab for the three of us. The route stays
+           reachable by URL for anyone who wants it. */
+        ...(isAdmin ? [{ label: 'More', path: '/more' }] : []),
       ]
     : [{ label: 'Connect', path: '/connect' }];
   const showSyncing = stored && !bootstrap && isLoading;
