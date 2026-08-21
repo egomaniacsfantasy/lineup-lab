@@ -196,6 +196,57 @@ apiRouter.get('/nfl/schedule', async (req, res) => {
   res.json(schedule);
 });
 
+/**
+ * Franco's weekly floor and ceiling for a set of players.
+ *
+ * getAdjustedProjections already carries weeklyCI — { week: { floor, ceiling } }
+ * — matched to provider player ids, in the league's scoring format, with the
+ * agreement tilt applied. The engine consumes it and the client never saw it.
+ *
+ * Deliberately a read-only route rather than a new field on the pricing
+ * payload: this needs nothing from the simulation, and the numbers are served
+ * exactly as the projection set computed them. Nothing here derives a range,
+ * it only hands over the one Franco already produced.
+ */
+apiRouter.get('/projections/weekly-range', async (req, res, next) => {
+  try {
+    const week = Number(req.query.week);
+    if (!Number.isFinite(week) || week < 1 || week > 18) {
+      res.status(400).json({ error: 'bad_week', message: 'week must be 1-18.' });
+      return;
+    }
+    const ids = String(req.query.ids ?? '').split(',').map((id) => id.trim()).filter(Boolean);
+    if (ids.length === 0) {
+      res.json({ available: false, reason: 'no_ids', ranges: {} });
+      return;
+    }
+
+    const adjusted = await getAdjustedProjections(scoringSuffix(String(req.query.scoring ?? '')));
+    if (!adjusted || !adjusted.matched) {
+      res.json({ available: false, reason: 'no_projections', ranges: {} });
+      return;
+    }
+
+    const wanted = new Set(ids);
+    const ranges = {};
+    for (const row of adjusted.projections ?? []) {
+      if (!wanted.has(String(row.playerId))) continue;
+      const ci = row.weeklyCI?.[String(week)] ?? row.weeklyCI?.[week];
+      const mean = row.weekly?.[String(week)] ?? row.weekly?.[week];
+      if (ci?.floor == null || ci?.ceiling == null) continue;
+      ranges[String(row.playerId)] = {
+        floor: Number(ci.floor),
+        ceiling: Number(ci.ceiling),
+        mean: mean != null ? Number(mean) : null,
+      };
+    }
+
+    res.json({ available: Object.keys(ranges).length > 0, week, ranges });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /** Active projection model served as a ranking board ("Odds Gods model"). */
 apiRouter.get('/rankings', async (req, res, next) => {
   try {

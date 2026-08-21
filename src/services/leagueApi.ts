@@ -815,6 +815,23 @@ export interface TradeSuggestions {
   suggestions?: TradeSuggestion[];
   debug?: { enumerated: number; scanned: number; resimmed: number; positive: number; ms: number };
 }
+export interface WeeklyRange {
+  floor: number;
+  ceiling: number;
+  mean: number | null;
+}
+
+/** Franco's weekly floor/ceiling for a set of players, served as computed. */
+export function fetchWeeklyRanges(
+  week: number,
+  playerIds: string[],
+  scoring?: string,
+): Promise<{ available: boolean; week?: number; ranges: Record<string, WeeklyRange> }> {
+  const params = new URLSearchParams({ week: String(week), ids: playerIds.join(',') });
+  if (scoring) params.set('scoring', scoring);
+  return get(`/api/projections/weekly-range?${params.toString()}`);
+}
+
 export function fetchTradeSuggestions(
   leagueId: string,
   body: {
