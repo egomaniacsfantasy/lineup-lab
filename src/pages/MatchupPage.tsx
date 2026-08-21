@@ -73,7 +73,6 @@ import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { shortInjuryStatus } from '../utils/playerNames.ts';
-import { CloseCalls } from '../components/matchup/CloseCalls';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
@@ -2464,10 +2463,6 @@ function MatchupLive({
             {/* Trades earn a box of their own rather than a tier inside the
                 start/add widget, but a small one: two rows, above the field. */}
             {isConnected ? <HubDeals /> : null}
-
-            {isConnected && engine.roster.length > 0 ? (
-              <CloseCalls slots={engine.roster} week={matchup.week} />
-            ) : null}
 
             <section className="matchup-page__module matchup-page__module--rail-chart">
               {matchupHistorySeries.length > 1 ? (
