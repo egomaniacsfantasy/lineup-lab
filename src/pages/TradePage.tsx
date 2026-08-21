@@ -59,7 +59,8 @@ import './TradePage.css';
 import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
-import { oddsPairDelta } from '../utils/noTradeMath';
+import { drawTradeCard, type TradeCardProposal, type TradeCardAsset } from '../utils/tradeCard';
+import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 
 type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
@@ -99,11 +100,14 @@ function initials(name: string) {
     .join('') || 'TM';
 }
 
-type MarketView = 'deals' | 'managers' | 'build';
+type MarketView = 'finder' | 'build';
 
+/* Three tabs was a phone compromise: the finder and the manager picker were
+   split because neither fitted beside the other in 402px. On a desktop they
+   are the same job — the finder searches the whole league, and picking a
+   manager narrows the same search. */
 const MARKET_VIEWS: { id: MarketView; label: string }[] = [
-  { id: 'deals', label: 'Trade finder' },
-  { id: 'managers', label: 'By manager' },
+  { id: 'finder', label: 'Trade finder' },
   { id: 'build', label: 'Build trades' },
 ];
 
@@ -303,30 +307,10 @@ function TradeDealsView() {
      whole league on every repricing — those are what you came for, so they
      lead, and picking a manager becomes the second question rather than the
      toll gate. */
-  const [marketView, setMarketView] = useState<MarketView>('deals');
-  /* Every trade the book already priced across the league, newest read first.
-     Nothing is computed here — titleOddsBefore/After are served, and turning a
-     pair into a delta is the same display transform the hub already makes. */
-  const leagueDeals = useMemo(() => {
-    if (!bootstrap || !pricing?.available) return [];
-    return (pricing.movers ?? [])
-      .filter((mover) => mover.kind === 'trade')
-      .map((mover) => {
-        const getIdsForCard = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
-        const giveIdsForCard = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
-        const partner = bootstrap.teams.find((team) => team.rosterId === mover.partnerRosterId) ?? null;
-        return {
-          signature: `${mover.partnerRosterId ?? 'x'}:${giveIdsForCard.join('+')}>${getIdsForCard.join('+')}`,
-          mover,
-          partner,
-          getIds: getIdsForCard,
-          giveIds: giveIdsForCard,
-          delta: oddsPairDelta(mover.titleOddsBefore, mover.titleOddsAfter),
-          acceptance: mover.acceptanceProbability ?? null,
-        };
-      })
-      .filter((deal) => deal.getIds.length > 0 && deal.giveIds.length > 0);
-  }, [bootstrap, pricing]);
+  const [marketView, setMarketView] = useState<MarketView>('finder');
+  /* A proposal is an argument you make to another manager, so it has to be
+     able to leave the app as a picture. */
+  const [tradeCard, setTradeCard] = useState<TradeCardProposal | null>(null);
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
   const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
@@ -401,11 +385,11 @@ function TradeDealsView() {
     relationship,
     stored,
   ]);
-  const showingManagerMarket = marketManagerFilter != null;
+  const showingManagerMarket = true;
   const visibleManagerSuggestions = showAllMarketCards
     ? managerSuggestionEntries
     : managerSuggestionEntries.slice(0, MAX_VISIBLE_MARKET_CARDS);
-  const visibleMarketCount = showingManagerMarket ? managerSuggestionEntries.length : 0;
+  const visibleMarketCount = managerSuggestionEntries.length;
   const hiddenMarketCount = showingManagerMarket
     ? managerSuggestionEntries.length - visibleManagerSuggestions.length
     : 0;
@@ -415,7 +399,7 @@ function TradeDealsView() {
   }, [marketManagerFilter, marketPositionFilter]);
 
   useEffect(() => {
-    if (!stored || marketManagerFilter == null) {
+    if (!stored) {
       setManagerSuggestions([]);
       setManagerSuggestionsUpdatedAt(null);
       setManagerSuggestionsError(null);
@@ -982,6 +966,14 @@ function TradeDealsView() {
     <div className="trade-page">
       <h1 className="visually-hidden">Market</h1>
 
+      {tradeCard ? (
+        <ShareCardPreview
+          draw={(options) => drawTradeCard(tradeCard, options)}
+          filename="odds-gods-trade.png"
+          onClose={() => setTradeCard(null)}
+        />
+      ) : null}
+
       {/* Three questions, in the order people actually ask them: what has the
           book got, who would say yes, and what if I build my own. */}
       <div className="trade-cc__views" role="tablist" aria-label="Trade views">
@@ -998,108 +990,17 @@ function TradeDealsView() {
             type="button"
           >
             {view.label}
-            {view.id === 'deals' && leagueDeals.length > 0 ? (
-              <span className="trade-cc__view-count">{leagueDeals.length}</span>
+            {view.id === 'finder' && visibleMarketCount > 0 ? (
+              <span className="trade-cc__view-count">{visibleMarketCount}</span>
             ) : null}
           </button>
         ))}
       </div>
 
-      {marketView === 'deals' ? (
-        <section className="trade-cc__deals">
-          {leagueDeals.length > 0 ? (
-            <div className="trade-cc__market-grid">
-              {leagueDeals.map((deal) => {
-                const verdict = analysisVerdict(deal.delta);
-                return (
-                  <TradeCard
-                    acceptanceBand={getAcceptanceLingo(deal.acceptance)?.label ?? null}
-                    acceptanceLabel={deal.acceptance != null ? acceptanceGaugeLabel(deal.acceptance) : null}
-                    acceptanceProbability={deal.acceptance}
-                    acceptanceValue={formatAcceptancePercent(deal.acceptance)}
-                    getSide={tradeSideFromIds('You get', deal.getIds, bootstrap.players)}
-                    impactRows={[
-                      {
-                        label: 'Your title',
-                        value: signedPct(deal.delta),
-                        tone: deltaTone(deal.delta),
-                        emphasis: 'lead',
-                      },
-                    ]}
-                    key={deal.signature}
-                    onClick={() => {
-                      if (deal.partner) applyMarketManagerFilter(deal.partner.rosterId);
-                      setMarketView('build');
-                    }}
-                    /* Which manager this is with is the first thing you need
-                       and the deals view is the only place it is not implied
-                       by a picker you just tapped. */
-                    partnerLine={deal.partner?.teamName ?? 'A manager'}
-                    sendSide={tradeSideFromIds('You send', deal.giveIds, bootstrap.players)}
-                    verdictLabel={verdict.label}
-                    verdictTone={verdict.tone as 'good' | 'neutral' | 'bad'}
-                  />
-                );
-              })}
-            </div>
-          ) : (
-            /* The scan lives on the Hub by an earlier decision, and the guard in
-               test/noTradeMath.test.mjs holds this module to it. So the empty
-               state offers the thing this tab can actually do instead. */
-            <div className="trade-cc__deals-empty">
-              <p className="trade-cc__empty-lane">
-                {pricing?.available
-                  ? 'No league-wide deals on the board yet. Asking a manager directly runs a fresh simulation against their roster.'
-                  : 'Pricing your league. Deals arrive with the first repricing.'}
-              </p>
-              {/* True as written: the server holds a scan for five minutes, so
-                  leaving this screen does not throw the work away. It is not a
-                  background job — nothing will tell you when it lands. */}
-              <p className="trade-cc__empty-note">
-                A scan simulates every roster in the league, so it takes a moment.
-                You can leave this tab and come back. The result is held for five
-                minutes and returns instantly.
-              </p>
-              {pricing?.available && partners.length > 0 ? (
-                <div className="trade-cc__quick">
-                  <span className="trade-cc__quick-label">Start with</span>
-                  {[...partners]
-                    .sort((a, b) => {
-                      const oa = futuresByRoster.get(a.rosterId)?.championOdds ?? Number.MAX_SAFE_INTEGER;
-                      const ob = futuresByRoster.get(b.rosterId)?.championOdds ?? Number.MAX_SAFE_INTEGER;
-                      return oa - ob;
-                    })
-                    .slice(0, 4)
-                    .map((team) => (
-                      <button
-                        className="trade-cc__quick-row"
-                        key={`quick-${team.rosterId}`}
-                        onClick={() => {
-                          applyMarketManagerFilter(team.rosterId);
-                          setMarketView('managers');
-                        }}
-                        type="button"
-                      >
-                        {renderTeamAvatar(team)}
-                        <span className="trade-cc__quick-name">{team.teamName}</span>
-                        <span className="trade-cc__quick-odds">
-                          {futuresByRoster.get(team.rosterId)?.championOdds != null
-                            ? formatAmericanOdds(futuresByRoster.get(team.rosterId)!.championOdds)
-                            : ''}
-                        </span>
-                      </button>
-                    ))}
-                </div>
-              ) : null}
-            </div>
-          )}
-        </section>
-      ) : null}
-
       <section
         className={[
           'trade-cc__finder',
-          marketView === 'managers' ? '' : 'trade-cc__finder--hidden',
+          marketView === 'finder' ? '' : 'trade-cc__finder--hidden',
         ].filter(Boolean).join(' ')}
       >
         {/* The read is about a specific manager, so it appears once there is
@@ -1337,6 +1238,34 @@ function TradeDealsView() {
                         : []),
                     ]}
                     key={entry.signature}
+                    onShare={() => {
+                      const partner = partners.find(
+                        (team) => team.rosterId === entry.suggestion.partnerRosterId,
+                      );
+                      const asset = (id: string): TradeCardAsset => {
+                        const player = toPlayer(id, bootstrap.players);
+                        return {
+                          name: player.name,
+                          position: player.position,
+                          team: player.team,
+                          headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
+                        };
+                      };
+                      setTradeCard({
+                        eyebrow: `Week ${bootstrap.week}`,
+                        you: userTeam?.teamName ?? 'You',
+                        them: partner?.teamName ?? 'Them',
+                        yourAvatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
+                        theirAvatar: resolveApiUrl(partner?.avatarUrl) ?? null,
+                        send: givePlayerIds.map(asset),
+                        get: getPlayerIds.map(asset),
+                        titleDelta: signedPct(entry.suggestion.youDelta),
+                        titleUp: entry.suggestion.youDelta >= 0,
+                        acceptance: formatAcceptancePercent(entry.acceptanceProbability),
+                        acceptanceBand: getAcceptanceLingo(entry.acceptanceProbability)?.label ?? null,
+                        verdict: suggestionVerdict.label,
+                      });
+                    }}
                     onClick={() => loadSuggestedTrade(entry.suggestion)}
                     onDismiss={(event) => {
                       event.preventDefault();

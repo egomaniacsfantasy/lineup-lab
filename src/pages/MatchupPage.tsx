@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { SeasonBand } from '../components/matchup/SeasonBand';
-import type { ShareCardLine } from '../utils/shareCard';
+import { drawShareCard, type ShareCardLine } from '../utils/shareCard';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 import { HubDeals } from '../components/matchup/HubDeals';
 import { PlayerChip } from '../components/player/PlayerChip';
@@ -2599,7 +2599,10 @@ function MatchupLive({
       ) : null}
 
       {sharePayload ? (
-        <ShareCardPreview line={sharePayload} onClose={() => setSharePayload(null)} />
+        <ShareCardPreview
+          draw={(options) => drawShareCard(sharePayload, options)}
+          onClose={() => setSharePayload(null)}
+        />
       ) : null}
 
       {compareResult && compareModalPlayers ? (

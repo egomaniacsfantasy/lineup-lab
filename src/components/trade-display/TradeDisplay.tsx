@@ -72,6 +72,9 @@ interface TradeLayoutProps {
   generatedAt?: string | null;
   dismissLabel?: string | null;
   onDismiss?: ((event: MouseEvent<HTMLButtonElement>) => void) | null;
+  /** Export this proposal as a card. Sits beside dismiss because both act on
+      the deal rather than opening it. */
+  onShare?: (() => void) | null;
   onClick?: (() => void) | null;
   whyOpen?: boolean;
   whyTrigger?: ReactNode;
@@ -202,6 +205,7 @@ function TradeLayout({
   generatedAt = null,
   dismissLabel = 'Dismiss',
   onDismiss = null,
+  onShare = null,
   onClick = null,
   whyOpen = false,
   whyTrigger = null,
@@ -236,15 +240,34 @@ function TradeLayout({
       ].filter(Boolean).join(' ')}
       {...interactiveProps}
     >
-      {onDismiss ? (
-        <button
-          aria-label={dismissLabel ?? undefined}
-          className="trade-display__dismiss"
-          onClick={onDismiss}
-          type="button"
-        >
-          ×
-        </button>
+      {onShare || onDismiss ? (
+        <div className="trade-display__tools">
+          {onShare ? (
+            <button
+              aria-label="Share this trade as a card"
+              className="trade-display__tool"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onShare();
+              }}
+              title="Share this trade"
+              type="button"
+            >
+              ↗
+            </button>
+          ) : null}
+          {onDismiss ? (
+            <button
+              aria-label={dismissLabel ?? undefined}
+              className="trade-display__tool"
+              onClick={onDismiss}
+              type="button"
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {tone === 'rich' ? (

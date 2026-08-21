@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { drawShareCard, shareCardToBlob, type ShareCardLine } from '../../utils/shareCard';
+import { canvasToBlob } from '../../utils/cardKit';
 import './ShareCardPreview.css';
 
 type State = 'idle' | 'working' | 'shared' | 'saved' | 'failed';
@@ -16,10 +16,14 @@ type State = 'idle' | 'working' | 'shared' | 'saved' | 'failed';
  * do with it.
  */
 export function ShareCardPreview({
-  line,
+  draw,
+  filename = 'odds-gods.png',
   onClose,
 }: {
-  line: ShareCardLine;
+  /** Draws the card. Called again without art if the canvas comes back
+      tainted, which is how a cross-origin logo announces itself. */
+  draw: (options?: { withArt?: boolean }) => Promise<HTMLCanvasElement>;
+  filename?: string;
   onClose: () => void;
 }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -27,21 +31,21 @@ export function ShareCardPreview({
 
   useEffect(() => {
     let cancelled = false;
-    void drawShareCard(line).then(async (canvas) => {
+    void draw().then(async (canvas) => {
       if (cancelled) return;
       try {
         setSrc(canvas.toDataURL('image/png'));
       } catch {
-        /* A crest from a host that sent no CORS headers taints the canvas and
-           toDataURL throws. Redraw without the art rather than show nothing. */
-        const plain = await drawShareCard(line, { withArt: false });
+        /* Art from a host that sent no CORS headers taints the canvas and
+           toDataURL throws. Redraw without it rather than show nothing. */
+        const plain = await draw({ withArt: false });
         if (!cancelled) setSrc(plain.toDataURL('image/png'));
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [line]);
+  }, [draw]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -54,8 +58,8 @@ export function ShareCardPreview({
   const withBlob = async (run: (blob: Blob) => Promise<State>) => {
     setState('working');
     try {
-      let blob = await shareCardToBlob(await drawShareCard(line));
-      if (!blob) blob = await shareCardToBlob(await drawShareCard(line, { withArt: false }));
+      let blob = await canvasToBlob(await draw());
+      if (!blob) blob = await canvasToBlob(await draw({ withArt: false }));
       if (!blob) {
         setState('failed');
         return;
@@ -68,7 +72,7 @@ export function ShareCardPreview({
 
   const onShare = () =>
     withBlob(async (blob) => {
-      const file = new File([blob], 'odds-gods.png', { type: 'image/png' });
+      const file = new File([blob], filename, { type: 'image/png' });
       const nav = navigator as Navigator & {
         canShare?: (data: { files: File[] }) => boolean;
         share?: (data: { files: File[]; title?: string }) => Promise<void>;
@@ -85,7 +89,7 @@ export function ShareCardPreview({
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = 'odds-gods.png';
+      anchor.download = filename;
       anchor.click();
       URL.revokeObjectURL(url);
       return 'saved';
