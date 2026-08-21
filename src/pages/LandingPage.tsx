@@ -1,21 +1,46 @@
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import logo from '../assets/og-logo.png';
 import { useReel } from '../hooks/useReel';
+import { LeagueFutures } from '../components/league/LeagueFutures';
+import { MOCK_LEAGUE_FUTURES } from '../mocks/league';
+import { MOCK_LEAGUE_HISTORY } from '../mocks/leagueHistory';
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { formatAmericanOdds } from '../utils/formatOdds';
-import {
-  LINE_FRAMES,
-  START_SIT_FRAMES,
-  TRADE_FRAMES,
-  type TradeFrame,
-} from './landingReel';
+import { LINE_FRAMES, TRADE_FRAMES, type TradeFrame } from './landingReel';
 import { MatchupPage } from './MatchupPage';
 import styles from './LandingPage.module.css';
 
-/* The three hero widgets play a reel of authored frames (see landingReel.ts).
-   They are illustrative, not priced: nothing on this page computes anything.
-   The cards run on different intervals so they never flip in unison, which is
-   what makes a set of animated cards read as a machine rather than a market. */
+/**
+ * The hero used to be three invented cards floating next to the copy. Two of
+ * them advertised things that are not the product: a start/sit toggle, which
+ * every fantasy site has had for fifteen years, and a package of two top-twelve
+ * players for one at 38% acceptance, which is a trade nobody sends and an
+ * example of the tool saying no.
+ *
+ * So the hero is the product now. The board below is the real LeagueFutures
+ * component, the same one the League tab renders, running on the demo league.
+ * The market toggle works, the chart is thirty real days of authored history,
+ * and everything a visitor clicks is a thing they will find again after they
+ * connect a league. Nothing here computes: LeagueFutures formats what it is
+ * handed, and what it is handed is a book that balances (see src/mocks/league.ts).
+ */
+
+function DemoFutures() {
+  return (
+    <div aria-label="The demo league's futures market" className={styles.heroBoard}>
+      <LeagueFutures
+        currentWeek={8}
+        futures={MOCK_LEAGUE_FUTURES}
+        history={MOCK_LEAGUE_HISTORY}
+        leagueName="Mount Olympus"
+        mode="inseason"
+        playoffTeams={6}
+        scoringFormat="half-ppr"
+        totalTeams={12}
+      />
+    </div>
+  );
+}
 
 function LineCard() {
   const frame = LINE_FRAMES[useReel(LINE_FRAMES.length, 3600)];
@@ -52,9 +77,7 @@ function LineCard() {
       <p className={styles.boardTicker} key={frame.note}>
         <span className={styles.boardTickerNote}>{frame.note}</span>
         {moved ? (
-          <span
-            className={frame.move > 0 ? styles.boardTickerUp : styles.boardTickerDown}
-          >
+          <span className={frame.move > 0 ? styles.boardTickerUp : styles.boardTickerDown}>
             {frame.move > 0 ? '▲' : '▼'} {Math.abs(frame.move).toFixed(1)}%
           </span>
         ) : null}
@@ -63,15 +86,7 @@ function LineCard() {
   );
 }
 
-function ReelFace({
-  slug,
-  name,
-  position,
-}: {
-  slug: string;
-  name: string;
-  position: string;
-}) {
+function ReelFace({ slug, name, position }: { slug: string; name: string; position: string }) {
   return (
     <span className={styles.reelFace}>
       <PlayerHeadshot
@@ -87,34 +102,6 @@ function ReelFace({
   );
 }
 
-function StartSitCard() {
-  const frame = START_SIT_FRAMES[useReel(START_SIT_FRAMES.length, 4700, 900)];
-
-  return (
-    <article className={styles.boardCard}>
-      <div className={styles.boardCardHead}>
-        <span>Who do I start?</span>
-        <span>{frame.sit.position}</span>
-      </div>
-      {/* Keyed on the frame, not the card: the content crossfades while the
-          card itself persists, so the bars below can ease rather than jump. */}
-      <div className={styles.reelSwap} key={frame.sit.slug}>
-        <span className={styles.boardTag}>Sit</span>
-        <ReelFace {...frame.sit} />
-        <span aria-hidden="true" className={styles.boardArrow}>→</span>
-        <span className={styles.boardTagStart}>Start</span>
-        <ReelFace {...frame.start} />
-      </div>
-      <p className={styles.boardMove}>
-        <s>{formatAmericanOdds(frame.beforeMoneyline)}</s>
-        <span aria-hidden="true"> → </span>
-        <strong>{formatAmericanOdds(frame.afterMoneyline)}</strong>
-        <em>+{frame.delta.toFixed(1)}%</em>
-      </p>
-    </article>
-  );
-}
-
 function TradeSideFaces({ side }: { side: TradeFrame['send'] }) {
   return (
     <span className={styles.reelStack}>
@@ -127,12 +114,15 @@ function TradeSideFaces({ side }: { side: TradeFrame['send'] }) {
 
 function TradeCard() {
   const frame = TRADE_FRAMES[useReel(TRADE_FRAMES.length, 5600, 1800)];
+  const band = getAcceptanceLingo(frame.acceptance);
 
   return (
     <article className={styles.boardCard}>
       <div className={styles.boardCardHead}>
-        <span>Trade finder</span>
         <span>{frame.partner}</span>
+        {/* The motive is the argument. Acceptance odds are only credible if you
+            can see what the other roster is missing. */}
+        <span className={styles.boardMotive}>{frame.motive}</span>
       </div>
       {/* Two rows, not one wrapping line: packages are lopsided by nature
           (2-for-1, 1-for-2) and inline wrapping orphans the Get tag. */}
@@ -153,32 +143,21 @@ function TradeCard() {
         <span className={styles.boardAcceptLabel}>
           {formatAcceptancePercent(frame.acceptance)} they take it
           {' · '}
-          {getAcceptanceLingo(frame.acceptance)?.label}
+          {band?.label}
         </span>
       </div>
     </article>
   );
 }
 
-function HeroBoard() {
-  return (
-    <div aria-label="What the book prices" className={styles.heroBoard}>
-      <LineCard />
-      <StartSitCard />
-      <TradeCard />
-    </div>
-  );
-}
-
-
 export function LandingPage() {
   return (
     <main className={styles.page}>
       {/* Two entries, one displayed. A phone gets the mark and two choices and
           nothing to scroll; a desktop has the room for the board to sell the
-          product, so it keeps the reel. Rendering both and hiding one is the
-          only way to give each breakpoint the layout it actually wants, and
-          display:none keeps the hidden copy out of the a11y tree. */}
+          product. Rendering both and hiding one is the only way to give each
+          breakpoint the layout it actually wants, and display:none keeps the
+          hidden copy out of the a11y tree. */}
       <div className={styles.mobileStage}>
         <img alt="Odds Gods" className={styles.mark} src={logo} />
         <h1 className={styles.wordmark}>Odds Gods</h1>
@@ -197,9 +176,8 @@ export function LandingPage() {
           <div className={styles.kicker}>FANTASY FOOTBALL · PRICED LIKE A SPORTSBOOK</div>
           <h1 className={styles.headline}>Every decision has a price.</h1>
           <p className={styles.sub}>
-            Connect your league and the book opens: your matchup as a
-            moneyline, every start or sit as a probability swing, every trade
-            with the odds the other manager actually says yes.
+            Your league already argues about who is best. We simulate it ten
+            thousand times a day and put a number on it.
           </p>
           <div className={styles.ctaRow}>
             <a className={styles.primaryCta} href="/signin">Get started</a>
@@ -208,12 +186,48 @@ export function LandingPage() {
             </a>
           </div>
           <div className={styles.proofStrip}>
-            <span>Built for Sleeper. Works with ESPN.</span>
+            <span>Works with Sleeper and ESPN</span>
             <span className={styles.dot}>·</span>
             <span>10,000 season sims. 5,000 per matchup.</span>
           </div>
         </div>
-        <HeroBoard />
+        <DemoFutures />
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionCopy}>
+          <p className={styles.sectionKicker}>Trades</p>
+          <h2 className={styles.sectionTitle}>He is not going to say yes to that.</h2>
+          <p className={styles.sectionBody}>
+            Every other trade tool grades your side. Ours reads the other
+            roster, finds what it is actually short of, and tells you how
+            likely that manager is to take the deal before you send it.
+          </p>
+        </div>
+        <TradeCard />
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionCopy}>
+          <p className={styles.sectionKicker}>Your matchup</p>
+          <h2 className={styles.sectionTitle}>The line moves all week.</h2>
+          <p className={styles.sectionBody}>
+            It opens Tuesday and re-prices on every projection refresh, every
+            waiver run, every lineup change in the league. By Sunday you know
+            exactly what moved you and by how much.
+          </p>
+        </div>
+        <LineCard />
+      </section>
+
+      {/* Somebody who read to the bottom is the most convinced visitor on the
+          page and the old one had nothing to press. */}
+      <section className={styles.close}>
+        <h2 className={styles.closeTitle}>What are your odds?</h2>
+        <p className={styles.closeBody}>
+          Connect a league and the board opens on your team in about a minute.
+        </p>
+        <a className={styles.primaryCta} href="/signin">Get started</a>
       </section>
 
       <footer className={styles.footer}>

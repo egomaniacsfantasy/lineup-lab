@@ -14,9 +14,6 @@
  *   -159 and 38.6% is +159), so a hero showing -159 against +134 would be
  *   quoting 104.1% of book, i.e. 4.1 points of vig we do not charge and do
  *   not model. Each pair below was generated from that function.
- * - Every start/sit frame's delta is the difference of its two win
- *   probabilities, and its two moneylines are those same probabilities
- *   converted. They cannot disagree.
  * - Acceptance band words are not written here at all; they are read from
  *   src/utils/acceptanceLingo.ts when the card renders.
  */
@@ -29,64 +26,40 @@ export interface LineFrame {
   note: string;
 }
 
-/** A fair two-way market drifting through a week, the way a real book moves. */
+/**
+ * A fair two-way market drifting through a week.
+ *
+ * The notes are the engine's OWN trigger vocabulary, the same strings it
+ * writes into line history: opening board, projection refresh, waiver run,
+ * lineup change. They used to be invented injury beats ("Their QB ruled out",
+ * "Nacua downgraded to questionable"), which read as writing rather than as a
+ * product, and described a feed we do not have. These are the four things
+ * that actually move a line here.
+ */
 export const LINE_FRAMES: LineFrame[] = [
   {
     you: { team: "Zeus's Bolts", prob: 58.2, moneyline: -139 },
     them: { team: 'Hermes Express', prob: 41.8, moneyline: 139 },
     move: 0,
-    note: 'Line opened',
+    note: 'Opening board',
   },
   {
     you: { team: "Zeus's Bolts", prob: 61.4, moneyline: -159 },
     them: { team: 'Hermes Express', prob: 38.6, moneyline: 159 },
     move: 3.2,
-    note: 'Projection update',
+    note: 'Projection refresh',
   },
   {
     you: { team: "Zeus's Bolts", prob: 59.6, moneyline: -148 },
     them: { team: 'Hermes Express', prob: 40.4, moneyline: 148 },
     move: -1.8,
-    note: 'Nacua upgraded to questionable',
+    note: 'Waiver run',
   },
   {
     you: { team: "Zeus's Bolts", prob: 63.0, moneyline: -170 },
     them: { team: 'Hermes Express', prob: 37.0, moneyline: 170 },
     move: 3.4,
-    note: 'Their QB ruled out',
-  },
-];
-
-export interface StartSitFrame {
-  sit: { slug: string; name: string; position: string };
-  start: { slug: string; name: string; position: string };
-  beforeMoneyline: number;
-  afterMoneyline: number;
-  /** after prob minus before prob, to one decimal. */
-  delta: number;
-}
-
-export const START_SIT_FRAMES: StartSitFrame[] = [
-  {
-    sit: { slug: 't-mclaurin', name: 'T. McLaurin', position: 'WR' },
-    start: { slug: 'd-smith', name: 'D. Smith', position: 'WR' },
-    beforeMoneyline: -159,
-    afterMoneyline: -182,
-    delta: 3.2,
-  },
-  {
-    sit: { slug: 'd-henry', name: 'D. Henry', position: 'RB' },
-    start: { slug: 's-barkley', name: 'S. Barkley', position: 'RB' },
-    beforeMoneyline: -159,
-    afterMoneyline: -170,
-    delta: 1.6,
-  },
-  {
-    sit: { slug: 't-mcbride', name: 'T. McBride', position: 'TE' },
-    start: { slug: 'b-bowers', name: 'B. Bowers', position: 'TE' },
-    beforeMoneyline: -139,
-    afterMoneyline: -151,
-    delta: 1.9,
+    note: 'Lineup change',
   },
 ];
 
@@ -98,36 +71,45 @@ export interface TradeFrame {
    *  drift from the vocabulary the product actually uses. */
   acceptance: number;
   partner: string;
+  /** Why this manager would even pick up the phone. */
+  motive: string;
 }
 
-/* Real trade shapes: consolidation and depth-for-star. Nobody has ever built a
-   package around a kicker, so none of these do. */
+/**
+ * Trades a real manager would actually send.
+ *
+ * The old set led with two top-twelve assets for one (Kelce and Bijan for
+ * Jefferson) at 38% acceptance, which is both a package nobody proposes and
+ * an example of the product saying no. Every trade here is instead driven by
+ * a hole in the other roster, which is what acceptance odds are modelling in
+ * the first place, and priced where a deal is genuinely live.
+ */
 export const TRADE_FRAMES: TradeFrame[] = [
-  {
-    send: [
-      { slug: 't-kelce', name: 'T. Kelce', position: 'TE' },
-      { slug: 'b-robinson', name: 'B. Robinson', position: 'RB' },
-    ],
-    get: [{ slug: 'j-jefferson', name: 'J. Jefferson', position: 'WR' }],
-    acceptance: 38,
-    partner: 'Hermes Express',
-  },
   {
     send: [{ slug: 'd-henry', name: 'D. Henry', position: 'RB' }],
     get: [
       { slug: 'p-nacua', name: 'P. Nacua', position: 'WR' },
       { slug: 't-mcbride', name: 'T. McBride', position: 'TE' },
     ],
-    acceptance: 62,
+    acceptance: 64,
+    partner: 'Hades Hounds',
+    motive: 'Starting a backup at RB',
+  },
+  {
+    send: [{ slug: 't-kelce', name: 'T. Kelce', position: 'TE' }],
+    get: [{ slug: 'b-robinson', name: 'B. Robinson', position: 'RB' }],
+    acceptance: 57,
     partner: 'Apollo Archers',
+    motive: 'Worst TE in the league',
   },
   {
     send: [
-      { slug: 't-mclaurin', name: 'T. McLaurin', position: 'WR' },
       { slug: 'j-gibbs', name: 'J. Gibbs', position: 'RB' },
+      { slug: 'd-smith', name: 'D. Smith', position: 'WR' },
     ],
     get: [{ slug: 'j-chase', name: 'J. Chase', position: 'WR' }],
     acceptance: 71,
-    partner: 'Poseidon Waves',
+    partner: 'Kronos Titans',
+    motive: '1-6 and selling',
   },
 ];
