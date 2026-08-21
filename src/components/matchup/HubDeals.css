@@ -1,129 +1,79 @@
+/* Two rows, not a board. The Trades tab is where a deal gets read properly;
+   this is only here to say one exists and is worth a look. */
 .hub-deals {
   display: grid;
-  gap: 13px;
-  padding: 16px;
+  gap: 6px;
+}
+
+.hub-deals__row {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 10px 11px;
   border: 1px solid var(--border-subtle);
-  border-radius: 18px;
-  background: var(--bg-surface);
-  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-inset) 65%, transparent);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
-.hub-deals__head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+.hub-deals__row:hover {
+  border-color: color-mix(in srgb, var(--amber) 50%, transparent);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 
-.hub-deals__sub {
-  margin: 3px 0 0;
-  color: var(--text-muted);
+.hub-deals__swap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.hub-deals__side {
+  overflow-wrap: break-word;
+  color: var(--text-soft);
   font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.hub-deals__side--get {
+  color: var(--text-primary);
+  font-weight: 700;
+  text-align: right;
+}
+
+.hub-deals__arrow {
+  color: var(--text-amber);
   font-size: 13px;
 }
 
-/* A price board, not a list of names: the title number is what makes picking
-   a manager an informed choice rather than a guess. */
-.hub-deals__managers {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
+.hub-deals__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.hub-deals__manager {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(232, 84, 29, 0.05), transparent 70%),
-    color-mix(in srgb, var(--bg-inset) 58%, transparent);
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 150ms ease, background 150ms ease;
-}
-
-.hub-deals__manager:hover,
-.hub-deals__manager:focus-visible {
-  border-color: rgba(232, 84, 29, 0.5);
-  background:
-    linear-gradient(180deg, rgba(232, 84, 29, 0.12), transparent 70%),
-    color-mix(in srgb, var(--bg-inset) 72%, transparent);
-}
-
-.hub-deals__manager-copy {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.hub-deals__manager-name {
+.hub-deals__partner {
   overflow: hidden;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 400;
-  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
   text-overflow: ellipsis;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
-.hub-deals__manager-record {
-  color: var(--text-muted);
+.hub-deals__delta {
   font-family: var(--font-num);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.hub-deals__manager-price {
-  display: grid;
-  justify-items: end;
-  gap: 0;
-}
-
-.hub-deals__manager-price-label {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.hub-deals__manager-price-value {
-  color: var(--text-amber);
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-  line-height: 1.05;
-}
-
-/* The call to action stays out of the way until the row is live, per the
-   DraftKings finding that a CTA on every card adds noise. */
-.hub-deals__manager-cue {
-  grid-column: 1 / -1;
-  color: var(--text-amber);
-  font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  opacity: 0;
-  text-transform: uppercase;
-  transition: opacity 150ms ease;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.hub-deals__manager:hover .hub-deals__manager-cue,
-.hub-deals__manager:focus-visible .hub-deals__manager-cue {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .hub-deals__manager-cue {
-    opacity: 1;
-  }
-}
+.hub-deals__delta--up { color: var(--green); }
+.hub-deals__delta--down { color: var(--red); }

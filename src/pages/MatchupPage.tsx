@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
-import { MatchupDistributions } from '../components/matchup/MatchupDistributions';
 import { SeasonBand } from '../components/matchup/SeasonBand';
 import { shareCard } from '../utils/shareCard';
 import { HubDeals } from '../components/matchup/HubDeals';
@@ -9,7 +8,6 @@ import { PlayerChip } from '../components/player/PlayerChip';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TradeRow } from '../components/trade-display/TradeDisplay';
 import { OddsChart, type OddsChartPoint } from '../components/charts/OddsChart';
-import { Card, Chip } from '../components/ui/DesignPrimitives';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import type { LeaguePricing, PricedFuture } from '../services/leagueApi';
@@ -22,9 +20,6 @@ import { useMatchupEngine, type SitCost } from '../hooks/useMatchupEngine';
 import { useNflSchedule } from '../hooks/useNflSchedule';
 import {
   MOCK_MATCHUP,
-  MOCK_PLAYER_POOL,
-  MOCK_TRADE_TARGET_GROUPS,
-  MOCK_WAIVER_SUGGESTION,
 } from '../mocks';
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
@@ -78,6 +73,7 @@ import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { shortInjuryStatus } from '../utils/playerNames.ts';
+import { TheField, type FieldTeam } from '../components/matchup/TheField';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
@@ -549,29 +545,6 @@ function HeadToHeadStrip({ summary }: { summary: SleeperHeadToHeadSummary }) {
   );
 }
 
-function displayPlayerFromMock(player: {
-  name: string;
-  position: string;
-  slug?: string;
-  team: string;
-}): Player {
-  const parts = player.name.split(' ');
-  const shortName = parts.length > 1
-    ? `${parts[0]?.charAt(0) ?? ''}. ${parts.slice(1).join(' ')}`
-    : player.name;
-  return {
-    bye: 0,
-    headshotUrl: '',
-    id: player.slug ?? player.name,
-    isActive: true,
-    name: player.name,
-    position: player.position as Player['position'],
-    shortName,
-    slug: player.slug,
-    team: player.team,
-    teamLogoUrl: '',
-  };
-}
 
 function displayCatalogPlayer(id: string, catalog: Record<string, ApiCatalogPlayer>) {
   if (!catalog[id]) {
@@ -1089,6 +1062,7 @@ interface MatchupLiveProps {
   isConnected: boolean;
   /** The user's own futures row, for the season band under the hero. */
   userFuture?: PricedFuture | null;
+  field?: { teams: FieldTeam[]; sigma: number; median: number } | null;
   /** Recorded title price per week, for the band's trend line. */
   titleHistory?: LeaguePricing['titleHistory'] | null;
   isPriced?: boolean;
@@ -1205,26 +1179,11 @@ function MatchupSuggestionSkeleton({
   );
 }
 
-function MatchupSuggestionEmpty({
-  copy,
-  meta = null,
-}: {
-  copy: string;
-  meta?: ReactNode;
-}) {
-  return (
-    <Card className="matchup-page__confirm-strip" compact tone="strip">
-      <Chip size="sm" tone="accent">Optimal</Chip>
-      <p className="matchup-page__confirm-copy">{copy}</p>
-      {meta ? <span className="matchup-page__confirm-meta">{meta}</span> : null}
-    </Card>
-  );
-}
-
 function MatchupLive({
   matchup,
   isConnected,
   userFuture = null,
+  field = null,
   titleHistory = null,
   isPriced = false,
   lineMovement = null,
@@ -1378,17 +1337,6 @@ function MatchupLive({
     stored?.userId,
   ]);
 
-  const playerMap = useMemo(
-    () => new Map(MOCK_PLAYER_POOL.map((player) => [player.id, player])),
-    [],
-  );
-  const topTradeTarget = useMemo(
-    () =>
-      MOCK_TRADE_TARGET_GROUPS.flatMap((group) => group.targets).sort(
-        (targetA, targetB) => targetB.fitScore - targetA.fitScore,
-      )[0] ?? null,
-    [],
-  );
   // The hero card must agree with the bench rows: any positive bench-driven
   // line move means the lineup is not fully optimal, even if the move stays
   // below the tighter "swap" threshold used for row-level urgency.
@@ -1517,14 +1465,36 @@ function MatchupLive({
     [activePick, engine.roster],
   );
 
-  /* Any two of your own players can be weighed against each other: lineups
-     are fluid, and deciding which of two starters gives up a spot is a real
-     call. Pairs that share a slot get the priced swap; the rest get a
-     straight projection comparison, never an invented number. */
-  const canPick = () => true;
+  /* You compare two players because you are choosing between them for one
+     slot, so the slot decides who is eligible. A quarterback slot offers
+     quarterbacks; a flex offers the backs, receivers and tight ends it would
+     actually accept. This had been opened up to "any two players", which put
+     a kicker next to a quarterback and answered a question nobody asked.
+
+     Eligibility is by position across the whole roster, starters included, so
+     RB1 against RB2 is a legal call — that is a real decision — not just
+     starter against bench. */
+  const eligibleForSlot = useMemo(() => {
+    if (!compareSlot) return null;
+    const ids = new Set<string>();
+    engine.roster.forEach((slot) => {
+      if (slotAccepts(compareSlot, slot.starter.position)) ids.add(slot.starter.id);
+    });
+    benchRows.forEach((row) => {
+      if (slotAccepts(compareSlot, row.player.position)) ids.add(row.player.id);
+    });
+    return ids;
+  }, [compareSlot, engine.roster, benchRows]);
+
+  const canPick = (player?: Player) => {
+    /* The first pick sets the slot, so nothing is excluded yet. */
+    if (compareSelection.length === 0 || !eligibleForSlot || !player) return true;
+    if (compareSelection.some((candidate) => candidate.id === player.id)) return true;
+    return eligibleForSlot.has(player.id);
+  };
 
   const handleComparePick = (player: Player, slotLabel?: string) => {
-    if (!canPick()) return;
+    if (!canPick(player)) return;
     if (compareSelection.length === 0 && slotLabel) setCompareSlot(slotLabel);
     if (compareSelection.some((candidate) => candidate.id === player.id)
       && compareSelection.length === 1) {
@@ -1691,23 +1661,6 @@ function MatchupLive({
 
   /* Your starters carrying an injury tag, straight from the payload's
      injuryStatus. Display only: nothing here re-weights a projection. */
-  const riskyStarters = useMemo(() => {
-    const healthy = ['active', 'healthy'];
-    return engine.roster
-      .filter((slot) => {
-        const status = slot.starter.injuryStatus?.toLowerCase();
-        return Boolean(status) && !healthy.includes(status as string);
-      })
-      .map((slot) => {
-        const context = getPlayerContext(slot.starter, gameContextSource);
-        const kickoff = context.contextAvailable && !context.bye ? context.kickoff : null;
-        return {
-          player: slot.starter,
-          status: slot.starter.injuryStatus as string,
-          meta: [slot.starter.team, kickoff].filter(Boolean).join(' · '),
-        };
-      });
-  }, [engine.roster, gameContextSource]);
 
   const removePick = (playerId: string) => {
     setCompareSelection((current) => current.filter((candidate) => candidate.id !== playerId));
@@ -1812,8 +1765,10 @@ function MatchupLive({
     );
     const isLineupSlot = tone === 'starter';
     const showSlotLabel = isLineupSlot;
-    const pickable = canPick();
-    const muted = false;
+    const pickable = canPick(player);
+    /* An ineligible player during a comparison is dimmed rather than silently
+       inert, so the rule is visible instead of just felt. */
+    const muted = compareSelection.length > 0 && !pickable;
 
     return (
       <div
@@ -2154,7 +2109,7 @@ function MatchupLive({
                     (starter != null &&
                       compareSlot != null &&
                       slotsAreComparable(compareSlot, firstPick.position, row.slotLabel, starter.position));
-                  const isPickable = starter ? canPick() && isEligible : false;
+                  const isPickable = starter ? canPick(starter) && isEligible : false;
                   const isMuted = Boolean(firstPick) && !isEligible;
                   const youLead = row.edgeDelta > 0;
 
@@ -2327,111 +2282,7 @@ function MatchupLive({
 
             {headToHead ? <HeadToHeadStrip summary={headToHead} /> : null}
 
-            {isConnected ? <HubDeals /> : null}
 
-            <div className="matchup-page__insight-grid">
-              {isConnected ? (
-                marketRows.length > 0 ? (
-                  <section className="matchup-page__module">
-                    <div className="matchup-page__module-row">
-                      {/* The note was a second line under the title, and on a
-                          phone the title is hidden — which left it sitting
-                          under a lone refresh button saying "added to your
-                          lineup" with nothing to be added to. Beside the title
-                          it reads on both. */}
-                      <span className="matchup-page__module-heading">
-                        <h2 className="matchup-page__module-title">The market</h2>
-                        <p className="matchup-page__meta-copy">
-                          {marketScan.note ?? 'what each one does to your week'}
-                        </p>
-                      </span>
-                      <div className="matchup-page__module-meta">
-                        {marketScan.isScanning ? (
-                          <SimulationLoader label="Scanning the market" size="compact" variant="scan" />
-                        ) : (
-                          <button
-                            aria-label="Scan the market"
-                            className={[
-                              'matchup-page__market-refresh',
-                              marketScan.coolingDown ? 'matchup-page__market-refresh--cooldown' : '',
-                            ].filter(Boolean).join(' ')}
-                            disabled={marketScan.coolingDown}
-                            onClick={() => onScanMarket?.()}
-                            type="button"
-                          >
-                            {marketScan.coolingDown ? marketScan.buttonLabel : <span aria-hidden="true">↻</span>}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {marketRows.map((mover) => (
-                      <MarketMoverRow
-                        acceptanceProbability={mover.acceptanceProbability}
-                        claimPlayer={mover.claimPlayer}
-                        from={mover.before}
-                        gain={mover.gain}
-                        getPlayers={mover.getPlayers}
-                        givePlayers={mover.givePlayers}
-                        href={marketHrefForMover(mover)}
-                        key={mover.headline}
-                        label={mover.headline}
-                        lowAcceptanceTagLabel={mover.lowAcceptanceTag}
-                        onDismiss={
-                          mover.kind === 'trade' && mover.signature
-                            ? () => onDismissMover?.(mover.signature as string)
-                            : null
-                        }
-                        sublabel={mover.kind === 'trade' ? undefined : mover.detail}
-                        to={mover.after}
-                        why={mover.kind === 'trade'
-                          ? marketMoverWhy({
-                              acceptanceProbability: mover.acceptanceProbability,
-                              from: mover.before,
-                              gain: mover.gain,
-                              partnerLabel: mover.partnerLabel,
-                              to: mover.after,
-                            })
-                          : undefined}
-                      />
-                    ))}
-                  </section>
-                ) : isPriced ? (
-                  <MatchupSuggestionEmpty
-                    copy="Nothing on waivers beats what you'd already stream."
-                    meta={marketScan.note ?? (suggestionsAsOf ? `as of ${suggestionsAsOf}` : 'what each one does to your week')}
-                  />
-                ) : (
-                  <MatchupSuggestionSkeleton mode="market" title="The market" subtitle="what each one does to your week" />
-                )
-              ) : !isConnected ? (
-                <section className="matchup-page__module">
-                  <div className="matchup-page__module-row">
-                    <h2 className="matchup-page__module-title">The market</h2>
-                    <p className="matchup-page__meta-copy">
-                      title odds <span className="matchup-page__inline-number">+450</span>
-                    </p>
-                  </div>
-
-                  <MarketMoverRow
-                    claimPlayer={playerMap.get('a-st-brown') ?? playerMap.get('a-stbrown')}
-                    from={450}
-                    label={`Claim ${MOCK_WAIVER_SUGGESTION.player.name} off waivers`}
-                    sublabel="Slots WR3, frees your flex"
-                    to={425}
-                  />
-                  {topTradeTarget ? (
-                    <MarketMoverRow
-                      from={topTradeTarget.suggestedPackage.championshipOddsBefore}
-                      getPlayers={[displayPlayerFromMock(topTradeTarget.player)]}
-                      givePlayers={topTradeTarget.suggestedPackage.youSend.map(displayPlayerFromMock)}
-                      label={`Trade lane: ${topTradeTarget.teamName} want ${topTradeTarget.theirNeed}`}
-                      to={topTradeTarget.suggestedPackage.championshipOddsAfter}
-                      why={`${topTradeTarget.suggestedPackage.youSend.map((player) => player.name).join(' + ')} for ${topTradeTarget.player.name}. Title price ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsBefore)} to ${formatAmericanOdds(topTradeTarget.suggestedPackage.championshipOddsAfter)}.`}
-                    />
-                  ) : null}
-                </section>
-              ) : null}
-            </div>
 
 
 
@@ -2465,13 +2316,30 @@ function MatchupLive({
             {biggestSwing ? (
               <section className="matchup-page__module matchup-page__module--rail-call">
                 <div className="matchup-page__module-row">
-                  <h2 className="matchup-page__module-title">Who do I start?</h2>
                   <div className="matchup-page__module-meta">
                     <MatchupSuggestionStatus
                       asOf={suggestionsAsOf}
                       isFetching={suggestionsFetching}
                       isStale={suggestionsStale}
                     />
+                    {/* The rescan came with the market module this widget
+                        absorbed, so it comes here rather than disappearing. */}
+                    {marketScan.isScanning ? (
+                      <SimulationLoader label="Scanning the market" size="compact" variant="scan" />
+                    ) : (
+                      <button
+                        aria-label="Scan the market"
+                        className={[
+                          'matchup-page__market-refresh',
+                          marketScan.coolingDown ? 'matchup-page__market-refresh--cooldown' : '',
+                        ].filter(Boolean).join(' ')}
+                        disabled={marketScan.coolingDown}
+                        onClick={() => onScanMarket?.()}
+                        type="button"
+                      >
+                        {marketScan.coolingDown ? marketScan.buttonLabel : <span aria-hidden="true">↻</span>}
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="matchup-page__rail-call-swap">
@@ -2492,6 +2360,40 @@ function MatchupLive({
                     </span>
                   </span>
                 </div>
+                {marketRows.length > 0 ? (
+                  <div className="matchup-page__adds">
+                    {marketRows.map((mover) => (
+                      <MarketMoverRow
+                        acceptanceProbability={mover.acceptanceProbability}
+                        claimPlayer={mover.claimPlayer}
+                        from={mover.before}
+                        gain={mover.gain}
+                        getPlayers={mover.getPlayers}
+                        givePlayers={mover.givePlayers}
+                        href={marketHrefForMover(mover)}
+                        key={mover.headline}
+                        label={mover.headline}
+                        lowAcceptanceTagLabel={mover.lowAcceptanceTag}
+                        onDismiss={
+                          mover.kind === 'trade' && mover.signature
+                            ? () => onDismissMover?.(mover.signature as string)
+                            : null
+                        }
+                        sublabel={mover.kind === 'trade' ? undefined : mover.detail}
+                        to={mover.after}
+                        why={mover.kind === 'trade'
+                          ? marketMoverWhy({
+                              acceptanceProbability: mover.acceptanceProbability,
+                              from: mover.before,
+                              gain: mover.gain,
+                              partnerLabel: mover.partnerLabel,
+                              to: mover.after,
+                            })
+                          : undefined}
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 <div className="matchup-page__edge-actions">
                   <button className="matchup-page__row-action" onClick={inspectBiggestEdge} type="button">
                     Inspect why
@@ -2520,40 +2422,62 @@ function MatchupLive({
             ) : isConnected ? (
               <section className="matchup-page__module matchup-page__module--rail-call matchup-page__module--rail-call-clean">
                 <div className="matchup-page__module-row">
-                  <h2 className="matchup-page__module-title">Who do I start?</h2>
                 </div>
                 <p className="matchup-page__rail-call-clean">
                   Your lineup is already the best play.
                 </p>
+                {marketRows.length > 0 ? (
+                  <div className="matchup-page__adds">
+                    {marketRows.map((mover) => (
+                      <MarketMoverRow
+                        acceptanceProbability={mover.acceptanceProbability}
+                        claimPlayer={mover.claimPlayer}
+                        from={mover.before}
+                        gain={mover.gain}
+                        getPlayers={mover.getPlayers}
+                        givePlayers={mover.givePlayers}
+                        href={marketHrefForMover(mover)}
+                        key={mover.headline}
+                        label={mover.headline}
+                        lowAcceptanceTagLabel={mover.lowAcceptanceTag}
+                        onDismiss={
+                          mover.kind === 'trade' && mover.signature
+                            ? () => onDismissMover?.(mover.signature as string)
+                            : null
+                        }
+                        sublabel={mover.kind === 'trade' ? undefined : mover.detail}
+                        to={mover.after}
+                        why={mover.kind === 'trade'
+                          ? marketMoverWhy({
+                              acceptanceProbability: mover.acceptanceProbability,
+                              from: mover.before,
+                              gain: mover.gain,
+                              partnerLabel: mover.partnerLabel,
+                              to: mover.after,
+                            })
+                          : undefined}
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </section>
             ) : null}
 
-            {isConnected && matchup.histograms ? (
-              <section className="matchup-page__module matchup-page__module--rail-dist">
-                <MatchupDistributions histograms={matchup.histograms} />
+            {/* Trades earn a box of their own rather than a tier inside the
+                start/add widget, but a small one: two rows, above the field. */}
+            {isConnected ? (
+              <section className="matchup-page__module matchup-page__module--rail-deals">
+                <HubDeals />
               </section>
             ) : null}
 
-            {riskyStarters.length > 0 ? (
-              <section className="matchup-page__module matchup-page__module--rail-risk">
-                <div className="matchup-page__module-row">
-                  <h2 className="matchup-page__module-title">Watch list</h2>
-                  <span className="matchup-page__edge-line-label">
-                    {riskyStarters.length} of your starters
-                  </span>
-                </div>
-                <div className="matchup-page__risk-list">
-                  {riskyStarters.map((entry) => (
-                    <div className="matchup-page__risk-row" key={entry.player.id}>
-                      <PlayerChip player={entry.player} showPosition size="sm" />
-                      <span className="matchup-page__risk-copy">
-                        <span className="matchup-page__row-name">{entry.player.shortName}</span>
-                        <span className="matchup-page__row-secondary">{entry.meta}</span>
-                      </span>
-                      <span className="matchup-page__risk-status">{entry.status}</span>
-                    </div>
-                  ))}
-                </div>
+            {/* The histogram was 5,000 sims of one week drawn as a curve, which
+                restated the moneyline already at the top of the page. The field
+                answers the question the moneyline cannot: whether a low win
+                probability is your roster or your draw. */}
+            {isConnected && field && field.teams.length > 1 ? (
+              <section className="matchup-page__module matchup-page__module--rail-field">
+                <TheField median={field.median} sigma={field.sigma} teams={field.teams} />
               </section>
             ) : null}
 
@@ -2825,6 +2749,44 @@ export function MatchupPage() {
     return () => window.clearInterval(timer);
   }, [marketScan.cooldownMs, marketScan.lastScannedAt]);
 
+  /* Every team's projection for this week, which the engine already prices
+     because every team is in a matchup. Sorting and subtraction only — the
+     projections and the sigma are both served. */
+  const field = useMemo(() => {
+    if (!bootstrap || !pricing?.available || !pricing.lines?.length) return null;
+    const userRosterId = bootstrap.teams.find((team) => team.isUser)?.rosterId ?? null;
+    const opponentRosterId = (() => {
+      const line = pricing.lines?.find((l) =>
+        Object.keys(l.sides).includes(String(userRosterId)),
+      );
+      if (!line || userRosterId == null) return null;
+      const other = Object.keys(line.sides).find((id) => id !== String(userRosterId));
+      return other != null ? Number(other) : null;
+    })();
+
+    const teams: FieldTeam[] = [];
+    for (const line of pricing.lines ?? []) {
+      for (const [rosterId, side] of Object.entries(line.sides)) {
+        const id = Number(rosterId);
+        const team = bootstrap.teams.find((t) => t.rosterId === id);
+        if (!team || !Number.isFinite(side.projection)) continue;
+        teams.push({
+          rosterId: id,
+          teamName: team.teamName,
+          projection: side.projection,
+          isUser: id === userRosterId,
+          isOpponent: id === opponentRosterId,
+        });
+      }
+    }
+    if (teams.length < 2 || !pricing.leagueMedian?.sigma) return null;
+    return {
+      teams,
+      sigma: pricing.leagueMedian?.sigma ?? 0,
+      median: pricing.leagueMedian?.mean ?? 0,
+    };
+  }, [bootstrap, pricing]);
+
   if (stored && !bootstrap) {
     if (isLoading) {
       return <MatchupColdLoading label={stored.leagueName ?? `${PROVIDER_LABEL[stored.provider]} league`} />;
@@ -2980,6 +2942,7 @@ export function MatchupPage() {
       <MatchupLive
         movers={movers}
         userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}
+        field={field}
         titleHistory={pricing?.available ? pricing.titleHistory ?? null : null}
         isConnected={connectedMatchup !== null}
         isPriced={Boolean(pricing?.available)}

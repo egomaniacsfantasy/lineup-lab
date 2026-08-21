@@ -19,7 +19,7 @@ import {
   isLiveOn, liveStatus, getOverlay, setOverlay, getBaseline, mergeLiveOverlay,
   setLiveMode, registerCycle,
 } from '../live/liveEngine.js';
-import { SEASON_ANCHORS, computeSeasonState } from '../config/season.js';
+import { SEASON_ANCHORS, computeSeasonState, resolveFantasyWeek, isPreseason } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
 import {
@@ -170,8 +170,11 @@ apiRouter.get('/state', async (req, res, next) => {
       ...state,
       anchors: SEASON_ANCHORS,
       seasonState: computeSeasonState(state),
-      // pre-kickoff Sleeper reports week 0 — the app lives in Week 1
-      displayWeek: Math.max(1, state.displayWeek ?? state.week ?? 1),
+      /* The NFL's week is not the fantasy week. In August Sleeper answers
+         preseason week 2, and using that to index a league's schedule prices a
+         week that has not happened. */
+      displayWeek: resolveFantasyWeek(state),
+      isPreseason: isPreseason(state),
       serverTime: Date.now(),
     });
   } catch (error) {
@@ -472,13 +475,9 @@ async function loadLeagueContext(provider, leagueId, userId) {
   });
 
   const isCurrentSeason = league.season === state.season;
-  const week = Math.max(
-    1,
-    Math.min(
-      isCurrentSeason ? (state.displayWeek || state.week || 1) : (league.lastScoredWeek ?? 1),
-      18,
-    ),
-  );
+  const week = isCurrentSeason
+    ? resolveFantasyWeek(state)
+    : Math.max(1, Math.min(league.lastScoredWeek ?? 1, 18));
 
   const matchups = await provider.getMatchups(leagueId, week);
   const rosteredIds = [...new Set(teams.flatMap((t) => t.players))];

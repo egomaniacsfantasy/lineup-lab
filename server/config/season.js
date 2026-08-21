@@ -18,6 +18,31 @@ export const SEASON_ANCHORS = {
 };
 
 /**
+ * The fantasy week to price.
+ *
+ * Sleeper's /state/nfl reports the NFL's week, and during August that is a
+ * PRESEASON week: right now it answers week 2, season_type "pre", leg 0. That
+ * number was being used to index the league's own schedule, so the hub priced
+ * fantasy week 2 while fantasy week 1 had not been played, and the title-odds
+ * chart drew a decline across two weeks nobody had played.
+ *
+ * Preseason and off-season both price week 1, which is the next week that
+ * will actually score. The regular season indexes normally.
+ */
+export function resolveFantasyWeek(state) {
+  const seasonType = state?.seasonType ?? state?.season_type ?? 'off';
+  if (seasonType !== 'regular' && seasonType !== 'post') return 1;
+  const raw = state?.displayWeek ?? state?.week ?? 1;
+  return Math.max(1, Math.min(raw, 18));
+}
+
+/** True while the NFL has not started the regular season. */
+export function isPreseason(state) {
+  const seasonType = state?.seasonType ?? state?.season_type ?? 'off';
+  return seasonType !== 'regular' && seasonType !== 'post';
+}
+
+/**
  * Season state is COMPUTED from Sleeper /state/nfl (+ the league's
  * playoff settings), never chosen by the user.
  *

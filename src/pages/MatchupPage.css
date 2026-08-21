@@ -3230,3 +3230,19 @@
     padding-block: 0;
   }
 }
+
+
+/* The adds sit under the start-or-sit call inside one box: both answer "what
+   should I change", differing only in whether the player is already yours. */
+.matchup-page__adds {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.matchup-page__module--rail-deals,
+.matchup-page__module--rail-field {
+  padding: 13px 14px;
+}
