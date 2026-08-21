@@ -1,0 +1,106 @@
+/* Two candidates for one slot. The comparison is the content, so both lines
+   share a scale and sit under a label naming the slot they are fighting over. */
+.calls {
+  display: grid;
+  gap: 14px;
+}
+
+.calls__slot {
+  display: grid;
+  gap: 6px;
+}
+
+.calls__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.calls__slot-label {
+  color: var(--text-amber);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.calls__gap {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.calls__line {
+  display: grid;
+  grid-template-columns: 26px 74px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.calls__face {
+  width: 26px;
+  height: 26px;
+}
+
+.calls__name {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one currently starting reads first; the alternative is the question. */
+.calls__line--lead .calls__name {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.calls__bar {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-inset) 90%, transparent);
+}
+
+.calls__range {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-3) 75%, transparent);
+}
+
+.calls__line--lead .calls__range {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--amber) 45%, transparent),
+    color-mix(in srgb, var(--amber) 85%, transparent)
+  );
+}
+
+/* Where the projection falls inside the range says which way a player is more
+   likely to break, which is the part a single number cannot carry. */
+.calls__proj {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text-primary);
+}
+
+.calls__nums {
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

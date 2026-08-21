@@ -89,12 +89,31 @@ export function HubDeals() {
   /* A blank rectangle reads as broken. Two skeleton rows say the same thing
      honestly: something is coming, and this is the shape of it. */
   if (deals === null) {
+    /* A grey rectangle says "broken". A ghost of the row that is coming says
+       "a trade is being built", which is both true and the same shape as the
+       answer, so nothing jumps when it lands. */
     return (
       <section className="matchup-page__module hub-deals hub-deals--loading">
-        <p className="hub-deals__pending">Scanning every roster in the league…</p>
         {[0, 1].map((row) => (
-          <span className="hub-deals__skeleton" key={row} />
+          <span className="hub-deals__ghost" key={row}>
+            <span className="hub-deals__ghost-swap">
+              <span className="hub-deals__ghost-side">
+                <span className="hub-deals__ghost-face" />
+                <span className="hub-deals__ghost-face" />
+              </span>
+              <span aria-hidden="true" className="hub-deals__ghost-arrow">⇄</span>
+              <span className="hub-deals__ghost-side hub-deals__ghost-side--get">
+                <span className="hub-deals__ghost-face" />
+                <span className="hub-deals__ghost-face" />
+              </span>
+            </span>
+            <span className="hub-deals__ghost-meta" />
+          </span>
         ))}
+        <p className="hub-deals__pending">
+          <span aria-hidden="true" className="hub-deals__pulse" />
+          Pricing every roster in the league
+        </p>
       </section>
     );
   }

@@ -112,31 +112,98 @@
 /* A scan takes real seconds. A blank rectangle for those seconds reads as
    broken, so the wait says what it is doing and shows the shape of the answer. */
 .hub-deals__pending {
-  margin: 0 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 0 0;
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: 11.5px;
 }
 
-.hub-deals__skeleton {
-  display: block;
-  height: 62px;
+.hub-deals__pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: hub-deals-pulse 1.3s ease-in-out infinite;
+}
+
+/* The ghost is the row that is coming, at the size it will be, so the panel
+   does not jump when the scan lands. */
+.hub-deals__ghost {
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   border-radius: 13px;
+  background: color-mix(in srgb, var(--bg-inset) 45%, transparent);
+}
+
+.hub-deals__ghost-swap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+}
+
+.hub-deals__ghost-side {
+  display: inline-flex;
+  align-items: center;
+}
+
+.hub-deals__ghost-side--get {
+  justify-content: flex-end;
+}
+
+.hub-deals__ghost-face {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--bg-inset) 70%, transparent) 0%,
-    color-mix(in srgb, var(--text-primary) 6%, transparent) 50%,
-    color-mix(in srgb, var(--bg-inset) 70%, transparent) 100%
+    color-mix(in srgb, var(--text-primary) 5%, transparent) 0%,
+    color-mix(in srgb, var(--text-primary) 11%, transparent) 50%,
+    color-mix(in srgb, var(--text-primary) 5%, transparent) 100%
   );
-  background-size: 200% 100%;
-  animation: hub-deals-shimmer 1.4s ease-in-out infinite;
+  background-size: 220% 100%;
+  animation: hub-deals-shimmer 1.5s ease-in-out infinite;
+}
+
+.hub-deals__ghost-face + .hub-deals__ghost-face {
+  margin-left: -9px;
+}
+
+.hub-deals__ghost-arrow {
+  color: color-mix(in srgb, var(--amber) 45%, transparent);
+  font-size: 14px;
+}
+
+.hub-deals__ghost-meta {
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-primary) 4%, transparent) 0%,
+    color-mix(in srgb, var(--text-primary) 9%, transparent) 50%,
+    color-mix(in srgb, var(--text-primary) 4%, transparent) 100%
+  );
+  background-size: 220% 100%;
+  animation: hub-deals-shimmer 1.5s ease-in-out infinite;
 }
 
 @keyframes hub-deals-shimmer {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
+  from { background-position: 220% 0; }
+  to { background-position: -220% 0; }
+}
+
+@keyframes hub-deals-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hub-deals__skeleton { animation: none; }
+  .hub-deals__ghost-face,
+  .hub-deals__ghost-meta,
+  .hub-deals__pulse { animation: none; }
 }

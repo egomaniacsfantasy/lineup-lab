@@ -73,7 +73,7 @@ import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { shortInjuryStatus } from '../utils/playerNames.ts';
-import { SwingRoom } from '../components/matchup/SwingRoom';
+import { CloseCalls } from '../components/matchup/CloseCalls';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
@@ -2466,11 +2466,7 @@ function MatchupLive({
             {isConnected ? <HubDeals /> : null}
 
             {isConnected && engine.roster.length > 0 ? (
-              <SwingRoom
-                favoured={engine.activeLine.yours.winProbability >= 50}
-                starters={engine.roster.map((slot) => slot.starter)}
-                week={matchup.week}
-              />
+              <CloseCalls slots={engine.roster} week={matchup.week} />
             ) : null}
 
             <section className="matchup-page__module matchup-page__module--rail-chart">
