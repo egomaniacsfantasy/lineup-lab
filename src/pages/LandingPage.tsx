@@ -6,7 +6,9 @@ import { MOCK_LEAGUE_FUTURES } from '../mocks/league';
 import { MOCK_LEAGUE_HISTORY } from '../mocks/leagueHistory';
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { formatAmericanOdds } from '../utils/formatOdds';
-import { LINE_FRAMES, TRADE_FRAMES, type TradeFrame } from './landingReel';
+import { apiUrl } from '../services/apiBase';
+import { LINE_FRAMES, type TradeFrame, type TradeFramePlayer } from './landingReel';
+import { TRADE_FRAMES } from './landingTrades';
 import { MatchupPage } from './MatchupPage';
 import styles from './LandingPage.module.css';
 
@@ -86,16 +88,26 @@ function LineCard() {
   );
 }
 
-function ReelFace({ slug, name, position }: { slug: string; name: string; position: string }) {
+function ReelFace({ name, position, sleeperId }: TradeFramePlayer) {
   return (
     <span className={styles.reelFace}>
+      {/* An empty slug on purpose: these players are chosen by the engine, not
+          drawn from the twenty-odd hand-listed entries in playerManifest, so
+          the photo comes through the app's asset proxy instead. */}
       <PlayerHeadshot
         className={styles.reelAvatar}
         fallbackClassName={styles.reelAvatarFallback}
         imageClassName={styles.reelAvatarImage}
         name={name}
+        player={{
+          id: '',
+          slug: '',
+          shortName: name,
+          position,
+          headshotUrl: sleeperId ? apiUrl(`/api/img/headshot/${sleeperId}`) : null,
+          teamLogoUrl: null,
+        } as never}
         position={position}
-        slug={slug}
       />
       <span className={styles.reelName}>{name}</span>
     </span>
@@ -106,7 +118,7 @@ function TradeSideFaces({ side }: { side: TradeFrame['send'] }) {
   return (
     <span className={styles.reelStack}>
       {side.map((player) => (
-        <ReelFace key={player.slug} {...player} />
+        <ReelFace key={player.name} {...player} />
       ))}
     </span>
   );
@@ -120,9 +132,11 @@ function TradeCard() {
     <article className={styles.boardCard}>
       <div className={styles.boardCardHead}>
         <span>{frame.partner}</span>
-        {/* The motive is the argument. Acceptance odds are only credible if you
-            can see what the other roster is missing. */}
-        <span className={styles.boardMotive}>{frame.motive}</span>
+        {/* The point of the whole feature: a fair trade is not one where you
+            win, it is one where the shapes of the two rosters fit. */}
+        <span className={styles.boardMotive}>
+          You +{frame.youTitleDelta}% · Them +{frame.partnerTitleDelta}%
+        </span>
       </div>
       {/* Two rows, not one wrapping line: packages are lopsided by nature
           (2-for-1, 1-for-2) and inline wrapping orphans the Get tag. */}
@@ -197,11 +211,12 @@ export function LandingPage() {
       <section className={styles.section}>
         <div className={styles.sectionCopy}>
           <p className={styles.sectionKicker}>Trades</p>
-          <h2 className={styles.sectionTitle}>He is not going to say yes to that.</h2>
+          <h2 className={styles.sectionTitle}>Find the trade he says yes to.</h2>
           <p className={styles.sectionBody}>
-            Every other trade tool grades your side. Ours reads the other
-            roster, finds what it is actually short of, and tells you how
-            likely that manager is to take the deal before you send it.
+            Every other trade tool grades your side, which is why every trade
+            you send gets ignored. Ours reads his roster too, and only shows
+            you deals that raise both title prices. You are not trying to rob
+            him. You are trying to find the one where you both get better.
           </p>
         </div>
         <TradeCard />

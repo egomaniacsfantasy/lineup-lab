@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ScoringFormat } from '../../types';
-import { formatAmericanOdds } from '../../utils/formatOdds';
+import { formatAmericanOdds, impliedProbability } from '../../utils/formatOdds';
 import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueFutureRow } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
@@ -209,7 +209,7 @@ export function LeagueFutures({
       ) : null}
 
       <div
-        aria-label="Chart line"
+        aria-label="Futures market"
         className="league-futures__markets"
         role="group"
       >
@@ -239,7 +239,11 @@ export function LeagueFutures({
           <span>Team</span>
           <span>Proj wins</span>
           <span>Avg seed</span>
-          <span>Playoff %</span>
+          {/* The complement of whichever market is priced. Showing "Playoff %"
+              beside "Playoff price" printed one fact twice in two formats,
+              which made the market toggle look like it did nothing useful:
+              96% and -2400 are the same number. */}
+          <span>{isPlayoffMarket ? 'Title %' : 'Playoff %'}</span>
           <span>{isPlayoffMarket ? 'Playoff price' : 'Title price'}</span>
           <span>Move</span>
         </div>
@@ -288,7 +292,12 @@ export function LeagueFutures({
                   {team.avgSeed != null ? team.avgSeed.toFixed(1) : 'N/A'}
                 </span>
                 <span className="league-futures__cell" role="cell">
-                  {team.playoffProb != null ? formatPercent(team.playoffProb) : 'N/A'}
+                  {(() => {
+                    const complement = isPlayoffMarket
+                      ? impliedProbability(team.championOdds)
+                      : team.playoffProb;
+                    return complement != null ? formatPercent(complement) : 'N/A';
+                  })()}
                 </span>
                 <span className="league-futures__price" role="cell">
                   <span className={['league-futures__odds', team.isUser ? 'league-futures__odds--selected' : ''].filter(Boolean).join(' ')}>
