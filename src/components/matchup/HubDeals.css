@@ -207,3 +207,10 @@
   .hub-deals__ghost-meta,
   .hub-deals__pulse { animation: none; }
 }
+
+/* Fixed height so a shorter line does not shrink the panel and nudge the rail
+   every few seconds while the scan runs. */
+.hub-deals__pending-line {
+  display: block;
+  min-height: 15px;
+}

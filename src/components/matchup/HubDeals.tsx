@@ -41,6 +41,19 @@ function writeCache(key: string, deals: TradeSuggestion[]) {
   }
 }
 
+/* A league-wide scan takes a while because it is pricing every roster, and a
+   single frozen line makes that read as stuck. These rotate in the voice the
+   rest of the app already uses for a wait: a book working, not a spinner
+   apologising. */
+const SCAN_LINES = [
+  'Pricing every roster in the league...',
+  'Working the phones...',
+  'Reading who needs what...',
+  'Testing who says yes...',
+  'Checking their depth charts...',
+  'Sounding out the market...',
+];
+
 export function HubDeals() {
   const { stored, bootstrap } = useLeagueConnection();
   const navigate = useNavigate();
@@ -48,6 +61,19 @@ export function HubDeals() {
   const [deals, setDeals] = useState<TradeSuggestion[] | null>(() =>
     cacheKey ? readCache(cacheKey) : null,
   );
+  const [scanLine, setScanLine] = useState(0);
+
+  /* Only while there is nothing to show. Once the deals land the copy is
+     irrelevant and a timer left running is just a re-render every few
+     seconds. */
+  useEffect(() => {
+    if (deals !== null) return undefined;
+    const timer = window.setInterval(
+      () => setScanLine((current) => (current + 1) % SCAN_LINES.length),
+      2600,
+    );
+    return () => window.clearInterval(timer);
+  }, [deals]);
 
   useEffect(() => {
     if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
@@ -112,7 +138,7 @@ export function HubDeals() {
         ))}
         <p className="hub-deals__pending">
           <span aria-hidden="true" className="hub-deals__pulse" />
-          Pricing every roster in the league
+          <span className="hub-deals__pending-line">{SCAN_LINES[scanLine]}</span>
         </p>
       </section>
     );
