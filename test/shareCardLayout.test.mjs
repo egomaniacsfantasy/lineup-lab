@@ -53,9 +53,29 @@ async function waitForUrl(url, timeoutMs = 30_000) {
 let nonce = 0;
 const nextNonce = () => `${process.pid}-${(nonce += 1)}`;
 
-const BASE = { eyebrow: 'Week 8', you: 'Vlahakis', record: '5-2-0', titleOdds: '+1226',
-  playoffs: '61%', finish: '7.4-6.6', seed: '5.2', standing: 'No. 3 of 12 in the league',
-  week: 'Week 8: -116 to beat Rodgers That' };
+const BASE = {
+  eyebrow: 'Week 8',
+  leagueName: 'Mount Olympus',
+  you: 'Vlahakis',
+  owner: 'avlahakis',
+  record: '5-2-0',
+  titleOdds: '+1226',
+  playoffs: '61%',
+  finish: '7.4-6.6',
+  seed: '5.2',
+  standing: { rank: 3, of: 12 },
+  week: '-116 to win',
+  opponent: 'Rodgers That',
+};
+
+/* The roster row replaced the title-chance chart as the band that fills the
+   middle of the card. Both cases still have to hold: a card with a lineup and
+   a card without one. */
+const STARTERS = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE'].map((position, index) => ({
+  name: `Player ${index + 1}`,
+  position,
+  headshotUrl: null,
+}));
 
 /**
  * Draw the card and measure it row by row.
@@ -137,7 +157,7 @@ async function withPage(run) {
 
 test('the hub card is portrait, because the season needs the room', async () => {
   await withPage(async (page) => {
-    const { width, height } = await rowProfile(page, { ...BASE, titleSeries: [6.1, 7.0, 8.1] });
+    const { width, height } = await rowProfile(page, { ...BASE, starters: STARTERS });
     assert.equal(width, 1080);
     assert.ok(height > width, `expected a portrait card, got ${width}x${height}`);
   });
@@ -145,13 +165,13 @@ test('the hub card is portrait, because the season needs the room', async () => 
 
 test('the plug bar reaches both edges of every card', async () => {
   await withPage(async (page) => {
-    for (const series of [null, [6.1, 6.4, 5.9, 7.2, 7.0, 7.5, 8.1]]) {
-      const { barEdges } = await rowProfile(page, { ...BASE, titleSeries: series });
+    for (const series of [null, STARTERS]) {
+      const { barEdges } = await rowProfile(page, { ...BASE, starters: series });
       /* If the bar ever becomes an inset pill, the address stops surviving a
          crop, which is the one thing on the card that has to. */
       assert.ok(
         barEdges.length > 0 && barEdges.every(Boolean),
-        `plug bar does not reach both edges (series=${series ? 'yes' : 'no'}): ${barEdges.filter(Boolean).length}/${barEdges.length} rows`,
+        `plug bar does not reach both edges (starters=${series ? 'yes' : 'no'}): ${barEdges.filter(Boolean).length}/${barEdges.length} rows`,
       );
     }
   });
@@ -159,8 +179,8 @@ test('the plug bar reaches both edges of every card', async () => {
 
 test('no card leaves a chart-sized hole above the plug', async () => {
   await withPage(async (page) => {
-    for (const series of [null, [6.1, 6.4, 5.9, 7.2, 7.0, 7.5, 8.1]]) {
-      const { height, painted } = await rowProfile(page, { ...BASE, titleSeries: series });
+    for (const series of [null, STARTERS]) {
+      const { height, painted } = await rowProfile(page, { ...BASE, starters: series });
       /* Measure the body only: above the plug bar, below the lockup. */
       const body = painted.slice(160, height - 108);
       let run = 0;
@@ -174,7 +194,7 @@ test('no card leaves a chart-sized hole above the plug', async () => {
          week-1 hole cannot hide under this ceiling. */
       assert.ok(
         worst <= 120,
-        `card with ${series ? 'history' : 'no history'} has a ${worst}px empty band; the layout is not filling its own height`,
+        `card with ${series ? 'a lineup' : 'no lineup'} has a ${worst}px empty band; the layout is not filling its own height`,
       );
     }
   });

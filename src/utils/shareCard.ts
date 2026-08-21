@@ -6,9 +6,19 @@ import {
   roundRect,
 } from './cardKit';
 
+export interface ShareCardStarter {
+  name: string;
+  position: string;
+  headshotUrl?: string | null;
+}
+
 export interface ShareCardLine {
   /** e.g. "Week 8" */
   eyebrow: string;
+  /** The league this is all happening in. */
+  leagueName?: string | null;
+  /** The manager behind the team, when it is not the same string. */
+  owner?: string | null;
   /** The user's team. The opponent is deliberately absent: a card about a
       season should not spend a third of itself on one afternoon's opponent. */
   you: string;
@@ -19,14 +29,18 @@ export interface ShareCardLine {
   playoffs?: string | null;
   finish?: string | null;
   seed?: string | null;
-  /** Title chance per recorded week, 0-100, oldest first. Converted upstream
-      so the card only ever draws what it is handed. */
-  titleSeries?: number[] | null;
+  /** Your starters, in lineup order. The roster is the most personal thing on
+      the card and the only part that looks like a team rather than a table. */
+  starters?: ShareCardStarter[] | null;
   /** This week, compressed to one line. It is this week's card, but it is
       not this week's story. */
   week?: string | null;
-  /** Power ranking, e.g. "No. 3 of 12 in the league". */
-  standing?: string | null;
+  /** Where you sit, as a pair so the card can set the number apart from the
+      field size instead of printing one grey sentence. */
+  standing?: { rank: number; of: number } | null;
+  /** The opponent, for the week strip. */
+  opponent?: string | null;
+  opponentAvatar?: string | null;
 }
 
 const W = 1080;
@@ -51,9 +65,15 @@ export async function drawShareCard(
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
 
-  const [mark, avatar] = withArt
-    ? await Promise.all([loadImage('/og-logo.png'), loadImage(line.yourAvatar)])
-    : [null, null];
+  const starters = (line.starters ?? []).slice(0, 6);
+  const [mark, avatar, oppAvatar, ...faces] = withArt
+    ? await Promise.all([
+        loadImage('/og-logo.png'),
+        loadImage(line.yourAvatar),
+        loadImage(line.opponentAvatar),
+        ...starters.map((player) => loadImage(player.headshotUrl)),
+      ])
+    : [null, null, null];
 
   ctx.fillStyle = P.bg;
   ctx.fillRect(0, 0, W, H);
@@ -73,6 +93,18 @@ export async function drawShareCard(
     ctx.letterSpacing = '0px';
   };
 
+  /* Shrink to fit rather than clip. League and team names run long and an
+     ellipsis in the places the card names you is worse than a smaller line. */
+  const fitted = (text: string, room: number, start: number, weight = 400, family = P.display) => {
+    let size = start;
+    do {
+      ctx.font = `${weight} ${size}px ${family}`;
+      if (ctx.measureText(text).width <= room) break;
+      size -= 2;
+    } while (size > 16);
+    return size;
+  };
+
   // ── lockup, matched to the site header: ink, Staatliches, tight ──────────
   let wordX = PAD;
   if (mark) {
@@ -85,7 +117,10 @@ export async function drawShareCard(
   ctx.textAlign = 'left';
   ctx.fillText('ODDS GODS', wordX, 122);
   ctx.letterSpacing = '0px';
-  label(line.eyebrow, W - PAD, 116, 'right');
+  /* The league is the context for every number below it, so it rides at the
+     top with the week rather than being left off entirely. */
+  const context = [line.leagueName, line.eyebrow].filter(Boolean).join('  ·  ');
+  label(context, W - PAD, 116, 'right');
 
   // ── who ──────────────────────────────────────────────────────────────────
   const R = 78;
@@ -103,21 +138,14 @@ export async function drawShareCard(
   }
   ctx.textAlign = 'left';
   ctx.fillStyle = P.ink;
-  /* Shrink to fit rather than clip. League names run long and an ellipsis in
-     the one place the card names you is worse than a smaller line. */
   const nameX = PAD + R * 2 + 30;
-  const nameRoom = W - PAD - nameX;
-  let nameSize = 62;
-  do {
-    ctx.font = `400 ${nameSize}px ${P.display}`;
-    if (ctx.measureText(line.you).width <= nameRoom) break;
-    nameSize -= 2;
-  } while (nameSize > 30);
+  ctx.font = `400 ${fitted(line.you, W - PAD - nameX, 62)}px ${P.display}`;
   ctx.fillText(line.you, nameX, cy + 2);
-  if (line.record) {
+  const sub = [line.owner, line.record].filter(Boolean).join('  ·  ');
+  if (sub) {
     ctx.fillStyle = P.muted;
     ctx.font = `600 28px ${P.ui}`;
-    ctx.fillText(line.record, PAD + R * 2 + 30, cy + 44);
+    ctx.fillText(sub, nameX, cy + 44);
   }
 
   // ── the season, which is the point ───────────────────────────────────────
@@ -130,6 +158,29 @@ export async function drawShareCard(
   ctx.letterSpacing = '5px';
   ctx.fillText(line.titleOdds ?? 'Not priced', PAD, 596);
   ctx.letterSpacing = '0px';
+
+  /* Your rank was a grey sentence under the fold. It is the one number that
+     says whether the price above is good news, so it sits beside it. */
+  if (line.standing) {
+    const badgeW = 210;
+    const badgeX = W - PAD - badgeW;
+    ctx.fillStyle = 'rgba(232,84,29,0.14)';
+    roundRect(ctx, badgeX, 484, badgeW, 112, 20);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(232,84,29,0.45)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, badgeX, 484, badgeW, 112, 20);
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.ink;
+    ctx.font = `400 64px ${P.display}`;
+    ctx.fillText(ordinal(line.standing.rank), badgeX + badgeW / 2, 546);
+    ctx.fillStyle = P.faint;
+    ctx.font = `700 20px ${P.ui}`;
+    ctx.letterSpacing = '2px';
+    ctx.fillText(`OF ${line.standing.of}`, badgeX + badgeW / 2, 578);
+    ctx.letterSpacing = '0px';
+  }
 
   const cells = [
     { k: 'Playoffs', v: line.playoffs },
@@ -159,107 +210,93 @@ export async function drawShareCard(
     y += boxH + 66;
   }
 
-  // ── how the price has moved ──────────────────────────────────────────────
-  const series = line.titleSeries ?? [];
-  if (series.length > 1) {
-    label('Title chance, week by week', PAD, y);
-    /* The endpoints ride the label row rather than sitting under the plot:
-       one fewer band of small grey text, and the change is stated instead of
-       left to be read off an unlabelled axis. */
-    ctx.fillStyle = P.muted;
-    ctx.font = `700 24px ${P.num}`;
-    ctx.textAlign = 'right';
-    ctx.fillText(
-      `${series[0].toFixed(1)}% to ${series[series.length - 1].toFixed(1)}%`,
-      W - PAD,
-      y,
-    );
-    const top = y + 34;
-    const chartH = 168;
-    const chartW = W - PAD * 2;
-    const lo = Math.min(...series);
-    const hi = Math.max(...series);
-    const spread = Math.max(hi - lo, 0.5);
-    const px = (i: number) => PAD + (chartW * i) / (series.length - 1);
-    /* Inset vertically: the marker on the latest week is 9px of radius, and
-       at a series high it would otherwise sit half outside the plot. */
-    const inset = 14;
-    const py = (v: number) =>
-      top + chartH - inset - ((v - lo) / spread) * (chartH - inset * 2);
-
-    ctx.strokeStyle = 'rgba(244,245,242,0.08)';
-    ctx.lineWidth = 1;
-    [0, 0.5, 1].forEach((t) => {
+  // ── the roster, which is the part that looks like a team ────────────────
+  if (starters.length > 0) {
+    label('Your starters', PAD, y);
+    const top = y + 26;
+    const faceR = 52;
+    const room = W - PAD * 2;
+    const step = room / starters.length;
+    starters.forEach((player, index) => {
+      const cx = PAD + step * index + step / 2;
+      const face = faces[index];
+      if (face) circleImage(ctx, face, cx, top + faceR, faceR);
+      else {
+        ctx.beginPath();
+        ctx.arc(cx, top + faceR, faceR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(244,245,242,0.06)';
+        ctx.fill();
+        ctx.fillStyle = P.faint;
+        ctx.font = `400 34px ${P.display}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(initialsFor(player.name), cx, top + faceR + 12);
+      }
+      ctx.strokeStyle = 'rgba(232,84,29,0.35)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(PAD, top + chartH * t);
-      ctx.lineTo(PAD + chartW, top + chartH * t);
+      ctx.arc(cx, top + faceR, faceR, 0, Math.PI * 2);
       ctx.stroke();
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = P.muted;
+      ctx.font = `600 20px ${P.ui}`;
+      ctx.fillText(lastNameOf(player.name), cx, top + faceR * 2 + 34);
+      ctx.fillStyle = P.faint;
+      ctx.font = `700 17px ${P.ui}`;
+      ctx.fillText(player.position, cx, top + faceR * 2 + 58);
     });
-
-    // area under the line, so a thin stroke still reads as a shape
-    ctx.beginPath();
-    ctx.moveTo(px(0), py(series[0]));
-    series.forEach((value, index) => ctx.lineTo(px(index), py(value)));
-    ctx.lineTo(px(series.length - 1), top + chartH);
-    ctx.lineTo(px(0), top + chartH);
-    ctx.closePath();
-    const fill = ctx.createLinearGradient(0, top, 0, top + chartH);
-    fill.addColorStop(0, 'rgba(232,84,29,0.32)');
-    fill.addColorStop(1, 'rgba(232,84,29,0)');
-    ctx.fillStyle = fill;
-    ctx.fill();
-
-    ctx.beginPath();
-    series.forEach((value, index) => {
-      const x = px(index);
-      const yy = py(value);
-      if (index === 0) ctx.moveTo(x, yy);
-      else ctx.lineTo(x, yy);
-    });
-    ctx.strokeStyle = P.accent;
-    ctx.lineWidth = 5;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    const lastX = px(series.length - 1);
-    const lastY = py(series[series.length - 1]);
-    ctx.beginPath();
-    ctx.arc(lastX, lastY, 9, 0, Math.PI * 2);
-    ctx.fillStyle = P.accent;
-    ctx.fill();
-
-    y = top + chartH + 60;
+    y = top + faceR * 2 + 96;
   } else {
-    /* Week one has no history, and leaving the band empty drops a hole the
-       height of a chart into the middle of the card. Saying why it is empty
-       fills the space and tells a new user the card gets better. */
-    label('Title chance, week by week', PAD, y);
-    const top = y + 34;
-    const boxH = 168;
+    /* A league that has not drafted has no lineup to show, and leaving the
+       band empty drops a roster-sized hole into the middle of the card. Every
+       league is in this state at some point and it is the state a new user
+       shares from, so it says what goes there rather than nothing. */
+    label('Your starters', PAD, y);
+    const top = y + 26;
+    const boxH = 176;
     ctx.fillStyle = P.surface;
     roundRect(ctx, PAD, top, W - PAD * 2, boxH, 26);
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = P.muted;
     ctx.font = `600 30px ${P.ui}`;
-    ctx.fillText('The line starts moving after week 1.', W / 2, top + boxH / 2 + 11);
+    ctx.fillText('Your lineup lands here once you draft.', W / 2, top + boxH / 2 + 11);
     y = top + boxH + 60;
   }
 
-  // ── this week and where they stand, secondary on purpose ────────────────
-  const footRows = [line.standing, line.week].filter(Boolean) as string[];
-  if (footRows.length > 0) {
+  // ── this week, as a strip rather than a sentence ─────────────────────────
+  if (line.week) {
+    const stripH = 92;
+    const top = Math.min(y, BAR_TOP - stripH - 34);
+    ctx.fillStyle = 'rgba(244,245,242,0.04)';
+    roundRect(ctx, PAD, top, W - PAD * 2, stripH, 18);
+    ctx.fill();
+
+    label(line.eyebrow, PAD + 26, top + 38);
     ctx.textAlign = 'left';
-    ctx.fillStyle = P.muted;
-    ctx.font = `600 29px ${P.ui}`;
-    /* Anchored to the footer bar, not to whatever the chart left behind, so
-       these rows keep their clearance whether or not a chart was drawn. */
-    let fy = Math.min(y + 12, BAR_TOP - 58 - (footRows.length - 1) * 42);
-    footRows.forEach((row) => {
-      ctx.fillText(row, PAD, fy);
-      fy += 42;
-    });
+    ctx.fillStyle = P.ink;
+    ctx.font = `600 26px ${P.ui}`;
+    ctx.fillText(line.week, PAD + 26, top + 70);
+
+    if (line.opponent) {
+      const oppR = 30;
+      const oppX = W - PAD - 26 - oppR;
+      if (oppAvatar) circleImage(ctx, oppAvatar, oppX, top + stripH / 2, oppR);
+      else {
+        ctx.beginPath();
+        ctx.arc(oppX, top + stripH / 2, oppR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(244,245,242,0.08)';
+        ctx.fill();
+        ctx.fillStyle = P.faint;
+        ctx.font = `400 26px ${P.display}`;
+        ctx.textAlign = 'center';
+        ctx.fillText(initialsFor(line.opponent), oppX, top + stripH / 2 + 9);
+      }
+      ctx.textAlign = 'right';
+      ctx.fillStyle = P.muted;
+      ctx.font = `600 24px ${P.ui}`;
+      ctx.fillText(line.opponent, oppX - oppR - 16, top + stripH / 2 + 8);
+    }
   }
 
   // ── the plug, which is the reason the card exists ───────────────────────
@@ -273,4 +310,16 @@ export async function drawShareCard(
   ctx.letterSpacing = '0px';
 
   return canvas;
+}
+
+function ordinal(n: number) {
+  const rest = n % 100;
+  if (rest >= 11 && rest <= 13) return `${n}TH`;
+  return `${n}${['TH', 'ST', 'ND', 'RD'][n % 10] ?? 'TH'}`;
+}
+
+/** "Amon-Ra St. Brown" under a 52px circle needs to be "St. Brown". */
+function lastNameOf(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? parts.slice(1).join(' ') : name;
 }

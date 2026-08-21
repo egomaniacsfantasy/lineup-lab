@@ -31,7 +31,6 @@ export function TradeAnalyzerPanel({
   error,
   friendliness,
   relationship,
-  onEditRead,
   showVerdict = true,
 }: {
   analysis: TradeAnalysis | null;
@@ -39,6 +38,7 @@ export function TradeAnalyzerPanel({
   error: string | null;
   friendliness: number;
   relationship: number;
+  /** Retained for when the manager personas come back. */
   onEditRead?: () => void;
   showVerdict?: boolean;
 }) {
@@ -91,17 +91,10 @@ export function TradeAnalyzerPanel({
               <span className="trade-analyzer-panel__accept-pct">{acceptPct}%</span>
               <span className="trade-analyzer-panel__accept-band">{acceptance?.label ?? ''}</span>
             </div>
-            <button
-              className="trade-analyzer-panel__read-chip"
-              onClick={onEditRead}
-              type="button"
-            >
-              <span className="trade-analyzer-panel__read-chip-label">{partnerName}&apos;s read</span>
-              <span className="trade-analyzer-panel__read-chip-values">
-                Friendly {friendliness} · Relationship {relationship}
-              </span>
-              <span aria-hidden="true" className="trade-analyzer-panel__read-chip-cue">Adjust</span>
-            </button>
+            {/* The manager personas are hidden for now. Friendliness and
+                relationship still feed acceptance at their neutral defaults;
+                what is gone is asking a first-time user to hand-tune two dials
+                they have no way to have an opinion about yet. */}
           </div>
 
           <Results

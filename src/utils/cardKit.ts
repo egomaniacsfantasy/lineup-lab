@@ -97,8 +97,13 @@ export function circleImage(
   const w = img.naturalWidth * scale;
   const h = img.naturalHeight * scale;
   /* Headshots are cutouts with the head at the top, so bias upward the same
-     way the app's CSS does with object-position: top center. */
-  ctx.drawImage(img, cx - w / 2, cy - h * 0.47, w, h);
+     way the app's CSS does with object-position: top center.
+     Clamped, because the bias only has room to move when the source is taller
+     than the circle. A square source (every manager avatar) scales to exactly
+     the diameter, so an unclamped 0.47 offset left an uncovered crescent at
+     the top of the circle and read as the picture being cut off. */
+  const top = Math.min(cy - r, cy - h * 0.47);
+  ctx.drawImage(img, cx - w / 2, top, w, h);
   ctx.restore();
 }
 

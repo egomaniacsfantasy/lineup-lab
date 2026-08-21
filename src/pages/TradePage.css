@@ -1650,12 +1650,15 @@
   font-size: 13px;
 }
 
+/* The deal on the table is the subject of this screen, so the players are
+   sized like the subject. At 38px the headshot was an icon next to a label;
+   at 68 it is a face you recognise before you read the name. */
 .trade-cc__asset-card {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  padding: 10px;
+  gap: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   background: var(--bg-inset);
@@ -1666,8 +1669,8 @@
 }
 
 .trade-cc__asset-headshot {
-  width: 38px;
-  height: 38px;
+  width: 68px;
+  height: 68px;
   overflow: hidden;
   border-radius: 50%;
   background: var(--bg-surface-soft);
@@ -1676,7 +1679,9 @@
 .trade-cc__asset-headshot-image {
   width: 100%;
   height: 100%;
+  /* Cutouts put the head at the top, so a centred crop cuts it off. */
   object-fit: cover;
+  object-position: top center;
 }
 
 .trade-cc__asset-headshot-fallback {
@@ -1686,20 +1691,20 @@
   height: 100%;
   color: var(--ink-3);
   font-family: var(--font-num);
-  font-size: 10px;
+  font-size: 17px;
   font-weight: 800;
 }
 
 .trade-cc__asset-pos {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--border-subtle);
   border-radius: 50%;
   color: var(--text-primary);
   font-family: var(--font-num);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -1713,8 +1718,9 @@
   overflow: hidden;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 900;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1723,7 +1729,7 @@
   overflow: hidden;
   color: var(--text-muted);
   font-family: var(--font-num);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3438,4 +3444,25 @@
     padding: 10px;
     gap: 8px;
   }
+}
+
+/* The trade you built by hand is the one you actually want to send someone,
+   so the card is reachable from the analyzer and not only from the finder. */
+.trade-cc__share {
+  justify-self: start;
+  margin-top: 14px;
+  padding: 10px 20px;
+  border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  color: var(--text-amber);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.trade-cc__share:hover {
+  background: color-mix(in srgb, var(--amber) 20%, transparent);
 }

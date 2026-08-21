@@ -1744,20 +1744,29 @@ function MatchupLive({
     return index === -1 ? null : { rank: index + 1, of: ranked.length };
   }, [titles]);
 
-  /* The season band's sparkline, unrolled for the card. Same source, same
-     phantom-week filter as SeasonBand: a snapshot written past the current
-     fantasy week is a week nobody has played. Plotted as title chance rather
-     than price so that up reads as better. */
-  const shareTitleSeries = useMemo(() => {
-    if (!userFuture) return null;
-    const key = String(userFuture.rosterId);
-    const points = (titleHistory ?? [])
-      .filter((entry) => entry.week <= matchup.week)
-      .filter((entry) => entry.odds?.[key] != null)
-      .sort((a, b) => a.week - b.week)
-      .map((entry) => impliedProbability(entry.odds[key]));
-    return points.length > 1 ? points : null;
-  }, [userFuture, titleHistory, matchup.week]);
+  /* Sleeper falls back to the handle when a manager never set a team name, so
+     printing both would print the same string twice. */
+  const shareOwner = useMemo(() => {
+    const owner = bootstrap?.teams.find((team) => team.isUser)?.ownerName ?? null;
+    return owner && owner !== matchup.yourTeam.teamName ? owner : null;
+  }, [bootstrap, matchup.yourTeam.teamName]);
+
+  /* The roster, for the card. Six starters is what fits across 1080px at a
+     size where the face is still a face; the lineup is already in slot order
+     so the first six are the ones anyone would name. */
+  const shareStarters = useMemo(() => {
+    const rows = engine.roster
+      .map((slot) => slot.starter)
+      .filter((player) => player && player.position !== 'DEF')
+      .slice(0, 6);
+    return rows.length
+      ? rows.map((player) => ({
+          name: player.name,
+          position: player.position,
+          headshotUrl: apiUrl(`/api/img/headshot/${player.id}`),
+        }))
+      : null;
+  }, [engine.roster]);
 
   /* Held rather than fired: the button opens a preview so you can see the card
      before it goes anywhere. */
@@ -2062,6 +2071,11 @@ function MatchupLive({
               onClick={() => setSharePayload({
                   eyebrow: `Week ${matchup.week}`,
                   you: matchup.yourTeam.teamName,
+                  /* The league is the context for every number on the card,
+                     and the manager is who to blame for them. Both were
+                     missing; the card named a team and nothing else. */
+                  leagueName: bootstrap?.league.name ?? stored?.leagueName ?? null,
+                  owner: shareOwner,
                   record: matchup.yourTeam.record ?? null,
                   yourAvatar: resolveApiUrl(matchup.yourTeam.avatarUrl) ?? null,
                   /* The season leads. These are the same four numbers the
@@ -2079,15 +2093,13 @@ function MatchupLive({
                       : null),
                   seed:
                     userFuture?.avgSeed != null ? userFuture.avgSeed.toFixed(1) : null,
-                  titleSeries: shareTitleSeries,
-                  standing: sharePower
-                    ? `No. ${sharePower.rank} of ${sharePower.of} in the league`
-                    : null,
-                  /* One week compressed to one line. It is this week's card,
-                     but it is not this week's story. */
-                  week: `Week ${matchup.week}: ${formatAmericanOdds(
-                    engine.activeLine.yours.moneyline,
-                  )} to beat ${matchup.opponentTeam.teamName}`,
+                  starters: shareStarters,
+                  standing: sharePower,
+                  /* One week, as a strip. It is this week's card, but it is
+                     not this week's story. */
+                  week: `${formatAmericanOdds(engine.activeLine.yours.moneyline)} to win`,
+                  opponent: matchup.opponentTeam.teamName,
+                  opponentAvatar: resolveApiUrl(matchup.opponentTeam.avatarUrl) ?? null,
               })}
               type="button"
             >

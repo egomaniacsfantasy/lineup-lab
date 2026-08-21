@@ -42,7 +42,6 @@ import { formatAmericanOdds } from '../utils/formatOdds';
 import {
   useDynastyTradesExperimental,
   useScoutingAffectsAcceptance,
-  writeScoutingAffectsAcceptance,
 } from '../hooks/useLabsFlags';
 import type { ManagerFile } from '../services/managerFiles';
 import { compileManagerFile } from '../services/managerFiles';
@@ -400,20 +399,31 @@ function TradeDealsView() {
         headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
       };
     };
-    const accept = acceptanceProbability(suggestion.partnerDelta, friendliness, relationship);
+    /* Each column shows what that manager RECEIVES, so the sides cross: you
+       get what he gives up. Acceptance is deliberately absent; it is a private
+       read and this card is the thing you hand him. */
     setTradeCard({
       eyebrow: `Week ${bootstrap.week}`,
-      you: userTeam?.teamName ?? 'You',
-      them: partner?.teamName ?? 'Them',
-      yourAvatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
-      theirAvatar: resolveApiUrl(partner?.avatarUrl) ?? null,
-      send: suggestion.give.map((a) => asset(a.id)),
-      get: suggestion.get.map((a) => asset(a.id)),
-      titleDelta: signedPct(suggestion.youDelta),
-      titleUp: suggestion.youDelta >= 0,
-      acceptance: formatAcceptancePercent(accept),
-      acceptanceBand: getAcceptanceLingo(accept)?.label ?? null,
+      leagueName: stored?.leagueName ?? null,
       verdict: analysisVerdict(suggestion.youDelta).label,
+      you: {
+        manager: userTeam?.teamName ?? 'You',
+        avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
+        assets: suggestion.get.map((a) => asset(a.id)),
+        titleDelta: signedPct(suggestion.youDelta),
+        playoffDelta: signedPct(suggestion.youPlayoffDelta ?? 0),
+        titleUp: suggestion.youDelta >= 0,
+        playoffUp: (suggestion.youPlayoffDelta ?? 0) >= 0,
+      },
+      them: {
+        manager: partner?.teamName ?? 'Them',
+        avatar: resolveApiUrl(partner?.avatarUrl) ?? null,
+        assets: suggestion.give.map((a) => asset(a.id)),
+        titleDelta: signedPct(suggestion.partnerDelta),
+        playoffDelta: signedPct(suggestion.partnerPlayoffDelta ?? 0),
+        titleUp: suggestion.partnerDelta >= 0,
+        playoffUp: (suggestion.partnerPlayoffDelta ?? 0) >= 0,
+      },
     });
   };
 
@@ -1402,17 +1412,26 @@ function TradeDealsView() {
                       };
                       setTradeCard({
                         eyebrow: `Week ${bootstrap.week}`,
-                        you: userTeam?.teamName ?? 'You',
-                        them: partner?.teamName ?? 'Them',
-                        yourAvatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
-                        theirAvatar: resolveApiUrl(partner?.avatarUrl) ?? null,
-                        send: givePlayerIds.map(asset),
-                        get: getPlayerIds.map(asset),
-                        titleDelta: signedPct(entry.suggestion.youDelta),
-                        titleUp: entry.suggestion.youDelta >= 0,
-                        acceptance: formatAcceptancePercent(entry.acceptanceProbability),
-                        acceptanceBand: getAcceptanceLingo(entry.acceptanceProbability)?.label ?? null,
+                        leagueName: stored?.leagueName ?? null,
                         verdict: suggestionVerdict.label,
+                        you: {
+                          manager: userTeam?.teamName ?? 'You',
+                          avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
+                          assets: getPlayerIds.map(asset),
+                          titleDelta: signedPct(entry.suggestion.youDelta),
+                          playoffDelta: signedPct(entry.suggestion.youPlayoffDelta ?? 0),
+                          titleUp: entry.suggestion.youDelta >= 0,
+                          playoffUp: (entry.suggestion.youPlayoffDelta ?? 0) >= 0,
+                        },
+                        them: {
+                          manager: partner?.teamName ?? 'Them',
+                          avatar: resolveApiUrl(partner?.avatarUrl) ?? null,
+                          assets: givePlayerIds.map(asset),
+                          titleDelta: signedPct(entry.suggestion.partnerDelta),
+                          playoffDelta: signedPct(entry.suggestion.partnerPlayoffDelta ?? 0),
+                          titleUp: entry.suggestion.partnerDelta >= 0,
+                          playoffUp: (entry.suggestion.partnerPlayoffDelta ?? 0) >= 0,
+                        },
                       });
                     }}
                     onClick={() => loadSuggestedTrade(entry.suggestion)}
@@ -1678,20 +1697,9 @@ function TradeDealsView() {
             ) : null}
           </div>
 
-          <div className="trade-cc__accept-toggle-row">
-            <span>Scouting affects acceptance odds</span>
-            <button
-              aria-pressed={scoutingAffectsAcceptance}
-              className={[
-                'trade-cc__read-toggle-btn',
-                scoutingAffectsAcceptance ? 'trade-cc__read-toggle-btn--on' : '',
-              ].filter(Boolean).join(' ')}
-              onClick={() => writeScoutingAffectsAcceptance(stored.leagueId, !scoutingAffectsAcceptance)}
-              type="button"
-            >
-              <span />
-            </button>
-          </div>
+          {/* Scouting-affects-acceptance is hidden with the personas it
+              belongs to. The preference still exists and still applies; it
+              just is not a switch on the trade screen any more. */}
 
           <TradeAnalyzerPanel
             analysis={analysis}
@@ -1701,6 +1709,60 @@ function TradeDealsView() {
             relationship={relationship}
             showVerdict={false}
           />
+
+          {/* The card was only reachable from the finder, which is the half of
+              the tab where the deal is not yours. A trade you built by hand is
+              exactly the one you want to send someone. */}
+          {analysis?.available && analysis.you && analysis.partner
+            && give.length > 0 && getIds.length > 0 ? (
+            <button
+              className="trade-cc__share"
+              onClick={() => {
+                const you = analysis.you;
+                const them = analysis.partner;
+                if (!bootstrap || !you || !them) return;
+                const partner = bootstrap.teams.find(
+                  (team) => team.rosterId === partnerRosterId,
+                );
+                const userTeam = bootstrap.teams.find((team) => team.isUser);
+                const asset = (id: string): TradeCardAsset => {
+                  const player = toPlayer(id, bootstrap.players);
+                  return {
+                    name: player.name,
+                    position: player.position,
+                    team: player.team,
+                    headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
+                  };
+                };
+                setTradeCard({
+                  eyebrow: `Week ${bootstrap.week}`,
+                  leagueName: stored?.leagueName ?? null,
+                  verdict: analysisVerdict(you.delta.titleProb).label,
+                  you: {
+                    manager: userTeam?.teamName ?? 'You',
+                    avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
+                    assets: getIds.map(asset),
+                    titleDelta: signedPct(you.delta.titleProb),
+                    playoffDelta: signedPct(you.delta.playoffProb),
+                    titleUp: you.delta.titleProb >= 0,
+                    playoffUp: you.delta.playoffProb >= 0,
+                  },
+                  them: {
+                    manager: partner?.teamName ?? 'Them',
+                    avatar: resolveApiUrl(partner?.avatarUrl) ?? null,
+                    assets: give.map(asset),
+                    titleDelta: signedPct(them.delta.titleProb),
+                    playoffDelta: signedPct(them.delta.playoffProb),
+                    titleUp: them.delta.titleProb >= 0,
+                    playoffUp: them.delta.playoffProb >= 0,
+                  },
+                });
+              }}
+              type="button"
+            >
+              Share this trade
+            </button>
+          ) : null}
         </section>
       ) : result && !result.available ? (
         <SeasonalNotice>
