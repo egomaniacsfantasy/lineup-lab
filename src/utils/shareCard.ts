@@ -38,6 +38,10 @@ export interface ShareCardLine {
   /** Where you sit, as a pair so the card can set the number apart from the
       field size instead of printing one grey sentence. */
   standing?: { rank: number; of: number } | null;
+  /** Every team's title chance, best first. Drawn as a ladder so the standing
+      is something you see rather than a sentence you read, which is the
+      difference between legible and not at thumbnail size. */
+  ladder?: { prob: number; isUser: boolean }[] | null;
   /** The opponent, for the week strip. */
   opponent?: string | null;
   opponentAvatar?: string | null;
@@ -160,26 +164,48 @@ export async function drawShareCard(
   ctx.letterSpacing = '0px';
 
   /* Your rank was a grey sentence under the fold. It is the one number that
-     says whether the price above is good news, so it sits beside it. */
+     says whether the price above is good news, so it sits beside it, and the
+     field is drawn behind it: a bar per team, yours lit. A number has to be
+     read, and at the size these get looked at in a group chat, a shape gets
+     through where a number does not. */
+  const ladder = line.ladder ?? [];
   if (line.standing) {
-    const badgeW = 210;
-    const badgeX = W - PAD - badgeW;
-    ctx.fillStyle = 'rgba(232,84,29,0.14)';
-    roundRect(ctx, badgeX, 484, badgeW, 112, 20);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(232,84,29,0.45)';
-    ctx.lineWidth = 2;
-    roundRect(ctx, badgeX, 484, badgeW, 112, 20);
-    ctx.stroke();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = P.ink;
-    ctx.font = `400 64px ${P.display}`;
-    ctx.fillText(ordinal(line.standing.rank), badgeX + badgeW / 2, 546);
+    const boxW = 372;
+    const boxX = W - PAD - boxW;
+    const boxY = 452;
+    const boxH = 146;
+
+    /* Right-aligned as one phrase, so it reads "7TH OF 10" and not the other
+       way round: the two halves have to be measured before either is drawn. */
+    const rankText = ordinal(line.standing.rank);
+    const ofText = `OF ${line.standing.of}`;
+    ctx.textAlign = 'right';
     ctx.fillStyle = P.faint;
     ctx.font = `700 20px ${P.ui}`;
     ctx.letterSpacing = '2px';
-    ctx.fillText(`OF ${line.standing.of}`, badgeX + badgeW / 2, 578);
+    ctx.fillText(ofText, W - PAD, boxY + 40);
+    const ofW = ctx.measureText(ofText).width;
     ctx.letterSpacing = '0px';
+    ctx.fillStyle = P.ink;
+    ctx.font = `400 54px ${P.display}`;
+    ctx.fillText(rankText, W - PAD - ofW - 16, boxY + 40);
+
+    if (ladder.length > 1) {
+      const barsTop = boxY + 62;
+      const barsH = boxH - 62;
+      const gap = 6;
+      const barW = Math.max(6, (boxW - gap * (ladder.length - 1)) / ladder.length);
+      const peak = Math.max(...ladder.map((row) => row.prob), 1);
+      ladder.forEach((row, index) => {
+        /* Floored so a long shot is still a mark rather than a gap: a missing
+           bar reads as a missing team. */
+        const h = Math.max(7, (row.prob / peak) * barsH);
+        const x = boxX + (barW + gap) * index;
+        ctx.fillStyle = row.isUser ? P.accent : 'rgba(244,245,242,0.20)';
+        roundRect(ctx, x, barsTop + barsH - h, barW, h, Math.min(4, barW / 2));
+        ctx.fill();
+      });
+    }
   }
 
   const cells = [

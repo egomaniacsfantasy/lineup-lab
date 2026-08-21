@@ -25,6 +25,7 @@ import {
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { formatAmericanOdds, impliedProbability } from '../utils/formatOdds';
+import { hubShareMessage } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
 import { formatSignedDisplayedDeltaValue } from '../utils/displayDelta';
 import {
@@ -2095,6 +2096,13 @@ function MatchupLive({
                     userFuture?.avgSeed != null ? userFuture.avgSeed.toFixed(1) : null,
                   starters: shareStarters,
                   standing: sharePower,
+                  /* The same list the rail widget ranks, so the card and the
+                     widget cannot draw different fields. */
+                  ladder: titles
+                    ? [...titles]
+                        .sort((a, b) => b.titleProb - a.titleProb)
+                        .map((row) => ({ prob: row.titleProb, isUser: row.isUser }))
+                    : null,
                   /* One week, as a strip. It is this week's card, but it is
                      not this week's story. */
                   week: `${formatAmericanOdds(engine.activeLine.yours.moneyline)} to win`,
@@ -2624,6 +2632,13 @@ function MatchupLive({
       {sharePayload ? (
         <ShareCardPreview
           draw={(options) => drawShareCard(sharePayload, options)}
+          message={hubShareMessage({
+            team: sharePayload.you,
+            leagueName: sharePayload.leagueName,
+            titleOdds: sharePayload.titleOdds,
+            rank: sharePayload.standing?.rank ?? null,
+            of: sharePayload.standing?.of ?? null,
+          })}
           onClose={() => setSharePayload(null)}
         />
       ) : null}

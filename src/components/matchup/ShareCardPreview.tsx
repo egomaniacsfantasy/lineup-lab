@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { canvasToBlob } from '../../utils/cardKit';
 import './ShareCardPreview.css';
 
-type State = 'idle' | 'working' | 'shared' | 'saved' | 'failed';
+type State = 'idle' | 'working' | 'shared' | 'saved' | 'copied' | 'failed';
 
 /**
  * Show the card before it leaves.
@@ -17,12 +17,16 @@ type State = 'idle' | 'working' | 'shared' | 'saved' | 'failed';
  */
 export function ShareCardPreview({
   draw,
+  message,
   filename = 'odds-gods.png',
   onClose,
 }: {
   /** Draws the card. Called again without art if the canvas comes back
       tainted, which is how a cross-origin logo announces itself. */
   draw: (options?: { withArt?: boolean }) => Promise<HTMLCanvasElement>;
+  /** Travels with the image, and is offered on its own for the platforms that
+      drop text when a file is attached, which is most of them. */
+  message?: string | null;
   filename?: string;
   onClose: () => void;
 }) {
@@ -75,10 +79,14 @@ export function ShareCardPreview({
       const file = new File([blob], filename, { type: 'image/png' });
       const nav = navigator as Navigator & {
         canShare?: (data: { files: File[] }) => boolean;
-        share?: (data: { files: File[]; title?: string }) => Promise<void>;
+        share?: (data: { files: File[]; title?: string; text?: string }) => Promise<void>;
       };
       if (nav.canShare?.({ files: [file] }) && nav.share) {
-        await nav.share({ files: [file], title: 'Odds Gods' });
+        await nav.share({
+          files: [file],
+          title: 'Odds Gods',
+          ...(message ? { text: message } : {}),
+        });
         return 'shared';
       }
       return 'failed';
@@ -99,6 +107,16 @@ export function ShareCardPreview({
     typeof navigator !== 'undefined' &&
     Boolean((navigator as Navigator & { canShare?: unknown }).canShare);
 
+  const onCopy = async () => {
+    if (!message) return;
+    try {
+      await navigator.clipboard.writeText(message);
+      setState('copied');
+    } catch {
+      setState('failed');
+    }
+  };
+
   return (
     <div className="sharecard" role="dialog" aria-label="Share this line" aria-modal="true">
       <button aria-label="Close" className="sharecard__scrim" onClick={onClose} type="button" />
@@ -110,6 +128,15 @@ export function ShareCardPreview({
             <span className="sharecard__drawing">Drawing your card…</span>
           )}
         </div>
+
+        {message ? (
+          <div className="sharecard__caption">
+            <p className="sharecard__caption-text">{message}</p>
+            <button className="sharecard__caption-copy" onClick={onCopy} type="button">
+              {state === 'copied' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        ) : null}
 
         <div className="sharecard__actions">
           {canShare ? (

@@ -60,6 +60,7 @@ import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { drawTradeCard, type TradeCardProposal, type TradeCardAsset } from '../utils/tradeCard';
+import { tradeShareMessage } from '../utils/shareMessage';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 import { LeagueDealBoard, type LeagueDealRow } from '../components/trade/LeagueDealBoard';
 
@@ -1114,6 +1115,16 @@ function TradeDealsView() {
       {tradeCard ? (
         <ShareCardPreview
           draw={(options) => drawTradeCard(tradeCard, options)}
+          message={tradeShareMessage({
+            you: tradeCard.you.manager,
+            them: tradeCard.them.manager,
+            youGet: tradeCard.you.assets.map((a) => a.name),
+            theyGet: tradeCard.them.assets.map((a) => a.name),
+            verdict: tradeCard.verdict,
+            yourTitleDelta: tradeCard.you.titleDelta,
+            theirTitleDelta: tradeCard.them.titleDelta,
+            bothGain: tradeCard.you.titleUp && tradeCard.them.titleUp,
+          })}
           filename="odds-gods-trade.png"
           onClose={() => setTradeCard(null)}
         />

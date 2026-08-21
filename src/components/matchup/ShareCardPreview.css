@@ -103,3 +103,37 @@
   font-family: var(--font-ui);
   font-size: 12px;
 }
+
+/* The caption ships with the image on the platforms that carry text, and is
+   copyable for the many that silently drop it when a file is attached. */
+.sharecard__caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--bg-inset);
+}
+
+.sharecard__caption-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.sharecard__caption-copy {
+  padding: 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-amber);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+}
