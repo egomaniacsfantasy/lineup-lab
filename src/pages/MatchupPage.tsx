@@ -74,7 +74,7 @@ import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { shortInjuryStatus } from '../utils/playerNames.ts';
-import { PowerRanks, type PowerRow } from '../components/matchup/PowerRanks';
+import { TitleOdds, type TitleRow } from '../components/matchup/TitleOdds';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
@@ -1063,7 +1063,7 @@ interface MatchupLiveProps {
   isConnected: boolean;
   /** The user's own futures row, for the season band under the hero. */
   userFuture?: PricedFuture | null;
-  power?: PowerRow[] | null;
+  titles?: TitleRow[] | null;
   /** Recorded title price per week, for the band's trend line. */
   titleHistory?: LeaguePricing['titleHistory'] | null;
   isPriced?: boolean;
@@ -1184,7 +1184,7 @@ function MatchupLive({
   matchup,
   isConnected,
   userFuture = null,
-  power = null,
+  titles = null,
   titleHistory = null,
   isPriced = false,
   lineMovement = null,
@@ -1734,16 +1734,15 @@ function MatchupLive({
       .join(' · ');
   };
 
-  /* Where the user sits for the rest of the season, ranked on the same
-     projected win totals the power table uses. Sorting, nothing more. */
+  /* Where the user sits in the league, ranked on the same title market the
+     rail widget shows, so the card and the widget can never quote different
+     standings. Sorting, nothing more. */
   const sharePower = useMemo(() => {
-    if (!power || power.length < 3) return null;
-    const ranked = [...power]
-      .filter((row) => row.projWins != null)
-      .sort((a, b) => (b.projWins ?? 0) - (a.projWins ?? 0));
+    if (!titles || titles.length < 3) return null;
+    const ranked = [...titles].sort((a, b) => b.titleProb - a.titleProb);
     const index = ranked.findIndex((row) => row.isUser);
     return index === -1 ? null : { rank: index + 1, of: ranked.length };
-  }, [power]);
+  }, [titles]);
 
   /* The season band's sparkline, unrolled for the card. Same source, same
      phantom-week filter as SeasonBand: a snapshot written past the current
@@ -2511,7 +2510,7 @@ function MatchupLive({
                 start/add widget, but a small one: two rows, above the field. */}
             {isConnected ? <HubDeals /> : null}
 
-            {isConnected && power && power.length > 2 ? <PowerRanks rows={power} /> : null}
+            {isConnected && titles && titles.length > 2 ? <TitleOdds rows={titles} /> : null}
 
             <section className="matchup-page__module matchup-page__module--rail-chart">
               {matchupHistorySeries.length > 1 ? (
@@ -2793,29 +2792,49 @@ export function MatchupPage() {
      again for a pre-draft league, and a hook declared below those runs on some
      renders and not others — which React reports as "rendered more hooks than
      during the previous render" and a blank page. */
-  /* Every team's projection for this week comes off the priced lines, and the
-     projected win total comes from the season sim. Both are served; this pairs
-     them by roster so the widget can rank on each. */
-  const powerRows = useMemo<PowerRow[] | null>(() => {
-    if (!bootstrap || !pricing?.available) return null;
-    const weekProjection = new Map<number, number>();
-    for (const line of pricing.lines ?? []) {
-      for (const [rosterId, side] of Object.entries(line.sides)) {
-        weekProjection.set(Number(rosterId), side.projection);
-      }
-    }
-    const futureByRoster = new Map(
-      (pricing.futures ?? []).map((future) => [future.rosterId, future]),
-    );
-    const rows = bootstrap.teams.map((team) => ({
-      rosterId: team.rosterId,
-      teamName: team.teamName,
-      weekProjection: weekProjection.get(team.rosterId) ?? 0,
-      projWins: futureByRoster.get(team.rosterId)?.projWins ?? null,
-      isUser: team.isUser,
-    }));
-    return rows.some((row) => row.projWins != null && row.weekProjection > 0) ? rows : null;
-  }, [bootstrap, pricing]);
+  /* The league's title market, condensed for the rail. Every value is served:
+     titleProb and championOdds come off the season sim, and the move is that
+     probability minus the one the board opened at. */
+  const titleRows = useMemo<TitleRow[] | null>(() => {
+    if (!pricing?.available) return null;
+    const futures = pricing.futures ?? [];
+    if (futures.length < 3) return null;
+
+    /* Same phantom-week filter the season band uses: the scheduler recorded
+       snapshots past the current fantasy week while the app was reading the
+       NFL's preseason week as a fantasy week, and a week nobody has played
+       cannot be where the line opened. */
+    const history = [...(pricing.titleHistory ?? [])]
+      .filter((entry) => currentWeek == null || entry.week <= currentWeek)
+      .sort((a, b) => a.at - b.at);
+
+    /* The same trailing window the League tab's move column reads, including
+       its fallback: if fewer than two snapshots landed in the last six days,
+       the whole series is the window. Leagues priced weekly always take that
+       fallback and so read as movement since the board opened, which is the
+       only honest answer when weekly is all you have. Leagues priced daily get
+       the six-day read on both surfaces. */
+    const latest = history.at(-1)?.at ?? 0;
+    const recent = history.filter((entry) => entry.at >= latest - 6 * 24 * 60 * 60 * 1000);
+    const window = recent.length > 1 ? recent : history;
+
+    const opened = new Map<string, number>();
+    Object.entries(window[0]?.odds ?? {}).forEach(([rosterId, odds]) => {
+      if (odds != null) opened.set(rosterId, impliedProbability(odds));
+    });
+
+    return futures.map((future) => {
+      const open = opened.get(String(future.rosterId));
+      return {
+        rosterId: future.rosterId,
+        teamName: future.teamName,
+        titleProb: future.titleProb,
+        championOdds: future.championOdds,
+        isUser: future.isUser,
+        move: open != null ? Number((future.titleProb - open).toFixed(1)) : null,
+      };
+    });
+  }, [pricing, currentWeek]);
 
 
   if (stored && !bootstrap) {
@@ -2972,7 +2991,7 @@ export function MatchupPage() {
     <>
       <MatchupLive
         movers={movers}
-        power={powerRows}
+        titles={titleRows}
         userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}
         titleHistory={pricing?.available ? pricing.titleHistory ?? null : null}
         isConnected={connectedMatchup !== null}
