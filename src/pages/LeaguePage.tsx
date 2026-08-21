@@ -12,6 +12,7 @@ import { ScheduleGrid, type ScheduleGridItem } from '../components/season/Schedu
 import { SeasonHeadline } from '../components/season/SeasonHeadline';
 import { WeekDetailModal } from '../components/season/WeekDetailModal';
 import { useAuth } from '../contexts/AuthContext';
+import { ProviderMark } from '../components/league/ProviderMark';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useSeasonMode } from '../hooks/useSeasonMode';
 import { isAgreementAdmin } from '../utils/admin';
@@ -213,11 +214,7 @@ export function LeaguePage() {
                 onClick={() => setManualFlow('sleeper')}
                 type="button"
               >
-                <img
-                  alt="Sleeper"
-                  className="connect-page__provider-logo connect-page__provider-logo--sleeper"
-                  src="/providers/sleeper-logo.png"
-                />
+                <ProviderMark className="connect-page__provider-logo connect-page__provider-logo--sleeper" provider="sleeper" />
                 <span className="connect-page__provider-action">Connect</span>
               </button>
 
@@ -226,11 +223,7 @@ export function LeaguePage() {
                 onClick={() => setManualFlow('espn')}
                 type="button"
               >
-                <img
-                  alt="ESPN"
-                  className="connect-page__provider-logo connect-page__provider-logo--espn"
-                  src="/providers/espn-logo.png"
-                />
+                <ProviderMark className="connect-page__provider-logo connect-page__provider-logo--espn" provider="espn" />
                 <span className="connect-page__provider-action">Connect</span>
               </button>
             </div>

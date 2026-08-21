@@ -3,6 +3,8 @@
  * pick a provider, type a username, and the whole league is priced.
  * The demo stays reachable, one click below.
  */
+import { MobileNotice } from '../components/layout/MobileNotice';
+import { ProviderMark } from '../components/league/ProviderMark';
 import { useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
@@ -67,17 +69,15 @@ export function ConnectPage() {
         <h1 className="connect-page__title">Sync a league to begin</h1>
       </section>
 
+      <MobileNotice />
+
       <div className="connect-page__providers">
         <button
           className="connect-page__provider connect-page__provider--live"
           onClick={() => setFlow('sleeper')}
           type="button"
         >
-          <img
-            alt="Sleeper"
-            className="connect-page__provider-logo connect-page__provider-logo--sleeper"
-            src="/providers/sleeper-logo.png"
-          />
+          <ProviderMark className="connect-page__provider-logo connect-page__provider-logo--sleeper" provider="sleeper" />
           <span className="connect-page__provider-action">Connect</span>
         </button>
 
@@ -86,11 +86,7 @@ export function ConnectPage() {
           onClick={() => setFlow('espn')}
           type="button"
         >
-          <img
-            alt="ESPN"
-            className="connect-page__provider-logo connect-page__provider-logo--espn"
-            src="/providers/espn-logo.png"
-          />
+          <ProviderMark className="connect-page__provider-logo connect-page__provider-logo--espn" provider="espn" />
           <span className="connect-page__provider-action">Connect</span>
         </button>
       </div>

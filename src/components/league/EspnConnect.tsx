@@ -383,7 +383,7 @@ export function EspnConnect({
                     <img
                       alt="ESPN"
                       className="espn-connect__login-mark"
-                      src="/providers/espn-logo.png"
+                      src="/brand/espn-logo.png"
                     />
                     <span className="espn-connect__login-lockup">Sign in</span>
                   </div>
@@ -409,7 +409,7 @@ export function EspnConnect({
                     <img
                       alt="ESPN"
                       className="espn-connect__login-mark"
-                      src="/providers/espn-logo.png"
+                      src="/brand/espn-logo.png"
                     />
                     <span className="espn-connect__login-lockup">Sign in</span>
                   </div>

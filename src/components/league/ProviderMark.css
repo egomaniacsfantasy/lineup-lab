@@ -1,0 +1,13 @@
+/* The text stand-in for a wordmark that did not load. It is not trying to
+   impersonate the logo, only to make the row identifiable. */
+.provider-mark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
