@@ -1745,6 +1745,21 @@ function MatchupLive({
     return index === -1 ? null : { rank: index + 1, of: ranked.length };
   }, [power]);
 
+  /* The season band's sparkline, unrolled for the card. Same source, same
+     phantom-week filter as SeasonBand: a snapshot written past the current
+     fantasy week is a week nobody has played. Plotted as title chance rather
+     than price so that up reads as better. */
+  const shareTitleSeries = useMemo(() => {
+    if (!userFuture) return null;
+    const key = String(userFuture.rosterId);
+    const points = (titleHistory ?? [])
+      .filter((entry) => entry.week <= matchup.week)
+      .filter((entry) => entry.odds?.[key] != null)
+      .sort((a, b) => a.week - b.week)
+      .map((entry) => impliedProbability(entry.odds[key]));
+    return points.length > 1 ? points : null;
+  }, [userFuture, titleHistory, matchup.week]);
+
   /* Held rather than fired: the button opens a preview so you can see the card
      before it goes anywhere. */
   const [sharePayload, setSharePayload] = useState<ShareCardLine | null>(null);
@@ -2048,35 +2063,32 @@ function MatchupLive({
               onClick={() => setSharePayload({
                   eyebrow: `Week ${matchup.week}`,
                   you: matchup.yourTeam.teamName,
-                  them: matchup.opponentTeam.teamName,
-                  yourPrice: formatAmericanOdds(engine.activeLine.yours.moneyline),
-                  theirPrice: formatAmericanOdds(engine.activeLine.opponent.moneyline),
-                  yourWinPct: engine.activeLine.yours.winProbability,
-                  /* The same four numbers the season band prints above the
-                     matchup, formatted there and passed through here. */
-                  season: userFuture
-                    ? {
-                        title: formatAmericanOdds(userFuture.championOdds),
-                        playoffs:
-                          userFuture.playoffProb != null
-                            ? `${Math.round(userFuture.playoffProb)}%`
-                            : null,
-                        finish:
-                          userFuture.projRecord
-                          ?? (userFuture.projWins != null && userFuture.projLosses != null
-                            ? `${userFuture.projWins.toFixed(1)}-${userFuture.projLosses.toFixed(1)}`
-                            : null),
-                        seed: userFuture.avgSeed != null ? userFuture.avgSeed.toFixed(1) : null,
-                      }
-                    : null,
-                  /* Their standing only. A whole league table does not travel
-                     in a group chat; one position does. */
-                  power: sharePower,
+                  record: matchup.yourTeam.record ?? null,
                   yourAvatar: resolveApiUrl(matchup.yourTeam.avatarUrl) ?? null,
-                  theirAvatar: resolveApiUrl(matchup.opponentTeam.avatarUrl) ?? null,
-                  movement: lineMovement
-                    ? `Opened ${formatAmericanOdds(lineMovement.from)}, now ${formatAmericanOdds(lineMovement.to)}`
+                  /* The season leads. These are the same four numbers the
+                     season band prints above the matchup, formatted there and
+                     passed through here. */
+                  titleOdds: userFuture ? formatAmericanOdds(userFuture.championOdds) : null,
+                  playoffs:
+                    userFuture?.playoffProb != null
+                      ? `${Math.round(userFuture.playoffProb)}%`
+                      : null,
+                  finish:
+                    userFuture?.projRecord
+                    ?? (userFuture?.projWins != null && userFuture?.projLosses != null
+                      ? `${userFuture.projWins.toFixed(1)}-${userFuture.projLosses.toFixed(1)}`
+                      : null),
+                  seed:
+                    userFuture?.avgSeed != null ? userFuture.avgSeed.toFixed(1) : null,
+                  titleSeries: shareTitleSeries,
+                  standing: sharePower
+                    ? `No. ${sharePower.rank} of ${sharePower.of} in the league`
                     : null,
+                  /* One week compressed to one line. It is this week's card,
+                     but it is not this week's story. */
+                  week: `Week ${matchup.week}: ${formatAmericanOdds(
+                    engine.activeLine.yours.moneyline,
+                  )} to beat ${matchup.opponentTeam.teamName}`,
               })}
               type="button"
             >

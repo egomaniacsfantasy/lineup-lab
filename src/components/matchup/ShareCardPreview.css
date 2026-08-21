@@ -25,6 +25,7 @@
      look like a separate decision. */
   gap: 22px;
   width: min(100%, 420px);
+  max-height: 92vh;
   padding: 18px 18px 20px;
   border: 1px solid var(--border-subtle);
   border-radius: 20px;
@@ -32,21 +33,25 @@
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
 }
 
-/* Square, because the card is square and a letterboxed preview would misrepresent
-   what lands in the chat. */
+/* No fixed ratio: the cards are not all one shape any more (the hub card is
+   4:5, the trade card is not), and a letterboxed or squashed preview would
+   misrepresent what lands in the chat. The image sets the height, capped so a
+   tall card still fits on screen next to its buttons. */
 .sharecard__art {
   display: grid;
   place-items: center;
-  aspect-ratio: 1 / 1;
+  min-height: 120px;
   overflow: hidden;
   border-radius: 14px;
   background: var(--bg-inset);
 }
 
 .sharecard__art img {
-  width: 100%;
-  height: 100%;
   display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(90vh - 150px);
 }
 
 .sharecard__drawing {

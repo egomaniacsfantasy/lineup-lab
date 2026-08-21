@@ -1,196 +1,49 @@
-/**
- * Share cards.
- *
- * Your league argues in a group chat, and the book's job is to settle it. A
- * screenshot of a line is the most shareable thing this product makes, so it
- * should be one tap and it should look like us, not like a cropped browser.
- *
- * Boundary: this draws numbers that are ALREADY on screen. It formats and
- * paints; it never computes a probability, a price or a delta.
- */
+import {
+  brandFonts,
+  circleImage,
+  initialsFor,
+  loadImage,
+  roundRect,
+} from './cardKit';
 
 export interface ShareCardLine {
-  /** e.g. "Zeus's Bolts" */
-  you: string;
-  /** e.g. "Hermes Express" */
-  them: string;
-  /** Already formatted, e.g. "-159" */
-  yourPrice: string;
-  /** Already formatted, e.g. "+159" */
-  theirPrice: string;
-  /** 0-100, as displayed */
-  yourWinPct: number;
   /** e.g. "Week 8" */
   eyebrow: string;
-  /** The season, as the band above the hub already prints it. */
-  season?: {
-    title?: string | null;
-    playoffs?: string | null;
-    finish?: string | null;
-    seed?: string | null;
-  } | null;
-  /** e.g. { rank: 2, of: 12 } — where they sit for the rest of the season. */
-  power?: { rank: number; of: number } | null;
-  /** e.g. "Opened -116, now -156" */
-  movement?: string | null;
-  /** Team avatars, already resolved to a fetchable URL. Optional: a league
-      with no avatars set still gets a card, it just gets initials. */
+  /** The user's team. The opponent is deliberately absent: a card about a
+      season should not spend a third of itself on one afternoon's opponent. */
+  you: string;
+  record?: string | null;
   yourAvatar?: string | null;
-  theirAvatar?: string | null;
+  /** Already formatted, e.g. "+1226" */
+  titleOdds?: string | null;
+  playoffs?: string | null;
+  finish?: string | null;
+  seed?: string | null;
+  /** Title chance per recorded week, 0-100, oldest first. Converted upstream
+      so the card only ever draws what it is handed. */
+  titleSeries?: number[] | null;
+  /** This week, compressed to one line. It is this week's card, but it is
+      not this week's story. */
+  week?: string | null;
+  /** Power ranking, e.g. "No. 3 of 12 in the league". */
+  standing?: string | null;
 }
 
 const W = 1080;
-const H = 1080;
+/* Portrait, not square. The season is the subject and it needs the room; every
+   chat app previews 4:5 without cropping. */
+const H = 1350;
 const PAD = 88;
+/* A full-bleed accent footer. The card gets forwarded into group chats by
+   people who are not us, so the only thing that brings anyone back is the
+   address, and it has to survive being a thumbnail. */
+const BAR_TOP = H - 108;
 
-const INK = '#f4f5f2';
-const MUTED = 'rgba(244,245,242,0.52)';
-const FAINT = 'rgba(244,245,242,0.34)';
-const ACCENT = '#ff8049';
-const AMBER = '#e8541d';
-const BG = '#0d0f11';
-const SURFACE = '#16120f';
-
-const DISPLAY = 'Staatliches, "Arial Narrow", sans-serif';
-const UI = '"Hanken Grotesk", system-ui, sans-serif';
-const NUM = '"JetBrains Mono", ui-monospace, monospace';
-
-/**
- * A canvas paints whatever is loaded at the moment it draws, so a card built
- * before the webfonts arrive silently falls back to system type. That is why
- * this used to be hardcoded to system-ui: the original note said a canvas
- * cannot wait on webfonts. It can. document.fonts.load resolves when the face
- * is usable, so the card waits and then looks like the product.
- */
-async function ensureBrandFonts(): Promise<void> {
-  const fonts = (document as Document & { fonts?: FontFaceSet }).fonts;
-  if (!fonts?.load) return;
-  try {
-    await Promise.all([
-      fonts.load('400 190px Staatliches'),
-      fonts.load('600 34px "Hanken Grotesk"'),
-      fonts.load('700 34px "Hanken Grotesk"'),
-      fonts.load('700 54px "JetBrains Mono"'),
-    ]);
-    await fonts.ready;
-  } catch {
-    // A missing face is not a reason to refuse to draw the card.
-  }
-}
-
-/**
- * Load an image for the canvas, or give up quietly.
- *
- * crossOrigin is set because the card is exported with toBlob, and a canvas
- * that has drawn a cross-origin image without CORS is tainted: the export then
- * throws a SecurityError and the whole card is lost rather than one logo. A
- * team avatar can come from our own proxy or, for ESPN, straight off their
- * CDN, so this can never assume same-origin.
- */
-function loadImage(src: string | null | undefined): Promise<HTMLImageElement | null> {
-  if (!src) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
-    /* A hung request must not hold the card hostage. */
-    window.setTimeout(() => resolve(img.complete && img.naturalWidth > 0 ? img : null), 2500);
-  });
-}
-
-function circleImage(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
-  cx: number,
-  cy: number,
-  r: number,
-) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.closePath();
-  ctx.clip();
-  const scale = Math.max((r * 2) / img.naturalWidth, (r * 2) / img.naturalHeight);
-  const w = img.naturalWidth * scale;
-  const h = img.naturalHeight * scale;
-  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
-  ctx.restore();
-}
-
-function initialsFor(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '?';
-}
-
-function crest(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement | null,
-  name: string,
-  cx: number,
-  cy: number,
-  r: number,
-  accent: boolean,
-) {
-  if (img) {
-    circleImage(ctx, img, cx, cy, r);
-    return;
-  }
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = accent ? 'rgba(232,84,29,0.22)' : 'rgba(244,245,242,0.10)';
-  ctx.fill();
-  ctx.fillStyle = accent ? ACCENT : MUTED;
-  ctx.font = `400 ${Math.round(r)}px ${DISPLAY}`;
-  ctx.textAlign = 'center';
-  ctx.fillText(initialsFor(name), cx, cy + r * 0.34);
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, align: CanvasTextAlign = 'left') {
-  ctx.fillStyle = FAINT;
-  ctx.font = `700 21px ${UI}`;
-  ctx.letterSpacing = '3px';
-  ctx.textAlign = align;
-  ctx.fillText(text.toUpperCase(), x, y);
-  ctx.letterSpacing = '0px';
-}
-
-/** Square, because every chat app previews square without cropping. */
 export async function drawShareCard(
   line: ShareCardLine,
   { withArt = true }: { withArt?: boolean } = {},
 ): Promise<HTMLCanvasElement> {
-  await ensureBrandFonts();
-
-  const [mark, yourCrest, theirCrest] = withArt
-    ? await Promise.all([
-        loadImage('/og-logo.png'),
-        loadImage(line.yourAvatar),
-        loadImage(line.theirAvatar),
-      ])
-    : [null, null, null];
+  const P = await brandFonts();
 
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -198,189 +51,226 @@ export async function drawShareCard(
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
 
-  ctx.fillStyle = BG;
-  ctx.fillRect(0, 0, W, H);
+  const [mark, avatar] = withArt
+    ? await Promise.all([loadImage('/og-logo.png'), loadImage(line.yourAvatar)])
+    : [null, null];
 
-  const wash = ctx.createLinearGradient(0, 0, 0, 460);
-  wash.addColorStop(0, 'rgba(232,84,29,0.18)');
+  ctx.fillStyle = P.bg;
+  ctx.fillRect(0, 0, W, H);
+  const wash = ctx.createLinearGradient(0, 0, 0, 620);
+  wash.addColorStop(0, 'rgba(232,84,29,0.20)');
   wash.addColorStop(1, 'rgba(232,84,29,0)');
   ctx.fillStyle = wash;
-  ctx.fillRect(0, 0, W, 460);
-
+  ctx.fillRect(0, 0, W, 620);
   ctx.textBaseline = 'alphabetic';
 
-  // ── mark and week ────────────────────────────────────────────────────────
-  let markX = PAD;
+  const label = (text: string, x: number, y: number, align: CanvasTextAlign = 'left') => {
+    ctx.fillStyle = P.faint;
+    ctx.font = `700 22px ${P.ui}`;
+    ctx.letterSpacing = '3px';
+    ctx.textAlign = align;
+    ctx.fillText(text.toUpperCase(), x, y);
+    ctx.letterSpacing = '0px';
+  };
+
+  // ── lockup, matched to the site header: ink, Staatliches, tight ──────────
+  let wordX = PAD;
   if (mark) {
-    ctx.drawImage(mark, PAD, 74, 46, 46);
-    markX = PAD + 62;
+    ctx.drawImage(mark, PAD, 54, 96, 96);
+    wordX = PAD + 114;
   }
-  ctx.fillStyle = ACCENT;
-  ctx.font = `400 32px ${DISPLAY}`;
-  ctx.letterSpacing = '7px';
+  ctx.fillStyle = P.ink;
+  ctx.font = `400 58px ${P.display}`;
+  ctx.letterSpacing = '2.9px';
   ctx.textAlign = 'left';
-  ctx.fillText('ODDS GODS', markX, 110);
+  ctx.fillText('ODDS GODS', wordX, 122);
+  ctx.letterSpacing = '0px';
+  label(line.eyebrow, W - PAD, 116, 'right');
+
+  // ── who ──────────────────────────────────────────────────────────────────
+  const R = 78;
+  const cy = 286;
+  if (avatar) circleImage(ctx, avatar, PAD + R, cy, R);
+  else {
+    ctx.beginPath();
+    ctx.arc(PAD + R, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(232,84,29,0.20)';
+    ctx.fill();
+    ctx.fillStyle = P.accent;
+    ctx.font = `400 62px ${P.display}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(initialsFor(line.you), PAD + R, cy + 23);
+  }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = P.ink;
+  /* Shrink to fit rather than clip. League names run long and an ellipsis in
+     the one place the card names you is worse than a smaller line. */
+  const nameX = PAD + R * 2 + 30;
+  const nameRoom = W - PAD - nameX;
+  let nameSize = 62;
+  do {
+    ctx.font = `400 ${nameSize}px ${P.display}`;
+    if (ctx.measureText(line.you).width <= nameRoom) break;
+    nameSize -= 2;
+  } while (nameSize > 30);
+  ctx.fillText(line.you, nameX, cy + 2);
+  if (line.record) {
+    ctx.fillStyle = P.muted;
+    ctx.font = `600 28px ${P.ui}`;
+    ctx.fillText(line.record, PAD + R * 2 + 30, cy + 44);
+  }
+
+  // ── the season, which is the point ───────────────────────────────────────
+  label('Championship odds', PAD, 452);
+  ctx.fillStyle = P.accent;
+  ctx.font = `400 176px ${P.display}`;
+  ctx.textAlign = 'left';
+  /* Staatliches sets a bare "1" tight enough that "+1226" reads as "+|226".
+     A little tracking is the whole fix. */
+  ctx.letterSpacing = '5px';
+  ctx.fillText(line.titleOdds ?? 'Not priced', PAD, 596);
   ctx.letterSpacing = '0px';
 
-  label(ctx, line.eyebrow, W - PAD, 110, 'right');
-
-  // ── the matchup ──────────────────────────────────────────────────────────
-  const R = 26;
-  const crestY = 206;
-  crest(ctx, yourCrest, line.you, PAD + R, crestY, R, true);
-  crest(ctx, theirCrest, line.them, W - PAD - R, crestY, R, false);
-
-  ctx.textAlign = 'left';
-  ctx.fillStyle = MUTED;
-  ctx.font = `600 30px ${UI}`;
-  ctx.fillText(line.you, PAD + R * 2 + 18, crestY + 11);
-  ctx.textAlign = 'right';
-  ctx.fillText(line.them, W - PAD - R * 2 - 18, crestY + 11);
-
-  ctx.textAlign = 'left';
-  ctx.fillStyle = ACCENT;
-  ctx.font = `400 168px ${DISPLAY}`;
-  ctx.fillText(line.yourPrice, PAD, 372);
-
-  ctx.textAlign = 'right';
-  ctx.fillStyle = INK;
-  ctx.fillText(line.theirPrice, W - PAD, 372);
-
-  // win probability, drawn the way the hub draws it
-  const barY = 418;
-  const barW = W - PAD * 2;
-  const pct = Math.max(0, Math.min(100, line.yourWinPct));
-  ctx.fillStyle = 'rgba(244,245,242,0.10)';
-  roundRect(ctx, PAD, barY, barW, 14, 7);
-  ctx.fill();
-  const fill = ctx.createLinearGradient(PAD, 0, PAD + barW * (pct / 100), 0);
-  fill.addColorStop(0, AMBER);
-  fill.addColorStop(1, ACCENT);
-  ctx.fillStyle = fill;
-  roundRect(ctx, PAD, barY, Math.max(14, barW * (pct / 100)), 14, 7);
-  ctx.fill();
-
-  ctx.font = `700 30px ${NUM}`;
-  ctx.textAlign = 'left';
-  ctx.fillStyle = ACCENT;
-  ctx.fillText(`${pct.toFixed(1)}%`, PAD, barY + 62);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = MUTED;
-  ctx.fillText(`${(100 - pct).toFixed(1)}%`, W - PAD, barY + 62);
-
-  // ── the season ───────────────────────────────────────────────────────────
   const cells = [
-    { k: 'Title', v: line.season?.title },
-    { k: 'Playoffs', v: line.season?.playoffs },
-    { k: 'Finish', v: line.season?.finish },
-    { k: 'Seed', v: line.season?.seed },
+    { k: 'Playoffs', v: line.playoffs },
+    { k: 'Finish', v: line.finish },
+    { k: 'Seed', v: line.seed },
   ].filter((cell) => Boolean(cell.v));
 
-  let cursor = 540;
+  let y = 652;
   if (cells.length > 0) {
-    const boxH = 196;
-    ctx.fillStyle = SURFACE;
-    roundRect(ctx, PAD, cursor, W - PAD * 2, boxH, 28);
+    const boxH = 168;
+    ctx.fillStyle = P.surface;
+    roundRect(ctx, PAD, y, W - PAD * 2, boxH, 26);
     ctx.fill();
     ctx.strokeStyle = 'rgba(232,84,29,0.22)';
     ctx.lineWidth = 2;
-    roundRect(ctx, PAD, cursor, W - PAD * 2, boxH, 28);
+    roundRect(ctx, PAD, y, W - PAD * 2, boxH, 26);
     ctx.stroke();
-
-    const inner = W - PAD * 2;
-    const colW = inner / cells.length;
+    const colW = (W - PAD * 2) / cells.length;
     cells.forEach((cell, index) => {
       const cx = PAD + colW * index + colW / 2;
-      label(ctx, cell.k, cx, cursor + 62, 'center');
+      label(cell.k, cx, y + 58, 'center');
       ctx.textAlign = 'center';
-      ctx.fillStyle = index === 0 ? ACCENT : INK;
-      ctx.font = `700 52px ${NUM}`;
-      ctx.fillText(String(cell.v), cx, cursor + 134);
+      ctx.fillStyle = P.ink;
+      ctx.font = `700 54px ${P.num}`;
+      ctx.fillText(String(cell.v), cx, y + 124);
     });
-    cursor += boxH + 56;
+    y += boxH + 66;
   }
 
-  // ── where they stand, and how the line has moved ─────────────────────────
-  if (line.power) {
+  // ── how the price has moved ──────────────────────────────────────────────
+  const series = line.titleSeries ?? [];
+  if (series.length > 1) {
+    label('Title chance, week by week', PAD, y);
+    /* The endpoints ride the label row rather than sitting under the plot:
+       one fewer band of small grey text, and the change is stated instead of
+       left to be read off an unlabelled axis. */
+    ctx.fillStyle = P.muted;
+    ctx.font = `700 24px ${P.num}`;
+    ctx.textAlign = 'right';
+    ctx.fillText(
+      `${series[0].toFixed(1)}% to ${series[series.length - 1].toFixed(1)}%`,
+      W - PAD,
+      y,
+    );
+    const top = y + 34;
+    const chartH = 168;
+    const chartW = W - PAD * 2;
+    const lo = Math.min(...series);
+    const hi = Math.max(...series);
+    const spread = Math.max(hi - lo, 0.5);
+    const px = (i: number) => PAD + (chartW * i) / (series.length - 1);
+    /* Inset vertically: the marker on the latest week is 9px of radius, and
+       at a series high it would otherwise sit half outside the plot. */
+    const inset = 14;
+    const py = (v: number) =>
+      top + chartH - inset - ((v - lo) / spread) * (chartH - inset * 2);
+
+    ctx.strokeStyle = 'rgba(244,245,242,0.08)';
+    ctx.lineWidth = 1;
+    [0, 0.5, 1].forEach((t) => {
+      ctx.beginPath();
+      ctx.moveTo(PAD, top + chartH * t);
+      ctx.lineTo(PAD + chartW, top + chartH * t);
+      ctx.stroke();
+    });
+
+    // area under the line, so a thin stroke still reads as a shape
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(series[0]));
+    series.forEach((value, index) => ctx.lineTo(px(index), py(value)));
+    ctx.lineTo(px(series.length - 1), top + chartH);
+    ctx.lineTo(px(0), top + chartH);
+    ctx.closePath();
+    const fill = ctx.createLinearGradient(0, top, 0, top + chartH);
+    fill.addColorStop(0, 'rgba(232,84,29,0.32)');
+    fill.addColorStop(1, 'rgba(232,84,29,0)');
+    ctx.fillStyle = fill;
+    ctx.fill();
+
+    ctx.beginPath();
+    series.forEach((value, index) => {
+      const x = px(index);
+      const yy = py(value);
+      if (index === 0) ctx.moveTo(x, yy);
+      else ctx.lineTo(x, yy);
+    });
+    ctx.strokeStyle = P.accent;
+    ctx.lineWidth = 5;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    const lastX = px(series.length - 1);
+    const lastY = py(series[series.length - 1]);
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 9, 0, Math.PI * 2);
+    ctx.fillStyle = P.accent;
+    ctx.fill();
+
+    y = top + chartH + 60;
+  } else {
+    /* Week one has no history, and leaving the band empty drops a hole the
+       height of a chart into the middle of the card. Saying why it is empty
+       fills the space and tells a new user the card gets better. */
+    label('Title chance, week by week', PAD, y);
+    const top = y + 34;
+    const boxH = 168;
+    ctx.fillStyle = P.surface;
+    roundRect(ctx, PAD, top, W - PAD * 2, boxH, 26);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.muted;
+    ctx.font = `600 30px ${P.ui}`;
+    ctx.fillText('The line starts moving after week 1.', W / 2, top + boxH / 2 + 11);
+    y = top + boxH + 60;
+  }
+
+  // ── this week and where they stand, secondary on purpose ────────────────
+  const footRows = [line.standing, line.week].filter(Boolean) as string[];
+  if (footRows.length > 0) {
     ctx.textAlign = 'left';
-    label(ctx, 'Power ranking, rest of season', PAD, cursor + 6);
-    ctx.fillStyle = INK;
-    ctx.font = `400 96px ${DISPLAY}`;
-    ctx.fillText(`${line.power.rank}`, PAD, cursor + 106);
-    const width = ctx.measureText(`${line.power.rank}`).width;
-    ctx.fillStyle = MUTED;
-    ctx.font = `600 38px ${UI}`;
-    ctx.fillText(`of ${line.power.of}`, PAD + width + 18, cursor + 106);
-    cursor += 150;
+    ctx.fillStyle = P.muted;
+    ctx.font = `600 29px ${P.ui}`;
+    /* Anchored to the footer bar, not to whatever the chart left behind, so
+       these rows keep their clearance whether or not a chart was drawn. */
+    let fy = Math.min(y + 12, BAR_TOP - 58 - (footRows.length - 1) * 42);
+    footRows.forEach((row) => {
+      ctx.fillText(row, PAD, fy);
+      fy += 42;
+    });
   }
 
-  /* Pinned to the foot rather than following the flow above, so the movement
-     line and the wordmark keep the same gap whether or not a power ranking
-     was drawn. They were landing 46px apart and reading as one block. */
-  if (line.movement) {
-    ctx.textAlign = 'left';
-    ctx.fillStyle = FAINT;
-    ctx.font = `600 26px ${UI}`;
-    ctx.fillText(line.movement, PAD, H - 132);
-  }
-
-  // ── footer ───────────────────────────────────────────────────────────────
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(244,245,242,0.22)';
-  ctx.font = `600 25px ${UI}`;
-  ctx.fillText('oddsgods.net', PAD, H - 58);
+  // ── the plug, which is the reason the card exists ───────────────────────
+  ctx.fillStyle = P.accent;
+  ctx.fillRect(0, BAR_TOP, W, H - BAR_TOP);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.bg;
+  ctx.font = `400 50px ${P.display}`;
+  ctx.letterSpacing = '2px';
+  ctx.fillText('PRICE YOUR TEAM AT ODDSGODS.NET', W / 2, BAR_TOP + 70);
+  ctx.letterSpacing = '0px';
 
   return canvas;
-}
-
-export function shareCardToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    /* toBlob reports a tainted canvas by throwing, not by returning null. */
-    try {
-      canvas.toBlob((blob) => resolve(blob), 'image/png');
-    } catch {
-      resolve(null);
-    }
-  });
-}
-
-/**
- * Hands the card to the OS share sheet where that exists (every phone, and the
- * native app), and falls back to a download on desktop browsers that have no
- * share target. Returns how it was handled so the caller can confirm.
- */
-export async function shareCard(
-  line: ShareCardLine,
-  filename = 'odds-gods.png',
-): Promise<'shared' | 'downloaded' | 'failed'> {
-  try {
-    let blob = await shareCardToBlob(await drawShareCard(line)).catch(() => null);
-    if (!blob) {
-      /* Most likely a tainted canvas: a logo came from a host that sent no
-         CORS headers. Losing one crest beats losing the card. */
-      blob = await shareCardToBlob(await drawShareCard(line, { withArt: false }));
-    }
-    if (!blob) return 'failed';
-
-    const file = new File([blob], filename, { type: 'image/png' });
-    const nav = navigator as Navigator & {
-      canShare?: (data: { files: File[] }) => boolean;
-      share?: (data: { files: File[]; title?: string }) => Promise<void>;
-    };
-
-    if (nav.canShare?.({ files: [file] }) && nav.share) {
-      await nav.share({ files: [file], title: 'Odds Gods' });
-      return 'shared';
-    }
-
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    return 'downloaded';
-  } catch {
-    return 'failed';
-  }
 }
