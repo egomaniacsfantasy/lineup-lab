@@ -35,13 +35,22 @@ export function TitleOdds({ rows }: { rows: TitleRow[] }) {
      100% would leave every row looking identically hopeless. */
   const top = ranked[0].titleProb || 1;
 
+  /* Week one has no history, so every move is null and the column is a header
+     over five empty cells. A column that never has a value in it is not a
+     quiet column, it is a broken one. */
+  const hasMovement = ranked.some((row) => row.move != null && isMaterialMove(row.move));
+
   return (
-    <section className="matchup-page__module title-odds">
+    <section
+      className={['matchup-page__module title-odds', hasMovement ? '' : 'title-odds--still']
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className="title-odds__head">
         <span className="title-odds__head-label">Title odds</span>
         <span className="title-odds__head-cols">
           <span>Price</span>
-          <span>Move</span>
+          {hasMovement ? <span>Move</span> : null}
         </span>
       </div>
 
@@ -61,20 +70,23 @@ export function TitleOdds({ rows }: { rows: TitleRow[] }) {
                 style={{ width: `${Math.max(4, (row.titleProb / top) * 100)}%` }}
               />
             </span>
+            {/* The price is the product, so it is the loudest thing in the
+                row: a quoted number in a box, the way a book posts one. */}
             <span className="title-odds__price">{formatAmericanOdds(row.championOdds)}</span>
-            <span className="title-odds__move">
-              {/* Shown only when the board has actually moved, on the same
-                  threshold the League tab uses, so the two never disagree
-                  about whether something happened. */}
-              {row.move != null && isMaterialMove(row.move) ? (
-                <span
-                  className={`title-odds__swing title-odds__swing--${row.move > 0 ? 'up' : 'down'}`}
-                >
-                  {row.move > 0 ? '▲' : '▼'}
-                  {Math.abs(row.move).toFixed(1)}
-                </span>
-              ) : null}
-            </span>
+            {hasMovement ? (
+              <span className="title-odds__move">
+                {/* Per row, on the same threshold the League tab uses, so the
+                    two never disagree about whether something happened. */}
+                {row.move != null && isMaterialMove(row.move) ? (
+                  <span
+                    className={`title-odds__swing title-odds__swing--${row.move > 0 ? 'up' : 'down'}`}
+                  >
+                    {row.move > 0 ? '▲' : '▼'}
+                    {Math.abs(row.move).toFixed(1)}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
           </li>
         ))}
       </ol>
