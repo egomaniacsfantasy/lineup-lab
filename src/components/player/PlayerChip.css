@@ -76,22 +76,35 @@
   box-shadow: 0 0 0 1px rgba(232, 84, 29, 0.28);
 }
 
+/* Round, and cropped to the head. Without this the cutout sits inside a
+   circular border rather than filling it, which is the same fault the
+   headshot component had: a player half outside his own circle. */
 .player-chip__image,
 .player-chip__fallback {
   width: 100%;
   height: 100%;
+  border-radius: 50%;
 }
 
+.player-chip__image {
+  object-fit: cover;
+  object-position: top center;
+}
+
+/* Same treatment as PlayerHeadshot: the mark sits on the player, it is not a
+   second object beside him. A ring and a fill drew a disc the logo had to live
+   inside; a drop shadow lifts it off the photo without inventing a shape. */
 .player-chip__team {
   position: absolute;
   right: -3px;
   bottom: -3px;
   width: 15px;
   height: 15px;
-  border: 1px solid var(--bg-surface);
-  border-radius: 999px;
-  background: var(--bg-inset);
+  border: 0;
+  border-radius: 0;
+  background: none;
   object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
 }
 
 .player-chip--sm .player-chip__position {

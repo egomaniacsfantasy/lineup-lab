@@ -1,15 +1,37 @@
+/* One block, not four.
+ *
+ * This file had grown three separate `.player-headshot` rules and two
+ * `.player-headshot__image` rules, each written to correct the one before it.
+ * The last one set `border-radius: 0` on the image, which undid the circular
+ * crop entirely: the photo then spilled outside whatever ring its container
+ * drew, so a player's head sat half outside his own circle. Every rule below
+ * is stated once.
+ */
+
 .player-headshot {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  /* Visible, not hidden: the team badge overhangs the edge on purpose, and
+     clipping the container would cut it in half. The crop lives on the image
+     and the fallback instead. */
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+}
+
+/* The photos are cutouts on transparency. `cover` fills the circle and
+   `top center` keeps the head rather than centring on the chest. */
+.player-headshot__image,
+.player-headshot__fallback {
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
 }
 
 .player-headshot__image {
-  width: 100%;
-  height: 100%;
   object-fit: cover;
   object-position: top center;
 }
@@ -18,55 +40,27 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: 0.08em;
 }
 
-.player-headshot--qb .player-headshot__fallback {
-  background: var(--pos-qb-bg);
-}
+.player-headshot--qb .player-headshot__fallback { background: var(--pos-qb-bg); }
+.player-headshot--rb .player-headshot__fallback { background: var(--pos-rb-bg); }
+.player-headshot--wr .player-headshot__fallback { background: var(--pos-wr-bg); }
+.player-headshot--te .player-headshot__fallback { background: var(--pos-te-bg); }
+.player-headshot--k  .player-headshot__fallback { background: var(--pos-k-bg); }
+.player-headshot--def .player-headshot__fallback { background: var(--pos-def-bg); }
 
-.player-headshot--rb .player-headshot__fallback {
-  background: var(--pos-rb-bg);
-}
-
-.player-headshot--wr .player-headshot__fallback {
-  background: var(--pos-wr-bg);
-}
-
-.player-headshot--te .player-headshot__fallback {
-  background: var(--pos-te-bg);
-}
-
-.player-headshot--k .player-headshot__fallback {
-  background: var(--pos-k-bg);
-}
-
-.player-headshot--def .player-headshot__fallback {
-  background: var(--pos-def-bg);
-}
-
-/* The team mark sits in the bottom-right corner of the headshot, the way
-   Sleeper does it: you recognise the team before you have read the name.
-   Sized as a share of the headshot so it holds at 24px on a phone lineup card
-   and at 44px on a board row without a second rule for each. */
-/* The container clipped to a circle with overflow: hidden, which would cut the
-   badge off. The crop moves onto the image and the fallback instead, so the
-   headshot is still round and the badge can overhang the edge. */
-.player-headshot {
-  position: relative;
-  overflow: visible;
-}
-
-.player-headshot__image,
-.player-headshot__fallback {
-  border-radius: 50%;
-}
-
+/* The team mark sits bottom-right, the way Sleeper does it: you recognise the
+   team before you have read the name. Sized as a share of the headshot so it
+   holds at 24px in a lineup row and at 44px on a board row without a second
+   rule for each.
+   
+   No disc behind it. A filled circle plus a ring was drawing a second object
+   next to the player rather than a mark on him; a drop shadow separates the
+   logo from the photo underneath without inventing a shape. */
 .player-headshot__team {
   position: absolute;
   right: -2%;
@@ -75,22 +69,9 @@
   height: 46%;
   min-width: 11px;
   min-height: 11px;
-  border-radius: 50%;
-  background: var(--bg-surface, #15181b);
-  box-shadow: 0 0 0 1.5px var(--bg-surface, #15181b);
-  object-fit: contain;
-  pointer-events: none;
-}
-
-
-/* The photos are cutouts, so the dark plate behind them was drawing a circle
-   nobody asked for. The image floats; only the team badge keeps a disc, and it
-   keeps one because it has to separate itself from the photo it overlaps. */
-.player-headshot {
-  background: transparent;
-  border: 0;
-}
-
-.player-headshot__image {
+  background: none;
   border-radius: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
+  pointer-events: none;
 }
