@@ -95,9 +95,6 @@ export function ConnectPage() {
         </button>
       </div>
 
-      <p className="connect-page__demo">
-        Read-only. We only ever read your league, never change it.
-      </p>
 
       {/* The build line has to live here too. With no league connected there is
           no tab bar and so no route to More, which is where it was: the one

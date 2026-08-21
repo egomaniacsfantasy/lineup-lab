@@ -198,9 +198,9 @@ function clampRating(value: number) {
 }
 
 function ratingSummary(value: number) {
-  if (value > 50) return `Agreement ${value} · lifts him vs Franco's number.`;
-  if (value < 50) return `Agreement ${value} · pushes him down vs Franco's number.`;
-  return `Agreement ${value} · aligned with Franco's number.`;
+  if (value > 50) return `Agreement ${value} · lifts him vs The Gods' number.`;
+  if (value < 50) return `Agreement ${value} · pushes him down vs The Gods' number.`;
+  return `Agreement ${value} · aligned with The Gods' number.`;
 }
 
 function saveConfirmation(value: number) {
@@ -854,7 +854,7 @@ export function MyBoardPage() {
           <p className="board-page__eyebrow">Board</p>
           <h2 className="board-page__title">Player value</h2>
           <p className="board-page__caption">
-            Franco&apos;s projections · {scoringLabel(scoring)}
+            The Gods&apos; projections · {scoringLabel(scoring)}
           </p>
           <p className="board-page__freshness">
             Updated {formatUpdatedDate(projectionData.updatedAt)} · {board.length} players

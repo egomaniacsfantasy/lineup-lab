@@ -235,9 +235,6 @@ export function LeaguePage() {
               </button>
             </div>
 
-            <p className="connect-page__demo">
-              Read-only. We only ever read your league, never change it.
-            </p>
           </div>
         ) : null}
 

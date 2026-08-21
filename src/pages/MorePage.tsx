@@ -69,7 +69,7 @@ export function MorePage() {
       ? [
           {
             title: 'Projections admin',
-            body: 'Owner import flow for weekly Franco workbooks.',
+            body: 'Owner import flow for the weekly projection workbooks.',
             path: '/admin/projections',
           },
         ]
@@ -257,7 +257,7 @@ export function MorePage() {
             <div>
               <h3 className="more-page__card-title">Player votes</h3>
               <p className="more-page__card-body">
-                Dark-launched Keep / Trade / Cut prompt. Votes queue locally and do not touch Franco&apos;s pipeline.
+                Dark-launched Keep / Trade / Cut prompt. Votes queue locally and do not touch the projection pipeline.
               </p>
             </div>
             <span className="more-page__card-cta">Open</span>

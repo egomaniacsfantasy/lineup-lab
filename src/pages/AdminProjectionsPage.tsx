@@ -226,7 +226,7 @@ export function AdminProjectionsPage() {
   return (
     <div className="admin-projections">
       <p className="admin-projections__kicker">Projections admin</p>
-      <h1 className="admin-projections__title">Import Franco&apos;s sheet</h1>
+      <h1 className="admin-projections__title">Import the projection sheet</h1>
 
       {status ? <SeasonalNotice>{status}</SeasonalNotice> : null}
 

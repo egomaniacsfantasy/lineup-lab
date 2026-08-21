@@ -84,16 +84,16 @@
   object-position: left center;
 }
 
-.connect-page__provider-logo--sleeper {
-  height: 38px;
-  max-width: 180px;
-}
-
-/* ESPN is a compact square mark, so it needs more height to carry the same
-   visual weight as Sleeper's wide wordmark. */
+/* One height for both, which only works because the files are now cropped to
+   their own artwork. ESPN's was a 120x120 canvas holding a 110x28 wordmark, so
+   46px of transparent padding sat above and below it: at height 56 the visible
+   mark rendered about 13px tall next to Sleeper's 36. The old rule gave ESPN
+   more height to compensate, which made the box bigger and the logo no larger.
+   Cropping the padding out is the fix; the CSS then needs no special case. */
+.connect-page__provider-logo--sleeper,
 .connect-page__provider-logo--espn {
-  height: 56px;
-  max-width: 110px;
+  height: 26px;
+  max-width: 160px;
 }
 
 .connect-page__provider-action {
