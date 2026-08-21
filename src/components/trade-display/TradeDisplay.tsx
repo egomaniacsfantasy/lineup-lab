@@ -243,18 +243,23 @@ function TradeLayout({
       {onShare || onDismiss ? (
         <div className="trade-display__tools">
           {onShare ? (
+            /* A bare arrow, revealed only on hover, asked people to guess
+               both that the control existed and that it made a card. It says
+               what it does now, and it does not wait to be hovered: sharing is
+               the reason the deal is worth looking at, while dismissing it is
+               the destructive one that can stay tucked away. */
             <button
               aria-label="Share this trade as a card"
-              className="trade-display__tool"
+              className="trade-display__tool trade-display__tool--share"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 onShare();
               }}
-              title="Share this trade"
+              title="Share this trade as a card"
               type="button"
             >
-              ↗
+              Card ↗
             </button>
           ) : null}
           {onDismiss ? (

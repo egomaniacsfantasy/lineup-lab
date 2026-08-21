@@ -923,3 +923,25 @@
 .trade-display__tool:hover {
   color: var(--text-amber);
 }
+
+/* The share control names itself and stays visible. A hover-revealed glyph is
+   undiscoverable on a phone, where there is no hover at all. */
+.trade-display__tool--share {
+  width: auto;
+  padding: 0 11px;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--amber) 38%, transparent);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  opacity: 1;
+  white-space: nowrap;
+}
+
+.trade-display__tool--share:hover {
+  background: color-mix(in srgb, var(--amber) 22%, transparent);
+  color: var(--text-amber);
+}

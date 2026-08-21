@@ -88,3 +88,27 @@ test('multi-player sides read as a sentence, not an array', () => {
   assert.match(message, /J\. Jacobs, P\. Nacua and D\. Smith/);
   assert.doesNotMatch(message, /[[\]]/, 'an array leaked into the caption');
 });
+
+test('a saved card is named so two of them can be told apart', async () => {
+  const { shareFilename } = await import('../src/utils/shareMessage.ts');
+  assert.equal(shareFilename('AVLA', 1), 'avla-odds-gods-week-1.png');
+  assert.equal(shareFilename("Zeus's Bolts", 8), 'zeus-s-bolts-odds-gods-week-8.png');
+  assert.equal(shareFilename('avla', 1, 'trade'), 'avla-odds-gods-trade-week-1.png');
+  /* Two cards from the same person in different weeks must not collide, which
+     is the whole reason the old constant filename was a problem. */
+  assert.notEqual(shareFilename('AVLA', 1), shareFilename('AVLA', 2));
+  assert.doesNotMatch(shareFilename('Ré/Mï  Ünicode!!', 3), /[^a-z0-9.-]/);
+});
+
+test('a headline reads both sides, not just yours', async () => {
+  const { tradeCardHeadline } = await import('../src/utils/tradeVerdict.ts');
+  /* The case that prompted this: both managers gain on both metrics and the
+     old one-sided verdict called it "Fair", the least interesting true thing
+     about it. */
+  assert.equal(tradeCardHeadline(0.6, 1.1), 'Both sides win');
+  assert.equal(tradeCardHeadline(5.2, -1.0), 'Steal');
+  assert.equal(tradeCardHeadline(-2.0, 3.0), 'Overpay');
+  assert.equal(tradeCardHeadline(0.2, -0.4), 'Fair deal');
+  /* A gain for you at the partner's expense is never "both sides win". */
+  assert.notEqual(tradeCardHeadline(4.5, -3.0), 'Both sides win');
+});

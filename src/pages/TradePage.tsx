@@ -37,7 +37,7 @@ import {
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
 import { signedDeltaClass } from '../utils/deltaTone';
-import { analysisVerdict, deltaTone, signedPct } from '../utils/tradeVerdict';
+import { analysisVerdict, deltaTone, signedPct, tradeCardHeadline } from '../utils/tradeVerdict';
 import { formatAmericanOdds } from '../utils/formatOdds';
 import {
   useDynastyTradesExperimental,
@@ -60,7 +60,7 @@ import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { drawTradeCard, type TradeCardProposal, type TradeCardAsset } from '../utils/tradeCard';
-import { tradeShareMessage } from '../utils/shareMessage';
+import { shareFilename, tradeShareMessage } from '../utils/shareMessage';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 import { LeagueDealBoard, type LeagueDealRow } from '../components/trade/LeagueDealBoard';
 
@@ -406,7 +406,7 @@ function TradeDealsView() {
     setTradeCard({
       eyebrow: `Week ${bootstrap.week}`,
       leagueName: stored?.leagueName ?? null,
-      verdict: analysisVerdict(suggestion.youDelta).label,
+      verdict: tradeCardHeadline(suggestion.youDelta, suggestion.partnerDelta),
       you: {
         manager: userTeam?.teamName ?? 'You',
         avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
@@ -1115,6 +1115,7 @@ function TradeDealsView() {
       {tradeCard ? (
         <ShareCardPreview
           draw={(options) => drawTradeCard(tradeCard, options)}
+          filename={shareFilename(tradeCard.you.manager, bootstrap?.week, 'trade')}
           message={tradeShareMessage({
             you: tradeCard.you.manager,
             them: tradeCard.them.manager,
@@ -1125,7 +1126,6 @@ function TradeDealsView() {
             theirTitleDelta: tradeCard.them.titleDelta,
             bothGain: tradeCard.you.titleUp && tradeCard.them.titleUp,
           })}
-          filename="odds-gods-trade.png"
           onClose={() => setTradeCard(null)}
         />
       ) : null}
@@ -1424,7 +1424,10 @@ function TradeDealsView() {
                       setTradeCard({
                         eyebrow: `Week ${bootstrap.week}`,
                         leagueName: stored?.leagueName ?? null,
-                        verdict: suggestionVerdict.label,
+                        verdict: tradeCardHeadline(
+                          entry.suggestion.youDelta,
+                          entry.suggestion.partnerDelta,
+                        ),
                         you: {
                           manager: userTeam?.teamName ?? 'You',
                           avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
@@ -1748,7 +1751,7 @@ function TradeDealsView() {
                 setTradeCard({
                   eyebrow: `Week ${bootstrap.week}`,
                   leagueName: stored?.leagueName ?? null,
-                  verdict: analysisVerdict(you.delta.titleProb).label,
+                  verdict: tradeCardHeadline(you.delta.titleProb, them.delta.titleProb),
                   you: {
                     manager: userTeam?.teamName ?? 'You',
                     avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,

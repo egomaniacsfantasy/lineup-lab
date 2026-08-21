@@ -84,3 +84,23 @@ function ordinal(n: number) {
   if (rest >= 11 && rest <= 13) return `${n}th`;
   return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
 }
+
+/**
+ * What the file is called once it is in someone's camera roll.
+ *
+ * "odds-gods.png" collides with every other card the same person saved, so the
+ * second one lands as "odds-gods (1)" and nobody can tell them apart a month
+ * later. Naming it by whose team it is and which week it was makes a saved
+ * card findable and, when it gets re-shared as a file, self-describing.
+ */
+export function shareFilename(team: string, week?: number | null, kind = 'week') {
+  const slug = team
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32);
+  const parts = [slug || 'my-team', 'odds-gods'];
+  parts.push(kind === 'trade' ? 'trade' : `week-${week ?? 1}`);
+  if (kind === 'trade' && week != null) parts.push(`week-${week}`);
+  return `${parts.join('-')}.png`;
+}

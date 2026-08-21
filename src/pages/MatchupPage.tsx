@@ -25,7 +25,7 @@ import {
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { formatAmericanOdds, impliedProbability } from '../utils/formatOdds';
-import { hubShareMessage } from '../utils/shareMessage';
+import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
 import { formatSignedDisplayedDeltaValue } from '../utils/displayDelta';
 import {
@@ -2632,6 +2632,7 @@ function MatchupLive({
       {sharePayload ? (
         <ShareCardPreview
           draw={(options) => drawShareCard(sharePayload, options)}
+          filename={shareFilename(sharePayload.you, matchup.week)}
           message={hubShareMessage({
             team: sharePayload.you,
             leagueName: sharePayload.leagueName,

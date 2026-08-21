@@ -123,17 +123,19 @@ export async function drawTradeCard(
   ctx.letterSpacing = '0px';
   label([deal.leagueName, deal.eyebrow].filter(Boolean).join('  ·  '), W - PAD, 106, 'right');
 
-  // ── the verdict, which is the headline ──────────────────────────────────
+  /* The headline is a caption on the deal, not the deal itself. It was set at
+     128px, which made a one-word read like "FAIR" the loudest thing on a card
+     whose subject is two rosters changing hands. */
   if (deal.verdict) {
     ctx.fillStyle = P.ink;
-    ctx.font = `400 ${fit(deal.verdict.toUpperCase(), W - PAD * 2, 128)}px ${P.display}`;
+    ctx.font = `400 ${fit(deal.verdict.toUpperCase(), W - PAD * 2, 82)}px ${P.display}`;
     ctx.textAlign = 'left';
-    ctx.fillText(deal.verdict.toUpperCase(), PAD, 266);
+    ctx.fillText(deal.verdict.toUpperCase(), PAD, 232);
   }
 
   // ── the two sides ────────────────────────────────────────────────────────
   const colW = (W - PAD * 2 - 44) / 2;
-  const top = 330;
+  const top = 282;
   /* The stat rows sit just above the plug, and the panels take everything
      between. A fixed panel height left a one-for-one deal with a third of the
      card empty; sizing the faces to the room instead means a small deal reads
@@ -141,13 +143,21 @@ export async function drawTradeCard(
   const statTop = BAR_TOP - 116;
   const cardH = statTop - 44 - top;
   const HEAD = 140;
-  const CAPTION = 72;
   const count = Math.max(
     1,
     Math.min(3, Math.max(deal.you.assets.length, deal.them.assets.length)),
   );
-  const faceR = Math.max(44, Math.min(126, ((cardH - HEAD) / count - CAPTION) / 2));
-  const rowH = faceR * 2 + CAPTION;
+  /* Names and positions were sitting 72px under a circle and immediately under
+     the next one, so a two-for-two had its players stacked shoulder to
+     shoulder with nothing between them. The caption gets real room and the
+     rows get a gap; three-a-side tightens because it has to. */
+  const CAPTION = count >= 3 ? 74 : 100;
+  const GAP = count >= 3 ? 10 : 22;
+  const faceR = Math.max(
+    42,
+    Math.min(128, ((cardH - HEAD) / count - CAPTION - GAP) / 2),
+  );
+  const rowH = faceR * 2 + CAPTION + GAP;
   /* Centre the stack: two players against three should not hang off the top. */
   const stackTop = top + HEAD + Math.max(0, (cardH - HEAD - rowH * count) / 2);
 
@@ -155,12 +165,19 @@ export async function drawTradeCard(
     const x = PAD + (colW + 44) * index;
     const cx = x + colW / 2;
 
-    ctx.fillStyle = index === 0 ? 'rgba(232,84,29,0.09)' : 'rgba(244,245,242,0.04)';
-    roundRect(ctx, x, top, colW, cardH, 26);
+    /* Lifted off the background rather than drawn into it, so the two sides
+       read as two objects on a table. */
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 34;
+    ctx.shadowOffsetY = 14;
+    ctx.fillStyle = index === 0 ? 'rgba(232,84,29,0.10)' : 'rgba(244,245,242,0.05)';
+    roundRect(ctx, x, top, colW, cardH, 30);
     ctx.fill();
-    ctx.strokeStyle = index === 0 ? 'rgba(232,84,29,0.38)' : 'rgba(244,245,242,0.10)';
+    ctx.restore();
+    ctx.strokeStyle = index === 0 ? 'rgba(232,84,29,0.42)' : 'rgba(244,245,242,0.12)';
     ctx.lineWidth = 2;
-    roundRect(ctx, x, top, colW, cardH, 26);
+    roundRect(ctx, x, top, colW, cardH, 30);
     ctx.stroke();
 
     // manager
@@ -232,11 +249,29 @@ export async function drawTradeCard(
     });
   });
 
-  // ── the swap mark, between the columns ──────────────────────────────────
+  /* Centred on the panels rather than on the first row of faces, and drawn
+     last so it sits over the seam between them. It was pinned to the top face,
+     which put it near the shoulders of a two-for-two and nowhere near the
+     middle of the deal. */
+  const swapY = top + cardH / 2;
+  const swapR = 58;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.6)';
+  ctx.shadowBlur = 26;
+  ctx.beginPath();
+  ctx.arc(W / 2, swapY, swapR, 0, Math.PI * 2);
+  ctx.fillStyle = P.bg;
+  ctx.fill();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(W / 2, swapY, swapR, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(232,84,29,0.55)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
   ctx.textAlign = 'center';
   ctx.fillStyle = P.accent;
-  ctx.font = `400 52px ${P.ui}`;
-  ctx.fillText('⇄', W / 2, stackTop + faceR + 18);
+  ctx.font = `400 66px ${P.ui}`;
+  ctx.fillText('⇄', W / 2, swapY + 22);
 
   // ── what it does to both teams, which is the whole argument ─────────────
   sides.forEach((side, index) => {
@@ -265,7 +300,7 @@ export async function drawTradeCard(
   ctx.fillStyle = P.bg;
   ctx.font = `400 50px ${P.display}`;
   ctx.letterSpacing = '2px';
-  ctx.fillText('PRICE YOUR TEAM AT ODDSGODS.NET', W / 2, BAR_TOP + 70);
+  ctx.fillText('PRICE YOUR TRADES AT ODDSGODS.NET', W / 2, BAR_TOP + 70);
   ctx.letterSpacing = '0px';
 
   return canvas;
