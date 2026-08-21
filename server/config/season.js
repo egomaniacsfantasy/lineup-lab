@@ -43,6 +43,24 @@ export function isPreseason(state) {
 }
 
 /**
+ * The single, authoritative fantasy week to PRICE for a league. Both the pricing
+ * cache key and the built context must derive the week from HERE so they can never
+ * disagree — if they do, two computations for different weeks share one cache slot
+ * and the served title odds flip (e.g. a contender's ~12% halving to ~6% because a
+ * remaining week was dropped from the sim).
+ *
+ * Hardened against season-rollover lag: if the league is still filed under a prior
+ * season (league.season != state.season) but the NFL itself is in preseason/off,
+ * we still price week 1 — matching resolveFantasyWeek's intent — instead of
+ * falling back to the prior season's lastScoredWeek.
+ */
+export function resolvePricingWeek(league, state) {
+  if (league?.season === state?.season) return resolveFantasyWeek(state);
+  if (isPreseason(state)) return 1;
+  return Math.max(1, Math.min(league?.lastScoredWeek ?? 1, 18));
+}
+
+/**
  * Season state is COMPUTED from Sleeper /state/nfl (+ the league's
  * playoff settings), never chosen by the user.
  *

@@ -19,7 +19,7 @@ import {
   isLiveOn, liveStatus, getOverlay, setOverlay, getBaseline, mergeLiveOverlay,
   setLiveMode, registerCycle,
 } from '../live/liveEngine.js';
-import { SEASON_ANCHORS, computeSeasonState, resolveFantasyWeek, isPreseason } from '../config/season.js';
+import { SEASON_ANCHORS, computeSeasonState, resolveFantasyWeek, isPreseason, resolvePricingWeek } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
 import {
@@ -437,7 +437,7 @@ apiRouter.post('/espn/login/start', async (req, res, next) => {
   }
 });
 
-async function loadLeagueContext(provider, leagueId, userId) {
+async function loadLeagueContext(provider, leagueId, userId, weekOverride = null) {
   const league = await provider.getLeague(leagueId);
   if (!league) return null;
 
@@ -474,10 +474,9 @@ async function loadLeagueContext(provider, leagueId, userId) {
     };
   });
 
-  const isCurrentSeason = league.season === state.season;
-  const week = isCurrentSeason
-    ? resolveFantasyWeek(state)
-    : Math.max(1, Math.min(league.lastScoredWeek ?? 1, 18));
+  // Use the week the caller already resolved (so the pricing cache key and this
+  // context can never disagree about which week to sim); otherwise resolve it here.
+  const week = weekOverride ?? resolvePricingWeek(league, state);
 
   const matchups = await provider.getMatchups(leagueId, week);
   const rosteredIds = [...new Set(teams.flatMap((t) => t.players))];
@@ -527,8 +526,8 @@ export function buildHeadlessProvider(providerKind, season) {
 // Assemble the full pricing context (league + rosters + schedule + adjusted
 // projections + any final-game locks). Shared by the cached static price and the
 // live overlay so the two never build a different context.
-async function assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams) {
-  const ctx = await loadLeagueContext(provider, leagueId, userId);
+async function assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams, weekOverride = null) {
+  const ctx = await loadLeagueContext(provider, leagueId, userId, weekOverride);
   if (!ctx) throw new Error('league_not_found');
 
   const lastWeek = Math.min((ctx.league.playoffWeekStart ?? 15) + 2, 18);
@@ -557,9 +556,24 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
   // game busts the price and re-locks those players.
   const finalTeams = getFinalNflTeams();
   const liveSig = finalTeamsSignature();
+  // Resolve the fantasy week UP FRONT (both reads are provider-cached, so this is
+  // cheap) and fold it into the cache key AND the built context. Without the week
+  // in the key, a preseason week-1 price and a rollover-lag lastScoredWeek price
+  // could share one cache slot and be served interchangeably — the title-odds flip
+  // (~12% <-> ~6%, from a remaining week being dropped from the sim).
+  let week = null;
+  try {
+    const [league, state] = await Promise.all([
+      provider.getLeague(leagueId),
+      provider.getSeasonState(),
+    ]);
+    if (league && state) week = resolvePricingWeek(league, state);
+  } catch {
+    // Fall back to letting the context resolve the week itself (key omits it).
+  }
   return getLeaguePricing(
-    () => assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams),
-    `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${playoffSettingsSignature(leagueId)}`,
+    () => assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams, week),
+    `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${playoffSettingsSignature(leagueId)}:w${week ?? '-'}`,
   );
 }
 
