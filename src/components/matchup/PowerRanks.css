@@ -1,0 +1,120 @@
+/* A table people already know how to read. The only new idea is the second
+   column, and it earns its place by disagreeing with the first. */
+.power {
+  display: grid;
+  gap: 8px;
+}
+
+.power__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.power__head-label,
+.power__head-cols span {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.power__head-cols {
+  display: flex;
+  gap: 14px;
+}
+
+.power__list {
+  list-style: none;
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+}
+
+.power__row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 46px 34px 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 7px;
+}
+
+.power__row--you {
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 30%, transparent);
+}
+
+.power__rank {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.power__team {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.power__row--you .power__team {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* The bar is the season, so the eye gets the shape of the league before it
+   reads a single number. */
+.power__meter {
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-inset) 85%, transparent);
+  overflow: hidden;
+}
+
+.power__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--ink-3) 70%, transparent);
+}
+
+.power__row--you .power__fill {
+  background: var(--amber);
+}
+
+.power__wk,
+.power__ros {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 3px;
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.power__row--you .power__wk,
+.power__row--you .power__ros {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* Only shown when the two rankings disagree, which is the entire point. */
+.power__swing {
+  font-size: 8.5px;
+  font-weight: 700;
+}
+
+.power__swing--up { color: var(--green); }
+.power__swing--down { color: var(--red); }

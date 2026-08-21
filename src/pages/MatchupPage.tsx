@@ -73,6 +73,7 @@ import { PreDraftHub } from '../components/matchup/PreDraftHub';
 import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { shortInjuryStatus } from '../utils/playerNames.ts';
+import { PowerRanks, type PowerRow } from '../components/matchup/PowerRanks';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
@@ -1061,6 +1062,7 @@ interface MatchupLiveProps {
   isConnected: boolean;
   /** The user's own futures row, for the season band under the hero. */
   userFuture?: PricedFuture | null;
+  power?: PowerRow[] | null;
   /** Recorded title price per week, for the band's trend line. */
   titleHistory?: LeaguePricing['titleHistory'] | null;
   isPriced?: boolean;
@@ -1181,6 +1183,7 @@ function MatchupLive({
   matchup,
   isConnected,
   userFuture = null,
+  power = null,
   titleHistory = null,
   isPriced = false,
   lineMovement = null,
@@ -2464,6 +2467,8 @@ function MatchupLive({
                 start/add widget, but a small one: two rows, above the field. */}
             {isConnected ? <HubDeals /> : null}
 
+            {isConnected && power && power.length > 2 ? <PowerRanks rows={power} /> : null}
+
             <section className="matchup-page__module matchup-page__module--rail-chart">
               {matchupHistorySeries.length > 1 ? (
                 <OddsChart
@@ -2733,6 +2738,35 @@ export function MatchupPage() {
   }, [marketScan.cooldownMs, marketScan.lastScannedAt]);
 
 
+  /* Above every early return. This page bails out for the loading state and
+     again for a pre-draft league, and a hook declared below those runs on some
+     renders and not others — which React reports as "rendered more hooks than
+     during the previous render" and a blank page. */
+  /* Every team's projection for this week comes off the priced lines, and the
+     projected win total comes from the season sim. Both are served; this pairs
+     them by roster so the widget can rank on each. */
+  const powerRows = useMemo<PowerRow[] | null>(() => {
+    if (!bootstrap || !pricing?.available) return null;
+    const weekProjection = new Map<number, number>();
+    for (const line of pricing.lines ?? []) {
+      for (const [rosterId, side] of Object.entries(line.sides)) {
+        weekProjection.set(Number(rosterId), side.projection);
+      }
+    }
+    const futureByRoster = new Map(
+      (pricing.futures ?? []).map((future) => [future.rosterId, future]),
+    );
+    const rows = bootstrap.teams.map((team) => ({
+      rosterId: team.rosterId,
+      teamName: team.teamName,
+      weekProjection: weekProjection.get(team.rosterId) ?? 0,
+      projWins: futureByRoster.get(team.rosterId)?.projWins ?? null,
+      isUser: team.isUser,
+    }));
+    return rows.some((row) => row.projWins != null && row.weekProjection > 0) ? rows : null;
+  }, [bootstrap, pricing]);
+
+
   if (stored && !bootstrap) {
     if (isLoading) {
       return <MatchupColdLoading label={stored.leagueName ?? `${PROVIDER_LABEL[stored.provider]} league`} />;
@@ -2887,6 +2921,7 @@ export function MatchupPage() {
     <>
       <MatchupLive
         movers={movers}
+        power={powerRows}
         userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}
         titleHistory={pricing?.available ? pricing.titleHistory ?? null : null}
         isConnected={connectedMatchup !== null}
