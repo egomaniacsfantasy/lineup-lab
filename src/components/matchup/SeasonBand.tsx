@@ -41,9 +41,19 @@ const SPARK_H = 24;
  * shortening to +390 is the line going the manager's way while the number
  * falls.
  */
-function titleTrend(future: PricedFuture, history: LeaguePricing['titleHistory'] | null) {
+function titleTrend(
+  future: PricedFuture,
+  history: LeaguePricing['titleHistory'] | null,
+  currentWeek: number,
+) {
   const key = String(future.rosterId);
   const points = (history ?? [])
+    /* Snapshots written past the current fantasy week are phantoms: the
+       scheduler recorded them while the app was reading the NFL's preseason
+       week as a fantasy week, so the chart drew a decline across two weeks
+       nobody had played. Preseason movement is real and stays; a week that
+       has not happened does not. */
+    .filter((entry) => entry.week <= currentWeek)
     .filter((entry) => entry.odds?.[key] != null)
     .sort((a, b) => a.week - b.week)
     .map((entry) => ({ week: entry.week, odds: entry.odds[key] }));
@@ -85,9 +95,11 @@ function titleTrend(future: PricedFuture, history: LeaguePricing['titleHistory']
 export function SeasonBand({
   future,
   history = null,
+  currentWeek = 1,
 }: {
   future: PricedFuture;
   history?: LeaguePricing['titleHistory'] | null;
+  currentWeek?: number;
 }) {
   /* `short` is the label as it reads on one line on a phone. Truncating the
      full labels there put an ellipsis on every one of them and still ran the
@@ -121,7 +133,7 @@ export function SeasonBand({
     items.push({ label: 'Average seed', short: 'Seed', value: future.avgSeed.toFixed(1) });
   }
 
-  const trend = titleTrend(future, history);
+  const trend = titleTrend(future, history, currentWeek);
 
   if (items.length === 0) return null;
 

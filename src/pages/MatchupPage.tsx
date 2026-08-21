@@ -1847,7 +1847,7 @@ function MatchupLive({
       <div className="matchup-page__frame">
         {userFuture ? (
           <div className="matchup-page__season--band">
-            <SeasonBand future={userFuture} history={titleHistory} />
+            <SeasonBand currentWeek={matchup.week} future={userFuture} history={titleHistory} />
           </div>
         ) : null}
 

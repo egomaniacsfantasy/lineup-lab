@@ -500,6 +500,10 @@ function TradeDealsView() {
     setMarketManagerFilter(partner.rosterId);
     setGive(nextGive);
     setGetIds(nextGet);
+    /* A deal arriving with both sides is a built trade, so land on the builder
+       rather than dropping the user on the finder with an invisible builder
+       already filled in behind it. */
+    if (nextGive.length > 0 && nextGet.length > 0) setMarketView('build');
     resetOutputs();
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   }, [bootstrap, params, stored]);

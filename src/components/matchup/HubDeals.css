@@ -1,18 +1,18 @@
-/* Two rows, not a board. The Trades tab is where a deal gets read properly;
-   this is only here to say one exists and is worth a look. */
+/* Two deals, not a board. Trades is where a deal gets read properly; this is
+   here to say one exists and is worth the trip. */
 .hub-deals {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .hub-deals__row {
   display: grid;
-  gap: 5px;
+  gap: 8px;
   width: 100%;
-  padding: 10px 11px;
+  padding: 11px 12px;
   border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg-inset) 65%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--bg-inset) 62%, transparent);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -24,31 +24,60 @@
   background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 
+/* Faces first. A trade is two sets of people, and a column of names asks you
+   to read where a row of headshots lets you recognise. */
 .hub-deals__swap {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .hub-deals__side {
-  overflow-wrap: break-word;
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.2;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .hub-deals__side--get {
+  justify-items: end;
+  text-align: right;
+}
+
+.hub-deals__faces {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Overlapped, so two or three players still read as one side of a deal
+   rather than as a list that happens to be adjacent. */
+.hub-deals__face {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.hub-deals__faces .hub-deals__face + .hub-deals__face {
+  margin-left: -9px;
+}
+
+.hub-deals__names {
+  overflow-wrap: break-word;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.hub-deals__side--get .hub-deals__names {
   color: var(--text-primary);
   font-weight: 700;
-  text-align: right;
 }
 
 .hub-deals__arrow {
   color: var(--text-amber);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .hub-deals__meta {
@@ -56,6 +85,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
 }
 
 .hub-deals__partner {
@@ -69,7 +100,7 @@
 
 .hub-deals__delta {
   font-family: var(--font-num);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -77,3 +108,35 @@
 
 .hub-deals__delta--up { color: var(--green); }
 .hub-deals__delta--down { color: var(--red); }
+
+/* A scan takes real seconds. A blank rectangle for those seconds reads as
+   broken, so the wait says what it is doing and shows the shape of the answer. */
+.hub-deals__pending {
+  margin: 0 0 2px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+}
+
+.hub-deals__skeleton {
+  display: block;
+  height: 62px;
+  border-radius: 13px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bg-inset) 70%, transparent) 0%,
+    color-mix(in srgb, var(--text-primary) 6%, transparent) 50%,
+    color-mix(in srgb, var(--bg-inset) 70%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: hub-deals-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes hub-deals-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-deals__skeleton { animation: none; }
+}

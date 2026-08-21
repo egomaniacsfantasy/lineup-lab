@@ -3246,3 +3246,40 @@
 .matchup-page__module--rail-field {
   padding: 13px 14px;
 }
+
+
+/* ---------------------------------------------------------------------------
+   The adds row, inside a 320px rail.
+
+   The mover row is a two-column flex: the player on the left, the market read
+   on the right. That fits a page column and does not fit a sidebar, so the
+   name lost the argument and "Brandon Aubrey" became "B. A...". Truncating a
+   player's name to make room for a sentence about that player is the wrong
+   trade at any width, so in here the row stacks and both get the full column.
+   --------------------------------------------------------------------------- */
+.matchup-page__adds .matchup-page__mover-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.matchup-page__adds .matchup-page__mover-market {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.matchup-page__adds .matchup-page__price-shift {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.matchup-page__adds .matchup-page__market-unit-name,
+.matchup-page__adds .matchup-page__mover-label {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: break-word;
+}

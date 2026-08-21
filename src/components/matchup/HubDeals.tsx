@@ -5,47 +5,63 @@ import { fetchTradeSuggestions, type TradeSuggestion } from '../../services/leag
 import { acceptanceWeightedValue } from '../../utils/tradeSuggestionDisplay';
 import { acceptanceProbability } from '../../utils/tradeAcceptance';
 import { signedPct } from '../../utils/tradeVerdict';
+import { toPlayer } from '../../adapters/connectedLeague';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import './HubDeals.css';
 
 const SHOWN = 2;
+const CACHE_PREFIX = 'og.hubDeals.';
 
 /**
- * The two deals the book would actually make, on the hub.
+ * The two deals the book would actually make.
  *
- * This widget used to be a manager picker — "who do you want to do business
- * with" — because an earlier attempt at running the league-wide scan here made
- * the landing page carry a season sim across every opponent before it could
- * finish. That was the right thing to back out, but the wrong lesson: the
- * problem was that the hub WAITED for it, not that it ran.
+ * The league-wide scan was tried on the hub once before and backed out because
+ * the page carried a season sim across every opponent before it could finish.
+ * The fault was that the hub waited, not that the scan ran, so it runs
+ * fire-and-forget and the widget renders a skeleton until it lands.
  *
- * So it runs, and nothing waits. The widget renders nothing at all until the
- * scan resolves, so the hub's first paint is unaffected. The result also warms
- * the server's cache for this league, which means opening Trades afterwards
- * finds a board already priced instead of an empty one.
- *
- * "Best" is not invented here. sortTradeSuggestions ranks by acceptance
- * weighted value — what a deal gains you multiplied by the chance they say
- * yes — because a title bump nobody accepts is worth nothing.
+ * The result is kept in sessionStorage. A scan takes real seconds and the old
+ * behaviour re-ran it on every return to the hub, so deals appeared, vanished
+ * on navigation, and made you wait again to see the same two rows.
  */
+function readCache(key: string): TradeSuggestion[] | null {
+  try {
+    const raw = window.sessionStorage.getItem(CACHE_PREFIX + key);
+    return raw ? (JSON.parse(raw) as TradeSuggestion[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key: string, deals: TradeSuggestion[]) {
+  try {
+    window.sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(deals));
+  } catch {
+    // storage unavailable; the scan simply runs again next time
+  }
+}
+
 export function HubDeals() {
   const { stored, bootstrap } = useLeagueConnection();
-  const [deals, setDeals] = useState<TradeSuggestion[] | null>(null);
+  const navigate = useNavigate();
+  const cacheKey = stored ? `${stored.leagueId}:${stored.userId}` : '';
+  const [deals, setDeals] = useState<TradeSuggestion[] | null>(() =>
+    cacheKey ? readCache(cacheKey) : null,
+  );
 
   useEffect(() => {
     if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
+    if (readCache(cacheKey)) return undefined;
     let cancelled = false;
-    /* Deliberately fire-and-forget. A failure here is silence, not an error
-       card: the hub has plenty to say without this. */
     void fetchTradeSuggestions(stored.leagueId, {
       userId: stored.userId,
       partnerRosterId: null,
     })
       .then((response) => {
         if (cancelled || !response.available) return;
-        /* Same ranking the Trades tab uses: what it gains you multiplied by
-           the chance they take it. Acceptance comes from the partner's own
-           title delta against a neutral 5/5 read, because the hub has no
-           per-manager read to apply and inventing one would be worse. */
+        /* Acceptance weighted: what it gains you times the chance they take
+           it. A title bump nobody accepts is worth nothing. The read is a
+           neutral 5/5 because the hub has no per-manager dossier to apply. */
         const ranked = [...(response.suggestions ?? [])]
           .map((suggestion) => ({
             suggestion,
@@ -55,47 +71,100 @@ export function HubDeals() {
             }),
           }))
           .sort((a, b) => b.weight - a.weight)
-          .map((entry) => entry.suggestion);
-        setDeals(ranked.slice(0, SHOWN));
+          .map((entry) => entry.suggestion)
+          .slice(0, SHOWN);
+        setDeals(ranked);
+        writeCache(cacheKey, ranked);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setDeals([]);
+      });
     return () => {
       cancelled = true;
     };
-  }, [stored?.leagueId, stored?.userId, bootstrap]);
+  }, [stored?.leagueId, stored?.userId, bootstrap, cacheKey]);
 
-  const navigate = useNavigate();
-  if (!deals || deals.length === 0) return null;
+  if (!bootstrap) return null;
+
+  /* A blank rectangle reads as broken. Two skeleton rows say the same thing
+     honestly: something is coming, and this is the shape of it. */
+  if (deals === null) {
+    return (
+      <section className="matchup-page__module hub-deals hub-deals--loading">
+        <p className="hub-deals__pending">Scanning every roster in the league…</p>
+        {[0, 1].map((row) => (
+          <span className="hub-deals__skeleton" key={row} />
+        ))}
+      </section>
+    );
+  }
+
+  if (deals.length === 0) return null;
+
+  const side = (assets: { id: string; name: string }[]) =>
+    assets.map((asset) => toPlayer(asset.id, bootstrap.players));
 
   return (
     <section className="matchup-page__module hub-deals">
-      {deals.map((deal) => (
-        <button
-          className="hub-deals__row"
-          key={`${deal.partnerRosterId}:${deal.give.map((a) => a.id).join('+')}`}
-          onClick={() => navigate(`/market?manager=${deal.partnerRosterId}`)}
-          type="button"
-        >
-          <span className="hub-deals__swap">
-            <span className="hub-deals__side">{deal.give.map((a) => a.name).join(' + ')}</span>
-            <span aria-hidden="true" className="hub-deals__arrow">⇄</span>
-            <span className="hub-deals__side hub-deals__side--get">
-              {deal.get.map((a) => a.name).join(' + ')}
+      {deals.map((deal) => {
+        const give = side(deal.give);
+        const get = side(deal.get);
+        return (
+          <button
+            className="hub-deals__row"
+            key={`${deal.partnerRosterId}:${deal.give.map((a) => a.id).join('+')}`}
+            onClick={() => {
+              const params = new URLSearchParams({
+                managerRosterId: String(deal.partnerRosterId),
+                give: deal.give.map((a) => a.id).join(','),
+                get: deal.get.map((a) => a.id).join(','),
+                view: 'build',
+              });
+              if (stored?.leagueId) params.set('leagueId', stored.leagueId);
+              navigate(`/market?${params.toString()}`);
+            }}
+            type="button"
+          >
+            <span className="hub-deals__swap">
+              <span className="hub-deals__side">
+                <span className="hub-deals__faces">
+                  {give.map((player) => (
+                    <PlayerHeadshot className="hub-deals__face" key={player.id} player={player} />
+                  ))}
+                </span>
+                <span className="hub-deals__names">
+                  {give.map((p) => p.shortName).join(', ')}
+                </span>
+              </span>
+
+              <span aria-hidden="true" className="hub-deals__arrow">⇄</span>
+
+              <span className="hub-deals__side hub-deals__side--get">
+                <span className="hub-deals__faces">
+                  {get.map((player) => (
+                    <PlayerHeadshot className="hub-deals__face" key={player.id} player={player} />
+                  ))}
+                </span>
+                <span className="hub-deals__names">
+                  {get.map((p) => p.shortName).join(', ')}
+                </span>
+              </span>
             </span>
-          </span>
-          <span className="hub-deals__meta">
-            <span className="hub-deals__partner">{deal.partnerName}</span>
-            <span
-              className={[
-                'hub-deals__delta',
-                deal.youDelta >= 0 ? 'hub-deals__delta--up' : 'hub-deals__delta--down',
-              ].join(' ')}
-            >
-              {signedPct(deal.youDelta)} title
+
+            <span className="hub-deals__meta">
+              <span className="hub-deals__partner">{deal.partnerName}</span>
+              <span
+                className={[
+                  'hub-deals__delta',
+                  deal.youDelta >= 0 ? 'hub-deals__delta--up' : 'hub-deals__delta--down',
+                ].join(' ')}
+              >
+                {signedPct(deal.youDelta)} title
+              </span>
             </span>
-          </span>
-        </button>
-      ))}
+          </button>
+        );
+      })}
     </section>
   );
 }
