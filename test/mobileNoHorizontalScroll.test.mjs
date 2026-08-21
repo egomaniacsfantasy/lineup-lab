@@ -67,10 +67,28 @@ function collectScrollers() {
 }
 
 let vite = null;
+let api = null;
 let browser = null;
 let ownsVite = false;
+let ownsApi = false;
+
+/* The Board loads its projections through the dev proxy, which forwards /api
+   to :8799. With nothing there the proxy answers 500, the Board renders "Could
+   not load Board", and these tests time out after 30s looking exactly like a
+   layout regression in whatever you last touched. That cost real time twice
+   before this hook existed, so the suite now brings its own API up. */
+const API_PORT = 8799;
 
 test.before(async () => {
+  if (!(await isPortOpen(API_PORT))) {
+    api = spawn('node', ['server/index.js'], {
+      cwd,
+      env: { ...process.env, PORT: String(API_PORT) },
+      stdio: 'ignore',
+    });
+    ownsApi = true;
+    await waitForUrl(`http://127.0.0.1:${API_PORT}/api/health`);
+  }
   if (!(await isPortOpen(port))) {
     vite = spawn(
       'npm',
@@ -86,6 +104,7 @@ test.before(async () => {
 test.after(async () => {
   if (browser) await browser.close();
   if (vite && ownsVite) vite.kill('SIGTERM');
+  if (api && ownsApi) api.kill('SIGTERM');
 });
 
 for (const scene of ['matchup', 'board', 'market', 'league']) {
