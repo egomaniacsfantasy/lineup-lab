@@ -28,7 +28,7 @@ export function CloseCalls({ slots, week }: { slots: RosterSlot[]; week: number 
   const { stored, bootstrap } = useLeagueConnection();
   const [ranges, setRanges] = useState<Record<string, WeeklyRange> | null>(null);
 
-  const contested = slots
+  const ranked = slots
     .map((slot) => {
       const best = [...slot.alternatives].sort((a, b) => b.projection - a.projection)[0];
       return best ? { slot, best, gap: slot.projection - best.projection } : null;
@@ -36,7 +36,19 @@ export function CloseCalls({ slots, week }: { slots: RosterSlot[]; week: number 
     .filter((row): row is { slot: RosterSlot; best: RosterSlot['alternatives'][0]; gap: number } =>
       Boolean(row) && Math.abs(row!.gap) <= CONTESTED,
     )
-    .sort((a, b) => Math.abs(a.gap) - Math.abs(b.gap))
+    .sort((a, b) => Math.abs(a.gap) - Math.abs(b.gap));
+
+  /* One bench player is usually the best alternative for several slots at
+     once, so A. Jones was listed against the RB and again against the FLEX.
+     You cannot start him twice, so the closest of those calls is the only one
+     worth asking; the rest are the same question with a worse answer. */
+  const claimed = new Set<string>();
+  const contested = ranked
+    .filter((row) => {
+      if (claimed.has(row.best.player.id)) return false;
+      claimed.add(row.best.player.id);
+      return true;
+    })
     .slice(0, SHOWN);
 
   const ids = contested.flatMap((row) => [row.slot.starter.id, row.best.player.id]);

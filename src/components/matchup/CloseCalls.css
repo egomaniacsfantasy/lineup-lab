@@ -33,9 +33,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* "D. Montgomery" became "D. Montgom..." in a fixed 74px column. A name is
+   the one thing on this row that must survive: the bar can lose a few pixels,
+   the name cannot lose letters. */
 .calls__line {
   display: grid;
-  grid-template-columns: 26px 74px minmax(0, 1fr) auto;
+  grid-template-columns: 26px minmax(88px, auto) minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
@@ -46,13 +49,12 @@
 }
 
 .calls__name {
-  overflow: hidden;
   color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.15;
+  overflow-wrap: break-word;
 }
 
 /* The one currently starting reads first; the alternative is the question. */
