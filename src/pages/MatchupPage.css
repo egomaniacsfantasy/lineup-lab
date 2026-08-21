@@ -2792,9 +2792,12 @@
   opacity: 0.85;
 }
 
-/* Share the line. Quiet until wanted: the hero is about the number, not the
-   button, but it has to be reachable without a menu. */
+/* Share your card. Quiet until wanted: the hero is about the number, not the
+   button, but it has to be reachable without a menu. It also needs room: sat
+   tight against the card above it, it read as part of the price block rather
+   than as an action on it. */
 .matchup-page__share {
+  margin-top: 6px;
   margin-left: auto;
   padding: 6px 12px;
   border: 1px solid var(--border-subtle);

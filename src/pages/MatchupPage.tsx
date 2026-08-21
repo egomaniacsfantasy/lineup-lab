@@ -2072,13 +2072,15 @@ function MatchupLive({
                   /* Their standing only. A whole league table does not travel
                      in a group chat; one position does. */
                   power: sharePower,
+                  yourAvatar: resolveApiUrl(matchup.yourTeam.avatarUrl) ?? null,
+                  theirAvatar: resolveApiUrl(matchup.opponentTeam.avatarUrl) ?? null,
                   movement: lineMovement
                     ? `Opened ${formatAmericanOdds(lineMovement.from)}, now ${formatAmericanOdds(lineMovement.to)}`
                     : null,
               })}
               type="button"
             >
-              Share the line
+              Share your card
             </button>
           </div>
         </section>

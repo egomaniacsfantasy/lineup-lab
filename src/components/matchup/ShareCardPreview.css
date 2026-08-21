@@ -20,9 +20,12 @@
 .sharecard__panel {
   position: relative;
   display: grid;
-  gap: 14px;
+  /* The action row was 14px off the artwork and read as part of it. The card
+     is the object here; the buttons are what you do to it, and they should
+     look like a separate decision. */
+  gap: 22px;
   width: min(100%, 420px);
-  padding: 16px;
+  padding: 18px 18px 20px;
   border: 1px solid var(--border-subtle);
   border-radius: 20px;
   background: var(--bg-surface);

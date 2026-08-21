@@ -27,8 +27,16 @@ export function ShareCardPreview({
 
   useEffect(() => {
     let cancelled = false;
-    void drawShareCard(line).then((canvas) => {
-      if (!cancelled) setSrc(canvas.toDataURL('image/png'));
+    void drawShareCard(line).then(async (canvas) => {
+      if (cancelled) return;
+      try {
+        setSrc(canvas.toDataURL('image/png'));
+      } catch {
+        /* A crest from a host that sent no CORS headers taints the canvas and
+           toDataURL throws. Redraw without the art rather than show nothing. */
+        const plain = await drawShareCard(line, { withArt: false });
+        if (!cancelled) setSrc(plain.toDataURL('image/png'));
+      }
     });
     return () => {
       cancelled = true;
@@ -46,8 +54,8 @@ export function ShareCardPreview({
   const withBlob = async (run: (blob: Blob) => Promise<State>) => {
     setState('working');
     try {
-      const canvas = await drawShareCard(line);
-      const blob = await shareCardToBlob(canvas);
+      let blob = await shareCardToBlob(await drawShareCard(line));
+      if (!blob) blob = await shareCardToBlob(await drawShareCard(line, { withArt: false }));
       if (!blob) {
         setState('failed');
         return;

@@ -33,6 +33,10 @@ export interface ShareCardLine {
   power?: { rank: number; of: number } | null;
   /** e.g. "Opened -116, now -156" */
   movement?: string | null;
+  /** Team avatars, already resolved to a fetchable URL. Optional: a league
+      with no avatars set still gets a card, it just gets initials. */
+  yourAvatar?: string | null;
+  theirAvatar?: string | null;
 }
 
 const W = 1080;
@@ -74,6 +78,79 @@ async function ensureBrandFonts(): Promise<void> {
   }
 }
 
+/**
+ * Load an image for the canvas, or give up quietly.
+ *
+ * crossOrigin is set because the card is exported with toBlob, and a canvas
+ * that has drawn a cross-origin image without CORS is tainted: the export then
+ * throws a SecurityError and the whole card is lost rather than one logo. A
+ * team avatar can come from our own proxy or, for ESPN, straight off their
+ * CDN, so this can never assume same-origin.
+ */
+function loadImage(src: string | null | undefined): Promise<HTMLImageElement | null> {
+  if (!src) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+    /* A hung request must not hold the card hostage. */
+    window.setTimeout(() => resolve(img.complete && img.naturalWidth > 0 ? img : null), 2500);
+  });
+}
+
+function circleImage(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  cx: number,
+  cy: number,
+  r: number,
+) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  const scale = Math.max((r * 2) / img.naturalWidth, (r * 2) / img.naturalHeight);
+  const w = img.naturalWidth * scale;
+  const h = img.naturalHeight * scale;
+  ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+  ctx.restore();
+}
+
+function initialsFor(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || '?';
+}
+
+function crest(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement | null,
+  name: string,
+  cx: number,
+  cy: number,
+  r: number,
+  accent: boolean,
+) {
+  if (img) {
+    circleImage(ctx, img, cx, cy, r);
+    return;
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = accent ? 'rgba(232,84,29,0.22)' : 'rgba(244,245,242,0.10)';
+  ctx.fill();
+  ctx.fillStyle = accent ? ACCENT : MUTED;
+  ctx.font = `400 ${Math.round(r)}px ${DISPLAY}`;
+  ctx.textAlign = 'center';
+  ctx.fillText(initialsFor(name), cx, cy + r * 0.34);
+}
+
 function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -101,8 +178,19 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
 }
 
 /** Square, because every chat app previews square without cropping. */
-export async function drawShareCard(line: ShareCardLine): Promise<HTMLCanvasElement> {
+export async function drawShareCard(
+  line: ShareCardLine,
+  { withArt = true }: { withArt?: boolean } = {},
+): Promise<HTMLCanvasElement> {
   await ensureBrandFonts();
+
+  const [mark, yourCrest, theirCrest] = withArt
+    ? await Promise.all([
+        loadImage('/og-logo.png'),
+        loadImage(line.yourAvatar),
+        loadImage(line.theirAvatar),
+      ])
+    : [null, null, null];
 
   const canvas = document.createElement('canvas');
   canvas.width = W;
@@ -122,34 +210,44 @@ export async function drawShareCard(line: ShareCardLine): Promise<HTMLCanvasElem
   ctx.textBaseline = 'alphabetic';
 
   // ── mark and week ────────────────────────────────────────────────────────
+  let markX = PAD;
+  if (mark) {
+    ctx.drawImage(mark, PAD, 74, 46, 46);
+    markX = PAD + 62;
+  }
   ctx.fillStyle = ACCENT;
   ctx.font = `400 32px ${DISPLAY}`;
   ctx.letterSpacing = '7px';
   ctx.textAlign = 'left';
-  ctx.fillText('ODDS GODS', PAD, 112);
+  ctx.fillText('ODDS GODS', markX, 110);
   ctx.letterSpacing = '0px';
 
-  label(ctx, line.eyebrow, W - PAD, 112, 'right');
+  label(ctx, line.eyebrow, W - PAD, 110, 'right');
 
   // ── the matchup ──────────────────────────────────────────────────────────
+  const R = 26;
+  const crestY = 206;
+  crest(ctx, yourCrest, line.you, PAD + R, crestY, R, true);
+  crest(ctx, theirCrest, line.them, W - PAD - R, crestY, R, false);
+
   ctx.textAlign = 'left';
   ctx.fillStyle = MUTED;
   ctx.font = `600 30px ${UI}`;
-  ctx.fillText(line.you, PAD, 214);
+  ctx.fillText(line.you, PAD + R * 2 + 18, crestY + 11);
   ctx.textAlign = 'right';
-  ctx.fillText(line.them, W - PAD, 214);
+  ctx.fillText(line.them, W - PAD - R * 2 - 18, crestY + 11);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = ACCENT;
   ctx.font = `400 168px ${DISPLAY}`;
-  ctx.fillText(line.yourPrice, PAD, 360);
+  ctx.fillText(line.yourPrice, PAD, 372);
 
   ctx.textAlign = 'right';
   ctx.fillStyle = INK;
-  ctx.fillText(line.theirPrice, W - PAD, 360);
+  ctx.fillText(line.theirPrice, W - PAD, 372);
 
   // win probability, drawn the way the hub draws it
-  const barY = 410;
+  const barY = 418;
   const barW = W - PAD * 2;
   const pct = Math.max(0, Math.min(100, line.yourWinPct));
   ctx.fillStyle = 'rgba(244,245,242,0.10)';
@@ -237,7 +335,12 @@ export async function drawShareCard(line: ShareCardLine): Promise<HTMLCanvasElem
 
 export function shareCardToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), 'image/png');
+    /* toBlob reports a tainted canvas by throwing, not by returning null. */
+    try {
+      canvas.toBlob((blob) => resolve(blob), 'image/png');
+    } catch {
+      resolve(null);
+    }
   });
 }
 
@@ -251,8 +354,12 @@ export async function shareCard(
   filename = 'odds-gods.png',
 ): Promise<'shared' | 'downloaded' | 'failed'> {
   try {
-    const canvas = await drawShareCard(line);
-    const blob = await shareCardToBlob(canvas);
+    let blob = await shareCardToBlob(await drawShareCard(line)).catch(() => null);
+    if (!blob) {
+      /* Most likely a tainted canvas: a logo came from a host that sent no
+         CORS headers. Losing one crest beats losing the card. */
+      blob = await shareCardToBlob(await drawShareCard(line, { withArt: false }));
+    }
     if (!blob) return 'failed';
 
     const file = new File([blob], filename, { type: 'image/png' });
