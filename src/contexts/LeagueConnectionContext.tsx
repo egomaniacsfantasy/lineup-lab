@@ -174,6 +174,33 @@ function hasSuggestionPayload(pricing: LeaguePricing | null | undefined) {
   return (pricing?.userSwaps?.length ?? 0) > 0 || (pricing?.movers?.length ?? 0) > 0;
 }
 
+/**
+ * Can this connection's "which team is mine" answer be trusted?
+ *
+ * False for any ESPN connection written before the identity fix, because it may
+ * carry the member id of whoever linked the league first. There is no way to
+ * tell a poisoned one from a correct one, so both are re-confirmed.
+ *
+ * This has to gate EVERY path that can make a connection active, not just the
+ * one that reads localStorage. The account rows are the other one, and rows
+ * carry no identity version at all: dropping the local copy while the rows kept
+ * restoring it made the connection vanish on load and come back mid-session,
+ * still pointing at the wrong team.
+ */
+function trustedForIdentity(connection: StoredConnection | null | undefined): boolean {
+  if (!connection) return false;
+  if (connection.provider !== 'espn') return true;
+  return (connection.identityVersion ?? 1) >= IDENTITY_VERSION;
+}
+
+function flagIdentityRecheck() {
+  try {
+    window.localStorage.setItem(IDENTITY_RECHECK_KEY, '1');
+  } catch {
+    /* The banner is a courtesy; losing it does not make the drop wrong. */
+  }
+}
+
 function readStored(): StoredConnection | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -182,13 +209,9 @@ function readStored(): StoredConnection | null {
     /* An ESPN connection from before the identity fix cannot be trusted to be
        the right team, so it is dropped rather than shown. Sleeper is untouched:
        it never resolved identity from a shared store. */
-    if (parsed?.provider === 'espn' && (parsed.identityVersion ?? 1) < IDENTITY_VERSION) {
+    if (parsed && !trustedForIdentity(parsed)) {
       window.localStorage.removeItem(STORAGE_KEY);
-      try {
-        window.localStorage.setItem(IDENTITY_RECHECK_KEY, '1');
-      } catch {
-        /* The banner is a courtesy; losing it does not make the drop wrong. */
-      }
+      flagIdentityRecheck();
       applyApiContext(null);
       return null;
     }
@@ -337,6 +360,9 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   );
   const { user } = useAuth();
   const userIdRef = useRef<string | null>(null);
+  /* Leagues removed in this session. See removeLeague: the row delete is async
+     and the hydrate that follows would otherwise restore what was just removed. */
+  const removedKeysRef = useRef<Set<string>>(new Set());
   const lastHydrateKeyRef = useRef<string | null>(null);
   const pricingRef = useRef<LeaguePricing | null>(null);
   const marketScanPromiseRef = useRef<Promise<LeaguePricing | null> | null>(null);
@@ -383,7 +409,16 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           applyApiContext(stored);
           return;
         }
-        const all = rows.map(rowToConnection);
+        const all = rows
+          .map(rowToConnection)
+          .filter((connection) => !removedKeysRef.current.has(leagueKey(connection)));
+        if (all.length === 0 && rows.length > 0) {
+          /* Everything the account still lists was removed here a moment ago.
+             Treat it as no leagues rather than restoring them. */
+          setLeagues([]);
+          applyApiContext(null);
+          return;
+        }
         const localActive = stored
           ? all.find((connection) => leagueKey(connection) === leagueKey(stored))
           : null;
@@ -414,6 +449,15 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
         }
 
         const dbActive = all.find((_, i) => rows[i].is_active) ?? all[0];
+        /* Rows carry no identity version, so an ESPN league restored from the
+           account is exactly as unverified as a local copy from before the fix.
+           Restoring it here would undo the drop that just happened and put the
+           wrong team back on screen. */
+        if (!trustedForIdentity(dbActive)) {
+          flagIdentityRecheck();
+          applyApiContext(null);
+          return;
+        }
         applyApiContext(dbActive);
         try {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(dbActive));
@@ -640,6 +684,9 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   // Add a league (or re-sync an existing one) and make it active.
   const connect = useCallback(
     (incoming: StoredConnection) => {
+      /* Reconnecting a league you removed has to un-tombstone it, or the
+         hydrate would keep filtering out the thing you just added. */
+      removedKeysRef.current.delete(leagueKey(incoming));
       /* Stamped on the way in, so a connection made under the fixed identity
          rules is not dropped by the next load's re-check. */
       const connection: StoredConnection = { ...incoming, identityVersion: IDENTITY_VERSION };
@@ -688,6 +735,13 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
    */
   const removeLeague = useCallback((target: StoredConnection | null) => {
     const removing = target;
+    /* Tombstone it before anything else. Removing a league clears `stored`,
+       which re-runs the hydrate effect, which re-reads the account rows. The
+       delete below is a network call that has not landed yet, so the rows still
+       list the league and it comes straight back: remove it and it reappears.
+       The row delete is the durable fix; this is what makes the removal stick
+       in the second before the delete commits. */
+    if (removing) removedKeysRef.current.add(leagueKey(removing));
     const remaining = removing
       ? leagues.filter((l) => leagueKey(l) !== leagueKey(removing))
       : leagues;
