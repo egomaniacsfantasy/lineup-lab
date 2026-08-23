@@ -135,6 +135,28 @@ export function teamLogo(team) {
   return /^https?:\/\//i.test(url) ? url : null;
 }
 
+/**
+ * Put a team's starters in the order the league declares its slots.
+ *
+ * The engine reads a lineup positionally: starters[i] is understood to occupy
+ * rosterPositions[i], and that pairing is what decides whether a swap is legal.
+ * ESPN returns roster entries in its own order, which is not slot order, so
+ * taking them as they arrive paired every starter with a label that was not
+ * theirs. A defence landing on a flex label is how the board came to offer a
+ * running back for the D/ST slot.
+ *
+ * rosterPositionsFromCounts emits starter labels in ascending ESPN slot id, so
+ * sorting starters the same way is what makes the two agree. Ties (two RB slots
+ * both id 2) keep entry order, which is arbitrary but stable, and either back is
+ * equally legal in either back's slot.
+ */
+export function orderStartersBySlot(startingEntries) {
+  return (startingEntries ?? [])
+    .map((entry, index) => ({ ...entry, index }))
+    .sort((a, b) => a.lineupSlotId - b.lineupSlotId || a.index - b.index)
+    .map((entry) => entry.id);
+}
+
 function rosterPositionsFromCounts(lineupSlotCounts = {}) {
   const positions = [];
   for (const [slotId, count] of Object.entries(lineupSlotCounts)) {
@@ -214,14 +236,28 @@ export function createEspnProvider({ season, espnS2, swid }) {
     return (blob.teams ?? []).map((team) => {
       const entries = team.roster?.entries ?? [];
       const players = [];
-      const starters = [];
+      /* The engine reads a lineup positionally: starters[i] is understood to
+         sit in the slot rosterPositions[i], and that is what makes a swap legal
+         or illegal. ESPN hands roster entries back in its own order, which is
+         not slot order, so pushing them as they arrive misaligned every starter
+         against a slot label that was not theirs. A defence landing on a flex
+         label is how the board came to offer a running back for the D/ST slot.
+
+         rosterPositionsFromCounts emits starter labels in ascending ESPN slot
+         id, so ordering the starters the same way is what makes the two agree.
+         Ties (two RB slots, both id 2) keep entry order, which is arbitrary but
+         consistent, and either RB is equally legal in either RB slot. */
+      const startingEntries = [];
       for (const entry of entries) {
         const espnPlayer = entry.playerPoolEntry?.player;
         if (!espnPlayer) continue;
         const id = resolvePlayer(espnPlayer, crosswalk, synthetic);
         players.push(id);
-        if (!BENCH_SLOTS.has(entry.lineupSlotId)) starters.push(id);
+        if (!BENCH_SLOTS.has(entry.lineupSlotId)) {
+          startingEntries.push({ id, lineupSlotId: entry.lineupSlotId ?? 99 });
+        }
       }
+      const starters = orderStartersBySlot(startingEntries);
       const ownerId = team.owners?.[0] ?? null;
       const teamName =
         `${team.location ?? ''} ${team.nickname ?? ''}`.trim() ||
