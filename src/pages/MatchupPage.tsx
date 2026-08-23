@@ -1234,10 +1234,17 @@ function MatchupLive({
     if (mover.getPlayerIds?.length) params.set('get', mover.getPlayerIds.join(','));
     return `/market?${params.toString()}`;
   };
-  const formatDisplayedOdds = (moneyline: number, winProbability?: number) =>
-    oddsFormat === 'percent' && winProbability != null
+  /* Until the sim has run there is no price, and the engine's unpriced default
+     is an even market: both sides came out +100, which is not "we do not know
+     yet", it is a confident claim that the game is a coin flip. Two +100s on
+     the hero for a second on every league switch is worse than showing nothing,
+     because it is a number a person can read and believe. */
+  const formatDisplayedOdds = (moneyline: number, winProbability?: number) => {
+    if (!isPriced) return '·····';
+    return oddsFormat === 'percent' && winProbability != null
       ? `${winProbability.toFixed(1)}%`
       : formatAmericanOdds(moneyline);
+  };
 
   // A "preview" lineup: you've swapped someone in here, so every number below
   // is hypothetical until you reset it or make it official in your platform.
@@ -1943,7 +1950,11 @@ function MatchupLive({
                   </p>
                 </div>
               </div>
-              <span className="matchup-page__hero-number">
+              <span
+                className={['matchup-page__hero-number', isPriced ? '' : 'matchup-page__hero-number--pending']
+                  .filter(Boolean)
+                  .join(' ')}
+              >
                 {formatDisplayedOdds(
                   engine.activeLine.yours.moneyline,
                   engine.activeLine.yours.winProbability,
@@ -2013,7 +2024,13 @@ function MatchupLive({
                   ) : null}
                 </div>
               </div>
-              <span className="matchup-page__hero-number matchup-page__hero-number--opp">
+              <span
+                className={[
+                  'matchup-page__hero-number',
+                  'matchup-page__hero-number--opp',
+                  isPriced ? '' : 'matchup-page__hero-number--pending',
+                ].filter(Boolean).join(' ')}
+              >
                 {formatDisplayedOdds(
                   engine.activeLine.opponent.moneyline,
                   engine.activeLine.opponent.winProbability,

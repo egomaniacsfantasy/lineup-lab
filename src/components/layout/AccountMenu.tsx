@@ -82,7 +82,18 @@ export function AccountMenu() {
     setIsRefreshing(true);
     void refresh().finally(() => setIsRefreshing(false));
   };
-  const activeName = bootstrap?.league.name ?? stored?.leagueName ?? null;
+  /* The bootstrap belongs to whichever league finished loading, which during a
+     switch is still the PREVIOUS one: `stored` changes the instant you click,
+     the fetch lands a moment later. Naming the active row from a bootstrap that
+     is not its own put a Sleeper league's name under an ESPN league until the
+     request returned. It is only a valid name once it is a name for this
+     league. */
+  const bootstrapIsForActive =
+    bootstrap != null
+    && stored != null
+    && String(bootstrap.league.id) === String(stored.leagueId);
+  const activeName =
+    (bootstrapIsForActive ? bootstrap.league.name : null) ?? stored?.leagueName ?? null;
   const activeLabel = stored ? leagueLabel(stored, activeName) : 'No league yet';
 
   const onAddLeague = () => {

@@ -3300,3 +3300,24 @@
   white-space: normal;
   overflow-wrap: break-word;
 }
+
+/* No price yet. Dimmed and breathing so it reads as "working" rather than as a
+   number: the thing it replaced was a confident +100 on both sides, which is a
+   coin flip stated as fact. */
+.matchup-page__hero-number--pending {
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+  animation: matchup-price-pending 1.4s ease-in-out infinite;
+}
+
+@keyframes matchup-price-pending {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.7; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matchup-page__hero-number--pending {
+    animation: none;
+    opacity: 0.45;
+  }
+}
