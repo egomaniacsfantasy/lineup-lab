@@ -31,8 +31,8 @@ import {
 } from '../utils/tradeMarket';
 import {
   acceptanceGaugeLabel,
-  applyTradeDisplayPolicy,
   sortByTradeFairness,
+  tradeFairnessScore,
 } from '../utils/tradeSuggestionDisplay';
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
@@ -417,8 +417,14 @@ function TradeDealsView() {
     const positionFiltered = targeted.filter(
       (entry) => marketPositionFilter === 'all' || entry.position === marketPositionFilter,
     );
-    const { visible } = applyTradeDisplayPolicy(positionFiltered);
-    return visible.filter((entry) => !dismissedSignatures.has(entry.signature));
+    // Same fairness ranking as the league "best deals" board — smallest combined
+    // title change — and NO acceptance-band hiding. So a deal that appears in best
+    // deals for this manager also appears here when you click them (the two used
+    // to diverge: the board ranked by fairness while this hid low-acceptance deals).
+    const ranked = [...positionFiltered].sort(
+      (a, b) => tradeFairnessScore(a.suggestion) - tradeFairnessScore(b.suggestion),
+    );
+    return ranked.filter((entry) => !dismissedSignatures.has(entry.signature));
   }, [
     bootstrap,
     dismissedSignatures,
