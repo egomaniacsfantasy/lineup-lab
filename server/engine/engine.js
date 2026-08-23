@@ -2322,7 +2322,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // Guarantee every opponent a fair slice of the scan budget so the all-teams sweep
   // never starves teams late in the loop — the old fixed 54-cap did exactly that,
   // leaving most managers blank. Deep on a single clicked partner.
-  const perOpp = partnerRosterId != null ? 40 : 16;
+  const perOpp = partnerRosterId != null ? 40 : 12;  // deep on a clicked partner; broad-but-bounded across all teams
   const SCAN_CAP = perOpp * numOpp;
   const byOpp = new Map();
   for (const c of scored) {
@@ -2350,13 +2350,13 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     takeFrom([...list].sort((a, b) => a.gap - b.gap), perOpp);
   }
 
-  // ── Pass 1: cheap scan. A suggestion must (a) raise YOUR title and (b) clear the
-  // scam guard — the partner's championship can't drop more than MAX_PARTNER_DROP.
+  // ── Pass 1: cheap scan. A suggestion must raise YOUR title (youDelta > 0) — that
+  // is the ONLY constraint (no partner-drop scam guard; a small partner dip is ok).
   // Survivors are RANKED by FAIRNESS: the total title-odds movement across both
   // teams, |youDelta| + |partnerDelta|, smallest first. The fairest trade barely
-  // moves either side's title price. Acceptance probability is no longer part of
-  // the ranking. Fair value (0.7–1.4) is already enforced in candidate generation.
-  const MAX_PARTNER_DROP = 4; // hard scam guard: never suggest a deal that craters the partner's title beyond this
+  // moves either side's title price. Acceptance probability plays NO part. The
+  // ONLY constraint is that YOUR title rises (youDelta > 0) — there is no
+  // partner-drop threshold, so a deal where the partner dips a little is allowed.
   const SCAN_SIMS = 1200;
   const scanBaseline = simulateSeason({ ...base, sims: SCAN_SIMS });
   const scanned = [];
@@ -2365,29 +2365,32 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const { youDelta, partnerDelta, theirValueDelta } = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline);
     simmed += 1;
     if (simmed % 4 === 0) await yieldToLoop();
-    if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
+    if (Date.now() - t0 > 18_000) break;   // stay within budget; leave time for Pass 2
+    if (youDelta <= 0) continue;   // your title must rise; no other threshold
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
   }
 
-  // ── Pass 2: re-sim the top survivors at FULL sims so the shown Δc matches the
-  // Build-a-trade analyzer exactly. Finalists are the FAIREST trades — smallest
-  // combined title movement across both teams — not the biggest one-sided gain.
+  // ── Pass 2: re-sim the fairest survivors for the displayed Δc. Because the seed
+  // is stable, common random numbers make the before/after DELTA accurate even at
+  // a reduced sim count — so we can cast a WIDE net (re-sim many finalists) without
+  // blowing the request's ~30s time budget. FINDER_SIMS is deliberately below the
+  // 10k futures/analyzer sim; the delta stays tight, only the last decimal of the
+  // absolute odds would differ.
+  const FINDER_SIMS = 3000;
   const fairness = (c) => Math.abs(c.youDelta) + Math.abs(c.partnerDelta);
-  // Cast a wide net: full-sim the 24 fairest candidates (up from 10) so the board
-  // can show many balanced trades, not just a handful. Tunable — raise for a wider
-  // net, lower if the scan gets slow.
   const finalists = scanned.sort((a, b) => fairness(a) - fairness(b)).slice(0, 24);
-  const finalBaseline = simulateSeason({ ...base, sims: SEASON_SIMS });
+  const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS });
   const suggestions = [];
   let re = 0;
   for (const c of finalists) {
     const { youDelta, partnerDelta, youPlayoffDelta, partnerPlayoffDelta, youWeekDelta, partnerWeekDelta } =
-      evalTrade(c.give, c.get, c.partner, SEASON_SIMS, finalBaseline);
+      evalTrade(c.give, c.get, c.partner, FINDER_SIMS, finalBaseline);
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
-    if (youDelta <= 0 || partnerDelta < -MAX_PARTNER_DROP) continue;
+    if (Date.now() - t0 > 26_000) break;   // return what we have before the client's 30s abort
+    if (youDelta <= 0) continue;   // your title must rise; no other threshold
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     suggestions.push({
