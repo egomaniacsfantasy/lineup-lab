@@ -6,6 +6,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
+import { corsMiddleware } from './cors.js';
 import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
 import { projectionsRouter } from './routes/projections.js';
@@ -21,6 +22,13 @@ const PORT = process.env.PORT ?? 8799;
 
 const app = express();
 app.use(express.json());
+
+/* Mounted before every /api route and before the body parser matters, so a
+   preflight is answered whatever the route would have done. Localhost is
+   allowed off production only: in development the site runs on a Vite port and
+   the API on another, which is the same cross-origin situation the CDN split
+   creates, so this is exercised every day rather than only after a deploy. */
+app.use('/api', corsMiddleware({ allowLocalhost: process.env.NODE_ENV !== 'production' }));
 
 app.use('/api/admin', adminRouter);
 app.use('/api/img', assetsRouter);
