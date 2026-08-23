@@ -10,6 +10,7 @@ import { corsMiddleware } from './cors.js';
 import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
 import { projectionsRouter } from './routes/projections.js';
+import { supportRouter } from './routes/support.js';
 import { loadProjections } from './projections/loadFromRepo.js';
 import { warmAdjustedProjections } from './projections/adjusted.js';
 import { startRepriceScheduler } from './scheduler.js';
@@ -21,14 +22,24 @@ const DIST = path.join(__dirname, '..', 'dist');
 const PORT = process.env.PORT ?? 8799;
 
 const app = express();
-app.use(express.json());
 
-/* Mounted before every /api route and before the body parser matters, so a
-   preflight is answered whatever the route would have done. Localhost is
-   allowed off production only: in development the site runs on a Vite port and
-   the API on another, which is the same cross-origin situation the CDN split
-   creates, so this is exercised every day rather than only after a deploy. */
+/* Mounted before every /api route and before any body parser, so a preflight is
+   answered whatever the route would have done. Localhost is allowed off
+   production only: in development the site runs on a Vite port and the API on
+   another, which is the same cross-origin situation the CDN split creates, so
+   this is exercised every day rather than only after a deploy. */
 app.use('/api', corsMiddleware({ allowLocalhost: process.env.NODE_ENV !== 'production' }));
+
+/* Ahead of the shared parser on purpose. express.json() defaults to a 100KB
+   limit and, mounted app-wide, it reads and rejects the body before the route
+   is ever chosen — so a support router carrying its own larger limit further
+   down would never see one. Every bug report with a screenshot is over 100KB,
+   which made this the difference between the feature working and the feature
+   failing on exactly the reports worth having. Anything else needing a body
+   larger than the default has to be mounted up here too. */
+app.use('/api/support', supportRouter);
+
+app.use(express.json());
 
 app.use('/api/admin', adminRouter);
 app.use('/api/img', assetsRouter);

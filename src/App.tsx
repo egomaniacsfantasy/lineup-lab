@@ -14,6 +14,7 @@ import { DesignBoardRowPage } from './pages/DesignBoardRowPage';
 import { DesignChartPage } from './pages/DesignChartPage';
 import { DesignFixturePage } from './pages/DesignFixturePage';
 import { EspnConnect } from './components/league/EspnConnect';
+import { BugReportDialog } from './components/support/BugReportDialog';
 import { LeaguePage } from './pages/LeaguePage';
 import { MatchupPage } from './pages/MatchupPage';
 import { MorePage } from './pages/MorePage';
@@ -91,6 +92,16 @@ function PublicRoutes() {
                     or measured without credentials — which is how it shipped
                     scrolling on both axes. */}
                 {import.meta.env.DEV ? <Route path="/design/connect" element={<ConnectPage />} /> : null}
+                {/* The report dialog is reachable only from a signed-in account
+                    menu or after a crash, so without this it could not be
+                    looked at or measured at all. That is exactly how the
+                    connect screen above shipped scrolling on both axes. */}
+                {import.meta.env.DEV ? (
+                  <Route
+                    path="/design/bug-report"
+                    element={<BugReportDialog onClose={() => undefined} />}
+                  />
+                ) : null}
                 {import.meta.env.DEV ? <Route path="/design/board-row/:variant" element={<DesignBoardRowPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/chart/:variant" element={<DesignChartPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/:scene" element={<DesignFixturePage />} /> : null}

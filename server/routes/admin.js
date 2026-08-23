@@ -20,6 +20,7 @@ import {
   saveVersion,
 } from '../projections/store.js';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
+import { listReports, reportScreenshotPath } from './support.js';
 import { invalidate } from '../cache.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -212,4 +213,21 @@ adminRouter.post('/projections/activate', (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+/* Bug reports are filed by anyone (see routes/support.js) but only readable
+   here. Newest first; the screenshot is a filename that the route below
+   serves, so a listing of a hundred reports stays small. */
+adminRouter.get('/bug-reports', (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  res.json({ reports: listReports(limit) });
+});
+
+adminRouter.get('/bug-reports/:file', (req, res) => {
+  const resolved = reportScreenshotPath(req.params.file);
+  if (!resolved) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  res.sendFile(resolved);
 });

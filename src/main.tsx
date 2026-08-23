@@ -3,7 +3,14 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { installDiagnostics } from './utils/diagnostics';
 import './styles/global.css';
+
+/* Installed before the app renders so the buffers already hold the boot
+   sequence by the time anyone files a report: a league that fails to load does
+   so during startup, and a recorder installed inside a component would miss
+   exactly those requests. */
+installDiagnostics();
 
 /* Personal ranking overlays were retired. Anyone who saved one before the
    change still has it in local storage, and leaving it there would let a

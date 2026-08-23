@@ -9,6 +9,8 @@ import { canPromptForVote } from '../../utils/playerVotes';
 import { AppHeader } from './AppHeader';
 import { BottomTabBar } from './BottomTabBar';
 import { PricingCurtain } from './PricingCurtain';
+import { AppErrorBoundary } from '../support/AppErrorBoundary';
+import { BugReportProvider, useBugReport } from '../support/BugReportProvider';
 import './AppShell.css';
 
 /* Crowdsourced ranking is parked: we will not have the voter volume to make
@@ -50,28 +52,41 @@ function useVotePromptTrigger() {
   return { open, close: () => setOpen(false) };
 }
 
+/* The boundary is a class (React offers no hook for catching render errors) and
+   the opener is a hook, so this bridges the two. Only the routed content is
+   wrapped: a crash in a page should leave the header and tabs alive so there is
+   still a way out of it. */
+function GuardedContent({ children }: { children: React.ReactNode }) {
+  const { open } = useBugReport();
+  return <AppErrorBoundary onReport={open}>{children}</AppErrorBoundary>;
+}
+
 export function AppShell() {
   const { format } = useOddsFormat();
   const votePrompt = useVotePromptTrigger();
 
   return (
-    <div className="app-shell">
-      <a className="skip-link" href="#main-content">
-        Skip to content
-      </a>
-      <AmbientCanvas />
-      <PlayerDetailProvider>
-        <ScoutingCardProvider>
-          <AppHeader />
-          {/* keyed on odds format: flipping it re-renders every number */}
-          <main className="app-content" id="main-content" key={format} tabIndex={-1}>
-            <Outlet />
-          </main>
-        </ScoutingCardProvider>
-      </PlayerDetailProvider>
-      <BottomTabBar />
-      <PricingCurtain />
-      <PlayerVotePrompt onClose={votePrompt.close} open={votePrompt.open} />
-    </div>
+    <BugReportProvider>
+      <div className="app-shell">
+        <a className="skip-link" href="#main-content">
+          Skip to content
+        </a>
+        <AmbientCanvas />
+        <PlayerDetailProvider>
+          <ScoutingCardProvider>
+            <AppHeader />
+            {/* keyed on odds format: flipping it re-renders every number */}
+            <main className="app-content" id="main-content" key={format} tabIndex={-1}>
+              <GuardedContent>
+                <Outlet />
+              </GuardedContent>
+            </main>
+          </ScoutingCardProvider>
+        </PlayerDetailProvider>
+        <BottomTabBar />
+        <PricingCurtain />
+        <PlayerVotePrompt onClose={votePrompt.close} open={votePrompt.open} />
+      </div>
+    </BugReportProvider>
   );
 }
