@@ -104,3 +104,33 @@ export function shareFilename(team: string, week?: number | null, kind = 'week')
   if (kind === 'trade' && week != null) parts.push(`week-${week}`);
   return `${parts.join('-')}.png`;
 }
+
+export interface DraftShareFacts {
+  team: string;
+  leagueName?: string | null;
+  bestValue?: { name: string; pickNo: number; ourRank: number } | null;
+  biggestReach?: { name: string; pickNo: number; ourRank: number } | null;
+  haul?: { rank: number; of: number } | null;
+}
+
+/**
+ * The line that travels with a draft card.
+ *
+ * It leads with the steal rather than the haul rank, because a rank is a
+ * leaderboard and a steal is a boast with a name attached, and only one of
+ * those gets a reply in a group chat.
+ */
+export function draftShareMessage(facts: DraftShareFacts): string {
+  const where = facts.leagueName ? ` in ${facts.leagueName}` : '';
+  const parts: string[] = [];
+  if (facts.bestValue) {
+    parts.push(
+      `${facts.bestValue.name} at ${facts.bestValue.pickNo}. The Gods had him ${ordinal(facts.bestValue.ourRank)}.`,
+    );
+  }
+  if (facts.haul) {
+    parts.push(`${ordinal(facts.haul.rank)} best haul of ${facts.haul.of}${where}.`);
+  }
+  if (parts.length === 0) parts.push(`${facts.team}, drafted and priced.`);
+  return `${parts.join(' ')}\n\nGrade your draft at oddsgods.net`;
+}

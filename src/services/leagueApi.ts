@@ -88,6 +88,14 @@ export interface ApiCatalogPlayer {
   injuryStatus: string | null;
 }
 
+export interface DraftPick {
+  pickNo: number;
+  round: number;
+  rosterId: number;
+  playerId: string;
+  isKeeper: boolean;
+}
+
 export interface LeagueBootstrap {
   league: ApiLeague;
   teams: ApiTeam[];
@@ -96,6 +104,8 @@ export interface LeagueBootstrap {
   players: Record<string, ApiCatalogPlayer>;
   state: { season: string; week: number; seasonType: string };
   lastUpdated: number;
+  /** Present once the league's draft is complete. */
+  draftPicks?: DraftPick[] | null;
 }
 
 export interface ScheduleWeek {
@@ -644,6 +654,52 @@ export function trackEspnConnectEvent(event: string, payload: Record<string, unk
 export function fetchBootstrap(leagueId: string, userId: string) {
   return get<LeagueBootstrap>(
     `/api/league/${leagueId}/bootstrap?userId=${encodeURIComponent(userId)}`,
+  );
+}
+
+export interface DraftRecapPick {
+  name: string;
+  position: string;
+  team: string | null;
+  pickNo: number;
+  ourRank: number;
+  /** pickNo minus our board rank. Positive is value, negative is a reach. */
+  delta: number;
+  playerId: string;
+}
+
+export interface DraftRecap {
+  available: boolean;
+  reason?: string;
+  leagueName?: string | null;
+  season?: string | null;
+  totalPicks?: number;
+  pricedPicks?: number;
+  rounds?: number;
+  teams?: {
+    rosterId: number;
+    teamName: string;
+    picks: number;
+    totalVor: number;
+    haulRank: number;
+    bestValue: DraftRecapPick;
+    biggestReach: DraftRecapPick;
+  }[];
+  you?: {
+    rosterId: number;
+    teamName: string;
+    haulRank: number | null;
+    of: number;
+    bestValue: DraftRecapPick;
+    biggestReach: DraftRecapPick;
+  } | null;
+  steal?: (DraftRecapPick & { rosterId: number; teamName: string }) | null;
+}
+
+/** Draft Wrapped. Off the bootstrap on purpose: a draft never changes. */
+export function fetchDraftRecap(leagueId: string, userId: string) {
+  return get<DraftRecap>(
+    `/api/league/${leagueId}/draft-recap?userId=${encodeURIComponent(userId)}`,
   );
 }
 

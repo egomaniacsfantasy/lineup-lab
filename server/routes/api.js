@@ -20,6 +20,7 @@ import {
   setLiveMode, registerCycle,
 } from '../live/liveEngine.js';
 import { SEASON_ANCHORS, computeSeasonState, resolveFantasyWeek, isPreseason, resolvePricingWeek } from '../config/season.js';
+import { buildDraftRecap } from '../services/draftRecap.js';
 import { getActiveProjections } from '../projections/store.js';
 import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
 import {
@@ -1247,6 +1248,57 @@ apiRouter.get('/league/:leagueId/transactions/:week', async (req, res, next) => 
 });
 
 /** Line-movement history (inputsHash diffs) for the digest + notifications. */
+/* Draft Wrapped. Kept off the bootstrap on purpose: it needs the projection
+   file and a full board sort, and a draft does not change once it is over, so
+   making every league load pay for it would be a tax on a thing you look at
+   once. */
+apiRouter.get('/league/:leagueId/draft-recap', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const userId = req.query.userId ?? null;
+    const ctx = await loadLeagueContext(provider, leagueId, userId);
+    if (!ctx) {
+      res.status(404).json({ available: false, reason: 'league_not_found' });
+      return;
+    }
+    const active = getActiveProjections();
+    if (!active) {
+      res.json({ available: false, reason: 'no_projections' });
+      return;
+    }
+    const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
+    const recap = buildDraftRecap({
+      picks: ctx.draftPicks ?? [],
+      teams: ctx.teams,
+      catalog: ctx.players,
+      projections: active.projections,
+      userRosterId,
+    });
+    if (!recap.available) {
+      res.json(recap);
+      return;
+    }
+    /* Team names live on the context, not in the recap's arithmetic. */
+    const nameByRoster = new Map(ctx.teams.map((t) => [t.rosterId, t]));
+    const withNames = (row) =>
+      row && {
+        ...row,
+        teamName: nameByRoster.get(row.rosterId)?.teamName ?? `Roster ${row.rosterId}`,
+      };
+    res.json({
+      ...recap,
+      leagueName: ctx.league?.name ?? null,
+      season: ctx.league?.season ?? null,
+      teams: recap.teams.map(withNames),
+      you: withNames(recap.you),
+      steal: withNames(recap.steal),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 apiRouter.get('/league/:leagueId/line-history', (req, res) => {
   res.json({ history: readHistory(req.params.leagueId) });
 });

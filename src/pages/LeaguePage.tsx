@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
@@ -13,6 +13,12 @@ import { SeasonHeadline } from '../components/season/SeasonHeadline';
 import { WeekDetailModal } from '../components/season/WeekDetailModal';
 import { useAuth } from '../contexts/AuthContext';
 import { ProviderMark } from '../components/league/ProviderMark';
+import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
+import { drawDraftCard, type DraftCardData } from '../utils/draftCard';
+import { fetchDraftRecap } from '../services/leagueApi';
+import { apiUrl } from '../services/apiBase';
+import { formatAmericanOdds } from '../utils/formatOdds';
+import { draftShareMessage } from '../utils/shareMessage';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useSeasonMode } from '../hooks/useSeasonMode';
 import { isAgreementAdmin } from '../utils/admin';
@@ -85,6 +91,49 @@ export function LeaguePage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showWizard, setShowWizard] = useState(false);
+  /* Draft Wrapped is fetched on demand rather than with the page: it needs the
+     projection file and a full board sort, and a draft never changes once it
+     is over, so nobody should pay for it just by opening the League tab. */
+  const [draftCard, setDraftCard] = useState<DraftCardData | null>(null);
+  const [draftState, setDraftState] = useState<'idle' | 'loading' | 'empty'>('idle');
+
+  const openDraftWrapped = useCallback(async () => {
+    if (!stored || !bootstrap) return;
+    setDraftState('loading');
+    try {
+      const recap = await fetchDraftRecap(stored.leagueId, stored.userId);
+      if (!recap.available || !recap.you) {
+        setDraftState('empty');
+        return;
+      }
+      const me = bootstrap.teams.find((team) => team.isUser);
+      const mine = (recap.you.rosterId ?? me?.rosterId) ?? null;
+      const rows = (pricing?.available ? pricing.futures ?? [] : [])
+        .slice()
+        .sort((a, b) => b.titleProb - a.titleProb);
+      const mineFuture = rows.find((row) => row.rosterId === mine) ?? null;
+      const rank = mine != null ? rows.findIndex((row) => row.rosterId === mine) + 1 : 0;
+      const face = (pick: { playerId: string }) =>
+        apiUrl(`/api/img/headshot/${pick.playerId}`);
+      setDraftCard({
+        leagueName: recap.leagueName ?? stored.leagueName ?? null,
+        season: recap.season ?? null,
+        team: me?.teamName ?? recap.you.teamName,
+        owner: me?.ownerName && me.ownerName !== me.teamName ? me.ownerName : null,
+        avatar: me?.avatarUrl ?? null,
+        titleOdds: mineFuture ? formatAmericanOdds(mineFuture.championOdds) : null,
+        standing: rank > 0 ? { rank, of: rows.length } : null,
+        ladder: rows.map((row) => ({ prob: row.titleProb, isUser: row.rosterId === mine })),
+        haul:
+          recap.you.haulRank != null ? { rank: recap.you.haulRank, of: recap.you.of } : null,
+        bestValue: { ...recap.you.bestValue, headshotUrl: face(recap.you.bestValue) },
+        biggestReach: { ...recap.you.biggestReach, headshotUrl: face(recap.you.biggestReach) },
+      });
+      setDraftState('idle');
+    } catch {
+      setDraftState('empty');
+    }
+  }, [stored, bootstrap, pricing]);
   const [manualFlow, setManualFlow] = useState<ConnectFlow>('none');
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const { user } = useAuth();
@@ -230,6 +279,21 @@ export function LeaguePage() {
 
           </div>
         ) : null}
+
+      {draftCard ? (
+        <ShareCardPreview
+          draw={(options) => drawDraftCard(draftCard, options)}
+          filename={`${(draftCard.team || 'my-team').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 32)}-odds-gods-draft.png`}
+          message={draftShareMessage({
+            team: draftCard.team,
+            leagueName: draftCard.leagueName,
+            bestValue: draftCard.bestValue,
+            biggestReach: draftCard.biggestReach,
+            haul: draftCard.haul,
+          })}
+          onClose={() => setDraftCard(null)}
+        />
+      ) : null}
 
         {flow === 'sleeper' ? (
           <ConnectWizard
@@ -408,6 +472,25 @@ export function LeaguePage() {
               />
             </>
           )}
+
+          {/* Only offered once there is a draft to talk about. */}
+          {connected && bootstrap?.draftPicks?.length ? (
+            <div className="league-page__wrapped">
+              <button
+                className="league-page__wrapped-btn"
+                disabled={draftState === 'loading'}
+                onClick={() => void openDraftWrapped()}
+                type="button"
+              >
+                {draftState === 'loading' ? 'Grading your draft…' : 'Draft Wrapped'}
+              </button>
+              {draftState === 'empty' ? (
+                <span className="league-page__wrapped-note">
+                  Not enough of this draft is priced to grade it yet.
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           <LeagueFutures
             currentWeek={connection.currentWeek}
