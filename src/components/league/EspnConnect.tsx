@@ -613,13 +613,6 @@ export function EspnConnect({
             </button>
           ) : null}
 
-          <p className="espn-connect__privacy">
-            {/* These branches were the wrong way round: the copy promising we
-                never ask for a password was the one shown when we do. */}
-            {espnLoginEnabled
-              ? 'Read-only. If you sign in, your password is used once and never stored.'
-              : 'Read-only. We never ask for your ESPN password.'}
-          </p>
         </form>
       ) : null}
 

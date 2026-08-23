@@ -218,7 +218,10 @@ export function createEspnProvider({ season, espnS2, swid }) {
       const cleanSwid = sw.startsWith('{') ? sw : `{${sw}}`;
       headers.Cookie = `espn_s2=${s2}; SWID=${cleanSwid}`;
     }
-    const response = await fetch(url, { headers });
+    /* ESPN answering slowly must not hold our own request open indefinitely:
+       without this an upstream stall becomes our stall, and the client sees a
+       spinner rather than an error it can act on. */
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(20_000) });
     if (!response.ok) {
       const error = new Error(`espn_${response.status}`);
       error.status = response.status;

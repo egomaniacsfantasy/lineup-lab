@@ -516,10 +516,42 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
      after that is a real fault and is reported as one. Retrying is only safe
      for reads, so a request with a method is left alone. */
   const isRead = !decorated.method || decorated.method.toUpperCase() === 'GET';
-  let response = await fetch(url, decorated);
+
+  /* A bad gateway rejects fast and the retry above handles it. A connection
+     accepted and then never answered does not reject at all, which is the
+     state a platform restart can leave a socket in, and fetch waits on it
+     forever. The user gets a button that spins for as long as they are willing
+     to watch it. Thirty seconds is well past the slowest real response (a cold
+     pricing run) and well short of anyone's patience. */
+  const REQUEST_TIMEOUT_MS = 30_000;
+  const send = () => fetch(url, { ...decorated, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+
+  let response: Response;
+  try {
+    response = await send();
+  } catch (caught) {
+    if (!isRead || !(caught instanceof DOMException && caught.name === 'TimeoutError')) {
+      throw caught instanceof DOMException && caught.name === 'TimeoutError'
+        ? new LeagueApiError(
+            'request_timeout',
+            'That request took too long and was given up on. Try again in a moment.',
+          )
+        : caught;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    try {
+      response = await send();
+    } catch {
+      throw new LeagueApiError(
+        'request_timeout',
+        'That request took too long and was given up on. Try again in a moment.',
+      );
+    }
+  }
+
   if (isRead && [502, 503, 504].includes(response.status)) {
     await new Promise((resolve) => setTimeout(resolve, 1_200));
-    response = await fetch(url, decorated);
+    response = await send();
   }
   const body = await response.json().catch(() => null);
 
