@@ -19,8 +19,14 @@ import { getActiveProjections } from '../projections/store.js';
 import { cached } from '../cache.js';
 import { closedFormWinProb, buildLiveTeamDistribution } from './liveWinProb.js';
 
-const SEASON_SIMS = 10_000; // player-level season Monte Carlo — the ONE sim behind every value: Futures, trades, movers
+const SEASON_SIMS = 10_000; // player-level season Monte Carlo — Futures and movers
 const MATCHUP_SIMS = 5_000; // seeded player-level sims for the headline matchup win%
+// EVERY trade evaluation — the finder (best deals / per-manager / hub), the
+// Build-a-Trade analyzer, and the counter-offer search — runs at THIS sim count.
+// Same seed + same sim count + same drop logic => a given trade prices IDENTICALLY
+// on every surface. It is below SEASON_SIMS so the finder can re-sim many trades
+// inside the request budget; common random numbers keep each delta accurate.
+const TRADE_SIMS = 4_000;
 const Z80 = 1.2815515594; // 80% CI half-width in sigmas (matches our weekly CI)
 const INV_SQRT_2PI = 0.3989422804014327;
 
@@ -1964,7 +1970,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
-  const baseline = simulateSeason(base);
+  const baseline = simulateSeason({ ...base, sims: TRADE_SIMS });
   const tradedTeams = teams.map((t) =>
     t.rosterId === userTeam.rosterId
       ? { ...t, players: userFinal }
@@ -1972,7 +1978,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
         ? { ...t, players: partnerFinal }
         : t,
   );
-  const after = simulateSeason({ ...base, teams: tradedTeams });
+  const after = simulateSeason({ ...base, teams: tradedTeams, sims: TRADE_SIMS });
 
   const find = (arr, id) => arr.find((f) => f.rosterId === id);
   const sideDelta = (team) => {
@@ -2106,12 +2112,12 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
     return { available: true, needed: true, whoAdds, add: [] };
   }
 
-  // Confirm the winner at full resolution — base trade AND with-throw-in both at
-  // 10k, so the displayed before/after are apples-to-apples and match the reprice.
-  const baseFull = simulateSeason({ ...base, sims: SEASON_SIMS });
-  const beforeFull = evalTrade(give, get, SEASON_SIMS, baseFull);
+  // Confirm the winner at TRADE_SIMS — the same count as the analyzer and the
+  // finder — so the displayed before/after are apples-to-apples with every surface.
+  const baseFull = simulateSeason({ ...base, sims: TRADE_SIMS });
+  const beforeFull = evalTrade(give, get, TRADE_SIMS, baseFull);
   const { g, t } = withAdd(best.id);
-  const confirm = evalTrade(g, t, SEASON_SIMS, baseFull);
+  const confirm = evalTrade(g, t, TRADE_SIMS, baseFull);
   return {
     available: true,
     needed: true,
@@ -2372,21 +2378,18 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
   }
 
-  // ── Pass 2: re-sim the fairest survivors for the displayed Δc. Because the seed
-  // is stable, common random numbers make the before/after DELTA accurate even at
-  // a reduced sim count — so we can cast a WIDE net (re-sim many finalists) without
-  // blowing the request's ~30s time budget. FINDER_SIMS is deliberately below the
-  // 10k futures/analyzer sim; the delta stays tight, only the last decimal of the
-  // absolute odds would differ.
-  const FINDER_SIMS = 3000;
+  // ── Pass 2: re-sim the fairest survivors for the displayed Δc, at TRADE_SIMS —
+  // the SAME sim count the Build-a-Trade analyzer uses — so a trade shown here
+  // prices IDENTICALLY when you open it in the analyzer. Stable seed + CRN keep
+  // each delta accurate at this count, and it re-sims many finalists in budget.
   const fairness = (c) => Math.abs(c.youDelta) + Math.abs(c.partnerDelta);
   const finalists = scanned.sort((a, b) => fairness(a) - fairness(b)).slice(0, 24);
-  const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS });
+  const finalBaseline = simulateSeason({ ...base, sims: TRADE_SIMS });
   const suggestions = [];
   let re = 0;
   for (const c of finalists) {
     const { youDelta, partnerDelta, youPlayoffDelta, partnerPlayoffDelta, youWeekDelta, partnerWeekDelta } =
-      evalTrade(c.give, c.get, c.partner, FINDER_SIMS, finalBaseline);
+      evalTrade(c.give, c.get, c.partner, TRADE_SIMS, finalBaseline);
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
     if (Date.now() - t0 > 26_000) break;   // return what we have before the client's 30s abort
@@ -2490,7 +2493,7 @@ function depthByPosition(playerIds, catalog) {
  * user (the one person who actually knows their league), so the
  * acceptance read is parameterized truth, never fabricated psychology.
  */
-export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get = [], traits = {}, baseline = null, sims = SEASON_SIMS, seed: seedOverride = null }) {
+export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get = [], traits = {}, baseline = null, sims = TRADE_SIMS, seed: seedOverride = null }) {
   const active = Array.isArray(ctx.projections)
     ? { version: 'ctx-projections', projections: ctx.projections }
     : ctx.projections ?? getActiveProjections();
