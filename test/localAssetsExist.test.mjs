@@ -67,3 +67,25 @@ test('a provider row does not put its whole identity in an image', async () => {
     'a raw <img> is carrying provider identity again',
   );
 });
+
+test('a missing file fails as a file, not as the app', async () => {
+  const source = await fs.readFile(path.resolve('server/index.js'), 'utf8');
+
+  /* The catch-all used to answer every unmatched path with index.html, so a
+     missing or renamed asset returned HTML with a 200 to a request for a PNG.
+     Browsers draw that as a broken image, and a 200 leaves no 404 anywhere to
+     find, so the picture just disappears and nothing says why. A 200 is also
+     cacheable, which is how it outlives the fix that put the file back. */
+  const start = source.indexOf('app.get(/.*/');
+  assert.ok(start > -1, 'could not find the catch-all route');
+  const body = source.slice(start, source.indexOf('\n});', start));
+
+  assert.match(body, /404/, 'a request for a file that is not there must 404');
+  assert.match(
+    body,
+    /\\\.\[a-zA-Z0-9\]\+\$/,
+    'the check should key off a file extension, so client routes still get the shell',
+  );
+  /* And the shell must still be reachable for extensionless routes. */
+  assert.match(body, /sendFile/);
+});

@@ -92,7 +92,22 @@ app.use(
   }),
 );
 
-app.get(/.*/, (_req, res) => {
+app.get(/.*/, (req, res) => {
+  /* A request for a file that is not there must fail as a file.
+
+     This used to hand back index.html for ANY unmatched path, so a missing or
+     renamed asset answered a request for a PNG with HTML and a 200. Browsers
+     render that as a broken image, and because it is a 200 there is no 404 in
+     any log to find: the picture is simply gone and nothing says why. That is
+     also what makes it survive in a cache, since a 200 is a cacheable success.
+
+     Anything whose last path segment carries an extension is a file request.
+     Client routes have no extension, so the shell is still served for them. */
+  if (/\.[a-zA-Z0-9]+$/.test(req.path.split('/').pop() ?? '')) {
+    res.status(404).type('text/plain').send('Not found');
+    return;
+  }
+
   /* The shell must never be cached: it is what points at the current asset
      hashes, and a stale copy pins a browser to a build that no longer exists. */
   res.set('Cache-Control', 'no-cache');
