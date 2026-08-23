@@ -24,7 +24,7 @@ function leagueLabel(league: StoredConnection, activeName?: string | null) {
  */
 export function AccountMenu() {
   const { user, signOut } = useAuth();
-  const { leagues, stored, bootstrap, switchLeague, removeLeague, refresh, isLoading, error } =
+  const { leagues, stored, bootstrap, switchLeague, removeLeague, changeEspnTeam, refresh, isLoading, error } =
     useLeagueConnection();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -247,6 +247,25 @@ export function AccountMenu() {
               >
                 {syncState === 'busy' ? 'Syncing…' : 'Sync now'}
                 <span className="account-menu__action-note">{syncLabel}</span>
+              </button>
+            ) : null}
+            {/* Picking the wrong team out of ESPN's list is easy and used to be
+                permanent: the league kept opening on somebody else's roster with
+                no way back short of removing it and starting over. */}
+            {stored?.provider === 'espn' ? (
+              <button
+                className="account-menu__action"
+                onClick={() => {
+                  setOpen(false);
+                  changeEspnTeam(stored);
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Change my team
+                <span className="account-menu__action-note">
+                  Pick again in {activeLabel}
+                </span>
               </button>
             ) : null}
             <button

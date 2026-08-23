@@ -133,3 +133,46 @@ test('Sleeper names refresh even when no Sleeper league is open', async () => {
     'the username should come from any Sleeper league, not only the active one',
   );
 });
+
+test('a wrong team pick is recoverable', async () => {
+  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+
+  /* Picking the wrong team out of ESPN's list is easy, and it used to be
+     permanent: the league kept opening on somebody else's roster and the only
+     way back was removing the league and starting over. */
+  assert.match(source, /function forgetEspnLeague\(leagueId: string\)/);
+  assert.match(source, /next\.delete\(String\(leagueId\)\)/);
+  assert.match(source, /changeEspnTeam/, 'the context should expose a way to re-pick');
+
+  const menu = await fs.readFile(path.resolve('src/components/layout/AccountMenu.tsx'), 'utf8');
+  assert.match(menu, /Change my team/, 'and it should be reachable from the switcher');
+  assert.match(
+    menu,
+    /stored\?\.provider === 'espn'/,
+    'only ESPN leagues have a team to re-pick',
+  );
+});
+
+test('the asset proxy is always CORS-safe, because canvases need it', async () => {
+  const source = await fs.readFile(path.resolve('server/routes/assets.js'), 'utf8');
+
+  /* These images are drawn twice: as <img> in the UI and onto a canvas for the
+     share cards, which requires crossOrigin and therefore CORS headers. A
+     same-origin <img> sends no Origin, so the allowlist added nothing, and the
+     response was cached for a day exactly as it was. The card then requested
+     the same URL with crossOrigin, got the cached header-less copy, failed the
+     check, and the headshot silently did not draw. */
+  const grants = source.match(/Access-Control-Allow-Origin', '\*'/g) ?? [];
+  assert.ok(
+    grants.length >= 2,
+    `every image response must carry the header, saw ${grants.length}`,
+  );
+
+  /* Unconditional on purpose: a header set only for allowlisted origins is
+     absent from the copy a same-origin request caches. */
+  assert.doesNotMatch(
+    source,
+    /if \([^)]*origin[^)]*\)[^\n]*Access-Control-Allow-Origin/i,
+    'the header must not be conditional, or the cached copy will lack it',
+  );
+});

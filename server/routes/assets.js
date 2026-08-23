@@ -1,5 +1,20 @@
 /**
  * Asset proxy: player headshots, NFL team logos, and manager avatars
+ *
+ * Every response carries Access-Control-Allow-Origin: * unconditionally, and it
+ * has to be unconditional rather than left to the CORS allowlist.
+ *
+ * These images are drawn twice: as ordinary <img> in the UI, and onto a canvas
+ * for the share cards, where the browser requires crossOrigin and therefore
+ * CORS headers. A same-origin <img> sends no Origin, so the allowlist added no
+ * header, and the response was cached for a day exactly as it was. The card
+ * then asked for the same URL with crossOrigin, the browser handed back that
+ * cached header-less copy, the CORS check failed, and the headshot silently did
+ * not draw. Everywhere else it looked fine, because everywhere else is an <img>.
+ *
+ * A wildcard is right here specifically: these are public NFL headshots and team
+ * logos, no credentials are involved, and any cached copy now carries the header
+ * whichever way it was first fetched.
  * from Sleeper's CDN, cached on our disk with a long TTL so the client
  * never hotlinks per-render. 404s pass through so the client can show
  * its initials fallback (no broken-image icons, ever).
@@ -56,6 +71,7 @@ async function serveCached(kind, key, res) {
     if (Date.now() - stat.mtimeMs < DAY_MS) {
       res.set('Content-Type', source.type);
       res.set('Cache-Control', BROWSER_CACHE);
+      res.set('Access-Control-Allow-Origin', '*');
       fs.createReadStream(file).pipe(res);
       return;
     }
@@ -93,6 +109,7 @@ async function serveCached(kind, key, res) {
 
     res.set('Content-Type', source.type);
     res.set('Cache-Control', BROWSER_CACHE);
+    res.set('Access-Control-Allow-Origin', '*');
     res.send(buffer);
   } catch {
     res.status(502).end();

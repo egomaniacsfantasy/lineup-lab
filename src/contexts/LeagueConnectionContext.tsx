@@ -66,6 +66,23 @@ function readConfirmed(): Set<string> {
   }
 }
 
+/**
+ * Forget which team is yours in an ESPN league, so the picker asks again.
+ *
+ * Picking the wrong team from that list is easy and, until now, permanent: the
+ * league would keep opening on somebody else's roster with no way back short of
+ * removing the league and starting over.
+ */
+function forgetEspnLeague(leagueId: string) {
+  try {
+    const next = readConfirmed();
+    next.delete(String(leagueId));
+    window.localStorage.setItem(CONFIRMED_KEY, JSON.stringify([...next]));
+  } catch {
+    /* Nothing to forget if nothing could be written in the first place. */
+  }
+}
+
 function confirmEspnLeague(leagueId: string) {
   try {
     const next = readConfirmed();
@@ -139,6 +156,8 @@ interface LeagueConnectionValue {
   switchLeague: (provider: StoredConnection['provider'], leagueId: string) => void;
   disconnect: () => void;
   removeLeague: (league: StoredConnection) => void;
+  /** ESPN only: forget which team is yours so the picker asks again. */
+  changeEspnTeam: (league: StoredConnection) => void;
   refresh: () => Promise<void>;
   liveMode: { on: boolean; at: number };
   marketScan: {
@@ -872,6 +891,29 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
 
   const disconnect = useCallback(() => removeLeague(stored), [removeLeague, stored]);
 
+  /* Forget the team and drop the league out of the active slot. The connect
+     flow already draws the picker for an ESPN league with nothing confirmed,
+     so this reuses the path that works rather than inventing a second one. */
+  const changeEspnTeam = useCallback((league: StoredConnection) => {
+    if (league.provider !== 'espn') return;
+    forgetEspnLeague(league.leagueId);
+    if (stored && leagueKey(stored) === leagueKey(league)) {
+      applyApiContext(null);
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+      setStored(null);
+      setBootstrap(null);
+      setSchedule(null);
+      setPricing(null);
+      setPricingMeta(EMPTY_PRICING_META);
+      setLineHistory(null);
+      setError(null);
+    }
+  }, [stored]);
+
   /**
    * Freshness loop: keep background repricing slow and deliberate so a tab
    * sitting open does not keep hammering the long-running market endpoint.
@@ -1008,6 +1050,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       switchLeague,
       disconnect,
       removeLeague,
+      changeEspnTeam,
       refresh,
       liveMode,
       marketScan: {
@@ -1031,6 +1074,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       switchLeague,
       disconnect,
       removeLeague,
+      changeEspnTeam,
       refresh,
       liveMode,
       isScanningMarket,
