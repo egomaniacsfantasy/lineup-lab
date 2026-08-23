@@ -395,9 +395,21 @@ export async function espnConnect({ season, leagueId, espnS2, swid }) {
     provider.getRosters(leagueId),
   ]);
   if (!league) return null;
-  /* The request may carry cookies, or the league may already be linked and the
-     cookies living in the server store — the same fallback espnGet makes. */
-  const identity = swid ?? getEspnCreds(leagueId)?.swid ?? null;
+  /* Identity comes from the caller's own cookie and nowhere else.
+
+     This used to fall back to the server store, the same way espnGet does. But
+     espnGet is answering "may I read this league", where a shared cookie is the
+     point, and this is answering "which of these teams is mine", where it is a
+     cross-user identity leak: the store is keyed by league id and holds exactly
+     one SWID, whoever linked the league first. A public league sends no cookie
+     at all, so every member who connected after the first one was silently
+     handed the first one's roster, and the client, trusting a non-null answer,
+     skipped the team picker and wrote that person's ESPN member id into their
+     own saved connection.
+
+     No cookie of your own means we do not know who you are, which is a question
+     for the picker and not something to guess at. */
+  const identity = swid ?? null;
   return {
     yourRosterId: findOwnedRosterId(teams, identity),
     league: {
