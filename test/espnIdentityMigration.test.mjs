@@ -102,3 +102,18 @@ test('removing a league is not undone by the account rows', async () => {
     'reconnecting a removed league must clear its tombstone',
   );
 });
+
+test('hydrating from the account keeps what only this device knows', async () => {
+  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+
+  /* rowToConnection cannot carry an identity version or ESPN cookies: the
+     account has no column for either. Merging a row over the local copy
+     therefore strips them, and the merge writes straight back to localStorage,
+     so the next load saw an unstamped ESPN connection, discarded it, and fell
+     through to another league. Connect, refresh, land somewhere else. */
+  const merge = source.slice(source.indexOf('const active = localActive'));
+  const block = merge.slice(0, 800);
+  assert.match(block, /identityVersion: stored\.identityVersion/, 'the identity stamp is being dropped on hydrate');
+  assert.match(block, /espnS2: stored\.espnS2/, 'ESPN cookies are being dropped on hydrate');
+  assert.match(block, /swid: stored\.swid/, 'the SWID is being dropped on hydrate');
+});

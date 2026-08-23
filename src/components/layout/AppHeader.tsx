@@ -74,7 +74,10 @@ export function AppHeader() {
     <header className="app-header">
       <div className="app-header__inner">
         <div className="app-header__brand" aria-label="Odds Gods">
-          <img alt="" className="app-header__brand-mark" src="/og-logo.png" />
+          {/* A 128px mark, not the 1254px original. The header drew it at 19px and
+              paid 370KB for the privilege, which on a slow connection meant the
+              logo simply arrived late. */}
+          <img alt="" className="app-header__brand-mark" src="/og-mark.png" width={128} height={128} />
           <span className="app-header__brand-title">ODDS GODS</span>
         </div>
 

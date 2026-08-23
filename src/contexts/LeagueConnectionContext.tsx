@@ -428,12 +428,26 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
         setLeagues(leaguesForSwitcher);
 
         if (stored) {
+          /* The account rows are the source of truth for which leagues exist,
+             but they have no column for the things that only live on this
+             device: the ESPN cookies, and the identity version stamped when
+             the manager picked their team.
+
+             Merging a row over the local copy dropped both. The stamp going
+             missing was the visible one: the merge wrote the stripped copy
+             straight back to localStorage, so the next refresh saw an
+             unstamped ESPN connection, discarded it as untrusted, and fell
+             through to whichever Sleeper league came next. Connect, refresh,
+             and you are somewhere else. */
           const active = localActive
             ? {
                 ...localActive,
                 leagueName: stored.leagueName ?? localActive.leagueName,
                 allLeagueIds: stored.allLeagueIds.length > 1 ? stored.allLeagueIds : all.map((l) => l.leagueId),
                 allLeagues: stored.allLeagues,
+                identityVersion: stored.identityVersion ?? localActive.identityVersion,
+                espnS2: stored.espnS2 ?? localActive.espnS2,
+                swid: stored.swid ?? localActive.swid,
               }
             : stored;
           applyApiContext(active);
