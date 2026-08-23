@@ -1,8 +1,17 @@
+# This blueprint manages STAGING and the ESPN login worker. It does NOT manage
+# production: `Olympus App (lineup-lab)` holds oddsgods.net and is configured in
+# the dashboard, so changing `plan` here would resize staging and leave the live
+# service untouched. Worth knowing before anyone edits this expecting to upgrade
+# the site.
 services:
   - type: web
     name: olympus
     runtime: node
     plan: starter
+    # Staging tracks its own branch. Pointed at main it redeployed the same
+    # commit as production, which is a second copy of production rather than a
+    # place to try anything.
+    branch: staging
     buildCommand: npm install && npm run build
     startCommand: npm run start
     # Persistent disk: projections imports, confirmed name matches, line
