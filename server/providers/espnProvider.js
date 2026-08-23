@@ -319,9 +319,20 @@ export function createEspnProvider({ season, espnS2, swid }) {
       const blob = await loadLeague(leagueId);
       if (!blob?.settings) return null;
       const s = blob.settings;
-      const playoffWeekStart =
-        (s.scheduleSettings?.matchupPeriodCount ?? 14) -
-          (s.scheduleSettings?.playoffMatchupPeriodLength ?? 0) || 15;
+      /* matchupPeriodCount is the length of the REGULAR season, so the
+         playoffs open the week after it. This used to subtract
+         playoffMatchupPeriodLength from it, which is not a meaningful
+         operation: that field is how many weeks each playoff ROUND runs (1
+         normally, 2 for a two-week final), not an offset. A fourteen week
+         league with one week rounds came out as week 13, so the sim treated
+         two real regular season weeks as playoffs and priced the season on a
+         schedule the league does not play.
+
+         The `|| 15` that used to close this line was worse than the bug: it
+         quietly rewrote any zero into a plausible-looking 15, so a league whose
+         settings we failed to read looked exactly like a normal one. */
+      const regularSeasonWeeks = s.scheduleSettings?.matchupPeriodCount ?? 14;
+      const playoffWeekStart = regularSeasonWeeks + 1;
       const isKeeper = Boolean(s.draftSettings?.keeperCount) || s.type === 'KEEPER';
       return {
         id: String(leagueId),
@@ -339,7 +350,7 @@ export function createEspnProvider({ season, espnS2, swid }) {
         playoffWeekStart,
         playoffTeams: s.scheduleSettings?.playoffTeamCount ?? null,
         lastScoredWeek: Math.max(0, (blob.status?.latestScoringPeriod ?? 1) - 1),
-        regularSeasonWeeks: s.scheduleSettings?.matchupPeriodCount ?? 14,
+        regularSeasonWeeks,
         leagueType: isKeeper ? 'keeper' : 'redraft',
         /* Already in the mSettings blob we fetch. Before a draft it is the
            only fact about the league worth printing, and we were throwing it
