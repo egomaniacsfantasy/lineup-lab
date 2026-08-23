@@ -533,12 +533,27 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
             summaries,
           ),
         );
-        const active = nextConnections.find((connection) => leagueKey(connection) === leagueKey(stored));
-        const existingKeys = leagues.map(leagueKey).join('|');
-        const nextKeys = nextConnections.map(leagueKey).join('|');
-        if (existingKeys !== nextKeys) {
-          setLeagues(nextConnections);
-          if (userIdRef.current && active) void saveLeagueRows(userIdRef.current, nextConnections, active);
+        /* Refresh what is already here; never add. Sleeper returns every league
+           the account is in, and adopting that list wholesale is why a switcher
+           the user never curated filled up with a dozen entries, and why
+           removing one came straight back on the next refresh.
+
+           What this IS for is names. The account rows have no column for a
+           league name, so a league restored from the account falls back to the
+           manager's display name and every Sleeper row reads the same word.
+           This is the only place those names can come back from. */
+        const nameById = new Map(nextConnections.map((c) => [leagueKey(c), c]));
+        const refreshed = leagues.map((league) => {
+          const fresh = nameById.get(leagueKey(league));
+          return fresh ? { ...league, leagueName: fresh.leagueName, season: fresh.season } : league;
+        });
+        const active = refreshed.find((connection) => leagueKey(connection) === leagueKey(stored));
+        const changed = refreshed.some(
+          (league, index) => league.leagueName !== leagues[index]?.leagueName,
+        );
+        if (changed) {
+          setLeagues(refreshed);
+          if (userIdRef.current && active) void saveLeagueRows(userIdRef.current, refreshed, active);
         }
         if (active && leagueKey(active) === leagueKey(stored)) {
           const activeChanged =

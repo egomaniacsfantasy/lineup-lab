@@ -43,14 +43,33 @@ test('an unpriced matchup does not print a price', async () => {
   assert.match(body, /if \(!isPriced\) return/, 'unpriced odds are still being formatted as a price');
 });
 
-test('the pending hero is marked so it can be styled as pending', async () => {
+test('both sides of the hero cycle a price while pricing', async () => {
   const source = await fs.readFile(path.resolve('src/pages/MatchupPage.tsx'), 'utf8');
-  const css = await fs.readFile(path.resolve('src/pages/MatchupPage.css'), 'utf8');
+  const uses = source.match(/<PricingOdds/g) ?? [];
+  assert.equal(uses.length, 2, 'your side and theirs should both show it');
+});
 
-  const marks = source.match(/matchup-page__hero-number--pending/g) ?? [];
-  assert.ok(marks.length >= 2, 'both sides of the hero should carry the pending state');
-  assert.match(css, /\.matchup-page__hero-number--pending/, 'the pending state needs to look different');
+test('the cycling price is decorative and never touches the engine', async () => {
+  const source = await fs.readFile(path.resolve('src/components/matchup/PricingOdds.tsx'), 'utf8');
 
-  /* A pulsing number is motion nobody asked for if they have asked for less. */
-  assert.match(css, /prefers-reduced-motion/, 'the pulse must respect reduced motion');
+  /* The numbers are random precisely because they are meaningless. Anything
+     derived from real projections would be a half-computed price shown as
+     though it were finished, which is the problem this exists to solve. */
+  assert.match(source, /Math\.random/);
+
+  /* Checked against the code with comments stripped: the doc comment above this
+     component explains what it must not do, and naming those things is not
+     doing them. */
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
+  assert.doesNotMatch(
+    code,
+    /engine|projection|winProbability|moneyline/i,
+    'the placeholder is reading something real',
+  );
+
+  /* And it must stop moving for anyone who asked for less motion. */
+  assert.match(source, /prefers-reduced-motion/);
+  assert.match(source, /clearInterval/, 'the timer has to be cleaned up');
 });

@@ -36,6 +36,10 @@ type Step =
 
 export function ConnectWizard({ onConnected }: ConnectWizardProps) {
   const [step, setStep] = useState<Step>({ name: 'username' });
+  /* Which leagues to actually bring in. Sleeper hands back every league the
+     account is in, and adding all of them turned the switcher into a list of a
+     dozen entries nobody chose. */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [username, setUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,11 +63,20 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
     }
   };
 
-  const pickLeague = async (
-    user: ProviderUser,
-    league: ApiLeagueSummary,
-    leagues: ApiLeagueSummary[],
-  ) => {
+  const toggle = (leagueId: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(leagueId)) next.delete(leagueId);
+      else next.add(leagueId);
+      return next;
+    });
+  };
+
+  /* `leagues` here is what the user ticked, not everything Sleeper returned.
+     The first one opens; the rest are in the switcher. */
+  const pickLeagues = async (user: ProviderUser, leagues: ApiLeagueSummary[]) => {
+    const league = leagues[0];
+    if (!league) return;
     setIsLoading(true);
     setError(null);
 
@@ -137,32 +150,63 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
             {step.user.displayName} · {step.season} season ·{' '}
             {step.leagues.length === 1 ? '1 league' : `${step.leagues.length} leagues`}
           </p>
+          <p className="connect-wizard__step-hint">
+            Pick the ones you want priced. You can add the rest later.
+          </p>
 
-          {step.leagues.map((league) => (
+          {step.leagues.map((league) => {
+            const isOn = selected.has(league.id);
+            return (
+              <button
+                aria-pressed={isOn}
+                className={['connect-wizard__league-row', isOn ? 'connect-wizard__league-row--on' : '']
+                  .filter(Boolean)
+                  .join(' ')}
+                disabled={isLoading}
+                key={league.id}
+                onClick={() => toggle(league.id)}
+                type="button"
+              >
+                <span aria-hidden="true" className="connect-wizard__tick">
+                  {isOn ? '✓' : ''}
+                </span>
+                <span className="connect-wizard__league-name">{league.name}</span>
+                <span className="connect-wizard__league-meta">
+                  {league.totalTeams} teams
+                  <span className="connect-wizard__scoring-badge">
+                    {SCORING_LABELS[league.scoringFamily]}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+
+          <div className="connect-wizard__pick-actions">
             <button
-              className="connect-wizard__league-row"
-              disabled={isLoading}
-              key={league.id}
-              onClick={() => void pickLeague(step.user, league, step.leagues)}
+              className="connect-wizard__continue"
+              disabled={isLoading || selected.size === 0}
+              onClick={() =>
+                void pickLeagues(
+                  step.user,
+                  step.leagues.filter((league) => selected.has(league.id)),
+                )
+              }
               type="button"
             >
-              <span className="connect-wizard__league-name">{league.name}</span>
-              <span className="connect-wizard__league-meta">
-                {league.totalTeams} teams
-                <span className="connect-wizard__scoring-badge">
-                  {SCORING_LABELS[league.scoringFamily]}
-                </span>
-              </span>
+              {isLoading
+                ? 'Loading…'
+                : selected.size === 0
+                  ? 'Pick at least one league'
+                  : `Add ${selected.size === 1 ? 'this league' : `these ${selected.size} leagues`}`}
             </button>
-          ))}
-
-          <button
-            className="connect-wizard__back"
-            onClick={() => setStep({ name: 'username' })}
-            type="button"
-          >
-            Back
-          </button>
+            <button
+              className="connect-wizard__back"
+              onClick={() => setStep({ name: 'username' })}
+              type="button"
+            >
+              Back
+            </button>
+          </div>
         </div>
       ) : null}
 

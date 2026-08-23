@@ -73,6 +73,7 @@ import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { shortInjuryStatus } from '../utils/playerNames.ts';
 import { TitleOdds, type TitleRow } from '../components/matchup/TitleOdds';
+import { PricingOdds } from '../components/matchup/PricingOdds';
 
 const RECAP_DISMISSED_KEY = 'og.lineuplab.matchup-recap.dismissed';
 
@@ -1950,14 +1951,14 @@ function MatchupLive({
                   </p>
                 </div>
               </div>
-              <span
-                className={['matchup-page__hero-number', isPriced ? '' : 'matchup-page__hero-number--pending']
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                {formatDisplayedOdds(
-                  engine.activeLine.yours.moneyline,
-                  engine.activeLine.yours.winProbability,
+              <span className="matchup-page__hero-number">
+                {isPriced ? (
+                  formatDisplayedOdds(
+                    engine.activeLine.yours.moneyline,
+                    engine.activeLine.yours.winProbability,
+                  )
+                ) : (
+                  <PricingOdds percent={oddsFormat === 'percent'} />
                 )}
               </span>
               <p className="matchup-page__meta-copy">
@@ -2024,16 +2025,14 @@ function MatchupLive({
                   ) : null}
                 </div>
               </div>
-              <span
-                className={[
-                  'matchup-page__hero-number',
-                  'matchup-page__hero-number--opp',
-                  isPriced ? '' : 'matchup-page__hero-number--pending',
-                ].filter(Boolean).join(' ')}
-              >
-                {formatDisplayedOdds(
-                  engine.activeLine.opponent.moneyline,
-                  engine.activeLine.opponent.winProbability,
+              <span className="matchup-page__hero-number matchup-page__hero-number--opp">
+                {isPriced ? (
+                  formatDisplayedOdds(
+                    engine.activeLine.opponent.moneyline,
+                    engine.activeLine.opponent.winProbability,
+                  )
+                ) : (
+                  <PricingOdds percent={oddsFormat === 'percent'} />
                 )}
               </span>
               <p className="matchup-page__meta-copy">
