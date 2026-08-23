@@ -74,7 +74,9 @@ function mapLeagueSummary(raw) {
   };
 }
 
-function trimCatalogEntry(id, p) {
+/* Exported for test/sleeperInjuryFields.test.mjs: a field silently dropped
+   here does not exist anywhere downstream. */
+export function trimCatalogEntry(id, p) {
   return {
     id,
     name: p.full_name ?? `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() ?? id,
@@ -86,17 +88,64 @@ function trimCatalogEntry(id, p) {
     byeWeek: null,
     status: p.status ?? null,
     injuryStatus: p.injury_status ?? null,
+    /* The rest of Sleeper's injury block. Coverage measured against the live
+       catalogue on 2026-08-23 (4,263 skill-position players, preseason):
+
+         injury_status           6.0%   Questionable / IR / NA / PUP / DNR / Out
+         injury_body_part        5.3%   Knee, Hamstring, "Knee - ACL", Achilles
+         injury_notes            0.8%   free text, e.g. "Surgery"
+         injury_start_date       0.0%
+         practice_participation  0.0%
+         practice_description    0.0%
+         news_updated           74.7%   ms timestamp of last news
+
+       Three of those are empty in every row today. Two of them —
+       practice_participation and practice_description — are fed by the
+       Wednesday/Thursday/Friday practice reports, which teams do not file
+       until the regular season, so preseason emptiness is expected rather than
+       evidence they never populate. They are carried anyway: an always-null
+       key costs a key, and the alternative is discovering in week 2 that we
+       threw away the one signal that says whether a player practised.
+
+       injury_start_date has no such excuse and may simply be unused. Carried
+       for the same reason and worth nothing until it is not zero.
+
+       Nothing downstream should present practice fields as data until they are
+       observed non-null in season. Empty is not the same as healthy, and a UI
+       that renders a blank practice report as "full participation" would be
+       inventing a fact. */
+    injuryBodyPart: p.injury_body_part ?? null,
+    injuryNotes: p.injury_notes ?? null,
+    injuryStartDate: p.injury_start_date ?? null,
+    practiceParticipation: p.practice_participation ?? null,
+    practiceDescription: p.practice_description ?? null,
+    newsUpdated: p.news_updated ?? null,
     number: p.number ?? null,
   };
 }
 
+/* Any key trimCatalogEntry always writes. A snapshot from before that key
+   existed is the same age as one written a minute ago, so freshness alone will
+   happily serve the old shape for a full day after a deploy that added a
+   field — and the field reads as `undefined` rather than null the whole time,
+   which is exactly the distinction downstream code is asked to respect. Cheaper
+   to notice the shape than to reason about who is holding a stale one. */
+const CATALOG_SHAPE_KEY = 'practiceParticipation';
+
+export function snapshotMatchesCurrentShape(catalog) {
+  const first = Object.values(catalog ?? {})[0];
+  return first != null && CATALOG_SHAPE_KEY in first;
+}
+
 async function loadFullCatalog() {
   return cached('sleeper:catalog', DAY, async () => {
-    // serve from disk if today's snapshot exists
+    // serve from disk if today's snapshot exists and was written by this code
     try {
       const stat = fs.statSync(CATALOG_FILE);
       if (Date.now() - stat.mtimeMs < DAY) {
-        return JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf8'));
+        const snapshot = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf8'));
+        if (snapshotMatchesCurrentShape(snapshot)) return snapshot;
+        console.log('[sleeper] catalog snapshot predates the current shape, refetching');
       }
     } catch {
       // no snapshot yet
