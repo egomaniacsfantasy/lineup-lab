@@ -6,6 +6,8 @@ import { LeagueFutures } from '../components/league/LeagueFutures';
 import { MatchupSlate } from '../components/league/MatchupSlate';
 import { PlayoffSettings } from '../components/league/PlayoffSettings';
 import { StandingsTable } from '../components/league/StandingsTable';
+import { LuckBoard, type LuckBoardTeam } from '../components/league/LuckBoard';
+import { computeAllPlay } from '../utils/allPlay';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
@@ -39,7 +41,7 @@ import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
-type LeagueView = 'this-week' | 'standings' | 'futures' | 'schedule';
+type LeagueView = 'this-week' | 'standings' | 'futures' | 'schedule' | 'luck';
 
 /**
  * Standings is deliberately not in here. Wins, PF and PA are already on ESPN
@@ -54,6 +56,7 @@ const LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
   { key: 'this-week', label: 'This week' },
   { key: 'futures', label: 'Futures' },
   { key: 'schedule', label: 'Schedule' },
+  { key: 'luck', label: 'All-play' },
 ];
 
 const ADMIN_LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
@@ -181,6 +184,38 @@ export function LeaguePage() {
     }
     return null;
   }, [connected?.slate]);
+
+  /* All-play needs only what has already happened: each team's score in each
+     completed week, plus their real record over those same weeks. Both are on
+     data the page already holds, so this adds no request and asks the engine
+     for nothing — it predicts nothing to ask about. */
+  const luckTeams = useMemo<LuckBoardTeam[]>(() => {
+    if (!bootstrap || !schedule) return [];
+    const scores = schedule.flatMap((weekEntry) =>
+      weekEntry.matchups.map((matchup) => ({
+        week: weekEntry.week,
+        rosterId: matchup.rosterId,
+        points: matchup.points ?? 0,
+      })),
+    );
+    const headToHead = new Map(
+      bootstrap.teams.map((team) => [team.rosterId, team.record.wins]),
+    );
+    const byRoster = new Map(bootstrap.teams.map((team) => [team.rosterId, team]));
+    return computeAllPlay(scores, headToHead)
+      .map((row) => {
+        const team = byRoster.get(row.rosterId);
+        if (!team) return null;
+        return {
+          ...row,
+          teamName: team.teamName,
+          ownerName: team.ownerName,
+          isUser: team.isUser,
+          record: team.record,
+        };
+      })
+      .filter((row): row is LuckBoardTeam => row != null);
+  }, [bootstrap, schedule]);
 
   const connectedScheduleItems = useMemo(() => {
     if (!connectedSeason) return [];
@@ -432,6 +467,16 @@ export function LeaguePage() {
             history={lineHistory}
             totalTeams={connection.totalTeams}
           />
+        </>
+      ) : null}
+
+      {activeView === 'luck' ? (
+        <>
+          {connected ? (
+            <LuckBoard teams={luckTeams} />
+          ) : (
+            <SeasonalNotice>Connect a league to see how its schedule has played out.</SeasonalNotice>
+          )}
         </>
       ) : null}
 

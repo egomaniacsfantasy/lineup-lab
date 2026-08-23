@@ -1,0 +1,199 @@
+.luck-board {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.luck-board__empty {
+  margin: 0;
+  padding: var(--space-xl);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.luck-board__head {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.luck-board__kicker {
+  margin: 0;
+  color: var(--text-amber);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.luck-board__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--type-title-xl);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+/* The sentence is the product. Sized so it is read, not skimmed past. */
+.luck-board__lede {
+  margin: var(--space-2xs) 0 0;
+  max-width: 62ch;
+  color: var(--text-soft);
+  font-size: var(--type-body);
+  line-height: 1.5;
+}
+
+.luck-board__extremes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.luck-board__extreme {
+  display: grid;
+  gap: var(--space-2xs);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+}
+
+.luck-board__extreme-label {
+  color: var(--text-dim);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.luck-board__extreme-team {
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: var(--type-title-md);
+  text-transform: uppercase;
+}
+
+.luck-board__extreme-value {
+  font-family: var(--font-price);
+  font-size: var(--type-display);
+  font-weight: var(--font-price-weight);
+  line-height: 1;
+}
+
+.luck-board__extreme-value--up { color: var(--green); }
+.luck-board__extreme-value--down { color: var(--red); }
+
+.luck-board__table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.luck-board__table thead th {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-dim);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.luck-board__table thead th.luck-board__num,
+.luck-board__table tbody td.luck-board__num {
+  text-align: right;
+}
+
+.luck-board__row {
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+}
+
+.luck-board__row:last-child {
+  border-bottom: 0;
+}
+
+/* Your row is marked the same way it is on every other board in the app. */
+.luck-board__row--you {
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.luck-board__team {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  font-weight: 400;
+  text-align: left;
+}
+
+.luck-board__team-name {
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: var(--type-body);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.luck-board__you {
+  padding: 1px var(--space-2xs);
+  border-radius: var(--radius-sm);
+  background: var(--amber);
+  color: var(--bg-deep);
+  font-family: var(--font-condensed);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.luck-board__table tbody td {
+  padding: var(--space-md);
+  font-family: var(--font-num);
+  font-size: var(--type-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* What you got: quiet. It is the thing being questioned. */
+.luck-board__record { color: var(--text-muted); }
+
+.luck-board__allplay { color: var(--text-primary); }
+
+.luck-board__pct {
+  margin-left: var(--space-xs);
+  color: var(--text-dim);
+  font-size: var(--type-caption);
+}
+
+.luck-board__earned { color: var(--text-soft); }
+
+/* The number the page exists for, set like a price on the board. */
+.luck-board__luck {
+  font-family: var(--font-price);
+  font-size: var(--type-stat);
+  font-weight: var(--font-price-weight);
+  letter-spacing: 0.01em;
+}
+
+.luck-board__luck--up { color: var(--green); }
+.luck-board__luck--down { color: var(--red); }
+.luck-board__luck--flat { color: var(--text-dim); }
+
+.luck-board__foot {
+  margin: 0;
+  max-width: 78ch;
+  color: var(--text-dim);
+  font-size: var(--type-caption);
+  line-height: 1.6;
+}
+
+.luck-board__foot strong {
+  color: var(--text-soft);
+  font-weight: 600;
+}

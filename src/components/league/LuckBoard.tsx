@@ -1,0 +1,146 @@
+import { useMemo } from 'react';
+import type { AllPlayRow } from '../../utils/allPlay';
+import { formatAllPlayRecord, formatLuck, luckSentence } from '../../utils/allPlay';
+import './LuckBoard.css';
+
+export interface LuckBoardTeam extends AllPlayRow {
+  teamName: string;
+  ownerName: string | null;
+  isUser: boolean;
+  /** Real head-to-head record, for the "what you got" column. */
+  record: { wins: number; losses: number; ties: number };
+}
+
+/**
+ * The schedule board.
+ *
+ * The convention in this category is three stacked bar charts — actual vs
+ * expected, the difference, and strength of schedule — above a sortable table
+ * where the most interesting number in the whole product sits in an unemphasised
+ * column. I went and looked at ffwrapped's Expected Wins page before building
+ * this, and the problem is not that it is ugly. It is that it asks you to read
+ * a table and infer a story it never tells: nowhere does it say "the schedule
+ * cost this team 1.4 wins", even though that is the only reason anybody opened
+ * the page.
+ *
+ * So this is not a chart. It is a board, the same one the rest of the app
+ * speaks: one row per team, the number that matters set in price type, sorted
+ * by the thing being measured, and a sentence at the top that can be read out
+ * loud in a group chat without anyone needing the axis labels explained.
+ *
+ * Two records sit side by side because the whole idea is the gap between them:
+ * what you GOT, and what you SCORED FOR.
+ */
+export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
+  /* Sorted by all-play, not by record — the point of the board is to rank the
+     league by scoring with the schedule taken out, so ordering it by the
+     schedule-contaminated record would undercut the whole thing. */
+  const rows = useMemo(
+    () => [...teams].sort((a, b) => b.allPlayWinPct - a.allPlayWinPct),
+    [teams],
+  );
+
+  const you = rows.find((row) => row.isUser) ?? null;
+  const weeks = rows[0]?.weeksCounted ?? 0;
+
+  if (weeks === 0) {
+    return (
+      <section className="luck-board">
+        <p className="luck-board__empty">
+          No completed weeks yet. This fills in once the league has played.
+        </p>
+      </section>
+    );
+  }
+
+  /* The extremes are the story, so they are named rather than left to be found
+     by scanning a column. */
+  const luckiest = rows.reduce((best, row) => (row.luck > best.luck ? row : best), rows[0]);
+  const unluckiest = rows.reduce((worst, row) => (row.luck < worst.luck ? row : worst), rows[0]);
+
+  return (
+    <section aria-labelledby="luck-board-title" className="luck-board">
+      <header className="luck-board__head">
+        <p className="luck-board__kicker">Through {weeks} {weeks === 1 ? 'week' : 'weeks'}</p>
+        <h2 className="luck-board__title" id="luck-board-title">
+          If everyone played everyone
+        </h2>
+        {you ? <p className="luck-board__lede">{luckSentence(you, you.teamName)}</p> : null}
+      </header>
+
+      <div className="luck-board__extremes">
+        <div className="luck-board__extreme">
+          <span className="luck-board__extreme-label">Schedule helped most</span>
+          <span className="luck-board__extreme-team">{luckiest.teamName}</span>
+          <span className="luck-board__extreme-value luck-board__extreme-value--up">
+            {formatLuck(luckiest.luck)}
+          </span>
+        </div>
+        <div className="luck-board__extreme">
+          <span className="luck-board__extreme-label">Schedule hurt most</span>
+          <span className="luck-board__extreme-team">{unluckiest.teamName}</span>
+          <span className="luck-board__extreme-value luck-board__extreme-value--down">
+            {formatLuck(unluckiest.luck)}
+          </span>
+        </div>
+      </div>
+
+      <table className="luck-board__table">
+        <thead>
+          <tr>
+            <th scope="col">Team</th>
+            <th scope="col" className="luck-board__num">Record</th>
+            <th scope="col" className="luck-board__num">All-play</th>
+            <th scope="col" className="luck-board__num">Earned</th>
+            <th scope="col" className="luck-board__num">Schedule</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const tone = row.luck > 0.05 ? 'up' : row.luck < -0.05 ? 'down' : 'flat';
+            return (
+              <tr
+                className={[
+                  'luck-board__row',
+                  row.isUser ? 'luck-board__row--you' : '',
+                ].filter(Boolean).join(' ')}
+                key={row.rosterId}
+              >
+                <th scope="row" className="luck-board__team">
+                  <span className="luck-board__team-name">{row.teamName}</span>
+                  {row.isUser ? <span className="luck-board__you">You</span> : null}
+                </th>
+                {/* What you got. */}
+                <td className="luck-board__num luck-board__record">
+                  {row.record.wins}-{row.record.losses}
+                  {row.record.ties > 0 ? `-${row.record.ties}` : ''}
+                </td>
+                {/* What you scored for, against the whole league. */}
+                <td className="luck-board__num luck-board__allplay">
+                  {formatAllPlayRecord(row)}
+                  <span className="luck-board__pct">
+                    {(row.allPlayWinPct * 100).toFixed(0)}%
+                  </span>
+                </td>
+                <td className="luck-board__num luck-board__earned">
+                  {row.expectedWins.toFixed(1)}
+                </td>
+                {/* The number the page exists for, set like a price. */}
+                <td className={`luck-board__num luck-board__luck luck-board__luck--${tone}`}>
+                  {formatLuck(row.luck)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <p className="luck-board__foot">
+        All-play is your record against every team, every week, so it ranks the
+        league on scoring with the schedule taken out. <strong>Earned</strong> is the
+        wins that scoring was worth. <strong>Schedule</strong> is what you got minus
+        what you earned.
+      </p>
+    </section>
+  );
+}
