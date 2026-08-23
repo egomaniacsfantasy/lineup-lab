@@ -339,7 +339,7 @@ function TradeDealsView() {
        guarantees youDelta > 0, so every shown deal still nudges your title up.
        Acceptance % is still displayed as context, just not used to rank. */
     return sortByTradeFairness(leagueDeals)
-      .slice(0, 5)
+      .slice(0, 15)
       .map((suggestion) => {
         const accept = acceptanceProbability(suggestion.partnerDelta, 5, 5);
         return {

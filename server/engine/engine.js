@@ -556,6 +556,25 @@ export function computeInputsHash({ projectionVersion, teams, week, overlay }) {
   return crypto.createHash('sha1').update(payload).digest('hex').slice(0, 16);
 }
 
+// Seed hash for the sim's RANDOM stream. It deliberately EXCLUDES
+// projectionVersion (unlike computeInputsHash, which identifies a cache/record
+// state). Reason: projectionVersion churns constantly — it ends in
+// `:consensusCount`, and flips on the model-only->consensus warmup — so if the
+// seed tracked it, every version bump would reshuffle the entire common-random-
+// number stream and re-roll every team's title odds from scratch, making the
+// displayed championship % (and every trade delta) jump on refresh. Keying the
+// seed to the STABLE inputs (rosters + week + overlay) holds the noise fixed, so
+// projections still move the odds through the mean scores but smoothly (proper
+// CRN — noise cancels between two states instead of being re-drawn).
+export function computeSeedHash({ teams, week, overlay }) {
+  const payload = JSON.stringify({
+    week,
+    starters: teams.map((t) => [t.rosterId, t.starters]),
+    overlay: overlay ?? null,
+  });
+  return crypto.createHash('sha1').update(payload).digest('hex').slice(0, 16);
+}
+
 /**
  * Apply a user's projection overlay onto a base projection. The overlay holds
  * absolute points the user set ({ base, weekly }), not deltas — Franco is the
@@ -691,7 +710,7 @@ export function priceLeague(ctx) {
   });
 
   // one seed per inputs state: identical inputs always price identically
-  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   const linesRng = mulberry32(seed);
 
   const lines = [];
@@ -1720,7 +1739,7 @@ export function buildLiveProjectionInputs(ctx) {
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   applyOverlay(projectionMap, overlay);
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
-  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   return { projectionMap, slotLabels, seed, version: active.version };
 }
 
@@ -1943,7 +1962,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
 
   // Same-seed CRN comparison.
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
-  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
   const baseline = simulateSeason(base);
   const tradedTeams = teams.map((t) =>
@@ -2019,7 +2038,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
   for (let r = 0; r < rounds; r += 1) dropWeeks.push(playoffWeekStart + r);
 
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
-  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
 
@@ -2155,7 +2174,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   for (let r = 0; r < rounds; r += 1) dropWeeks.push(playoffWeekStart + r);
 
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
-  const seed = parseInt(inputsHash.slice(0, 8), 16);
+  const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
 
@@ -2303,7 +2322,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // Guarantee every opponent a fair slice of the scan budget so the all-teams sweep
   // never starves teams late in the loop — the old fixed 54-cap did exactly that,
   // leaving most managers blank. Deep on a single clicked partner.
-  const perOpp = partnerRosterId != null ? 40 : 8;
+  const perOpp = partnerRosterId != null ? 40 : 16;
   const SCAN_CAP = perOpp * numOpp;
   const byOpp = new Map();
   for (const c of scored) {
@@ -2356,7 +2375,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // Build-a-trade analyzer exactly. Finalists are the FAIREST trades — smallest
   // combined title movement across both teams — not the biggest one-sided gain.
   const fairness = (c) => Math.abs(c.youDelta) + Math.abs(c.partnerDelta);
-  const finalists = scanned.sort((a, b) => fairness(a) - fairness(b)).slice(0, 10);
+  // Cast a wide net: full-sim the 24 fairest candidates (up from 10) so the board
+  // can show many balanced trades, not just a handful. Tunable — raise for a wider
+  // net, lower if the scan gets slow.
+  const finalists = scanned.sort((a, b) => fairness(a) - fairness(b)).slice(0, 24);
   const finalBaseline = simulateSeason({ ...base, sims: SEASON_SIMS });
   const suggestions = [];
   let re = 0;
@@ -2488,12 +2510,7 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   // One seed per inputs state (shared with priceLeague's futures sim when the
   // caller passes it), so before/after cancel common variance (CRN).
   const seed = seedOverride ?? parseInt(
-    computeInputsHash({
-      projectionVersion: active.version,
-      teams,
-      week,
-      overlay: overlay ?? null,
-    }).slice(0, 8),
+    computeSeedHash({ teams, week, overlay }).slice(0, 8),
     16,
   );
 
