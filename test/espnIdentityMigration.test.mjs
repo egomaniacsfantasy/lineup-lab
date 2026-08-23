@@ -89,3 +89,47 @@ test('removing a league is still not undone by the account rows', async () => {
   const hydrate = source.slice(source.indexOf('const all = rows'));
   assert.match(hydrate.slice(0, 400), /removedKeysRef\.current\.has/);
 });
+
+test('an unopenable league does not take the whole account down with it', async () => {
+  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+  const start = source.indexOf('const preferred = all.find');
+  assert.ok(start > -1, 'the account fallback should choose, not bail');
+  const body = source.slice(start, start + 700);
+
+  /* An ESPN league awaiting a team pick cannot be opened. It used to `return`
+     here, so someone whose active league was an unconfirmed ESPN one landed on
+     "sync a league to begin" while holding fourteen leagues. */
+  assert.match(
+    body,
+    /all\.find\(\(connection\) => trustedForIdentity\(connection\)\)/,
+    'it must fall through to a league it CAN open',
+  );
+});
+
+test('the active league is not chosen by indexing a filtered list', async () => {
+  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+
+  /* `all` is filtered for removals, so an index into it stopped matching the
+     row it came from and "active" could resolve to a different league. */
+  assert.doesNotMatch(
+    source,
+    /rows\[i\]\.is_active/,
+    'is_active is being read back out of rows by index again',
+  );
+  assert.match(source, /wasActive: row\.is_active/, 'is_active should ride on the connection');
+});
+
+test('Sleeper names refresh even when no Sleeper league is open', async () => {
+  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+
+  /* The account rows have no column for a league name, so Sleeper is the only
+     source. Gating the refresh on the ACTIVE league being Sleeper meant that
+     with an ESPN league active, or none at all, every Sleeper row in the
+     switcher showed the manager's own username forever. */
+  assert.match(source, /const sleeperUsername =/);
+  assert.match(
+    source,
+    /leagues\.find\(\(league\) => league\.provider === 'sleeper' && league\.username\)/,
+    'the username should come from any Sleeper league, not only the active one',
+  );
+});

@@ -437,8 +437,12 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           applyApiContext(stored);
           return;
         }
+        /* is_active is carried on the connection rather than read back out of
+           `rows` by index. The list is filtered a line later, so an index into
+           `all` stopped matching the row it came from and the "active" league
+           could be somebody else entirely. */
         const all = rows
-          .map(rowToConnection)
+          .map((row) => ({ ...rowToConnection(row), wasActive: row.is_active }))
           .filter((connection) => !removedKeysRef.current.has(leagueKey(connection)));
         if (all.length === 0 && rows.length > 0) {
           /* Everything the account still lists was removed here a moment ago.
@@ -489,13 +493,21 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           return;
         }
 
-        const dbActive = all.find((_, i) => rows[i].is_active) ?? all[0];
-        /* Rows carry no identity version, so an ESPN league restored from the
-           account is exactly as unverified as a local copy from before the fix.
-           Restoring it here would undo the drop that just happened and put the
-           wrong team back on screen. */
-        if (!trustedForIdentity(dbActive)) {
-          flagIdentityRecheck();
+        /* An ESPN league that has not been confirmed on this device cannot be
+           opened, because it might be pointing at someone else's team. But it
+           must not take the whole account down with it: this used to return
+           here, so a person whose active league was an unconfirmed ESPN one
+           landed on "sync a league to begin" while holding fourteen leagues.
+
+           Skip what cannot be opened, open the best thing that can. */
+        const preferred = all.find((connection) => connection.wasActive) ?? all[0];
+        const dbActive = trustedForIdentity(preferred)
+          ? preferred
+          : all.find((connection) => trustedForIdentity(connection)) ?? null;
+        if (preferred && !trustedForIdentity(preferred)) flagIdentityRecheck();
+        if (!dbActive) {
+          /* Nothing on the account can be opened yet, which means every league
+             here is an ESPN one awaiting a team pick. */
           applyApiContext(null);
           return;
         }
@@ -515,20 +527,39 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   }, [stored, user]);
 
   useEffect(() => {
-    if (!user || !stored || stored.provider !== 'sleeper' || !stored.username) return;
+    /* Names come from Sleeper, not from the account, because the rows have no
+       column for one. Gating this on the ACTIVE league being Sleeper meant that
+       whenever the active league was ESPN, or there was no active league at
+       all, the names never arrived and every Sleeper row in the switcher showed
+       the manager's own username instead. The username is on any Sleeper league
+       in the list, so take it from there. */
+    const sleeperUsername =
+      (stored?.provider === 'sleeper' ? stored.username : null)
+      ?? leagues.find((league) => league.provider === 'sleeper' && league.username)?.username
+      ?? null;
+    if (!user || !sleeperUsername) return;
     let cancelled = false;
-    connectUsername(stored.username)
+    connectUsername(sleeperUsername)
       .then((result) => {
         if (cancelled || result.leagues.length === 0) return;
         const summaries = sleeperSummaries(result.leagues);
+        /* `stored` may be null here now that this runs without an active
+           Sleeper league, so the base is built from the Sleeper account rather
+           than spread from whatever happens to be open. */
+        const base: StoredConnection = {
+          provider: 'sleeper',
+          leagueId: '',
+          userId: result.user.id,
+          username: result.user.username,
+          displayName: result.user.displayName,
+          allLeagueIds: [],
+          season: result.season,
+          espnS2: null,
+          swid: null,
+        };
         const nextConnections = result.leagues.map((league) =>
           connectionFromSummary(
-            {
-              ...stored,
-              userId: result.user.id,
-              username: result.user.username,
-              displayName: result.user.displayName,
-            },
+            base,
             { id: league.id, name: league.name, season: league.season },
             summaries,
           ),
@@ -547,7 +578,9 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           const fresh = nameById.get(leagueKey(league));
           return fresh ? { ...league, leagueName: fresh.leagueName, season: fresh.season } : league;
         });
-        const active = refreshed.find((connection) => leagueKey(connection) === leagueKey(stored));
+        const active = stored
+          ? refreshed.find((connection) => leagueKey(connection) === leagueKey(stored))
+          : undefined;
         const changed = refreshed.some(
           (league, index) => league.leagueName !== leagues[index]?.leagueName,
         );
@@ -555,7 +588,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           setLeagues(refreshed);
           if (userIdRef.current && active) void saveLeagueRows(userIdRef.current, refreshed, active);
         }
-        if (active && leagueKey(active) === leagueKey(stored)) {
+        if (active && stored && leagueKey(active) === leagueKey(stored)) {
           const activeChanged =
             active.leagueName !== stored.leagueName ||
             active.allLeagueIds.length !== stored.allLeagueIds.length ||
