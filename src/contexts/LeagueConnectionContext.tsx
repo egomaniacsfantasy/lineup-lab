@@ -29,6 +29,11 @@ import {
   readCachedLeaguePricing,
 } from '../services/leaguePricingCache';
 import { supabase } from '../services/supabase';
+import {
+  isMissingLeagueNameColumn,
+  leagueNameFromRow,
+  type DbLeagueRow,
+} from './leagueRows';
 import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
@@ -105,9 +110,10 @@ interface StoredLeagueSummary {
 export interface StoredConnection {
   provider: 'sleeper' | 'espn';
   leagueId: string;
-  /** Friendly league name for the switcher. Persisted locally; not yet a DB
-   *  column, so leagues loaded fresh on another device fall back to the
-   *  manager name until they're opened once. */
+  /** Friendly league name for the switcher. Persisted locally and, once the
+   *  olympus_leagues.league_name column exists, on the account — so a league
+   *  loaded fresh on another device carries its own name instead of falling
+   *  back to the manager name, which is identical on every row. */
   leagueName?: string;
   userId: string;
   username: string;
@@ -282,16 +288,6 @@ export function consumeEspnIdentityRecheck(): boolean {
   }
 }
 
-interface DbLeagueRow {
-  provider: string;
-  league_id: string;
-  season: string | null;
-  member_id: string | null;
-  username: string | null;
-  display_name: string | null;
-  is_active: boolean;
-  created_at: string;
-}
 
 /** A saved-league row from Supabase becomes a connection (cookies live
  *  server-side, so they stay null here). */
@@ -299,6 +295,7 @@ function rowToConnection(row: DbLeagueRow): StoredConnection {
   return {
     provider: row.provider === 'espn' ? 'espn' : 'sleeper',
     leagueId: row.league_id,
+    leagueName: leagueNameFromRow(row),
     userId: row.member_id ?? '',
     username: row.username ?? '',
     displayName: row.display_name ?? '',
@@ -348,36 +345,75 @@ function sleeperSummaries(leagues: ApiLeagueSummary[]): StoredLeagueSummary[] {
   }));
 }
 
-async function saveLeagueRow(userId: string, c: StoredConnection, isActive = true) {
-  await supabase.from('olympus_leagues').upsert(
-    {
-      user_id: userId,
-      provider: c.provider,
-      league_id: c.leagueId,
-      season: c.season ?? null,
-      member_id: c.userId,
-      username: c.username,
-      display_name: c.displayName,
-      is_active: isActive,
-    },
-    { onConflict: 'user_id,provider,league_id' },
+/**
+ * Whether olympus_leagues has the league_name column yet.
+ *
+ * The column is a migration Andre runs by hand in Supabase, and the code has
+ * to work on both sides of it — shipping a write that names a column the table
+ * does not have would break saving a league entirely, and demanding the SQL
+ * land first turns a one-line change into a coordinated deploy. So: assume it
+ * is there, notice the specific schema error if it is not, and stop asking for
+ * the rest of the session.
+ */
+let leagueNameColumn: 'assumed' | 'present' | 'absent' = 'assumed';
+
+function leagueRow(userId: string, c: StoredConnection, isActive: boolean) {
+  const row: Record<string, unknown> = {
+    user_id: userId,
+    provider: c.provider,
+    league_id: c.leagueId,
+    season: c.season ?? null,
+    member_id: c.userId,
+    username: c.username,
+    display_name: c.displayName,
+    is_active: isActive,
+  };
+  if (leagueNameColumn !== 'absent') row.league_name = c.leagueName ?? null;
+  return row;
+}
+
+/** Upsert, and retry once without the name if the column is not there yet. */
+async function upsertRows(rows: Record<string, unknown>[]) {
+  const { error } = await supabase
+    .from('olympus_leagues')
+    .upsert(rows, { onConflict: 'user_id,provider,league_id' });
+
+  if (!error) {
+    if (leagueNameColumn === 'assumed') leagueNameColumn = 'present';
+    return;
+  }
+
+  if (!isMissingLeagueNameColumn(error)) {
+    console.error('[leagues] could not save', error.message);
+    return;
+  }
+
+  leagueNameColumn = 'absent';
+  console.warn(
+    '[leagues] olympus_leagues has no league_name column, so league names will '
+      + 'not persist. Run: alter table olympus_leagues add column if not exists league_name text;',
   );
+  const stripped = rows.map((row) => {
+    const rest = { ...row };
+    delete rest.league_name;
+    return rest;
+  });
+  const retry = await supabase
+    .from('olympus_leagues')
+    .upsert(stripped, { onConflict: 'user_id,provider,league_id' });
+  if (retry.error) console.error('[leagues] could not save', retry.error.message);
+}
+
+async function saveLeagueRow(userId: string, c: StoredConnection, isActive = true) {
+  await upsertRows([leagueRow(userId, c, isActive)]);
 }
 
 async function saveLeagueRows(userId: string, connections: StoredConnection[], active: StoredConnection) {
   await supabase.from('olympus_leagues').update({ is_active: false }).eq('user_id', userId);
-  await supabase.from('olympus_leagues').upsert(
-    connections.map((connection) => ({
-      user_id: userId,
-      provider: connection.provider,
-      league_id: connection.leagueId,
-      season: connection.season ?? null,
-      member_id: connection.userId,
-      username: connection.username,
-      display_name: connection.displayName,
-      is_active: leagueKey(connection) === leagueKey(active),
-    })),
-    { onConflict: 'user_id,provider,league_id' },
+  await upsertRows(
+    connections.map((connection) =>
+      leagueRow(userId, connection, leagueKey(connection) === leagueKey(active)),
+    ),
   );
 }
 
