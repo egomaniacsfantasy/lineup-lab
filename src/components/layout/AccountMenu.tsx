@@ -6,7 +6,6 @@ import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import { PROVIDER_LABEL } from '../../utils/provider';
 import './AccountMenu.css';
 import { WelcomeCard } from '../onboarding/WelcomeCard';
-import { useBugReport } from '../support/BugReportProvider';
 
 function leagueLabel(league: StoredConnection, activeName?: string | null) {
   return (
@@ -28,7 +27,6 @@ export function AccountMenu() {
   const { leagues, stored, bootstrap, switchLeague, removeLeague, changeEspnTeam, refresh, isLoading, error } =
     useLeagueConnection();
   const navigate = useNavigate();
-  const bugReport = useBugReport();
   const [open, setOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   /* Removing a league is destructive and one row away from switching to it, so
@@ -288,23 +286,6 @@ export function AccountMenu() {
               type="button"
             >
               How this works
-            </button>
-            {/* Sits with the account actions rather than behind a support
-                page, because the moment someone wants it is the moment
-                something is already wrong and they will not go looking. */}
-            <button
-              className="account-menu__action"
-              onClick={() => {
-                setOpen(false);
-                bugReport.open();
-              }}
-              role="menuitem"
-              type="button"
-            >
-              Report a bug
-              <span className="account-menu__action-note">
-                Sends the page and league you had open
-              </span>
             </button>
             <button
               className="account-menu__action account-menu__action--quiet"

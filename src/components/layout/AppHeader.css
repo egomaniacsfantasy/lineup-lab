@@ -420,3 +420,34 @@
     display: none;
   }
 }
+
+/* Report a bug. Deliberately the quietest control in the row: it has to be
+   present on every screen without competing with sync, week or the avatar. */
+.app-header__report {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.app-header__report svg {
+  width: 15px;
+  height: 15px;
+}
+
+.app-header__report:hover {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  color: var(--text-amber);
+}
+
+.app-header__report:focus-visible {
+  outline: var(--focus-ring);
+}

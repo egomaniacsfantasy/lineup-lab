@@ -11,6 +11,7 @@ import { PROVIDER_LABEL } from '../../utils/provider';
 import { isAgreementAdmin } from '../../utils/admin';
 import { Gloss } from '../ui/Gloss';
 import { AccountMenu } from './AccountMenu';
+import { useBugReport } from '../support/BugReportProvider';
 import './AppHeader.css';
 
 const SCORING_LABELS: Record<ScoringFormat, string> = {
@@ -32,6 +33,7 @@ export function AppHeader() {
   const { user } = useAuth();
   const isAdmin = isAgreementAdmin(user?.email);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const bugReport = useBugReport();
   const isSynced = bootstrap !== null;
   const dynastyTradesExperimental = useDynastyTradesExperimental();
   const providerLabel = stored ? PROVIDER_LABEL[stored.provider] : 'your league host';
@@ -128,6 +130,32 @@ export function AppHeader() {
               LIVE
             </span>
           ) : null}
+          {/* Reporting a bug was two clicks deep in the account menu, which is
+              the wrong place for it: the moment someone wants it is the moment
+              something is already broken, and that is not when people go
+              hunting through menus. A 15px glyph on every screen instead —
+              always one click, and quiet enough to ignore. */}
+          <button
+            aria-label="Report a bug"
+            className="app-header__report"
+            onClick={() => bugReport.open()}
+            title="Report a bug"
+            type="button"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M8 6a4 4 0 0 1 8 0" />
+              <rect x="7" y="6" width="10" height="12" rx="5" />
+              <path d="M3 11h4M17 11h4M4 17l3-1.6M20 17l-3-1.6M4.5 6.5 7 8M19.5 6.5 17 8" />
+            </svg>
+          </button>
           {isAdmin ? (
             <NavLink
               className="app-header__admin"

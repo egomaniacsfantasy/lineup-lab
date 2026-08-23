@@ -66,8 +66,20 @@ function flowFromHash(hash: string): ConnectFlow | null {
   return null;
 }
 
+/**
+ * Read a view out of the URL. Every known view, admin ones included.
+ *
+ * This used to check LEAGUE_VIEWS alone, which does not contain 'standings'.
+ * So an admin clicking the Standings tab set ?view=standings, this coerced it
+ * straight back to 'this-week', and the tab rendered but never activated: a
+ * visible control that did nothing when clicked. Deciding who may see a view
+ * is not this function's job — activeView below is the gate, and doing it in
+ * two places is what made them disagree.
+ */
+const ALL_LEAGUE_VIEWS = [...LEAGUE_VIEWS, ...ADMIN_LEAGUE_VIEWS];
+
 function parseLeagueView(raw: string | null): LeagueView {
-  return LEAGUE_VIEWS.some((view) => view.key === raw)
+  return ALL_LEAGUE_VIEWS.some((view) => view.key === raw)
     ? (raw as LeagueView)
     : 'this-week';
 }
