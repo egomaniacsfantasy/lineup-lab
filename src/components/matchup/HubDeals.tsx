@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { fetchTradeSuggestions, type TradeSuggestion } from '../../services/leagueApi';
-import { acceptanceWeightedValue } from '../../utils/tradeSuggestionDisplay';
-import { acceptanceProbability } from '../../utils/tradeAcceptance';
+import { sortByTradeFairness } from '../../utils/tradeSuggestionDisplay';
 import { signedPct } from '../../utils/tradeVerdict';
 import { toPlayer } from '../../adapters/connectedLeague';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
@@ -85,20 +84,10 @@ export function HubDeals() {
     })
       .then((response) => {
         if (cancelled || !response.available) return;
-        /* Acceptance weighted: what it gains you times the chance they take
-           it. A title bump nobody accepts is worth nothing. The read is a
-           neutral 5/5 because the hub has no per-manager dossier to apply. */
-        const ranked = [...(response.suggestions ?? [])]
-          .map((suggestion) => ({
-            suggestion,
-            weight: acceptanceWeightedValue({
-              valueGain: suggestion.youDelta,
-              acceptanceProbability: acceptanceProbability(suggestion.partnerDelta, 5, 5),
-            }),
-          }))
-          .sort((a, b) => b.weight - a.weight)
-          .map((entry) => entry.suggestion)
-          .slice(0, SHOWN);
+        /* Fairest first: the trade that moves BOTH teams' championship odds the
+           least (|youDelta| + |partnerDelta|). Acceptance probability is not part
+           of this — this is the exact same ranking the Trades tab uses. */
+        const ranked = sortByTradeFairness(response.suggestions ?? []).slice(0, SHOWN);
         setDeals(ranked);
         writeCache(cacheKey, ranked);
       })

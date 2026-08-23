@@ -2333,9 +2333,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
 
   // ── Pass 1: cheap scan. A suggestion must (a) raise YOUR title and (b) clear the
   // scam guard — the partner's championship can't drop more than MAX_PARTNER_DROP.
-  // Survivors are RANKED by title gain × chance they accept, so a big-gain/tiny-
-  // accept deal (+10% × 3% = 0.30) still loses to a solid win-win (+2.4% × 40% =
-  // 0.96). Fair value (0.7–1.4) is already enforced in candidate generation.
+  // Survivors are RANKED by FAIRNESS: the total title-odds movement across both
+  // teams, |youDelta| + |partnerDelta|, smallest first. The fairest trade barely
+  // moves either side's title price. Acceptance probability is no longer part of
+  // the ranking. Fair value (0.7–1.4) is already enforced in candidate generation.
   const MAX_PARTNER_DROP = 4; // hard scam guard: never suggest a deal that craters the partner's title beyond this
   const SCAN_SIMS = 1200;
   const scanBaseline = simulateSeason({ ...base, sims: SCAN_SIMS });
@@ -2351,9 +2352,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
   }
 
-  // ── Pass 2: re-sim the top survivors (by title gain × accept) at FULL sims so
-  // the shown Δc matches the Build-a-trade analyzer exactly.
-  const finalists = scanned.sort((a, b) => b.score - a.score).slice(0, 10);
+  // ── Pass 2: re-sim the top survivors at FULL sims so the shown Δc matches the
+  // Build-a-trade analyzer exactly. Finalists are the FAIREST trades — smallest
+  // combined title movement across both teams — not the biggest one-sided gain.
+  const fairness = (c) => Math.abs(c.youDelta) + Math.abs(c.partnerDelta);
+  const finalists = scanned.sort((a, b) => fairness(a) - fairness(b)).slice(0, 10);
   const finalBaseline = simulateSeason({ ...base, sims: SEASON_SIMS });
   const suggestions = [];
   let re = 0;
@@ -2380,7 +2383,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       score: Number((youDelta * (accept / 100)).toFixed(2)),
     });
   }
-  suggestions.sort((a, b) => b.score - a.score);
+  // Fairest first: smallest combined title movement across both teams.
+  suggestions.sort((a, b) => (Math.abs(a.youDelta) + Math.abs(a.partnerDelta)) - (Math.abs(b.youDelta) + Math.abs(b.partnerDelta)));
 
   return {
     available: true,

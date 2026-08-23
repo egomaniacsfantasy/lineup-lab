@@ -31,8 +31,8 @@ import {
 } from '../utils/tradeMarket';
 import {
   acceptanceGaugeLabel,
-  acceptanceWeightedValue,
   applyTradeDisplayPolicy,
+  sortByTradeFairness,
 } from '../utils/tradeSuggestionDisplay';
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
@@ -333,22 +333,16 @@ function TradeDealsView() {
 
   const leagueDealRows = useMemo<LeagueDealRow[] | null>(() => {
     if (!bootstrap || leagueDeals === null) return null;
-    return [...leagueDeals]
-      /* A board headed "best deals" cannot carry one that lowers your title
-         price. Acceptance weighting sorts it last rather than out, because a
-         bad deal they would happily take still scores above a good one they
-         would refuse. */
-      .filter((suggestion) => suggestion.youDelta > 0)
+    /* Fairest first: the trades that move BOTH teams' championship odds the least
+       (|youDelta| + |partnerDelta|). Identical ranking to the Hub deals section;
+       acceptance probability is no longer part of the value. The server already
+       guarantees youDelta > 0, so every shown deal still nudges your title up.
+       Acceptance % is still displayed as context, just not used to rank. */
+    return sortByTradeFairness(leagueDeals)
+      .slice(0, 5)
       .map((suggestion) => {
         const accept = acceptanceProbability(suggestion.partnerDelta, 5, 5);
-        return { suggestion, accept, weight: acceptanceWeightedValue({
-          valueGain: suggestion.youDelta,
-          acceptanceProbability: accept,
-        }) };
-      })
-      .sort((a, b) => b.weight - a.weight)
-      .slice(0, 5)
-      .map(({ suggestion, accept }) => ({
+        return {
         key: tradeSignature({
           leagueId: stored?.leagueId ?? '',
           partnerRosterId: suggestion.partnerRosterId,
@@ -363,7 +357,8 @@ function TradeDealsView() {
         delta: signedPct(suggestion.youDelta),
         up: suggestion.youDelta >= 0,
         acceptance: formatAcceptancePercent(accept),
-      }));
+        };
+      });
   }, [bootstrap, leagueDeals, stored?.leagueId]);
 
   const leagueDealByKey = useMemo(() => {

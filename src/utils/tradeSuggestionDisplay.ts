@@ -23,6 +23,24 @@ export function acceptanceWeightedValue(mover: TradeDisplayMover) {
   return gain * (acceptance / 100);
 }
 
+type TradeFairnessInput = { youDelta?: number | null; partnerDelta?: number | null };
+
+/**
+ * Fairest-trade score: the total championship-odds movement across BOTH teams,
+ * |youDelta| + |partnerDelta|. SMALLER is better — the fairest trade barely moves
+ * either side's title price. Acceptance probability is intentionally NOT part of
+ * this; a balanced trade needs no acceptance nudge to be worth showing. This is
+ * the single ranking used by both the Hub deals section and the Trades board.
+ */
+export function tradeFairnessScore(mover: TradeFairnessInput) {
+  return Math.abs(mover.youDelta ?? 0) + Math.abs(mover.partnerDelta ?? 0);
+}
+
+/** Sort ascending by tradeFairnessScore (fairest / least-movement first). */
+export function sortByTradeFairness<T extends TradeFairnessInput>(suggestions: T[]) {
+  return [...suggestions].sort((left, right) => tradeFairnessScore(left) - tradeFairnessScore(right));
+}
+
 export function sortTradeSuggestions<T extends TradeDisplayMover>(suggestions: T[]) {
   return [...suggestions].sort((left, right) => {
     const weightedGap = acceptanceWeightedValue(right) - acceptanceWeightedValue(left);
