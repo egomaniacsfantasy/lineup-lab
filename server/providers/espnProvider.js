@@ -193,6 +193,18 @@ export function createEspnProvider({ season, espnS2, swid }) {
     );
   };
 
+  /* Separate from loadLeague on purpose: the draft blob is big, it is frozen
+     the moment the draft ends, and folding it into the league view would make
+     every roster read pay for it. Cached long for the same reason. */
+  const loadDraft = (leagueId) => {
+    const authed = (espnS2 && swid) || getEspnCreds(leagueId);
+    return cached(
+      `espn:draft:${season}:${leagueId}:${authed ? 'auth' : 'pub'}`,
+      6 * 60 * MINUTE,
+      () => espnGet(leagueId, ['mDraftDetail']),
+    );
+  };
+
   const buildTeams = async (leagueId) => {
     const [blob, crosswalk] = await Promise.all([loadLeague(leagueId), getCrosswalk()]);
     const membersById = new Map(
@@ -340,12 +352,78 @@ export function createEspnProvider({ season, espnS2, swid }) {
       return merged;
     },
 
-    // ESPN draft import is a later pass; Draft Wrapped is off for now anyway.
-    async getDrafts() {
-      return [];
+    /* ESPN keeps the draft on the league itself: there is no separate draft
+       resource and so no draft id, which is why this hands the league id back
+       as one. Sleeper has real draft ids and the shared contract was written
+       around them. */
+    async getDrafts(leagueId) {
+      const detail = (await loadDraft(leagueId))?.draftDetail;
+      if (!detail) return [];
+      return [
+        {
+          draftId: String(leagueId),
+          status: detail.drafted
+            ? 'complete'
+            : detail.inProgress
+              ? 'in_progress'
+              : 'pre_draft',
+          picks: (detail.picks ?? []).length,
+        },
+      ];
     },
-    async getDraftPicks() {
-      return [];
+
+    /* The draft view names players by numeric ESPN id and nothing else, while
+       resolvePlayer matches on name and position. The roster view already
+       carries the full player object for everyone currently rostered, so it is
+       the bridge between the two.
+
+       The gap that leaves is real and worth stating: a player drafted and then
+       dropped is on nobody's roster, so there is no object to match and the
+       pick resolves to a synthetic id with no name. Those are exactly the
+       picks a draft recap wants to talk about, so this reports them rather
+       than dropping them, and a fuller fix means pulling the player pool. */
+    async getDraftPicks(draftId) {
+      const leagueId = String(draftId);
+      const [draftBlob, rosterBlob, crosswalk] = await Promise.all([
+        loadDraft(leagueId),
+        loadLeague(leagueId),
+        getCrosswalk(),
+      ]);
+      const picks = draftBlob?.draftDetail?.picks ?? [];
+      if (picks.length === 0) return [];
+
+      const synthetic = {};
+      const byEspnId = new Map();
+      for (const team of rosterBlob.teams ?? []) {
+        for (const entry of team.roster?.entries ?? []) {
+          const player = entry.playerPoolEntry?.player;
+          if (player?.id != null) byEspnId.set(Number(player.id), player);
+        }
+      }
+
+      return picks
+        .map((pick) => {
+          const espnPlayerId = Number(pick.playerId);
+          const player = byEspnId.get(espnPlayerId);
+          return {
+            /* ESPN counts overall picks from 1 the way Sleeper does. */
+            pickNo: pick.overallPickNumber ?? null,
+            round: pick.roundId ?? null,
+            draftSlot: pick.roundPickNumber ?? null,
+            rosterId: pick.teamId ?? null,
+            pickedBy: pick.memberId ?? null,
+            playerId: player
+              ? resolvePlayer(player, crosswalk, synthetic)
+              : `espn-${espnPlayerId}`,
+            /* True for a pick that was never made from the board. */
+            unresolved: !player,
+            isKeeper: Boolean(pick.keeper ?? pick.reservedForKeeper),
+            /* Auction leagues price picks in dollars, not slots. */
+            bidAmount: pick.bidAmount ?? null,
+          };
+        })
+        .filter((pick) => pick.pickNo != null)
+        .sort((a, b) => a.pickNo - b.pickNo);
     },
 
     // NFL week/season is global, not provider-specific — reuse Sleeper's.
