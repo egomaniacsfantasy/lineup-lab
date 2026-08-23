@@ -37,10 +37,7 @@ import { resolveWaiverClaimPlayer } from '../utils/marketMoverClaim';
 import { PROVIDER_LABEL } from '../utils/provider';
 import { resolveApiUrl } from '../services/apiBase.ts';
 import { shareText, type ShareResult } from '../utils/share';
-import {
-  marketMoverSignature,
-  samePositionOneForOneTrade,
-} from '../utils/tradeMarket';
+import { marketMoverSignature } from '../utils/tradeMarket';
 import {
   roundTo,
 } from '../utils/lineupComparison';
@@ -2936,23 +2933,13 @@ export function MatchupPage() {
   const connectedMatchup = bootstrap ? toMatchupData(bootstrap, pricing) : null;
 
   const pricedMovers = pricing?.movers ?? [];
-  const filteredSamePositionMovers =
-    connectedMatchup && bootstrap && pricing?.available
-      ? pricedMovers.filter(
-          (mover) => mover.kind === 'trade' && samePositionOneForOneTrade(mover, bootstrap.players),
-        ).length
-      : 0;
-  if (import.meta.env.DEV && filteredSamePositionMovers > 0) {
-    console.info('[matchup] filtered same-position trade suggestions', filteredSamePositionMovers);
-  }
 
   // Real priced movers (waiver claim + trade lane) for connected leagues.
+  // Same-position 1-for-1 swaps are NOT filtered out — they are valid, often-fair
+  // trades, and hiding them made surfaces disagree about what trades exist.
   const movers =
     connectedMatchup && bootstrap && pricing?.available
       ? pricedMovers
-        .filter(
-          (mover) => !(mover.kind === 'trade' && samePositionOneForOneTrade(mover, bootstrap.players)),
-        )
         .reduce<PricedMover[]>((nextMovers, mover) => {
           const getIds = mover.getPlayerIds ?? (mover.getPlayerId ? [mover.getPlayerId] : []);
           const giveIds = mover.givePlayerIds ?? (mover.givePlayerId ? [mover.givePlayerId] : []);
@@ -3007,7 +2994,7 @@ export function MatchupPage() {
     );
     const nextPricing = await scanMarket();
     const nextVisibleTradeSignatures = (nextPricing?.movers ?? [])
-      .filter((mover) => mover.kind === 'trade' && !samePositionOneForOneTrade(mover, bootstrap.players))
+      .filter((mover) => mover.kind === 'trade')
       .map((mover) => (stored.leagueId ? marketMoverSignature(stored.leagueId, mover) : null))
       .filter(
         (signature): signature is string =>

@@ -378,28 +378,48 @@ function TradeDealsView() {
   const managerSuggestionEntries = useMemo(() => {
     if (!stored || !bootstrap || marketManagerFilter == null) return [];
 
+    // A trade that also appears on the league "best deals" board must show the SAME
+    // numbers here. Both scans share the seed and sim count, so they only diverge if
+    // computed against different projection snapshots (the model refreshes in the
+    // background); prefer the board's copy of a shared trade so the two always agree.
+    const boardBySignature = new Map(
+      (leagueDeals ?? []).map((deal) => [
+        tradeSignature({
+          leagueId: stored.leagueId,
+          partnerRosterId: deal.partnerRosterId,
+          givePlayerIds: deal.give.map((asset) => asset.id),
+          getPlayerIds: deal.get.map((asset) => asset.id),
+        }),
+        deal,
+      ]),
+    );
+
     const targeted = managerSuggestions
       .filter((suggestion) => suggestion.partnerRosterId === marketManagerFilter)
-      .map((suggestion) => ({
-        suggestion,
-        signature: tradeSignature({
+      .map((rawSuggestion) => {
+        const signature = tradeSignature({
           leagueId: stored.leagueId,
-          partnerRosterId: suggestion.partnerRosterId,
-          givePlayerIds: suggestion.give.map((asset) => asset.id),
-          getPlayerIds: suggestion.get.map((asset) => asset.id),
-        }),
-        acceptanceProbability: acceptanceProbability(
-          suggestion.partnerDelta,
-          friendliness,
-          relationship,
-        ),
-        valueGain: suggestion.youDelta,
-        position: normalizeMarketPosition(
-          suggestion.get
-            .map((asset) => bootstrap.players[asset.id]?.position)
-            .find(Boolean),
-        ),
-      }));
+          partnerRosterId: rawSuggestion.partnerRosterId,
+          givePlayerIds: rawSuggestion.give.map((asset) => asset.id),
+          getPlayerIds: rawSuggestion.get.map((asset) => asset.id),
+        });
+        const suggestion = boardBySignature.get(signature) ?? rawSuggestion;
+        return {
+          suggestion,
+          signature,
+          acceptanceProbability: acceptanceProbability(
+            suggestion.partnerDelta,
+            friendliness,
+            relationship,
+          ),
+          valueGain: suggestion.youDelta,
+          position: normalizeMarketPosition(
+            suggestion.get
+              .map((asset) => bootstrap.players[asset.id]?.position)
+              .find(Boolean),
+          ),
+        };
+      });
 
     const positionFiltered = targeted.filter(
       (entry) => marketPositionFilter === 'all' || entry.position === marketPositionFilter,
@@ -417,6 +437,7 @@ function TradeDealsView() {
     bootstrap,
     dismissedSignatures,
     friendliness,
+    leagueDeals,
     managerSuggestions,
     marketManagerFilter,
     marketPositionFilter,
