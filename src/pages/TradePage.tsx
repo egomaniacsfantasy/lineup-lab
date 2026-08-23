@@ -25,10 +25,7 @@ import {
 import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
 import type { LeagueBootstrap } from '../services/leagueApi';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
-import {
-  samePositionOneForOneTrade,
-  tradeSignature,
-} from '../utils/tradeMarket';
+import { tradeSignature } from '../utils/tradeMarket';
 import {
   acceptanceGaugeLabel,
   sortByTradeFairness,
@@ -122,7 +119,7 @@ const NEUTRAL_TRADE_TRAITS: TradeTraits = {
   fandomLevel: 5,
 };
 
-const MAX_VISIBLE_MARKET_CARDS = 5;
+const MAX_VISIBLE_MARKET_CARDS = 15;
 
 // Starters first, in their lineup order, then the bench, the way a manager
 // reads a roster.
@@ -402,25 +399,16 @@ function TradeDealsView() {
             .map((asset) => bootstrap.players[asset.id]?.position)
             .find(Boolean),
         ),
-      }))
-      .filter(
-        (entry) =>
-          !samePositionOneForOneTrade(
-            {
-              givePlayerIds: entry.suggestion.give.map((asset) => asset.id),
-              getPlayerIds: entry.suggestion.get.map((asset) => asset.id),
-            },
-            bootstrap.players,
-          ),
-      );
+      }));
 
     const positionFiltered = targeted.filter(
       (entry) => marketPositionFilter === 'all' || entry.position === marketPositionFilter,
     );
-    // Same fairness ranking as the league "best deals" board — smallest combined
-    // title change — and NO acceptance-band hiding. So a deal that appears in best
-    // deals for this manager also appears here when you click them (the two used
-    // to diverge: the board ranked by fairness while this hid low-acceptance deals).
+    // Identical to the league "best deals" board: same fairness ranking (smallest
+    // combined title change), and NO extra hiding — no acceptance-band filter and
+    // no same-position-1-for-1 filter. A same-position swap of similar value is
+    // often the FAIREST trade, so it tops the board; it must show here too. (Only
+    // the user's own position filter and dismissals still apply.)
     const ranked = [...positionFiltered].sort(
       (a, b) => tradeFairnessScore(a.suggestion) - tradeFairnessScore(b.suggestion),
     );
