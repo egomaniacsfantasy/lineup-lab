@@ -46,10 +46,8 @@ import {
 import type { ManagerFile } from '../services/managerFiles';
 import { compileManagerFile } from '../services/managerFiles';
 import {
-  clearTradeTraitsOverride,
   loadTradeTraitsRecord,
   resolveTradeTraits,
-  saveTradeTraits,
   NEUTRAL_READ,
 } from '../utils/tradeTraits';
 import {
@@ -159,95 +157,6 @@ function DismissToast({
 
 /** Your private read on a manager: two subjective sliders that feed the trade
  *  acceptance model. Saved per manager and loaded into every trade with them. */
-function ManagerReadCard({
-  name,
-  friendliness,
-  relationship,
-  suggestedRead,
-  suggestedReceipt,
-  source,
-  sourceLabel,
-  suggestedReason,
-  onChange,
-  onReset,
-}: {
-  name: string;
-  friendliness: number;
-  relationship: number;
-  suggestedRead: { friendliness: number; relationship: number };
-  suggestedReceipt: { friendliness: string; relationship: string };
-  source: 'neutral' | 'scouted' | 'override';
-  sourceLabel: string;
-  suggestedReason: string;
-  onChange: (next: { friendliness?: number; relationship?: number }) => void;
-  onReset: () => void;
-}) {
-  return (
-    <div className="trade-cc__read-card">
-      <p className="trade-cc__read-title">How they trade on {name}</p>
-      <ReadSlider
-        label="Trade-friendliness"
-        hint="0 = stubborn hoarder · 10 = wheeler-dealer"
-        value={friendliness}
-        ghost={suggestedRead.friendliness}
-        ghostReceipt={suggestedReceipt.friendliness}
-        onChange={(n) => onChange({ friendliness: n })}
-      />
-      <ReadSlider
-        label="Relationship"
-        hint="0 = despises you · 10 = great terms"
-        value={relationship}
-        ghost={suggestedRead.relationship}
-        ghostReceipt={suggestedReceipt.relationship}
-        onChange={(n) => onChange({ relationship: n })}
-      />
-      <p className="trade-cc__read-note">
-        Only nudges the acceptance odds, never the championship numbers. {source === 'override'
-          ? 'Your override is active.'
-          : `Reading from ${sourceLabel}.`}
-      </p>
-      <p className="trade-cc__read-note">{suggestedReason}</p>
-      {source === 'override' ? (
-        <button className="trade-cc__read-reset" onClick={onReset} type="button">
-          Reset to scouted
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function ReadSlider({
-  label,
-  hint,
-  value,
-  ghost,
-  ghostReceipt,
-  onChange,
-}: {
-  label: string;
-  hint: string;
-  value: number;
-  ghost?: number;
-  ghostReceipt?: string;
-  onChange: (n: number) => void;
-}) {
-  return (
-    <div className="trade-cc__read-slider">
-      <div className="trade-cc__read-slider-head">
-        <span>{label}</span>
-        <span className="trade-cc__read-slider-value">{value}</span>
-      </div>
-      <input type="range" min={0} max={10} step={1} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-      {typeof ghost === 'number' ? (
-        <span className="trade-cc__read-slider-ghost">
-          {ghostReceipt ?? `data suggests ${ghost}`}
-        </span>
-      ) : null}
-      <span className="trade-cc__read-slider-hint">{hint}</span>
-    </div>
-  );
-}
-
 function TradeDealsView() {
   const { bootstrap, stored, pricing, isLoading, error } =
     useLeagueConnection();
@@ -275,13 +184,7 @@ function TradeDealsView() {
   const [friendliness, setFriendliness] = useState(5);
   const [relationship, setRelationship] = useState(5);
   const [suggestedRead, setSuggestedRead] = useState(NEUTRAL_READ);
-  const [suggestedReadReason, setSuggestedReadReason] = useState(
-    'Neutral file until a manager dossier is compiled.',
-  );
-  const [readSource, setReadSource] = useState<'neutral' | 'scouted' | 'override'>('neutral');
-  const [readSourceLabel, setReadSourceLabel] = useState('neutral file');
   const [scoutingFile, setScoutingFile] = useState<ManagerFile | null>(null);
-  const [showRead, setShowRead] = useState(false);
   const [marketManagerFilter, setMarketManagerFilter] = useState<number | null>(null);
   const deepLinkAppliedRef = useRef(false);
 
@@ -642,15 +545,11 @@ function TradeDealsView() {
     if (!stored || !selectedPartner) {
       setScoutingFile(null);
       setSuggestedRead(NEUTRAL_READ);
-      setSuggestedReadReason('Neutral file until a manager dossier is compiled.');
-      setReadSourceLabel('neutral file');
       return;
     }
     if (stored.provider !== 'sleeper' || !selectedPartner.ownerId) {
       setScoutingFile(null);
       setSuggestedRead(NEUTRAL_READ);
-      setSuggestedReadReason('No public Sleeper file is connected here, so the read stays neutral.');
-      setReadSourceLabel('neutral file');
       return;
     }
 
@@ -666,15 +565,11 @@ function TradeDealsView() {
         if (cancelled) return;
         setScoutingFile(file);
         setSuggestedRead(file.readDefaults);
-        setSuggestedReadReason(file.readDefaults.rationale);
-        setReadSourceLabel(file.readDefaults.sourceLabel);
       })
       .catch(() => {
         if (cancelled) return;
         setScoutingFile(null);
         setSuggestedRead(NEUTRAL_READ);
-        setSuggestedReadReason('The file could not be refreshed, so the read stays neutral.');
-        setReadSourceLabel('neutral file');
       });
     return () => {
       cancelled = true;
@@ -692,36 +587,9 @@ function TradeDealsView() {
     );
     setFriendliness(resolved.friendliness);
     setRelationship(resolved.relationship);
-    setReadSource(resolved.source);
-    setReadSourceLabel(
-      scoutingAffectsAcceptance
-          ? scoutingFile?.readDefaults.sourceLabel ?? 'neutral file'
-          : 'neutral file',
-    );
-    setShowRead(false);
   }, [partnerRosterId, scoutingAffectsAcceptance, scoutingFile, stored, suggestedRead]);
 
-  const updateRead = (next: { friendliness?: number; relationship?: number }) => {
-    const t = { friendliness, relationship, ...next };
-    setFriendliness(t.friendliness);
-    setRelationship(t.relationship);
-    setReadSource('override');
-    if (stored) saveTradeTraits(stored.leagueId, partnerRosterId, { ...t, mode: 'override' });
-  };
 
-  const resetRead = () => {
-    if (!stored) return;
-    clearTradeTraitsOverride(stored.leagueId, partnerRosterId);
-    const resolved = resolveTradeTraits(
-      stored.leagueId,
-      partnerRosterId,
-      suggestedRead,
-      scoutingAffectsAcceptance,
-    );
-    setFriendliness(resolved.friendliness);
-    setRelationship(resolved.relationship);
-    setReadSource(resolved.source);
-  };
 
   const canPrice = partnerRosterId != null && give.length > 0 && getIds.length > 0;
   const verdictReady = Boolean(
@@ -1179,19 +1047,6 @@ function TradeDealsView() {
         {managerSuggestionsError && showingManagerMarket ? (
           <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
         ) : null}
-        {marketManagerFilter != null ? (
-          <div className="trade-cc__finder-head">
-            <button
-              aria-expanded={showRead}
-              className="trade-cc__partner-read trade-cc__partner-read--inline"
-              disabled={isPricing || counterLoading}
-              onClick={() => setShowRead((current) => !current)}
-              type="button"
-            >
-              {showRead ? 'Hide read' : 'How they trade'}
-            </button>
-          </div>
-        ) : null}
         <div className="trade-cc__filter-stack">
           <div className="trade-cc__filter-row">
             <span className="trade-cc__filter-label">
@@ -1292,23 +1147,7 @@ function TradeDealsView() {
           </div>
         </div>
 
-        {showRead && selectedPartner && marketManagerFilter != null ? (
-          <ManagerReadCard
-            friendliness={friendliness}
-            name={selectedPartner.teamName}
-            onChange={updateRead}
-            onReset={resetRead}
-            relationship={relationship}
-            source={readSource}
-            sourceLabel={readSourceLabel}
-            suggestedRead={suggestedRead}
-            suggestedReason={suggestedReadReason}
-            suggestedReceipt={{
-              friendliness: scoutingFile?.readDefaults.friendlinessReceipt ?? `data suggests ${suggestedRead.friendliness}`,
-              relationship: scoutingFile?.readDefaults.relationshipReceipt ?? `data suggests ${suggestedRead.relationship}`,
-            }}
-          />
-        ) : null}
+
 
         {managerSuggestionsLoading && visibleMarketCount > 0 ? (
           <div className="trade-cc__finder-loader-inline">
@@ -1566,36 +1405,9 @@ function TradeDealsView() {
               </div>
               <div className="trade-cc__partner-tools">
                 {renderPartnerSelector()}
-                {partnerRosterId != null && !showingManagerMarket ? (
-                  <button
-                    className="trade-cc__partner-read"
-                    aria-expanded={showRead}
-                    disabled={isPricing || counterLoading}
-                    onClick={() => setShowRead((v) => !v)}
-                    type="button"
-                  >
-                    {showRead ? 'Hide read' : 'How they trade'}
-                  </button>
-                ) : null}
               </div>
             </div>
-            {partnerRosterId != null && showRead && !showingManagerMarket ? (
-              <ManagerReadCard
-                name={partners.find((t) => t.rosterId === partnerRosterId)?.teamName ?? 'this manager'}
-                friendliness={friendliness}
-                relationship={relationship}
-                source={readSource}
-                sourceLabel={readSourceLabel}
-                suggestedRead={suggestedRead}
-                suggestedReceipt={{
-                  friendliness: scoutingFile?.readDefaults.friendlinessReceipt ?? `data suggests ${suggestedRead.friendliness}`,
-                  relationship: scoutingFile?.readDefaults.relationshipReceipt ?? `data suggests ${suggestedRead.relationship}`,
-                }}
-                suggestedReason={suggestedReadReason}
-                onChange={updateRead}
-                onReset={resetRead}
-              />
-            ) : null}
+
             {partnerRosterId != null ? (
               <>
                 {renderSelectedCards(partnerRosterId, getIds, setGetIds, 'No return selected yet.', 'get')}
