@@ -1,8 +1,12 @@
 # This blueprint manages STAGING and the ESPN login worker. It does NOT manage
-# production: `Olympus App (lineup-lab)` holds oddsgods.net and is configured in
-# the dashboard, so changing `plan` here would resize staging and leave the live
-# service untouched. Worth knowing before anyone edits this expecting to upgrade
-# the site.
+# production: `Olympus App (lineup-lab)` is configured in the dashboard, so
+# changing `plan` here would resize staging and leave the live service
+# untouched. Worth knowing before anyone edits this expecting to upgrade the
+# site.
+#
+# Since the frontend moved to a CDN, oddsgods.net serves the static site and the
+# API answers on its own Render address. Anything that needs the API by URL
+# wants that address, not oddsgods.net, which is now the frontend.
 services:
   - type: web
     name: olympus
