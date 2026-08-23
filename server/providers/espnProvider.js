@@ -409,6 +409,36 @@ export function createEspnProvider({ season, espnS2, swid }) {
       return out;
     },
 
+    /**
+     * ESPN's read API does not publish what was in a trade.
+     *
+     * Probed against a real, public league (2107153357) on 2026-08-23, which
+     * had two executed trade rows. Every source ESPN offers returns the fact
+     * of the trade and nothing else:
+     *
+     *   ?view=mTransactions2              200, 61 transactions, both TRADE
+     *                                     rows have items: []
+     *   /transactions/?view=mTransactions2  200, same 61, same empty items
+     *   ?view=mTransactions2 + an
+     *     x-fantasy-filter on TRADE_*     200, both rows, still items: []
+     *   /communication/?view=
+     *     kona_league_communication       401
+     *
+     * And across all 61 transactions, the number of items moving a player
+     * from one real team to another is zero — the ROSTER rows are lineup
+     * swaps, carrying fromTeamId 0 and toTeamId 0.
+     *
+     * So a trade's players are either behind the 401 (the league is public
+     * enough to read rosters, which is not the same as being public enough to
+     * read the activity feed) or not exposed at all. Distinguishing those needs
+     * a signed-in cookie pair against a league that has traded, which is worth
+     * doing before anyone builds trade history on ESPN — the feature is not
+     * merely unimplemented here, it has no data behind it yet.
+     *
+     * Returning [] rather than the contentless rows on purpose: "two trades
+     * happened and we cannot say what was in them" renders as a broken feature,
+     * and reporting no history is the more honest of the two.
+     */
     async getTransactions() {
       return [];
     },
