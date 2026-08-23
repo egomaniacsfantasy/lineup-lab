@@ -76,7 +76,9 @@ export function HubDeals() {
 
   useEffect(() => {
     if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
-    if (readCache(cacheKey)) return undefined;
+    // Always refetch -- the cache (loaded into state initially) is only a placeholder.
+    // Its key has no projection version, so returning early here would freeze the hub
+    // deals on stale numbers while the analyzer computes fresh.
     let cancelled = false;
     void fetchTradeSuggestions(stored.leagueId, {
       userId: stored.userId,

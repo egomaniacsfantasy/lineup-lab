@@ -222,12 +222,13 @@ function TradeDealsView() {
   useEffect(() => {
     if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
     const key = `og.leagueDeals.${stored.leagueId}:${stored.userId}`;
+    // Show any cached scan instantly as a placeholder, but ALWAYS refetch below. The
+    // cache key has no projection version, so trusting it would freeze the board on
+    // stale numbers while the analyzer computes fresh -- exactly the drift we saw. The
+    // fresh fetch (server-cached per version) overwrites it so every surface agrees.
     try {
       const cached = window.sessionStorage.getItem(key);
-      if (cached) {
-        setLeagueDeals(JSON.parse(cached) as TradeSuggestion[]);
-        return undefined;
-      }
+      if (cached) setLeagueDeals(JSON.parse(cached) as TradeSuggestion[]);
     } catch {
       // storage unavailable; the scan just runs
     }
