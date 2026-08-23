@@ -3,117 +3,89 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
-/**
- * Fixing the leak did not un-leak anybody.
- *
- * espnConnect no longer answers "which team is mine" with the league-keyed
- * cookie store, so new connections are correct. But a connection written
- * BEFORE that fix carries another manager's ESPN member id, and it is saved,
- * valid, and pointed at a real team. Nothing distinguishes it from a correct
- * one, so it survives every reload and keeps showing somebody else's roster
- * until it is thrown away on purpose.
- */
-
 const CONTEXT = 'src/contexts/LeagueConnectionContext.tsx';
 
-test('an ESPN connection from before the fix is dropped, not trusted', async () => {
+/**
+ * An ESPN league has to be confirmed once before it is trusted, and then it has
+ * to STAY trusted however the connection object is rebuilt.
+ *
+ * The first version put a version number on the connection itself. That field
+ * had to survive every place a connection is constructed, and a connection is
+ * constructed constantly: from account rows, from a merge of rows over the
+ * local copy, from the league switcher's list. Three of those paths dropped it
+ * and I patched them one at a time. The fourth was the switcher, which is the
+ * one a person actually uses: clicking your ESPN league handed activateLocal a
+ * row-derived object carrying no stamp, and the next read discarded it. Click
+ * the league, watch it disappear.
+ *
+ * The trust lives in one record keyed by league id now. These tests exist to
+ * stop it moving back onto the object.
+ */
+
+test('trust is not a field on the connection', async () => {
   const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
-  const start = source.indexOf('function readStored');
-  assert.ok(start > -1, 'readStored is gone');
+  assert.doesNotMatch(
+    source,
+    /identityVersion/,
+    'trust is back on the connection object, where every rebuild drops it',
+  );
+});
+
+test('every path that activates a league asks the same record', async () => {
+  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+
+  /* One predicate, one source of truth. */
+  assert.match(source, /function trustedForIdentity/);
+  assert.match(source, /readConfirmed\(\)\.has\(String\(connection\.leagueId\)\)/);
+
+  /* And it must not depend on anything the caller carries in. */
+  const start = source.indexOf('function trustedForIdentity');
   const body = source.slice(start, source.indexOf('\n}', start));
-
-  assert.match(body, /trustedForIdentity/, 'stored connections are not identity-checked on load');
-  assert.match(body, /removeItem\(STORAGE_KEY\)/, 'an untrusted connection has to be discarded');
-
-  /* The ESPN scoping lives in the predicate now rather than inline here. */
-  const predicate = source.slice(source.indexOf('function trustedForIdentity'));
-  assert.match(predicate.slice(0, 400), /provider !== 'espn'/, 'the check must be scoped to ESPN');
-  assert.match(predicate.slice(0, 400), /identityVersion/);
+  assert.doesNotMatch(body, /\?\?/, 'the predicate should not be reading a field off the object');
 });
 
-test('a connection made now is stamped, or every load would drop it again', async () => {
+test('confirming is keyed by league, so a rebuilt object stays trusted', async () => {
   const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
-  const start = source.indexOf('const connect = useCallback');
-  const body = source.slice(start, start + 900);
-  assert.match(
-    body,
-    /identityVersion: IDENTITY_VERSION/,
-    'connect must stamp the current identity version',
-  );
-});
+  assert.match(source, /function confirmEspnLeague\(leagueId: string\)/);
 
-test('Sleeper is left alone, because it never had this bug', async () => {
-  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
-  const predicate = source.slice(
-    source.indexOf('function trustedForIdentity'),
-    source.indexOf('function flagIdentityRecheck'),
-  );
-  /* Sleeper resolves identity from the user's own account, never from a
-     league-keyed shared store, so re-picking would be friction for nothing.
-     The predicate must return true for it before looking at any version. */
-  assert.match(predicate, /provider !== 'espn'\) return true/);
-});
-
-test('every path that can activate a connection checks the identity version', async () => {
-  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
-
-  /* The localStorage read is the obvious one. The account rows are the other,
-     and missing it made the connection vanish on load and come back
-     mid-session still pointing at the wrong team, because the rows carry no
-     identity version and kept restoring what the drop had just removed. */
-  const checks = source.match(/trustedForIdentity\(/g) ?? [];
-  assert.ok(
-    checks.length >= 3,
-    `trustedForIdentity should gate the definition plus every activation path, saw ${checks.length}`,
-  );
-
-  const dbPath = source.slice(source.indexOf('const dbActive ='));
-  assert.match(
-    dbPath.slice(0, 700),
-    /trustedForIdentity\(dbActive\)/,
-    'restoring a league from the account must check identity too',
-  );
-});
-
-test('removing a league is not undone by the account rows', async () => {
-  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
-
-  /* removeLeague deletes the row, but the delete is a network call and clearing
-     `stored` re-runs the hydrate immediately. Without a session tombstone the
-     rows still list the league and it reappears the instant you remove it. */
-  const remove = source.slice(source.indexOf('const removeLeague = useCallback'));
-  assert.match(
-    remove.slice(0, 900),
-    /removedKeysRef\.current\.add/,
-    'removal must be remembered locally until the row delete lands',
-  );
-
-  const hydrate = source.slice(source.indexOf('const all = rows'));
-  assert.match(
-    hydrate.slice(0, 400),
-    /removedKeysRef\.current\.has/,
-    'the hydrate must filter out leagues removed in this session',
-  );
-
+  /* Connecting is the confirmation: the team was either matched to the user's
+     own cookie or picked by them from the list. */
   const connect = source.slice(source.indexOf('const connect = useCallback'));
   assert.match(
-    connect.slice(0, 600),
-    /removedKeysRef\.current\.delete/,
-    'reconnecting a removed league must clear its tombstone',
+    connect.slice(0, 900),
+    /confirmEspnLeague\(incoming\.leagueId\)/,
+    'connecting an ESPN league must record the confirmation',
   );
 });
 
-test('hydrating from the account keeps what only this device knows', async () => {
+test('the switcher cannot un-trust a league by rebuilding it', async () => {
   const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
 
-  /* rowToConnection cannot carry an identity version or ESPN cookies: the
-     account has no column for either. Merging a row over the local copy
-     therefore strips them, and the merge writes straight back to localStorage,
-     so the next load saw an unstamped ESPN connection, discarded it, and fell
-     through to another league. Connect, refresh, land somewhere else. */
-  const merge = source.slice(source.indexOf('const active = localActive'));
-  const block = merge.slice(0, 800);
-  assert.match(block, /identityVersion: stored\.identityVersion/, 'the identity stamp is being dropped on hydrate');
-  assert.match(block, /espnS2: stored\.espnS2/, 'ESPN cookies are being dropped on hydrate');
-  assert.match(block, /swid: stored\.swid/, 'the SWID is being dropped on hydrate');
+  /* switchLeague picks from `leagues`, which is built from account rows via
+     rowToConnection. If trust rode on the object, this path would hand
+     activateLocal an untrusted copy of a league the user already confirmed.
+     rowToConnection must therefore not be expected to carry trust at all. */
+  const rowToConnection = source.slice(source.indexOf('function rowToConnection'));
+  assert.doesNotMatch(
+    rowToConnection.slice(0, 500),
+    /identityVersion|confirmed/i,
+    'account rows should not need to carry trust',
+  );
+});
+
+test('Sleeper is never asked to confirm anything', async () => {
+  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+  const start = source.indexOf('function trustedForIdentity');
+  const body = source.slice(start, source.indexOf('\n}', start));
+  /* Sleeper resolves identity from the user's own account and never from a
+     league-keyed shared store, so it had none of this problem. */
+  assert.match(body, /provider !== 'espn'\) return true/);
+});
+
+test('removing a league is still not undone by the account rows', async () => {
+  const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+  const remove = source.slice(source.indexOf('const removeLeague = useCallback'));
+  assert.match(remove.slice(0, 900), /removedKeysRef\.current\.add/);
+  const hydrate = source.slice(source.indexOf('const all = rows'));
+  assert.match(hydrate.slice(0, 400), /removedKeysRef\.current\.has/);
 });

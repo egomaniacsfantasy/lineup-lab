@@ -32,18 +32,50 @@ import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
-/* Bumped when a stored connection's identity can no longer be trusted.
-   Version 2: before it, an ESPN connection made on a league somebody else had
-   already linked could be stamped with THAT person's member id, because the
-   connect probe fell back to the server's league-keyed cookie store to answer
-   "which team is mine". The code path is fixed, but a connection already
-   written with the wrong owner stays wrong forever on its own: it is saved,
-   it is valid, and it points at a real team. Nothing distinguishes it from a
-   correct one, so every ESPN connection from before the fix has to be
-   re-confirmed once. The cost is one screen; the alternative is a manager
-   quietly managing somebody else's roster. */
-const IDENTITY_VERSION = 2;
+/**
+ * Which ESPN leagues this device has confirmed a team for.
+ *
+ * Before the identity fix, connecting to a league somebody else had already
+ * linked could stamp you with THAT person's ESPN member id, so you opened the
+ * app looking at their roster. The server no longer does that, but a connection
+ * already saved with the wrong owner is indistinguishable from a right one, so
+ * each ESPN league has to be re-confirmed once by picking a team.
+ *
+ * This was first written as a version number ON the connection object, and that
+ * was the wrong shape. A connection gets rebuilt constantly: from account rows,
+ * from a merge of rows over the local copy, from the league switcher's list.
+ * Every one of those constructs a fresh object, and every one silently dropped
+ * the field. I patched three such paths and the fourth, the switcher, is the
+ * one that mattered: clicking your ESPN league in the list handed activateLocal
+ * a row-derived object with no stamp, which the next read threw away. Click the
+ * league, watch it vanish.
+ *
+ * So the trust does not travel with the object any more. It lives here, keyed
+ * by league id, and every path asks the same question of the same record.
+ */
+const CONFIRMED_KEY = 'og.olympus.espn-confirmed';
 const IDENTITY_RECHECK_KEY = 'og.olympus.espn-identity-recheck';
+
+function readConfirmed(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(CONFIRMED_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function confirmEspnLeague(leagueId: string) {
+  try {
+    const next = readConfirmed();
+    next.add(String(leagueId));
+    window.localStorage.setItem(CONFIRMED_KEY, JSON.stringify([...next]));
+  } catch {
+    /* Private browsing: the confirmation lasts the session, which means one
+       extra pick next visit rather than a wrong team. */
+  }
+}
 const MARKET_SCAN_KEY = 'og.market.last-scan';
 const MARKET_SCAN_COOLDOWN_MS = 30_000;
 
@@ -71,10 +103,6 @@ export interface StoredConnection {
   season?: string;
   espnS2?: string | null;
   swid?: string | null;
-  /** Which identity contract this connection was written under. Absent means
-      version 1, which is the one that could be stamped with another manager's
-      member id. */
-  identityVersion?: number;
 }
 
 /** Point the API client at the right provider for a connection. */
@@ -190,7 +218,7 @@ function hasSuggestionPayload(pricing: LeaguePricing | null | undefined) {
 function trustedForIdentity(connection: StoredConnection | null | undefined): boolean {
   if (!connection) return false;
   if (connection.provider !== 'espn') return true;
-  return (connection.identityVersion ?? 1) >= IDENTITY_VERSION;
+  return readConfirmed().has(String(connection.leagueId));
 }
 
 function flagIdentityRecheck() {
@@ -445,7 +473,6 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
                 leagueName: stored.leagueName ?? localActive.leagueName,
                 allLeagueIds: stored.allLeagueIds.length > 1 ? stored.allLeagueIds : all.map((l) => l.leagueId),
                 allLeagues: stored.allLeagues,
-                identityVersion: stored.identityVersion ?? localActive.identityVersion,
                 espnS2: stored.espnS2 ?? localActive.espnS2,
                 swid: stored.swid ?? localActive.swid,
               }
@@ -701,13 +728,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       /* Reconnecting a league you removed has to un-tombstone it, or the
          hydrate would keep filtering out the thing you just added. */
       removedKeysRef.current.delete(leagueKey(incoming));
-      /* Stamped on the way in, so a connection made under the fixed identity
-         rules is not dropped by the next load's re-check. */
-      const connection: StoredConnection = { ...incoming, identityVersion: IDENTITY_VERSION };
-      const knownConnections = connectionsFromKnownLeagues(connection).map((known) => ({
-        ...known,
-        identityVersion: IDENTITY_VERSION,
-      }));
+      /* Recorded on the way in. Connecting an ESPN league means the team was
+         either matched to your own cookie or picked by you from the list, and
+         both are confirmations. Recorded by league id rather than stamped on
+         the object, so it survives the connection being rebuilt from account
+         rows or handed around by the switcher. */
+      if (incoming.provider === 'espn') confirmEspnLeague(incoming.leagueId);
+      const connection: StoredConnection = incoming;
+      const knownConnections = connectionsFromKnownLeagues(connection);
       const active =
         knownConnections.find((known) => leagueKey(known) === leagueKey(connection)) ??
         connection;
