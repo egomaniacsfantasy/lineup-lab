@@ -32,6 +32,8 @@ import { supabase } from '../services/supabase';
 import {
   isMissingLeagueNameColumn,
   leagueNameFromRow,
+  mergeLeagueNames,
+  sameLeagueList,
   type DbLeagueRow,
 } from './leagueRows';
 import { useAuth } from './AuthContext';
@@ -512,7 +514,20 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
         const leaguesForSwitcher = stored && !localActive
           ? [stored, ...all.filter((connection) => leagueKey(connection) !== leagueKey(stored))]
           : all;
-        setLeagues(leaguesForSwitcher);
+        /* Rows carry no name until the league_name migration has run, and old
+           rows carry none after it either. Writing them in raw wiped every name
+           in the switcher, and the Sleeper name refresh put them back a second
+           later — the two took turns forever, which is what the flashing was.
+           A name is only ever replaced by another name. */
+        setLeagues((previous) => {
+          const merged = mergeLeagueNames(
+            leaguesForSwitcher,
+            stored ? [...previous, stored] : previous,
+          );
+          /* Same list -> same reference, so the name refresh downstream is not
+             woken up to redo work it already did. */
+          return sameLeagueList(merged, previous) ? previous : merged;
+        });
 
         if (stored) {
           /* The account rows are the source of truth for which leagues exist,
@@ -765,6 +780,38 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     try {
       const data = await fetchBootstrap(connection.leagueId, connection.userId);
       setBootstrap(data);
+
+      /* Learn the league's real name from the league itself.
+         Names used to arrive from one place only — a Sleeper account lookup —
+         so an ESPN league never got one and sat in the switcher under the
+         manager's own name forever. Andre's ESPN row read "Andre Vlahakis".
+         The bootstrap knows what the league is called whatever host it came
+         from, and it has already been fetched, so this costs nothing and works
+         for both providers. Guarded on the id because a bootstrap in flight
+         during a switch belongs to the PREVIOUS league, and writing its name
+         onto the new one is how a Sleeper league ends up labelled with an ESPN
+         league's name. */
+      const learnedName = data.league?.name;
+      if (learnedName && String(data.league.id) === String(connection.leagueId)) {
+        setLeagues((previous) =>
+          previous.map((league) =>
+            leagueKey(league) === leagueKey(connection) && league.leagueName !== learnedName
+              ? { ...league, leagueName: learnedName }
+              : league,
+          ),
+        );
+        setStored((previous) => {
+          if (!previous || leagueKey(previous) !== leagueKey(connection)) return previous;
+          if (previous.leagueName === learnedName) return previous;
+          const next = { ...previous, leagueName: learnedName };
+          try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          } catch {
+            // ignore
+          }
+          return next;
+        });
+      }
       const cachedPricing = readCachedLeaguePricing(connection, data.week);
       if (cachedPricing) {
         applyPricingSnapshot(cachedPricing, {
@@ -848,7 +895,12 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           ...knownConnections,
           ...prev.filter((l) => !knownConnections.some((known) => leagueKey(known) === leagueKey(l))),
         ];
-        return merged;
+        /* Same rule as the rehydrate: a name is only ever replaced by another
+           name. Connect paths normally carry names, so this is a guard rather
+           than a fix — but it is the one invariant that stops this field from
+           being clobbered, and it is worth holding everywhere rather than in
+           the one place it has already gone wrong. */
+        return mergeLeagueNames(merged, prev);
       });
       // Persist to the account so it's there on every device.
       if (userIdRef.current) void saveLeagueRows(userIdRef.current, knownConnections, active);
