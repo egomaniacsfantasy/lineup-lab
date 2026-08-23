@@ -53,7 +53,9 @@ console.log('\n--- first pick, verbatim ---');
 console.log(JSON.stringify(picks[0], null, 1));
 
 /* The exact fields the provider reads. Anything undefined here is a rename. */
-const READS = ['overallPickNumber', 'roundId', 'roundPickNumber', 'teamId', 'memberId', 'playerId', 'keeper', 'bidAmount'];
+/* memberId is deliberately absent from this list: a real league returned it on
+   zero of 180 picks, so the owner is resolved from the pick's team instead. */
+const READS = ['overallPickNumber', 'roundId', 'roundPickNumber', 'teamId', 'playerId', 'keeper', 'bidAmount'];
 console.log('\n--- fields the provider depends on ---');
 for (const key of READS) {
   const present = picks.filter((p) => p[key] !== undefined).length;

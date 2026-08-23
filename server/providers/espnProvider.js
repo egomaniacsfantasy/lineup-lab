@@ -394,7 +394,12 @@ export function createEspnProvider({ season, espnS2, swid }) {
 
       const synthetic = {};
       const byEspnId = new Map();
+      /* ESPN's picks name a team but never a member: memberId came back absent
+         on all 180 picks of a real league. The owner has to come from the team
+         the pick belongs to, which the roster view does carry. */
+      const ownerByTeam = new Map();
       for (const team of rosterBlob.teams ?? []) {
+        ownerByTeam.set(Number(team.id), team.owners?.[0] ?? null);
         for (const entry of team.roster?.entries ?? []) {
           const player = entry.playerPoolEntry?.player;
           if (player?.id != null) byEspnId.set(Number(player.id), player);
@@ -411,7 +416,7 @@ export function createEspnProvider({ season, espnS2, swid }) {
             round: pick.roundId ?? null,
             draftSlot: pick.roundPickNumber ?? null,
             rosterId: pick.teamId ?? null,
-            pickedBy: pick.memberId ?? null,
+            pickedBy: ownerByTeam.get(Number(pick.teamId)) ?? null,
             playerId: player
               ? resolvePlayer(player, crosswalk, synthetic)
               : `espn-${espnPlayerId}`,
