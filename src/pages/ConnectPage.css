@@ -296,3 +296,27 @@
   letter-spacing: 0.04em;
   text-align: center;
 }
+
+/* Shown once, after a connection was dropped because its team could not be
+   trusted. It explains a thing the user did not do and did not see coming. */
+.connect-page__recheck {
+  width: min(100%, 560px);
+  margin: 0 auto 16px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+
+.connect-page__recheck p {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.connect-page__recheck strong {
+  color: var(--text-primary);
+  font-weight: 800;
+}

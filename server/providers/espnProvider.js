@@ -44,6 +44,22 @@ const SLOT_LABEL = {
 };
 const BENCH_SLOTS = new Set([20, 21, 24]);
 
+/* How a lineup should read, which is not the order ESPN numbers its slots.
+   Sorting by raw slot id puts FLEX (23) below D/ST (16) and K (17), so the
+   flex spot rendered under the kicker. Everyone writes a lineup with the flex
+   attached to the skill players it draws from and the two specialists last.
+
+   Both the slot labels and the starters are sorted by this, and they have to
+   stay that way: the engine pairs starters[i] with rosterPositions[i], and a
+   swap is legal or illegal on the strength of that pairing. */
+const SLOT_DISPLAY_ORDER = [
+  'QB', 'SUPER_FLEX', 'RB', 'WR', 'TE', 'WRRB_FLEX', 'REC_FLEX', 'FLEX', 'DEF', 'K',
+];
+const slotRank = (label) => {
+  const index = SLOT_DISPLAY_ORDER.indexOf(label);
+  return index === -1 ? SLOT_DISPLAY_ORDER.length : index;
+};
+
 function isPrivateError(status) {
   return status === 401 || status === 403;
 }
@@ -152,8 +168,12 @@ export function teamLogo(team) {
  */
 export function orderStartersBySlot(startingEntries) {
   return (startingEntries ?? [])
-    .map((entry, index) => ({ ...entry, index }))
-    .sort((a, b) => a.lineupSlotId - b.lineupSlotId || a.index - b.index)
+    .map((entry, index) => ({
+      ...entry,
+      index,
+      rank: slotRank(SLOT_LABEL[entry.lineupSlotId]),
+    }))
+    .sort((a, b) => a.rank - b.rank || a.lineupSlotId - b.lineupSlotId || a.index - b.index)
     .map((entry) => entry.id);
 }
 
@@ -163,8 +183,11 @@ function rosterPositionsFromCounts(lineupSlotCounts = {}) {
     const label = SLOT_LABEL[Number(slotId)] ?? 'BN';
     for (let i = 0; i < count; i += 1) positions.push(label);
   }
-  // starters first, bench/IR last — keeps slot indexing aligned with the engine
-  const order = (l) => (l === 'BN' ? 90 : l === 'IR' ? 91 : l === 'TAXI' ? 92 : 0);
+  /* Starters in reading order, bench and IR last. The starter half has to come
+     out in exactly the order orderStartersBySlot produces, or every starter is
+     paired with somebody else's slot. */
+  const order = (l) =>
+    l === 'BN' ? 90 : l === 'IR' ? 91 : l === 'TAXI' ? 92 : slotRank(l);
   return positions.sort((a, b) => order(a) - order(b));
 }
 

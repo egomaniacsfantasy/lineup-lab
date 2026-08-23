@@ -32,6 +32,18 @@ import { supabase } from '../services/supabase';
 import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
+/* Bumped when a stored connection's identity can no longer be trusted.
+   Version 2: before it, an ESPN connection made on a league somebody else had
+   already linked could be stamped with THAT person's member id, because the
+   connect probe fell back to the server's league-keyed cookie store to answer
+   "which team is mine". The code path is fixed, but a connection already
+   written with the wrong owner stays wrong forever on its own: it is saved,
+   it is valid, and it points at a real team. Nothing distinguishes it from a
+   correct one, so every ESPN connection from before the fix has to be
+   re-confirmed once. The cost is one screen; the alternative is a manager
+   quietly managing somebody else's roster. */
+const IDENTITY_VERSION = 2;
+const IDENTITY_RECHECK_KEY = 'og.olympus.espn-identity-recheck';
 const MARKET_SCAN_KEY = 'og.market.last-scan';
 const MARKET_SCAN_COOLDOWN_MS = 30_000;
 
@@ -59,6 +71,10 @@ export interface StoredConnection {
   season?: string;
   espnS2?: string | null;
   swid?: string | null;
+  /** Which identity contract this connection was written under. Absent means
+      version 1, which is the one that could be stamped with another manager's
+      member id. */
+  identityVersion?: number;
 }
 
 /** Point the API client at the right provider for a connection. */
@@ -162,11 +178,37 @@ function readStored(): StoredConnection | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? (JSON.parse(raw) as StoredConnection) : null;
+
+    /* An ESPN connection from before the identity fix cannot be trusted to be
+       the right team, so it is dropped rather than shown. Sleeper is untouched:
+       it never resolved identity from a shared store. */
+    if (parsed?.provider === 'espn' && (parsed.identityVersion ?? 1) < IDENTITY_VERSION) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      try {
+        window.localStorage.setItem(IDENTITY_RECHECK_KEY, '1');
+      } catch {
+        /* The banner is a courtesy; losing it does not make the drop wrong. */
+      }
+      applyApiContext(null);
+      return null;
+    }
+
     // Point the API client at the right provider before the first fetch.
     applyApiContext(parsed);
     return parsed;
   } catch {
     return null;
+  }
+}
+
+/** One-shot: did we just drop a connection whose team we could not trust? */
+export function consumeEspnIdentityRecheck(): boolean {
+  try {
+    if (window.localStorage.getItem(IDENTITY_RECHECK_KEY) !== '1') return false;
+    window.localStorage.removeItem(IDENTITY_RECHECK_KEY);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -597,8 +639,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
 
   // Add a league (or re-sync an existing one) and make it active.
   const connect = useCallback(
-    (connection: StoredConnection) => {
-      const knownConnections = connectionsFromKnownLeagues(connection);
+    (incoming: StoredConnection) => {
+      /* Stamped on the way in, so a connection made under the fixed identity
+         rules is not dropped by the next load's re-check. */
+      const connection: StoredConnection = { ...incoming, identityVersion: IDENTITY_VERSION };
+      const knownConnections = connectionsFromKnownLeagues(connection).map((known) => ({
+        ...known,
+        identityVersion: IDENTITY_VERSION,
+      }));
       const active =
         knownConnections.find((known) => leagueKey(known) === leagueKey(connection)) ??
         connection;

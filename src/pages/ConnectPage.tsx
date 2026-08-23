@@ -4,6 +4,7 @@
  * The demo stays reachable, one click below.
  */
 import { MobileNotice } from '../components/layout/MobileNotice';
+import { consumeEspnIdentityRecheck } from '../contexts/LeagueConnectionContext';
 import { ProviderMark } from '../components/league/ProviderMark';
 import { useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -16,6 +17,8 @@ import './ConnectPage.css';
 
 declare const __BUILD_STAMP__: string | undefined;
 const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
+
+const IDENTITY_RECHECK = consumeEspnIdentityRecheck();
 
 export function ConnectPage() {
   const { stored, connect } = useLeagueConnection();
@@ -68,6 +71,17 @@ export function ConnectPage() {
         <p className="connect-page__kicker">Welcome to Odds Gods</p>
         <h1 className="connect-page__title">Sync a league to begin</h1>
       </section>
+
+      {IDENTITY_RECHECK ? (
+        <aside className="connect-page__recheck" role="status">
+          <p>
+            <strong>Pick your team again.</strong> ESPN leagues linked before
+            today could be matched to the wrong manager when somebody else had
+            already connected the same league. Reconnect and choose your own
+            team; it will stay put after that.
+          </p>
+        </aside>
+      ) : null}
 
       <MobileNotice />
 

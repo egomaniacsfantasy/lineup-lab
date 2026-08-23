@@ -29,15 +29,17 @@ test('starters come back in slot order however ESPN hands them over', () => {
     { id: 'montgomery', lineupSlotId: RB },
     { id: 'adams', lineupSlotId: WR },
   ];
+  /* Reading order, not ESPN's numbering: the flex sits with the skill players
+     it draws from, and the two specialists come last. */
   assert.deepEqual(orderStartersBySlot(scrambled), [
-    'stafford', 'gibbs', 'montgomery', 'flowers', 'adams', 'bowers', 'lions', 'fairbairn', 'odunze',
+    'stafford', 'gibbs', 'montgomery', 'flowers', 'adams', 'bowers', 'odunze', 'lions', 'fairbairn',
   ]);
 });
 
 test('the defence lands on the defence slot, which is the whole bug', () => {
   /* rosterPositionsFromCounts emits starter labels in ascending slot id, so
      this is the label list the ordering has to agree with. */
-  const slots = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'DEF', 'K', 'FLEX'];
+  const slots = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'DEF', 'K'];
   const position = {
     stafford: 'QB', gibbs: 'RB', montgomery: 'RB', flowers: 'WR',
     adams: 'WR', bowers: 'TE', lions: 'DEF', fairbairn: 'K', odunze: 'WR',
@@ -63,8 +65,9 @@ test('the defence lands on the defence slot, which is the whole bug', () => {
       `${id} (${position[id]}) was placed in the ${slots[index]} slot`,
     );
   });
-  assert.equal(ordered[6], 'lions', 'the defence must sit in the DEF slot');
-  assert.equal(ordered[7], 'fairbairn', 'the kicker must sit in the K slot');
+  assert.equal(ordered[6], 'odunze', 'the flex belongs above the specialists');
+  assert.equal(ordered[7], 'lions', 'the defence must sit in the DEF slot');
+  assert.equal(ordered[8], 'fairbairn', 'the kicker must sit in the K slot');
 });
 
 test('two players sharing a slot keep a stable order', () => {

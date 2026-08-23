@@ -2207,9 +2207,15 @@ function MatchupLive({
                                 <span className="matchup-page__meta-compact">
                                   {lineupMetaFor(row.yourSlot.starter, null, true)}
                                 </span>
+                                {/* The arrow already says "swap"; spelling out
+                                    "on the bench" beside every starter turned a
+                                    hint into a paragraph. */}
                                 {optionCount > 0 ? (
-                                  <span className="matchup-page__slot-bench-cue">
-                                    {' '}⇄ {optionCount} on the bench
+                                  <span
+                                    className="matchup-page__slot-bench-cue"
+                                    title={`${optionCount} bench ${optionCount === 1 ? 'option' : 'options'} for this slot`}
+                                  >
+                                    ⇄ {optionCount}
                                   </span>
                                 ) : null}
                               </span>
