@@ -52,8 +52,42 @@ app.use('/api', (error, req, res, _next) => {
   });
 });
 
-app.use(express.static(DIST));
+/* Vite fingerprints everything under /assets, so those files can never change
+   without changing name and are safe to cache forever. Served with no cache
+   policy they were revalidated on every load, which put a round trip to this
+   instance in front of every repeat visit. On one small box that shares its
+   CPU with the pricing sim, those round trips are the difference between a page
+   that paints and a page that hangs. */
+app.use(
+  '/assets',
+  express.static(path.join(DIST, 'assets'), {
+    immutable: true,
+    maxAge: '1y',
+  }),
+);
+
+/* Everything else in dist is unfingerprinted (the logo, the favicon, the
+   privacy page), so it gets a short cache rather than a permanent one.
+
+   index: false, and HTML forced to no-cache: the shell is what names the
+   current asset hashes, so caching it for an hour pins a browser to a build
+   whose files may already be gone. The static middleware answers "/" with
+   index.html before the route below ever runs, which is how it picked up the
+   one-hour policy meant for images. */
+app.use(
+  express.static(DIST, {
+    index: false,
+    maxAge: '1h',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+    },
+  }),
+);
+
 app.get(/.*/, (_req, res) => {
+  /* The shell must never be cached: it is what points at the current asset
+     hashes, and a stale copy pins a browser to a build that no longer exists. */
+  res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(DIST, 'index.html'));
 });
 

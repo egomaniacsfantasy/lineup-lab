@@ -1,5 +1,8 @@
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
-import logo from '../assets/og-logo.png';
+/* 512px, not the 1254px original. The landing page draws it at 96px on desktop
+   and about 200 on the phone stage, and the full-size file was 370KB of the
+   first paint on a box that also serves the API. */
+import logo from '../assets/og-hero.png';
 import { useReel } from '../hooks/useReel';
 import { LeagueFutures } from '../components/league/LeagueFutures';
 import { MOCK_LEAGUE_FUTURES } from '../mocks/league';
