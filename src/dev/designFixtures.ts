@@ -529,7 +529,12 @@ function buildHistory() {
        refuses to render with fewer than two priced weeks, so a single-week
        fixture made it invisible and therefore unreviewable. That is how the
        connect screen shipped scrolling on both axes. */
-    week: Math.max(1, WEEK - 2 + Math.floor((index * 3) / entries.length)),
+    /* Two snapshots land in the current week and one in each of the two
+       before it. Movement needs an open and a later price IN THE SAME WEEK, so
+       an even spread left the current week holding a single snapshot and the
+       board's Move column empty — correct behaviour, and invisible to review.
+       It is also the realistic shape: the live week reprices most. */
+    week: index < 1 ? Math.max(1, WEEK - 2) : index < 2 ? Math.max(1, WEEK - 1) : WEEK,
     trigger: entry.trigger,
     lines: [
       {

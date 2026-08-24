@@ -29,6 +29,8 @@ export interface LeagueWeekMatchup {
   teamAOdds: number;
   teamAWinProb?: number;
   teamAProjection?: number;
+  teamASpread?: number;
+  teamBSpread?: number;
   totalProjection?: number;
   teamAIsUser?: boolean;
   teamBRosterId?: number;

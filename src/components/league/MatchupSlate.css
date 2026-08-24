@@ -551,3 +551,20 @@
 
 .matchup-slate__mover-now--up { color: var(--green); }
 .matchup-slate__mover-now--down { color: var(--red); }
+
+/* The middle of a board row: the probability bar with the number a book would
+   post underneath it. The bar alone left this column reading as empty space. */
+.matchup-slate__line-cell {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+}
+
+.matchup-slate__line-meta {
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}

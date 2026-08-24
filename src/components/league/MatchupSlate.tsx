@@ -289,7 +289,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             <span>Matchup</span>
             <span>Price</span>
             <span>Win%</span>
-            <span>Line</span>
+            <span>Spread &amp; total</span>
             <span>Win%</span>
             <span>Price</span>
             <span>Move</span>
@@ -326,8 +326,32 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                     {formatPercent(left.winProb)}
                   </span>
 
-                  <span className="matchup-slate__prob-track" aria-hidden="true">
-                    <span className="matchup-slate__prob-fill" style={{ width: `${left.winProb}%` }} />
+                  <span className="matchup-slate__line-cell">
+                    <span className="matchup-slate__prob-track" aria-hidden="true">
+                      <span className="matchup-slate__prob-fill" style={{ width: `${left.winProb}%` }} />
+                    </span>
+                    {/* The number a book would actually post. It was priced and
+                        then dropped by the adapter, so the middle of every row
+                        was a bar floating in empty space. */}
+                    <span className="matchup-slate__line-meta">
+                      {(() => {
+                        const favSpread = leftFavored ? matchup.teamASpread : matchup.teamBSpread;
+                        const initials = favorite.name
+                          .split(/\s+/)
+                          .map((word) => word[0])
+                          .join('')
+                          .slice(0, 3)
+                          .toUpperCase();
+                        const parts: string[] = [];
+                        if (typeof favSpread === 'number' && favSpread !== 0) {
+                          parts.push(`${initials} ${favSpread > 0 ? '-' : '+'}${Math.abs(favSpread).toFixed(1)}`);
+                        }
+                        if (typeof matchup.totalProjection === 'number') {
+                          parts.push(`O/U ${matchup.totalProjection.toFixed(1)}`);
+                        }
+                        return parts.join(' · ');
+                      })()}
+                    </span>
                   </span>
 
                   <span className="matchup-slate__prob-number matchup-slate__prob-number--right">
