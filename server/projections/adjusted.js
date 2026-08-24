@@ -152,8 +152,21 @@ export async function getAdjustedProjections(suf = '') {
     if (Date.now() - e.at >= 60_000) _refreshInBackground(suf);
     return e.data;
   }
-  _refreshInBackground(suf);
-  return _computeAdjusted(false, suf); // model-only, no consensus, no network — instant
+  // Cold cache: build WITH consensus so the VERY FIRST request already uses the
+  // consensus-weighted values -- no one-time model-only view that would read
+  // differently from every later (warm) request. The consensus read is time-bounded
+  // (4s) and falls back to last-good/model-only, so this can't hang. Concurrent cold
+  // callers share the one in-flight build.
+  if (!e.coldBuild) {
+    e.coldBuild = _computeAdjusted(CONSENSUS_ENABLED, suf)
+      .then((d) => { e.data = d; e.at = Date.now(); e.coldBuild = null; return d; })
+      .catch((err) => {
+        e.coldBuild = null;
+        console.error(`[adjusted:${suf || 'ppr'}] cold consensus build failed; using model-only`, err);
+        return _computeAdjusted(false, suf);
+      });
+  }
+  return e.coldBuild;
 }
 
 /**
