@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
+import { TeamAvatar } from './TeamAvatar';
 import {
   fetchConditionedBoard,
   pickSetHash,
@@ -8,16 +9,24 @@ import {
 } from '../../services/predictor';
 import './Predictor.css';
 
+export interface PredictorSide {
+  rosterId: string;
+  teamName: string;
+  avatarUrl?: string | null;
+  winProb?: number;
+}
+
 export interface PredictorGame {
   week: number;
   matchupId: number;
-  home: { rosterId: string; teamName: string; winProb?: number };
-  away: { rosterId: string; teamName: string; winProb?: number };
+  home: PredictorSide;
+  away: PredictorSide;
 }
 
 export interface PredictorBaselineRow {
   rosterId: string;
   teamName: string;
+  avatarUrl?: string | null;
   isUser: boolean;
   playoffProb: number;
   titleProb: number;
@@ -144,11 +153,25 @@ export function Predictor({
     });
   };
 
-  const byWeek = useMemo(() => {
-    const map = new Map<number, PredictorGame[]>();
-    for (const game of games) map.set(game.week, [...(map.get(game.week) ?? []), game]);
-    return [...map.entries()].sort((a, b) => a[0] - b[0]);
-  }, [games]);
+  /* One week at a time, with navigation, rather than every remaining week
+     stacked into one scroll. Nine weeks of games in a column is a wall you
+     have to work through; a week is a thing you can finish. Playoff
+     Predictors gets this right and it is the single structural idea worth
+     taking from them. */
+  const weeks = useMemo(
+    () => [...new Set(games.map((game) => game.week))].sort((a, b) => a - b),
+    [games],
+  );
+  const [weekIndex, setWeekIndex] = useState(0);
+  const activeWeek = weeks[Math.min(weekIndex, Math.max(0, weeks.length - 1))] ?? null;
+  const weekGames = useMemo(
+    () => games.filter((game) => game.week === activeWeek),
+    [games, activeWeek],
+  );
+  const weekPicked = useMemo(
+    () => picks.filter((pick) => pick.week === activeWeek).length,
+    [picks, activeWeek],
+  );
 
   const conditioned = useMemo(() => {
     if (!board) return null;
@@ -171,51 +194,112 @@ export function Predictor({
               : `${picks.length} of ${totalRemaining} games called. The other ${totalRemaining - picks.length} are still simulated.`}
           </p>
         </div>
-        {picks.length > 0 ? (
-          <button className="predictor__reset" onClick={() => setPicks([])} type="button">
-            Clear picks
-          </button>
-        ) : null}
+        {/* No clear button here: the week bar carries both resets, and two
+            controls doing the same thing one row apart is how people learn not
+            to trust either. */}
       </header>
 
       {notice ? <p className="predictor__notice">{notice}</p> : null}
 
+      {/* Week navigation. One week at a time is the whole point: nine weeks
+          stacked is a wall you work through, a week is a thing you finish. */}
+      <div className="predictor__weekbar">
+        <button
+          className="predictor__weeknav"
+          disabled={weekIndex <= 0}
+          onClick={() => setWeekIndex((index) => Math.max(0, index - 1))}
+          type="button"
+        >
+          ‹ Prev
+        </button>
+
+        <div className="predictor__weekpicker">
+          <label className="visually-hidden" htmlFor="predictor-week">Week</label>
+          <select
+            className="predictor__weekselect"
+            id="predictor-week"
+            onChange={(event) => setWeekIndex(weeks.indexOf(Number(event.target.value)))}
+            value={activeWeek ?? ''}
+          >
+            {weeks.map((week) => (
+              <option key={week} value={week}>Week {week}</option>
+            ))}
+          </select>
+          <span className="predictor__weekcount">
+            {weekPicked} of {weekGames.length} called
+          </span>
+        </div>
+
+        <button
+          className="predictor__weeknav"
+          disabled={weekIndex >= weeks.length - 1}
+          onClick={() => setWeekIndex((index) => Math.min(weeks.length - 1, index + 1))}
+          type="button"
+        >
+          Next ›
+        </button>
+
+        <span className="predictor__weekbar-spacer" />
+
+        <button
+          className="predictor__weekaction"
+          disabled={weekPicked === 0}
+          onClick={() => setPicks((current) => current.filter((pick) => pick.week !== activeWeek))}
+          type="button"
+        >
+          Reset week
+        </button>
+        <button
+          className="predictor__weekaction"
+          disabled={picks.length === 0}
+          onClick={() => setPicks([])}
+          type="button"
+        >
+          Clear all
+        </button>
+      </div>
+
       <div className="predictor__body">
         <div className="predictor__picks">
-          {byWeek.map(([week, weekGames]) => (
-            <div className="predictor__week" key={week}>
-              <p className="predictor__week-label">Week {week}</p>
-              {weekGames.map((game) => {
-                const pick = pickedFor(game.matchupId);
-                return (
-                  <div className="predictor__game" key={game.matchupId}>
-                    {[game.away, game.home].map((side) => {
-                      const chosen = pick?.winnerRosterId === side.rosterId;
-                      const beaten = pick != null && !chosen;
-                      return (
-                        <button
-                          aria-pressed={chosen}
-                          className={[
-                            'predictor__side',
-                            chosen ? 'predictor__side--picked' : '',
-                            beaten ? 'predictor__side--beaten' : '',
-                          ].filter(Boolean).join(' ')}
-                          key={side.rosterId}
-                          onClick={() => choose(game, side.rosterId)}
-                          type="button"
-                        >
-                          <span className="predictor__side-name">{side.teamName}</span>
-                          {typeof side.winProb === 'number' ? (
-                            <span className="predictor__side-prob">{side.winProb.toFixed(0)}%</span>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+          {weekGames.map((game) => {
+            const pick = pickedFor(game.matchupId);
+            return (
+              <div className="predictor__game" key={game.matchupId}>
+                {[game.away, game.home].map((side, index) => {
+                  const chosen = pick?.winnerRosterId === side.rosterId;
+                  const beaten = pick != null && !chosen;
+                  return (
+                    <button
+                      aria-pressed={chosen}
+                      className={[
+                        'predictor__side',
+                        index === 1 ? 'predictor__side--home' : '',
+                        chosen ? 'predictor__side--picked' : '',
+                        beaten ? 'predictor__side--beaten' : '',
+                      ].filter(Boolean).join(' ')}
+                      key={side.rosterId}
+                      onClick={() => choose(game, side.rosterId)}
+                      type="button"
+                    >
+                      {/* The logo is the pick target, the way every scenario
+                          tool people already use works. A team is a crest
+                          before it is a string. */}
+                      <TeamAvatar avatarUrl={side.avatarUrl} name={side.teamName} />
+                      <span className="predictor__side-copy">
+                        <span className="predictor__side-name">{side.teamName}</span>
+                        {typeof side.winProb === 'number' ? (
+                          <span className="predictor__side-prob">{side.winProb.toFixed(0)}%</span>
+                        ) : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {weekGames.length === 0 ? (
+            <p className="predictor__empty">No games left to call.</p>
+          ) : null}
         </div>
 
         <div className="predictor__consequences">
@@ -239,7 +323,10 @@ export function Predictor({
                   .filter(Boolean).join(' ')}
                 key={row.rosterId}
               >
-                <span className="predictor__row-team">{row.teamName}</span>
+                <span className="predictor__row-team">
+                  <TeamAvatar avatarUrl={row.avatarUrl} name={row.teamName} />
+                  <span className="predictor__row-name">{row.teamName}</span>
+                </span>
                 <span className="predictor__num predictor__row-playoff">
                   {suspended ? (
                     <span className="predictor__suspended" aria-label="repricing" />

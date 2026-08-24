@@ -367,11 +367,16 @@ export function LeaguePage() {
       }
       return [...byMatchup.entries()].flatMap(([matchupId, pair]) => {
         if (pair.length !== 2) return [];
-        const named = pair.map((side) => ({
-          rosterId: String(side.rosterId),
-          teamName:
-            bootstrap.teams.find((team) => String(team.rosterId) === String(side.rosterId))?.teamName ?? '',
-        }));
+        const named = pair.map((side) => {
+          const team = bootstrap.teams.find(
+            (candidate) => String(candidate.rosterId) === String(side.rosterId),
+          );
+          return {
+            rosterId: String(side.rosterId),
+            teamName: team?.teamName ?? '',
+            avatarUrl: team?.avatarUrl ?? null,
+          };
+        });
         if (named.some((side) => !side.teamName)) return [];
         return [{ week: weekEntry.week, matchupId, away: named[0], home: named[1] }];
       });
@@ -383,6 +388,7 @@ export function LeaguePage() {
     return connected.futures.map((row) => ({
       rosterId: String(row.rosterId ?? ''),
       teamName: row.teamName,
+      avatarUrl: row.avatarUrl ?? null,
       isUser: Boolean(row.isUser),
       playoffProb: row.playoffProb ?? 0,
       /* The futures row carries the price, not the raw probability; the
