@@ -222,13 +222,22 @@ function TradeDealsView() {
   useEffect(() => {
     if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
     const key = `og.leagueDeals.${stored.leagueId}:${stored.userId}`;
-    // Show any cached scan instantly as a placeholder, but ALWAYS refetch below. The
-    // cache key has no projection version, so trusting it would freeze the board on
-    // stale numbers while the analyzer computes fresh -- exactly the drift we saw. The
-    // fresh fetch (server-cached per version) overwrites it so every surface agrees.
+    const DEALS_TTL_MS = 120_000;
+    // Use a RECENT cached scan as-is: the league-wide scan is heavy, and re-running it
+    // on every mount/navigation lagged the page and interrupted itself (returning only
+    // a couple of trades). Only refetch when the cache is stale, so the numbers stay
+    // fresh without constant re-simulation.
     try {
-      const cached = window.sessionStorage.getItem(key);
-      if (cached) setLeagueDeals(JSON.parse(cached) as TradeSuggestion[]);
+      const raw = window.sessionStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const data = Array.isArray(parsed) ? parsed : parsed?.data;
+        const at = Array.isArray(parsed) ? 0 : parsed?.at ?? 0;
+        if (Array.isArray(data)) {
+          setLeagueDeals(data as TradeSuggestion[]);
+          if (Date.now() - at < DEALS_TTL_MS) return undefined;
+        }
+      }
     } catch {
       // storage unavailable; the scan just runs
     }
@@ -242,7 +251,7 @@ function TradeDealsView() {
         const found = response.available ? response.suggestions ?? [] : [];
         setLeagueDeals(found);
         try {
-          window.sessionStorage.setItem(key, JSON.stringify(found));
+          window.sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data: found }));
         } catch {
           // ignore
         }

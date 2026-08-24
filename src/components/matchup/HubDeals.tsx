@@ -23,10 +23,16 @@ const CACHE_PREFIX = 'og.hubDeals.';
  * behaviour re-ran it on every return to the hub, so deals appeared, vanished
  * on navigation, and made you wait again to see the same two rows.
  */
-function readCache(key: string): TradeSuggestion[] | null {
+const DEALS_TTL_MS = 120_000;
+
+function readCache(key: string): { at: number; deals: TradeSuggestion[] } | null {
   try {
     const raw = window.sessionStorage.getItem(CACHE_PREFIX + key);
-    return raw ? (JSON.parse(raw) as TradeSuggestion[]) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return { at: 0, deals: parsed as TradeSuggestion[] };
+    if (Array.isArray(parsed?.data)) return { at: parsed.at ?? 0, deals: parsed.data as TradeSuggestion[] };
+    return null;
   } catch {
     return null;
   }
@@ -34,7 +40,7 @@ function readCache(key: string): TradeSuggestion[] | null {
 
 function writeCache(key: string, deals: TradeSuggestion[]) {
   try {
-    window.sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify(deals));
+    window.sessionStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ at: Date.now(), data: deals }));
   } catch {
     // storage unavailable; the scan simply runs again next time
   }
@@ -58,7 +64,7 @@ export function HubDeals() {
   const navigate = useNavigate();
   const cacheKey = stored ? `${stored.leagueId}:${stored.userId}` : '';
   const [deals, setDeals] = useState<TradeSuggestion[] | null>(() =>
-    cacheKey ? readCache(cacheKey) : null,
+    cacheKey ? readCache(cacheKey)?.deals ?? null : null,
   );
   const [scanLine, setScanLine] = useState(0);
 
@@ -76,9 +82,11 @@ export function HubDeals() {
 
   useEffect(() => {
     if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
-    // Always refetch -- the cache (loaded into state initially) is only a placeholder.
-    // Its key has no projection version, so returning early here would freeze the hub
-    // deals on stale numbers while the analyzer computes fresh.
+    // Skip the heavy scan when we have a RECENT cached result; otherwise refetch so the
+    // hub deals don't freeze on stale numbers for the whole session (which made them
+    // disagree with fresh computations elsewhere).
+    const cached = readCache(cacheKey);
+    if (cached && Date.now() - cached.at < DEALS_TTL_MS) return undefined;
     let cancelled = false;
     void fetchTradeSuggestions(stored.leagueId, {
       userId: stored.userId,
