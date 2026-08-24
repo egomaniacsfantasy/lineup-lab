@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
@@ -13,6 +13,10 @@ import { buildTicket } from '../utils/ticket';
 import { YourTicket } from '../components/league/YourTicket';
 import { TimeMachine } from '../components/league/TimeMachine';
 import { LeagueRecords } from '../components/league/LeagueRecords';
+import { Predictor, type PredictorGame, type PredictorBaselineRow } from '../components/league/Predictor';
+import { WeekFork } from '../components/league/WeekFork';
+import { forkRows } from '../utils/forkRows';
+import { fetchWeekForks, type WeekForksResult } from '../services/predictor';
 import { leagueRecords } from '../utils/leagueRecords';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -47,7 +51,7 @@ import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
-type LeagueView = 'this-week' | 'futures' | 'season' | 'standings';
+type LeagueView = 'this-week' | 'futures' | 'season' | 'predictor' | 'standings';
 
 /**
  * Three tabs, not five.
@@ -76,6 +80,7 @@ const LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
   { key: 'this-week', label: 'This week' },
   { key: 'futures', label: 'Futures' },
   { key: 'season', label: 'Season' },
+  { key: 'predictor', label: 'Predictor' },
 ];
 
 /* Reachable by URL, never in the strip. */
@@ -333,6 +338,60 @@ export function LeaguePage() {
     );
   }, [bootstrap, schedule, lineHistory]);
 
+  /* Both branches of every game this week. Reads the contract in
+     services/predictor.ts; until that endpoint exists the component is told
+     why rather than shown invented branches. */
+  const [forks, setForks] = useState<WeekForksResult | null>(null);
+  useEffect(() => {
+    if (!stored || !bootstrap) return undefined;
+    let cancelled = false;
+    void fetchWeekForks(String(stored.leagueId), String(stored.userId), bootstrap.week)
+      .then((result) => {
+        if (!cancelled) setForks(result);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stored, bootstrap]);
+
+  /* Remaining games, and the board as it stands with nothing forced. Both are
+     read off data the page already holds; the conditioned numbers come from
+     the engine, not from here. */
+  const predictorGames = useMemo<PredictorGame[]>(() => {
+    if (!bootstrap || !schedule) return [];
+    return schedule.flatMap((weekEntry) => {
+      if (weekEntry.week < bootstrap.week) return [];
+      const byMatchup = new Map<number, typeof weekEntry.matchups>();
+      for (const matchup of weekEntry.matchups) {
+        byMatchup.set(matchup.matchupId, [...(byMatchup.get(matchup.matchupId) ?? []), matchup]);
+      }
+      return [...byMatchup.entries()].flatMap(([matchupId, pair]) => {
+        if (pair.length !== 2) return [];
+        const named = pair.map((side) => ({
+          rosterId: String(side.rosterId),
+          teamName:
+            bootstrap.teams.find((team) => String(team.rosterId) === String(side.rosterId))?.teamName ?? '',
+        }));
+        if (named.some((side) => !side.teamName)) return [];
+        return [{ week: weekEntry.week, matchupId, away: named[0], home: named[1] }];
+      });
+    });
+  }, [bootstrap, schedule]);
+
+  const predictorBaseline = useMemo<PredictorBaselineRow[]>(() => {
+    if (!connected) return [];
+    return connected.futures.map((row) => ({
+      rosterId: String(row.rosterId ?? ''),
+      teamName: row.teamName,
+      isUser: Boolean(row.isUser),
+      playoffProb: row.playoffProb ?? 0,
+      /* The futures row carries the price, not the raw probability; the
+         Predictor only needs the price for the baseline column. */
+      titleProb: 0,
+      titleOdds: row.championOdds,
+    }));
+  }, [connected]);
+
   const connectedScheduleItems = useMemo(() => {
     if (!connectedSeason) return [];
     if (!bootstrap || !liveBoardLine) return connectedSeason.scheduleItems;
@@ -516,6 +575,19 @@ export function LeaguePage() {
         ))}
       </div>
 
+      {activeView === 'this-week' && bootstrap ? (
+        <WeekFork
+          rows={forkRows(
+            forks?.forks ?? [],
+            (rosterId) =>
+              bootstrap.teams.find((team) => String(team.rosterId) === rosterId)?.teamName ?? null,
+            connectedSeason ? String(connectedSeason.userTeam.rosterId) : null,
+          )}
+          unavailableMessage={forks && !forks.available ? forks.message : undefined}
+          week={forks?.week ?? bootstrap.week}
+        />
+      ) : null}
+
       {activeView === 'this-week' ? (
         <>
           {!connected ? <TradeTargetTeaser groups={MOCK_TRADE_TARGET_GROUPS} /> : null}
@@ -599,6 +671,22 @@ export function LeaguePage() {
           teamName={connectedSeason.userTeam.teamName}
           ticket={ticket}
         />
+      ) : null}
+
+      {activeView === 'predictor' ? (
+        <>
+          {connected && bootstrap ? (
+            <Predictor
+              baseline={predictorBaseline}
+              games={predictorGames}
+              leagueId={String(stored?.leagueId ?? '')}
+              storageKey={`og.predictor.${stored?.provider}.${stored?.leagueId}`}
+              userId={String(stored?.userId ?? '')}
+            />
+          ) : (
+            <SeasonalNotice>Connect a league to call the rest of its season.</SeasonalNotice>
+          )}
+        </>
       ) : null}
 
       {activeView === 'season' ? (

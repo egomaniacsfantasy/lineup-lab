@@ -1,0 +1,257 @@
+/* The Predictor. Picks on the left, consequences on the right, both visible at
+   once — the one structural idea worth taking from BrainyBallers. You should
+   never have to scroll away from the board to make a pick. */
+.predictor {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.predictor__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.predictor__kicker {
+  margin: 0 0 var(--space-2xs);
+  color: var(--text-amber);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.predictor__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--type-title-md);
+  text-transform: uppercase;
+}
+
+/* Says which games are forced and which are still simulated. That distinction
+   is the epistemic basis of every number on the right; leaving it implied
+   would let the board be read as certainty. */
+.predictor__sub {
+  margin: var(--space-2xs) 0 0;
+  max-width: 62ch;
+  color: var(--text-muted);
+  font-size: var(--type-caption);
+  line-height: 1.5;
+}
+
+.predictor__notice {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-dim);
+  font-size: var(--type-caption);
+}
+
+.predictor__reset {
+  padding: var(--space-2xs) var(--space-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.predictor__reset:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.predictor__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+.predictor__picks {
+  display: grid;
+  gap: var(--space-md);
+  max-height: 620px;
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+}
+
+.predictor__week-label {
+  margin: 0 0 var(--space-2xs);
+  color: var(--text-dim);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.predictor__game {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+/* One action per side: click to pick, click again to unpick, click across to
+   flip. No confirm step, because a scenario tool people will not play with is
+   a scenario tool that does not work. */
+.predictor__side {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-soft);
+  cursor: pointer;
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.02em;
+  text-align: left;
+  text-transform: uppercase;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.predictor__side:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.predictor__side:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+
+.predictor__side:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.predictor__side--picked {
+  border-color: color-mix(in srgb, var(--green) 55%, transparent);
+  background: color-mix(in srgb, var(--green) 12%, var(--bg-inset));
+  color: var(--text-primary);
+}
+
+/* The side that lost this scenario. Dimmed rather than hidden, so the pick
+   reads as a choice between two things and can be flipped in one click. */
+.predictor__side--beaten {
+  opacity: 0.42;
+}
+
+.predictor__side-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.predictor__side-prob {
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.predictor__consequences {
+  display: grid;
+  gap: 1px;
+  padding: var(--space-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  position: sticky;
+  top: var(--space-lg);
+}
+
+.predictor__consequences-head,
+.predictor__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 84px;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.predictor__consequences-head {
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-dim);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.predictor__num { text-align: right; }
+
+.predictor__row {
+  border-radius: var(--radius-sm);
+}
+
+.predictor__row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.predictor__row--you {
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.predictor__row-team {
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.predictor__row-playoff,
+.predictor__row-title {
+  font-family: var(--font-price);
+  font-size: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.predictor__row-playoff { color: var(--text-soft); }
+.predictor__row-title { color: var(--text-primary); }
+
+.predictor__delta {
+  margin-left: var(--space-2xs);
+  font-size: 0.62rem;
+}
+
+.predictor__delta--up { color: var(--green); }
+.predictor__delta--down { color: var(--red); }
+
+/* Suspended, not stale. A price the run is about to replace is withheld while
+   it computes: an old number beside a fresh pick reads as the answer to the
+   question just asked, which is worse than a blank because a blank cannot be
+   misread. */
+.predictor__suspended {
+  display: inline-block;
+  width: 34px;
+  height: 9px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-inset),
+    color-mix(in srgb, var(--text-dim) 28%, var(--bg-inset)),
+    var(--bg-inset)
+  );
+  background-size: 200% 100%;
+  animation: predictor-suspend 1.1s ease-in-out infinite;
+}
+
+@keyframes predictor-suspend {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .predictor__suspended { animation: none; }
+}
