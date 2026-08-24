@@ -526,32 +526,68 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
   const REQUEST_TIMEOUT_MS = 30_000;
   const send = () => fetch(url, { ...decorated, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 
-  let response: Response;
-  try {
-    response = await send();
-  } catch (caught) {
-    if (!isRead || !(caught instanceof DOMException && caught.name === 'TimeoutError')) {
-      throw caught instanceof DOMException && caught.name === 'TimeoutError'
-        ? new LeagueApiError(
-            'request_timeout',
-            'That request took too long and was given up on. Try again in a moment.',
-          )
-        : caught;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
+  /* A deploy takes the API away for the best part of a minute, and every
+     request in that window fails at the connection rather than with a status:
+     fetch rejects with a TypeError whose message is the browser's own words,
+     "Load failed" in Safari and "Failed to fetch" in Chrome.
+
+     Both problems were live at once. That rejection was not retried at all —
+     only a TimeoutError was — and it was rethrown untouched, so the browser's
+     internal string was rendered to the user as the entire explanation. The
+     result is a black page reading "Load failed" every time anybody deploys,
+     which is exactly what Andre was looking at.
+
+     One retry at 1.2s never spanned a restart either. The waits below add up to
+     roughly twelve seconds across four attempts, which covers a normal restart,
+     while still giving up long before anyone would keep waiting. Reads only:
+     replaying a POST could double a write. */
+  const RETRY_WAITS_MS = [1_200, 3_000, 8_000];
+
+  const isNetworkFailure = (error: unknown) =>
+    error instanceof TypeError
+    || (error instanceof DOMException && error.name === 'NetworkError');
+  const isTimeout = (error: unknown) =>
+    error instanceof DOMException && error.name === 'TimeoutError';
+
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  let response: Response | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt <= RETRY_WAITS_MS.length; attempt += 1) {
+    if (attempt > 0) await wait(RETRY_WAITS_MS[attempt - 1]);
     try {
       response = await send();
-    } catch {
-      throw new LeagueApiError(
-        'request_timeout',
-        'That request took too long and was given up on. Try again in a moment.',
-      );
+    } catch (caught) {
+      lastError = caught;
+      /* A write, or something that is not the connection failing, is the
+         caller's problem and is not replayed. */
+      if (!isRead || !(isNetworkFailure(caught) || isTimeout(caught))) {
+        throw isTimeout(caught)
+          ? new LeagueApiError(
+              'request_timeout',
+              'That request took too long and was given up on. Try again in a moment.',
+            )
+          : caught;
+      }
+      continue;
     }
+    /* The platform answers for a service that is still coming up. Same
+       treatment: wait and ask again. */
+    if (isRead && [502, 503, 504].includes(response.status)) {
+      lastError = null;
+      continue;
+    }
+    break;
   }
 
-  if (isRead && [502, 503, 504].includes(response.status)) {
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
-    response = await send();
+  if (!response || (isRead && [502, 503, 504].includes(response.status))) {
+    /* Never the browser's own words. "Load failed" tells the reader nothing
+       and cannot be reported to us usefully. */
+    throw new LeagueApiError(
+      lastError ? 'connection_failed' : 'service_unavailable',
+      'We could not reach Odds Gods just then. It is usually back within a minute.',
+    );
   }
   const body = await response.json().catch(() => null);
 
