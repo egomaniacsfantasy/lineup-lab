@@ -11,6 +11,7 @@ import { computeAllPlay } from '../utils/allPlay';
 import { formatVsBook, vsBookRecords } from '../utils/vsBook';
 import { buildTicket } from '../utils/ticket';
 import { YourTicket } from '../components/league/YourTicket';
+import { TimeMachine } from '../components/league/TimeMachine';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
@@ -506,6 +507,16 @@ export function LeaguePage() {
               leagueName={bootstrap.league.name}
               teamName={connectedSeason.userTeam.teamName}
               ticket={ticket}
+            />
+          ) : null}
+          {connected && connectedSeason && bootstrap ? (
+            <TimeMachine
+              history={lineHistory}
+              nameFor={(rosterId) =>
+                bootstrap.teams.find((team) => String(team.rosterId) === rosterId)?.teamName ?? null
+              }
+              teamName={connectedSeason.userTeam.teamName}
+              userRosterId={connectedSeason.userTeam.rosterId}
             />
           ) : null}
           {connectedSeason ? (

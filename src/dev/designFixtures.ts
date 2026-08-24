@@ -523,7 +523,13 @@ function buildHistory() {
     computedAt: entry.at,
     inputsHash: `design-history-${index}`,
     projectionVersion: 'design-pass-replay-v1',
-    week: WEEK,
+    /* Spread across the three weeks leading into WEEK rather than stamped with
+       one. A fixture where every snapshot belongs to the same week cannot
+       exercise anything that reasons about weeks — the time machine correctly
+       refuses to render with fewer than two priced weeks, so a single-week
+       fixture made it invisible and therefore unreviewable. That is how the
+       connect screen shipped scrolling on both axes. */
+    week: Math.max(1, WEEK - 2 + Math.floor((index * 3) / entries.length)),
     trigger: entry.trigger,
     lines: [
       {
