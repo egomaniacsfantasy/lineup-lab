@@ -12,34 +12,57 @@
   justify-self: end;
 }
 
+/* Sub-navigation, in the same language as the primary nav above it.
+   This was a fixed three-column pill group, which fought the header's plain
+   text links on every axis — different shape, different weight, its own
+   background — and broke outright the moment a fourth tab existed, because the
+   column count was hard-coded. Text with an underline for the active tab: the
+   header's grammar, one step quieter. */
 .league-page__view-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  width: fit-content;
-  max-width: 100%;
-  padding: 4px;
-  border-radius: 999px;
-  background: var(--bg-inset, #0b0d0f);
-  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  align-items: center;
+  margin-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .league-page__view-tab {
+  position: relative;
   border: none;
-  border-radius: 999px;
   background: none;
-  color: var(--text-muted, #a9aea4);
+  padding: var(--space-xs) 0 var(--space-sm);
+  color: var(--text-muted);
   cursor: pointer;
-  font-family: var(--font-ui);
+  font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
-  padding: 9px 8px;
+  letter-spacing: 0.02em;
+  transition: color var(--transition-fast);
+}
+
+.league-page__view-tab:hover {
+  color: var(--text-primary);
 }
 
 .league-page__view-tab--active {
-  background: var(--bg-surface, #15181b);
-  color: var(--text-primary, #f4efe7);
-  box-shadow: inset 0 0 0 1px var(--border-subtle, #23272b);
+  color: var(--text-primary);
+}
+
+/* The active marker sits on the shared rule, so the strip reads as one row
+   with a position rather than as a set of separate controls. */
+.league-page__view-tab--active::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 2px;
+  background: var(--amber);
+  border-radius: 2px 2px 0 0;
+}
+
+.league-page__view-tab:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .league-page__section-label {

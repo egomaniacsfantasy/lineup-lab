@@ -55,7 +55,7 @@ test('only one place decides who may see a view', async () => {
      hidden tab becomes reachable by typing its URL. */
   assert.match(
     source,
-    /visibleViews\.some\(\(view\) => view\.key === requestedView\)/,
+    /reachableViews\.some\(\(view\) => view\.key === requestedView\)/,
     'the admin gate moved or changed shape',
   );
 });
@@ -68,7 +68,7 @@ test('the tabs that shipped still resolve after the rename', async () => {
      view is a link that lies about where it went. */
   assert.match(source, /const LEGACY_VIEWS: Record<string, LeagueView> = \{/);
   for (const [old, next] of [
-    ["'this-week'", 'board'],
+    ['board', 'this-week'],
     ['schedule', 'season'],
     ['luck', 'season'],
   ]) {

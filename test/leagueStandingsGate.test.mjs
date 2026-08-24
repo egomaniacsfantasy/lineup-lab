@@ -37,7 +37,7 @@ test('standings is still reachable, for admins', () => {
 test('the admin list is only added for an admin', () => {
   assert.match(
     source,
-    /const visibleViews = isAdmin \? \[\.\.\.LEAGUE_VIEWS, \.\.\.ADMIN_LEAGUE_VIEWS\] : LEAGUE_VIEWS;/,
+    /const reachableViews = isAdmin \? \[\.\.\.visibleViews, \.\.\.ADMIN_LEAGUE_VIEWS\] : visibleViews;/,
   );
 });
 
@@ -52,6 +52,6 @@ test('the tab strip renders the gated list, not the public one', () => {
 test('a typed ?view=standings cannot walk around the gate', () => {
   assert.match(
     source,
-    /visibleViews\.some\(\(view\) => view\.key === requestedView\) \? requestedView : 'board'/,
+    /reachableViews\.some\(\(view\) => view\.key === requestedView\) \? requestedView : 'this-week'/,
   );
 });

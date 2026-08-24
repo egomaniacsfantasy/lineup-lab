@@ -47,7 +47,7 @@ import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
-type LeagueView = 'board' | 'futures' | 'season' | 'standings';
+type LeagueView = 'this-week' | 'futures' | 'season' | 'standings';
 
 /**
  * Three tabs, not five.
@@ -59,21 +59,26 @@ type LeagueView = 'board' | 'futures' | 'season' | 'standings';
  * produced could not be read against each other, which is the only way either
  * is interesting.
  *
- * Board is this week. Futures is the season market. Season is everything
- * retrospective: the heat strip, the priced standings, and the records. A
- * fourth, Machine, joins when the playoff machine ships.
+ * "This week", not "Board": the site already has a Board in the primary nav,
+ * and two things called the same word one row apart is a navigation bug
+ * wearing a label.
  *
- * Standings stays admin-only for the same reason as before: wins, PF and PA
- * are already on ESPN and Sleeper, rendered better and without our sync lag.
- * Its real job was never the user's — it reads each team's record and points
- * the same way the sim seeds playoffs, which makes it a check on the sim.
+ * Each tab owns a direction in time. This week is now. Futures is ahead.
+ * Season is behind. A tab that cannot say which of the three it is does not
+ * have a reason to exist.
+ *
+ * Standings is gone from the strip entirely. It was never a user surface —
+ * wins, PF and PA are already on ESPN and Sleeper, rendered better and without
+ * our sync lag — and its real job is as a check on the sim, which is a thing
+ * you reach for deliberately. The route still answers for anyone who types it.
  */
 const LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
-  { key: 'board', label: 'Board' },
+  { key: 'this-week', label: 'This week' },
   { key: 'futures', label: 'Futures' },
   { key: 'season', label: 'Season' },
 ];
 
+/* Reachable by URL, never in the strip. */
 const ADMIN_LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
   { key: 'standings', label: 'Standings' },
 ];
@@ -86,7 +91,7 @@ const ADMIN_LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
  * about where it went.
  */
 const LEGACY_VIEWS: Record<string, LeagueView> = {
-  'this-week': 'board',
+  board: 'this-week',
   schedule: 'season',
   luck: 'season',
 };
@@ -113,7 +118,7 @@ function parseLeagueView(raw: string | null): LeagueView {
   if (raw && raw in LEGACY_VIEWS) return LEGACY_VIEWS[raw];
   return ALL_LEAGUE_VIEWS.some((view) => view.key === raw)
     ? (raw as LeagueView)
-    : 'board';
+    : 'this-week';
 }
 
 function recordLabel(team: { record: { wins: number; losses: number; ties: number } }) {
@@ -133,13 +138,10 @@ export function LeaguePage() {
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const { user } = useAuth();
   const isAdmin = isAgreementAdmin(user?.email);
-  const visibleViews = isAdmin ? [...LEAGUE_VIEWS, ...ADMIN_LEAGUE_VIEWS] : LEAGUE_VIEWS;
   const requestedView = parseLeagueView(searchParams.get('view'));
   /* A hidden tab still has a URL. Without this, ?view=standings rendered the
      table for anyone who typed it or kept an old bookmark, which would make
      the gate decorative. */
-  const activeView =
-    visibleViews.some((view) => view.key === requestedView) ? requestedView : 'board';
   const isReconnectState = Boolean(stored && !bootstrap && !isLoading && error);
   const hasConnectHash = location.hash.startsWith('#connect');
   const isWizardOpen = showWizard || hasConnectHash || isReconnectState;
@@ -291,6 +293,19 @@ export function LeaguePage() {
     [lineHistory, connectedSeason],
   );
 
+  /* Season is retrospective, so before a draft it is a page about a season
+     that has not happened: an empty all-play table, an empty record book and a
+     schedule of unplayed weeks. Hidden until there is something behind it. */
+  const seasonHasContent = !preDraft && luckTeams.some((team) => team.weeksCounted > 0);
+  const visibleViews = LEAGUE_VIEWS.filter(
+    (view) => view.key !== 'season' || seasonHasContent,
+  );
+  /* Admins can still reach the standings diagnostic by URL; it is not a tab. */
+  const reachableViews = isAdmin ? [...visibleViews, ...ADMIN_LEAGUE_VIEWS] : visibleViews;
+
+  const activeView =
+    reachableViews.some((view) => view.key === requestedView) ? requestedView : 'this-week';
+
   /* The record book, over every completed game we have priced. Empty holders
      are expected early and are rendered as such rather than hidden. */
   const records = useMemo(() => {
@@ -337,7 +352,7 @@ export function LeaguePage() {
   const setLeagueView = (view: LeagueView) => {
     /* The default view owns the bare URL, so /league and /league?view=board are
        the same page rather than two. */
-    if (view === 'board') {
+    if (view === 'this-week') {
       setSearchParams({});
       return;
     }
@@ -501,7 +516,7 @@ export function LeaguePage() {
         ))}
       </div>
 
-      {activeView === 'board' ? (
+      {activeView === 'this-week' ? (
         <>
           {!connected ? <TradeTargetTeaser groups={MOCK_TRADE_TARGET_GROUPS} /> : null}
 
@@ -531,23 +546,7 @@ export function LeaguePage() {
 
       {activeView === 'futures' ? (
         <>
-          {ticket && connectedSeason && bootstrap ? (
-            <YourTicket
-              leagueName={bootstrap.league.name}
-              teamName={connectedSeason.userTeam.teamName}
-              ticket={ticket}
-            />
-          ) : null}
-          {connected && connectedSeason && bootstrap ? (
-            <TimeMachine
-              history={lineHistory}
-              nameFor={(rosterId) =>
-                bootstrap.teams.find((team) => String(team.rosterId) === rosterId)?.teamName ?? null
-              }
-              teamName={connectedSeason.userTeam.teamName}
-              userRosterId={connectedSeason.userTeam.rosterId}
-            />
-          ) : null}
+
           {connectedSeason ? (
             <SeasonHeadline
               /* No mock fallback for a real league. An unpriced team says so. */
@@ -594,6 +593,14 @@ export function LeaguePage() {
           week by week, then the verdict that reading produces. They used to be
           two tabs, which meant the strip and the record it explains could never
           be read against each other. */}
+      {activeView === 'futures' && ticket && connectedSeason && bootstrap ? (
+        <YourTicket
+          leagueName={bootstrap.league.name}
+          teamName={connectedSeason.userTeam.teamName}
+          ticket={ticket}
+        />
+      ) : null}
+
       {activeView === 'season' ? (
         <>
           {connected ? (
@@ -613,6 +620,19 @@ export function LeaguePage() {
                 <SeasonalNotice>Loading your schedule…</SeasonalNotice>
               )}
               <LeagueRecords records={records} />
+              {/* Retrospective, so it belongs with the past rather than above
+                  the forward-looking market. Having it lead Futures is a large
+                  part of why Season and Futures read as the same tab. */}
+              {bootstrap ? (
+                <TimeMachine
+                  history={lineHistory}
+                  nameFor={(rosterId) =>
+                    bootstrap.teams.find((team) => String(team.rosterId) === rosterId)?.teamName ?? null
+                  }
+                  teamName={connectedSeason?.userTeam.teamName ?? ''}
+                  userRosterId={connectedSeason?.userTeam.rosterId}
+                />
+              ) : null}
             </>
           ) : (
             <ScheduleGrid items={preseasonSchedule} title="Upcoming schedule" />
