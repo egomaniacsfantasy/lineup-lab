@@ -1,7 +1,6 @@
 import { useRef, type CSSProperties } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
-import { OddsChart, type OddsChartPoint, type OddsChartRangeOption } from '../charts/OddsChart';
 import { TeamAvatar } from '../league/TeamAvatar';
 import './ScheduleGrid.css';
 
@@ -27,7 +26,6 @@ interface ScheduleGridProps {
   onSelectWeek?: (item: ScheduleGridItem) => void;
 }
 
-const PACE_RANGES: OddsChartRangeOption[] = [{ id: 'season', label: 'Season' }];
 
 function heatColor(winProb: number) {
   const t = Math.max(0, Math.min(1, winProb / 100));
@@ -57,17 +55,6 @@ function pricedChipColor(item: ScheduleGridItem) {
   return 'transparent';
 }
 
-function expectedWinsTakeaway(
-  cumulativeWins: { week: number; expectedWins: number; baseline: number; isPlayoff?: boolean }[],
-) {
-  const regular = cumulativeWins.filter((item) => !item.isPlayoff);
-  const last = regular.at(-1);
-  if (!last) return 'No priced weeks yet.';
-  const diff = last.expectedWins - last.baseline;
-  if (Math.abs(diff) < 0.15) return `Dead even with .500 pace through Week ${last.week}.`;
-  return `${Math.abs(diff).toFixed(1)} wins ${diff > 0 ? 'ahead of' : 'behind'} .500 pace through Week ${last.week}.`;
-}
-
 function heatTakeaway(items: ScheduleGridItem[]) {
   const priced = items.filter((item) => typeof item.winProb === 'number' && !item.isPlayoff);
   if (priced.length === 0) return 'No priced regular-season weeks yet.';
@@ -76,66 +63,16 @@ function heatTakeaway(items: ScheduleGridItem[]) {
   return `Softest: Week ${softest.week} ${formatWinProb(softest)} · toughest: Week ${toughest.week} ${formatWinProb(toughest)}.`;
 }
 
-function paceValue(delta: number) {
-  const rounded = Math.abs(delta) < 0.05 ? 0 : Number(delta.toFixed(1));
-  return `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)}`;
-}
 
-function paceDeltaRead(delta: number, rangeLabel: string) {
-  const rounded = Math.abs(delta) < 0.05 ? 0 : Number(delta.toFixed(1));
-  return {
-    text: `${rounded > 0 ? '+' : ''}${rounded.toFixed(1)} wins this ${rangeLabel.toLowerCase()}`,
-    tone: rounded > 0 ? 'positive' : rounded < 0 ? 'negative' : 'neutral',
-  } as const;
-}
 
-function paceSummary(openValue: number, currentValue: number) {
-  return `Open ${paceValue(openValue)} → Now ${paceValue(currentValue)}`;
-}
 
-function weekLabel(value: number) {
-  return `Wk ${Math.round(value)}`;
-}
 
-function paceYAxis(value: number) {
-  const rounded = Math.abs(value) < 0.05 ? 0 : Number(value.toFixed(1));
-  return `${rounded >= 0 ? '+' : ''}${rounded.toFixed(1)}`;
-}
 
 export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) {
   const rowRefs = useRef<Record<number, HTMLElement | null>>({});
-  const pricedItems = items.filter((item) => typeof item.winProb === 'number');
   const hasFutureBestLineupRows = items.some(
     (item) => item.status === 'projected' && !item.isPlayoff && typeof item.yourLine === 'number',
   );
-  const cumulativeWins = items.reduce<
-    { week: number; expectedWins: number; baseline: number; status: ScheduleGridItem['status']; isPlayoff?: boolean }[]
-  >((rows, item) => {
-    const previous = rows.at(-1)?.expectedWins ?? 0;
-    const expected =
-      item.status === 'win'
-        ? 1
-        : item.status === 'loss' || item.status === 'bye' || item.isPlayoff
-          ? 0
-          : (item.winProb ?? 50) / 100;
-    rows.push({
-      week: item.week,
-      expectedWins: previous + expected,
-      baseline: item.week / 2,
-      status: item.status,
-      isPlayoff: item.isPlayoff,
-    });
-    return rows;
-  }, []);
-  const deltaRows = cumulativeWins.map((item) => ({
-    ...item,
-    delta: item.expectedWins - item.baseline,
-  }));
-  const deltaPoints = deltaRows.map<OddsChartPoint>((item) => ({
-    x: item.week,
-    y: item.delta,
-  }));
-  const wormTakeaway = expectedWinsTakeaway(cumulativeWins);
   const heatSummary = heatTakeaway(items);
   const jumpToWeek = (week: number) => {
     rowRefs.current[week]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -189,33 +126,19 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
         </div>
       ) : null}
 
-      {leagueChartFlags.scheduleWorm && pricedItems.length > 1 ? (
-        <div className="schedule-grid__chart-card schedule-grid__chart-card--worm">
-          <OddsChart
-            caption="Zero line = .500 pace. Green and red only mark the side of zero."
-            className="schedule-grid__pace-chart"
-            defaultRangeId="season"
-            deltaFormatter={paceDeltaRead}
-            displayValueForDelta={(value) => Number(value.toFixed(1))}
-            domainMode="delta"
-            footer={wormTakeaway}
-            hero={{
-              id: 'pace-line',
-              name: 'Against .500 pace',
-              points: deltaPoints,
-            }}
-            heroFillMode="zero"
-            rangeOptions={PACE_RANGES}
-            showHeroEndpoint={false}
-            summaryFormatter={paceSummary}
-            title="Expected wins pace"
-            valueFormatter={paceValue}
-            xTickFormatter={weekLabel}
-            yTickFormatter={paceYAxis}
-            dateFormatter={weekLabel}
-          />
-        </div>
-      ) : null}
+      {/* "Expected wins pace" lived here and is gone.
+
+          It charted cumulative expected wins against a .500 baseline of
+          week/2, and that baseline was wrong twice over: a bye adds nothing to
+          your expected wins but still advances the baseline by half a win, so
+          a bye alone read as falling behind, and every playoff week did the
+          same thing again at the end of the season. It also mixed two
+          questions — how good you are, and what a .500 schedule looks like —
+          into one number nobody could interpret.
+
+          The priced standings below answer the question it was reaching for,
+          correctly: xW-L is your record with the schedule removed, and
+          Schedule is the difference. */}
 
       <div className="schedule-grid__rows">
         {items.map((item) => {

@@ -1,6 +1,11 @@
 import { useMemo } from 'react';
 import type { AllPlayRow } from '../../utils/allPlay';
-import { formatAllPlayRecord, formatLuck, luckSentence } from '../../utils/allPlay';
+import {
+  formatAllPlayRecord,
+  formatExpectedRecord,
+  formatLuck,
+  luckSentence,
+} from '../../utils/allPlay';
 import './LuckBoard.css';
 
 export interface LuckBoardTeam extends AllPlayRow {
@@ -91,7 +96,7 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
             <th scope="col">Team</th>
             <th scope="col" className="luck-board__num">Record</th>
             <th scope="col" className="luck-board__num">All-play</th>
-            <th scope="col" className="luck-board__num">Earned</th>
+            <th scope="col" className="luck-board__num" title="Your record with the schedule removed: all-play win rate applied to the games you have played.">xW-L</th>
             <th scope="col" className="luck-board__num">Schedule</th>
           </tr>
         </thead>
@@ -123,7 +128,7 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
                   </span>
                 </td>
                 <td className="luck-board__num luck-board__earned">
-                  {row.expectedWins.toFixed(1)}
+                  {formatExpectedRecord(row)}
                 </td>
                 {/* The number the page exists for, set like a price. */}
                 <td className={`luck-board__num luck-board__luck luck-board__luck--${tone}`}>
@@ -137,8 +142,8 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
 
       <p className="luck-board__foot">
         All-play is your record against every team, every week, so it ranks the
-        league on scoring with the schedule taken out. <strong>Earned</strong> is the
-        wins that scoring was worth. <strong>Schedule</strong> is what you got minus
+        league on scoring with the schedule taken out. <strong>xW-L</strong> is the
+        record that scoring earned. <strong>Schedule</strong> is what you got minus
         what you earned.
       </p>
     </section>

@@ -30,7 +30,7 @@ test('the URL parser knows about every view, admin ones included', async () => {
     body,
     /ALL_LEAGUE_VIEWS\.some/,
     'parseLeagueView is filtering by a subset of views again, which silently '
-      + 'coerces any view it does not list back to this-week',
+      + 'coerces any view it does not list back to the default',
   );
   assert.doesNotMatch(
     body,
@@ -58,4 +58,44 @@ test('only one place decides who may see a view', async () => {
     /visibleViews\.some\(\(view\) => view\.key === requestedView\)/,
     'the admin gate moved or changed shape',
   );
+});
+
+test('the tabs that shipped still resolve after the rename', async () => {
+  const source = await fs.readFile(path.resolve(PAGE), 'utf8');
+
+  /* "This week", "Schedule" and "All-play" were real URLs that people have in
+     history and bookmarks. A renamed tab that quietly answers with the default
+     view is a link that lies about where it went. */
+  assert.match(source, /const LEGACY_VIEWS: Record<string, LeagueView> = \{/);
+  for (const [old, next] of [
+    ["'this-week'", 'board'],
+    ['schedule', 'season'],
+    ['luck', 'season'],
+  ]) {
+    assert.match(
+      source,
+      new RegExp(`${old.replace(/'/g, "'?")}: '${next}'`),
+      `${old} no longer maps to ${next}, so an old link lands on the wrong tab`,
+    );
+  }
+
+  assert.match(
+    source,
+    /if \(raw && raw in LEGACY_VIEWS\) return LEGACY_VIEWS\[raw\];/,
+    'parseLeagueView stopped honouring the legacy names',
+  );
+});
+
+test('Season carries both halves, since that was the point of merging', async () => {
+  const source = await fs.readFile(path.resolve(PAGE), 'utf8');
+  const season = source.slice(
+    source.indexOf("activeView === 'season'"),
+    source.indexOf('selectedWeek && bootstrap'),
+  );
+  assert.ok(season.length > 0, 'the season branch is gone');
+  assert.match(season, /<ScheduleGrid/, 'the heat strip did not come across');
+  assert.match(season, /<LuckBoard/, 'the priced standings did not come across');
+  /* And the tab it replaced must not still exist, or the merge left a
+     destination nobody can reach. */
+  assert.doesNotMatch(source, /activeView === 'schedule'/);
 });

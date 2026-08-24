@@ -41,27 +41,49 @@ import { isLeaguePreDraft } from '../utils/preDraft';
 import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 
 type ConnectFlow = 'none' | 'sleeper' | 'espn';
-type LeagueView = 'this-week' | 'standings' | 'futures' | 'schedule' | 'luck';
+type LeagueView = 'board' | 'futures' | 'season' | 'standings';
 
 /**
- * Standings is deliberately not in here. Wins, PF and PA are already on ESPN
- * and Sleeper, rendered better and without our sync lag, so re-showing them
- * spent a quarter of the tab strip on the one surface that says nothing only
- * we can say. The table stays in the codebase because its real job was never
- * the user's: it reads each team's record and points the same way the sim
- * seeds playoffs, which makes it a check on the sim. So it is now what it
- * always was — an admin diagnostic. See ADMIN_LEAGUE_VIEWS.
+ * Three tabs, not five.
+ *
+ * "This week", "Schedule" and "All-play" were three destinations answering one
+ * question each, and two of them were about the same span of time: All-play is
+ * a verdict on the weeks you have played, Schedule is the same weeks plus the
+ * ones to come. Splitting them meant the schedule strip and the record it
+ * produced could not be read against each other, which is the only way either
+ * is interesting.
+ *
+ * Board is this week. Futures is the season market. Season is everything
+ * retrospective: the heat strip, the priced standings, and the records. A
+ * fourth, Machine, joins when the playoff machine ships.
+ *
+ * Standings stays admin-only for the same reason as before: wins, PF and PA
+ * are already on ESPN and Sleeper, rendered better and without our sync lag.
+ * Its real job was never the user's — it reads each team's record and points
+ * the same way the sim seeds playoffs, which makes it a check on the sim.
  */
 const LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
-  { key: 'this-week', label: 'This week' },
+  { key: 'board', label: 'Board' },
   { key: 'futures', label: 'Futures' },
-  { key: 'schedule', label: 'Schedule' },
-  { key: 'luck', label: 'All-play' },
+  { key: 'season', label: 'Season' },
 ];
 
 const ADMIN_LEAGUE_VIEWS: Array<{ key: LeagueView; label: string }> = [
   { key: 'standings', label: 'Standings' },
 ];
+
+/**
+ * Old URLs keep working.
+ *
+ * These view names shipped and are in people's history and bookmarks; a
+ * renamed tab that answers with the default view is a link that silently lies
+ * about where it went.
+ */
+const LEGACY_VIEWS: Record<string, LeagueView> = {
+  'this-week': 'board',
+  schedule: 'season',
+  luck: 'season',
+};
 
 function flowFromHash(hash: string): ConnectFlow | null {
   if (hash === '#connect-sleeper') return 'sleeper';
@@ -82,9 +104,10 @@ function flowFromHash(hash: string): ConnectFlow | null {
 const ALL_LEAGUE_VIEWS = [...LEAGUE_VIEWS, ...ADMIN_LEAGUE_VIEWS];
 
 function parseLeagueView(raw: string | null): LeagueView {
+  if (raw && raw in LEGACY_VIEWS) return LEGACY_VIEWS[raw];
   return ALL_LEAGUE_VIEWS.some((view) => view.key === raw)
     ? (raw as LeagueView)
-    : 'this-week';
+    : 'board';
 }
 
 function recordLabel(team: { record: { wins: number; losses: number; ties: number } }) {
@@ -110,7 +133,7 @@ export function LeaguePage() {
      table for anyone who typed it or kept an old bookmark, which would make
      the gate decorative. */
   const activeView =
-    visibleViews.some((view) => view.key === requestedView) ? requestedView : 'this-week';
+    visibleViews.some((view) => view.key === requestedView) ? requestedView : 'board';
   const isReconnectState = Boolean(stored && !bootstrap && !isLoading && error);
   const hasConnectHash = location.hash.startsWith('#connect');
   const isWizardOpen = showWizard || hasConnectHash || isReconnectState;
@@ -234,7 +257,9 @@ export function LeaguePage() {
   }, [bootstrap, connectedSeason, liveBoardLine]);
 
   const setLeagueView = (view: LeagueView) => {
-    if (view === 'this-week') {
+    /* The default view owns the bare URL, so /league and /league?view=board are
+       the same page rather than two. */
+    if (view === 'board') {
       setSearchParams({});
       return;
     }
@@ -398,7 +423,7 @@ export function LeaguePage() {
         ))}
       </div>
 
-      {activeView === 'this-week' ? (
+      {activeView === 'board' ? (
         <>
           {!connected ? <TradeTargetTeaser groups={MOCK_TRADE_TARGET_GROUPS} /> : null}
 
@@ -470,28 +495,25 @@ export function LeaguePage() {
         </>
       ) : null}
 
-      {activeView === 'luck' ? (
+      {/* Season, stacked in the order the story is told: what happened to you
+          week by week, then the verdict that reading produces. They used to be
+          two tabs, which meant the strip and the record it explains could never
+          be read against each other. */}
+      {activeView === 'season' ? (
         <>
           {connected ? (
-            <LuckBoard teams={luckTeams} />
-          ) : (
-            <SeasonalNotice>Connect a league to see how its schedule has played out.</SeasonalNotice>
-          )}
-        </>
-      ) : null}
-
-      {activeView === 'schedule' ? (
-        <>
-          {connected ? (
-            connectedSeason && connectedSeason.scheduleItems.length > 0 ? (
-              <ScheduleGrid
-                items={connectedScheduleItems}
-                onSelectWeek={(item) => setSelectedWeek(item.week)}
-                title="Schedule"
-              />
-            ) : (
-              <SeasonalNotice>Loading your schedule…</SeasonalNotice>
-            )
+            <>
+              {connectedSeason && connectedSeason.scheduleItems.length > 0 ? (
+                <ScheduleGrid
+                  items={connectedScheduleItems}
+                  onSelectWeek={(item) => setSelectedWeek(item.week)}
+                  title="Your season, priced"
+                />
+              ) : (
+                <SeasonalNotice>Loading your schedule…</SeasonalNotice>
+              )}
+              <LuckBoard teams={luckTeams} />
+            </>
           ) : (
             <ScheduleGrid items={preseasonSchedule} title="Upcoming schedule" />
           )}

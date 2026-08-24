@@ -126,3 +126,22 @@ test('the sentence blames the schedule, not the manager', () => {
     assert.doesNotMatch(sentence, /lucky|unlucky|deserve/i);
   }
 });
+
+test('xW-L reads as a record against the real one', async () => {
+  const { formatExpectedRecord } = await import('../src/utils/allPlay.ts');
+  const scores = [...week(1, [120, 110, 100, 90]), ...week(2, [120, 110, 100, 90])];
+  const rows = computeAllPlay(scores, new Map([[1, 2]]));
+
+  /* Team 1 scores highest both weeks: 6-0 all-play, so its scoring earned both
+     games. Rendered as a record so "2-0 actual, 2.0-0.0 expected" can be read
+     in one glance, which "2" next to "2.0" cannot. */
+  assert.equal(formatExpectedRecord(rows.find((r) => r.rosterId === 1)), '2.0-0.0');
+  assert.equal(formatExpectedRecord(rows.find((r) => r.rosterId === 4)), '0.0-2.0');
+
+  /* Wins and losses always sum to the weeks counted, or the two halves of the
+     record would describe different seasons. */
+  for (const row of rows) {
+    const [w, l] = formatExpectedRecord(row).split('-').map(Number);
+    assert.ok(Math.abs(w + l - row.weeksCounted) < 0.05, `${w}-${l} is not ${row.weeksCounted} games`);
+  }
+});

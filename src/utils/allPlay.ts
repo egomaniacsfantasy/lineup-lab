@@ -15,11 +15,16 @@
  * already happened — counting, not modelling. That matters for where this is
  * allowed to live: the engine owns predictions, and this predicts nothing.
  *
- * A note on naming. The engine publishes `expWins`, which is a projection of
- * how many games a team will win this season. The `expectedWins` here is a
- * different quantity that happens to share an English phrase: the wins a team's
- * SCORING alone earned it in games already played. They are not comparable and
- * must never be shown in the same column.
+ * A note on naming. The engine publishes `expWins`, a projection of how many
+ * games a team will win this season. The `expectedWins` here is the opposite
+ * direction in time: the wins a team's SCORING alone earned in games already
+ * played. Same English phrase, different quantity.
+ *
+ * On screen the retrospective one is xW-L, borrowing the x-prefix convention
+ * from xG and xFIP, where it reads as "what should have happened given what you
+ * did". The forward-looking one is only ever labelled "Projected wins", and the
+ * two live on different tabs. They must never share a screen, let alone a
+ * column, because "expected wins" said out loud is ambiguous between them.
  */
 
 export interface WeekScore {
@@ -133,6 +138,18 @@ export function computeAllPlay(
       luck: actualWins - expectedWins,
     };
   });
+}
+
+/**
+ * xW-L: the record your scoring earned, to one decimal.
+ *
+ * Rendered as a record rather than a single number so it can be read straight
+ * against the real one — "6-2 actual, 5.0-3.0 expected" lands immediately in a
+ * way "6-2" next to "5.0" does not.
+ */
+export function formatExpectedRecord(row: AllPlayRow): string {
+  const losses = Math.max(0, row.weeksCounted - row.expectedWins);
+  return `${row.expectedWins.toFixed(1)}-${losses.toFixed(1)}`;
 }
 
 /** "9-2" or "9-2-1". */

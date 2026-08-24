@@ -52,6 +52,6 @@ test('the tab strip renders the gated list, not the public one', () => {
 test('a typed ?view=standings cannot walk around the gate', () => {
   assert.match(
     source,
-    /visibleViews\.some\(\(view\) => view\.key === requestedView\) \? requestedView : 'this-week'/,
+    /visibleViews\.some\(\(view\) => view\.key === requestedView\) \? requestedView : 'board'/,
   );
 });
