@@ -2328,7 +2328,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // Guarantee every opponent a fair slice of the scan budget so the all-teams sweep
   // never starves teams late in the loop — the old fixed 54-cap did exactly that,
   // leaving most managers blank. Deep on a single clicked partner.
-  const perOpp = partnerRosterId != null ? 40 : 12;  // deep on a clicked partner; broad-but-bounded across all teams
+  const perOpp = partnerRosterId != null ? 40 : 10;  // scan ~10 candidates per manager so the round-robin below can cover everyone
   const SCAN_CAP = perOpp * numOpp;
   const byOpp = new Map();
   for (const c of scored) {
@@ -2371,7 +2371,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const { youDelta, partnerDelta, theirValueDelta } = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline);
     simmed += 1;
     if (simmed % 4 === 0) await yieldToLoop();
-    if (Date.now() - t0 > 18_000) break;   // stay within budget; leave time for Pass 2
+    if (Date.now() - t0 > 14_000) break;   // stop scanning; leave the rest of the budget for Pass 2's full-sims
     if (youDelta <= 0) continue;   // your title must rise; no other threshold
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
@@ -2383,7 +2383,25 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // prices IDENTICALLY when you open it in the analyzer. Stable seed + CRN keep
   // each delta accurate at this count, and it re-sims many finalists in budget.
   const fairness = (c) => Math.abs(c.youDelta) + Math.abs(c.partnerDelta);
-  const finalists = scanned.sort((a, b) => fairness(a) - fairness(b)).slice(0, 24);
+  // Cover EVERY manager: take each manager's fairest few candidates and full-sim them
+  // ROUND-ROBIN (manager 1's best, manager 2's best, ... then everyone's 2nd best...).
+  // The pool ends up spread across all managers, so "best deals" is just the top of
+  // this pool and clicking a manager filters the SAME pool -- the two can't disagree,
+  // and any manager with a youDelta>0 trade is never empty. Round-robin also means a
+  // time cut-off still leaves every manager their fairest trade.
+  const K_PER_MGR = 5;
+  const byMgrScan = new Map();
+  for (const c of scanned) {
+    const list = byMgrScan.get(c.partner.rosterId) ?? [];
+    list.push(c);
+    byMgrScan.set(c.partner.rosterId, list);
+  }
+  const perMgr = [...byMgrScan.values()].map((list) =>
+    list.sort((a, b) => fairness(a) - fairness(b)).slice(0, K_PER_MGR));
+  const finalists = [];
+  for (let i = 0; i < K_PER_MGR; i += 1) {
+    for (const list of perMgr) if (list[i]) finalists.push(list[i]);
+  }
   const finalBaseline = simulateSeason({ ...base, sims: TRADE_SIMS });
   const suggestions = [];
   let re = 0;
@@ -2416,7 +2434,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
 
   return {
     available: true,
-    suggestions: suggestions.slice(0, 40),
+    suggestions: suggestions.slice(0, 60),
     debug: {
       generated: scored.length,
       simmed: promising.length,

@@ -265,7 +265,6 @@ function TradeDealsView() {
   }, [stored?.leagueId, stored?.userId, bootstrap]);
 
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
-  const [managerSuggestions, setManagerSuggestions] = useState<TradeSuggestion[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
   const [managerSuggestionsError, setManagerSuggestionsError] = useState<string | null>(null);
   const [managerSuggestionsUpdatedAt, setManagerSuggestionsUpdatedAt] = useState<number | null>(null);
@@ -388,57 +387,37 @@ function TradeDealsView() {
   const managerSuggestionEntries = useMemo(() => {
     if (!stored || !bootstrap || marketManagerFilter == null) return [];
 
-    // A trade that also appears on the league "best deals" board must show the SAME
-    // numbers here. Both scans share the seed and sim count, so they only diverge if
-    // computed against different projection snapshots (the model refreshes in the
-    // background); prefer the board's copy of a shared trade so the two always agree.
-    const boardBySignature = new Map(
-      (leagueDeals ?? []).map((deal) => [
-        tradeSignature({
-          leagueId: stored.leagueId,
-          partnerRosterId: deal.partnerRosterId,
-          givePlayerIds: deal.give.map((asset) => asset.id),
-          getPlayerIds: deal.get.map((asset) => asset.id),
-        }),
-        deal,
-      ]),
-    );
-
-    const targeted = managerSuggestions
+    // Clicking a manager just FILTERS the one league-wide pool (leagueDeals) to that
+    // manager -- the exact same trades and numbers as the "best deals" board. There is
+    // no separate per-manager scan, so the two can never disagree, and a manager the
+    // board shows a trade with is never empty here. (Only the user's own position
+    // filter and dismissals still narrow it.)
+    const entries = (leagueDeals ?? [])
       .filter((suggestion) => suggestion.partnerRosterId === marketManagerFilter)
-      .map((rawSuggestion) => {
-        const signature = tradeSignature({
+      .map((suggestion) => ({
+        suggestion,
+        signature: tradeSignature({
           leagueId: stored.leagueId,
-          partnerRosterId: rawSuggestion.partnerRosterId,
-          givePlayerIds: rawSuggestion.give.map((asset) => asset.id),
-          getPlayerIds: rawSuggestion.get.map((asset) => asset.id),
-        });
-        const suggestion = boardBySignature.get(signature) ?? rawSuggestion;
-        return {
-          suggestion,
-          signature,
-          acceptanceProbability: acceptanceProbability(
-            suggestion.partnerDelta,
-            friendliness,
-            relationship,
-          ),
-          valueGain: suggestion.youDelta,
-          position: normalizeMarketPosition(
-            suggestion.get
-              .map((asset) => bootstrap.players[asset.id]?.position)
-              .find(Boolean),
-          ),
-        };
-      });
+          partnerRosterId: suggestion.partnerRosterId,
+          givePlayerIds: suggestion.give.map((asset) => asset.id),
+          getPlayerIds: suggestion.get.map((asset) => asset.id),
+        }),
+        acceptanceProbability: acceptanceProbability(
+          suggestion.partnerDelta,
+          friendliness,
+          relationship,
+        ),
+        valueGain: suggestion.youDelta,
+        position: normalizeMarketPosition(
+          suggestion.get
+            .map((asset) => bootstrap.players[asset.id]?.position)
+            .find(Boolean),
+        ),
+      }));
 
-    const positionFiltered = targeted.filter(
+    const positionFiltered = entries.filter(
       (entry) => marketPositionFilter === 'all' || entry.position === marketPositionFilter,
     );
-    // Identical to the league "best deals" board: same fairness ranking (smallest
-    // combined title change), and NO extra hiding — no acceptance-band filter and
-    // no same-position-1-for-1 filter. A same-position swap of similar value is
-    // often the FAIREST trade, so it tops the board; it must show here too. (Only
-    // the user's own position filter and dismissals still apply.)
     const ranked = [...positionFiltered].sort(
       (a, b) => tradeFairnessScore(a.suggestion) - tradeFairnessScore(b.suggestion),
     );
@@ -448,7 +427,6 @@ function TradeDealsView() {
     dismissedSignatures,
     friendliness,
     leagueDeals,
-    managerSuggestions,
     marketManagerFilter,
     marketPositionFilter,
     relationship,
@@ -468,60 +446,13 @@ function TradeDealsView() {
   }, [marketManagerFilter, marketPositionFilter]);
 
   useEffect(() => {
-    if (!stored || marketManagerFilter == null) {
-      setManagerSuggestions([]);
-      setManagerSuggestionsUpdatedAt(null);
-      setManagerSuggestionsError(null);
-      setManagerSuggestionsLoading(false);
-      return undefined;
-    }
-
-    let cancelled = false;
-    setManagerSuggestionsLoading(true);
+    // Per-manager trades come from the already-fetched league pool (leagueDeals); there
+    // is no separate per-manager scan, so nothing to fetch or fail here. "Loading" just
+    // tracks whether that pool has arrived.
     setManagerSuggestionsError(null);
-
-    // Send YOUR saved read (friendliness/relationship) for each manager so the scan's
-    // accept % uses the exact sliders you set on their card — the same input the
-    // Build-a-trade analyzer uses. Only real overrides travel; managers you haven't
-    // adjusted fall back to neutral server-side.
-    const readsByRoster: Record<number, { friendliness: number; relationship: number }> = {};
-    for (const team of partners) {
-      const rec = loadTradeTraitsRecord(stored.leagueId, team.rosterId);
-      if (rec && rec.mode !== 'default') {
-        readsByRoster[team.rosterId] = {
-          friendliness: rec.friendliness,
-          relationship: rec.relationship,
-        };
-      }
-    }
-
-    fetchTradeSuggestions(stored.leagueId, {
-      userId: stored.userId,
-      partnerRosterId: marketManagerFilter,
-      readsByRoster,
-    })
-      .then((response) => {
-        if (cancelled) return;
-        if (!response.available) {
-          setManagerSuggestionsError(response.reason ?? 'Could not price manager trades right now.');
-          setManagerSuggestions([]);
-          return;
-        }
-        setManagerSuggestions(response.suggestions ?? []);
-        setManagerSuggestionsUpdatedAt(Date.now());
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setManagerSuggestionsError('Could not price manager trades right now.');
-      })
-      .finally(() => {
-        if (!cancelled) setManagerSuggestionsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [marketManagerFilter, stored, partners]);
+    setManagerSuggestionsLoading(marketManagerFilter != null && leagueDeals === null);
+    setManagerSuggestionsUpdatedAt(leagueDeals !== null ? Date.now() : null);
+  }, [marketManagerFilter, leagueDeals]);
 
   // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
   // pre-selects that partner in the builder. We intentionally do NOT pre-fill
