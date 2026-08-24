@@ -7,6 +7,5 @@ export const leagueChartFlags = {
   stakes: false,
   contenderShape: true,
   scheduleHeatStrip: true,
-  scheduleWorm: true,
   avatars: true,
 } as const;

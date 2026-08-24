@@ -4,7 +4,7 @@ import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueWeekMatchup } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
-import { weekMovement } from '../../utils/openAnchors';
+import { marketMovement, weekMovement } from '../../utils/openAnchors';
 import { OddsChart, type OddsChartPoint } from '../charts/OddsChart';
 import { TeamAvatar } from './TeamAvatar';
 import './MatchupSlate.css';
@@ -189,6 +189,23 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
     }
     return map;
   }, [history, currentWeek]);
+
+  /* The title market's biggest reactions to THIS week, not to the season. A
+     team can be well up across the year and down on the week; the board is a
+     weekly surface and should say the weekly thing. */
+  const titleMovers = useMemo(() => {
+    const nameByRoster = new Map<string, string>();
+    for (const matchup of matchups) {
+      if (matchup.teamARosterId != null) nameByRoster.set(String(matchup.teamARosterId), matchup.teamA);
+      if (matchup.teamBRosterId != null) nameByRoster.set(String(matchup.teamBRosterId), matchup.teamB);
+    }
+    return marketMovement(history ?? [], 'title', currentWeek)
+      .filter((move) => move.movePp != null && Math.abs(move.movePp) >= 0.1)
+      .map((move) => ({ ...move, name: nameByRoster.get(move.rosterId) ?? null }))
+      .filter((move) => move.name != null)
+      .sort((a, b) => Math.abs(b.movePp ?? 0) - Math.abs(a.movePp ?? 0))
+      .slice(0, 3);
+  }, [history, currentWeek, matchups]);
 
   const rows = useMemo(
     () =>
@@ -387,7 +404,12 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             {closestLine ? (
               <div className="matchup-slate__glance-row">
                 <span>Closest line</span>
-                <strong>{closestLine.left.name} vs {closestLine.right.name} · {Math.abs(closestLine.left.winProb - 50).toFixed(1)} pts</strong>
+                {/* The price, not a distance from 50 labelled "pts". This
+                    page is covered in fantasy points and a coin-flip line
+                    reads better as the number a book would quote anyway. */}
+                <strong>
+                  {closestLine.favorite.name} · {formatAmericanOdds(closestLine.favorite.odds)}
+                </strong>
               </div>
             ) : null}
             {highestTotal?.matchup.totalProjection != null ? (
@@ -397,6 +419,37 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
               </div>
             ) : null}
           </section>
+
+          {/* What the week did to the title market. Only shown when the week
+              actually moved something: an empty list means the board opened
+              and nothing has happened yet, which is a true and common state
+              early in a week and should not render as a heading over nothing. */}
+          {titleMovers.length > 0 ? (
+            <section className="matchup-slate__movers">
+              <span className="matchup-slate__glance-title">Title market · this week</span>
+              {titleMovers.map((mover) => (
+                <div className="matchup-slate__mover" key={mover.rosterId}>
+                  <span className="matchup-slate__mover-name">{mover.name}</span>
+                  <span className="matchup-slate__mover-prices">
+                    <span className="matchup-slate__mover-open">
+                      {formatAmericanOdds(mover.openOdds)}
+                    </span>
+                    <span aria-hidden="true" className="matchup-slate__mover-arrow">→</span>
+                    <span
+                      className={[
+                        'matchup-slate__mover-now',
+                        (mover.movePp ?? 0) > 0
+                          ? 'matchup-slate__mover-now--up'
+                          : 'matchup-slate__mover-now--down',
+                      ].join(' ')}
+                    >
+                      {formatAmericanOdds(mover.nowOdds)}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </section>
+          ) : null}
 
         </aside>
       </div>

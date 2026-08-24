@@ -163,9 +163,15 @@ export interface TitleMove {
 export function marketMovement(
   history: readonly HistoryEntry[],
   market: FuturesMarket = 'title',
+  /* Omit for the season book, which is what futures and the ticket quote.
+     Pass a week to ask the narrower question the weekly board asks: what has
+     this week done to the title market? Those are different stories — a team
+     can be well up on the season and down on the week. */
+  week?: number,
 ): TitleMove[] {
-  const open = seasonOpen(history);
-  const now = latestSnapshot(history);
+  const scoped = week == null ? history : history.filter((entry) => entry.week === week);
+  const open = week == null ? seasonOpen(history) : weekOpen(history, week);
+  const now = latestSnapshot(scoped);
   if (!open || !now || open.computedAt === now.computedAt) return [];
 
   const probOf = (entry: HistoryEntry) => (market === 'playoff' ? undefined : entry.titleProb);

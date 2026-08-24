@@ -72,3 +72,31 @@ test('a line that moved early still shows a move', async () => {
   assert.ok(home, 'no movement found across separate days');
   assert.ok(Math.abs(home.movePp - 6) < 1e-9, `expected +6.0pp, got ${home.movePp}`);
 });
+
+test('the weekly board asks the weekly question of the title market', async () => {
+  const { marketMovement } = await import('../src/utils/openAnchors.ts');
+
+  /* A team can be well up on the season and down on the week. The board is a
+     weekly surface, so its movers list must anchor to this week's open, not
+     the season's, or it repeats what Futures already says. */
+  const history = [
+    { computedAt: 1, week: 1, titleOdds: { '1': 900 }, titleProb: { '1': 10 } },
+    { computedAt: 2, week: 5, titleOdds: { '1': 300 }, titleProb: { '1': 25 } },
+    { computedAt: 3, week: 5, titleOdds: { '1': 400 }, titleProb: { '1': 20 } },
+  ];
+
+  const season = marketMovement(history, 'title')[0];
+  assert.equal(season.openOdds, 900, 'season anchor moved');
+  assert.ok(season.movePp > 0, 'up +10pp across the season');
+
+  const thisWeek = marketMovement(history, 'title', 5)[0];
+  assert.equal(thisWeek.openOdds, 300, 'the week anchor is week 5 open, not the season open');
+  assert.ok(thisWeek.movePp < 0, 'down 5pp on the week, opposite to the season');
+});
+
+test('the closest line is quoted as a price, not as "pts"', async () => {
+  const source = await fs.readFile(path.resolve(SLATE), 'utf8');
+  /* "1.5 pts" on a page full of fantasy points reads as fantasy scoring. */
+  assert.doesNotMatch(source, /winProb - 50\)\.toFixed\(1\)\} pts/);
+  assert.match(source, /closestLine\.favorite\.name\} · \{formatAmericanOdds\(closestLine\.favorite\.odds\)\}/);
+});
