@@ -78,7 +78,7 @@ test('the rehydrate merges rather than replaces', async () => {
   const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
   assert.match(
     source,
-    /setLeagues\(\(previous\) => \{\s*const merged = mergeLeagueNames\(/,
+    /const merged = applyCachedLeagueNames\(\s*mergeLeagueNames\(/,
     'the rehydrate is writing account rows straight into the switcher again, '
       + 'which erases every league name it does not know',
   );
@@ -96,4 +96,49 @@ test('the active league learns its name from its own bootstrap', async () => {
     'the id guard is gone: a bootstrap still in flight during a switch belongs '
       + 'to the previous league, and its name would be written onto the new one',
   );
+});
+
+test('a name once seen survives the API being cold', async () => {
+  const { applyCachedLeagueNames, rememberLeagueNames, clearLeagueNameCache } =
+    await import('../src/contexts/leagueRows.ts');
+
+  /* localStorage stand-in: these run in node. */
+  const store = new Map();
+  globalThis.window = {
+    localStorage: {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+    },
+  };
+  clearLeagueNameCache();
+
+  /* A good load: names arrive from the provider and are written down. */
+  rememberLeagueNames([
+    SLEEPER('1', 'Engineer Bowl'),
+    { provider: 'espn', leagueId: '2107153357', leagueName: 'LA 2026 League' },
+  ]);
+
+  /* The next load, with the API cold: rows carry no names at all. This was
+     Andre's account exactly — thirteen leagues all reading "avla" because one
+     request 503'd. */
+  const cold = applyCachedLeagueNames([
+    { provider: 'sleeper', leagueId: '1' },
+    { provider: 'espn', leagueId: '2107153357' },
+    { provider: 'sleeper', leagueId: '999' },
+  ]);
+
+  assert.equal(cold[0].leagueName, 'Engineer Bowl');
+  assert.equal(cold[1].leagueName, 'LA 2026 League', 'the ESPN league must be covered too');
+  assert.equal(cold[2].leagueName, undefined, 'a league never seen stays nameless');
+
+  /* The cache never overrides a real name. */
+  const fresh = applyCachedLeagueNames([SLEEPER('1', 'Renamed')]);
+  assert.equal(fresh[0].leagueName, 'Renamed');
+
+  /* And it never erases: a nameless league does not blank a remembered one. */
+  rememberLeagueNames([{ provider: 'sleeper', leagueId: '1' }]);
+  assert.equal(applyCachedLeagueNames([{ provider: 'sleeper', leagueId: '1' }])[0].leagueName, 'Engineer Bowl');
+
+  delete globalThis.window;
 });

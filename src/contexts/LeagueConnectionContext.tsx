@@ -30,9 +30,11 @@ import {
 } from '../services/leaguePricingCache';
 import { supabase } from '../services/supabase';
 import {
+  applyCachedLeagueNames,
   isMissingLeagueNameColumn,
   leagueNameFromRow,
   mergeLeagueNames,
+  rememberLeagueNames,
   sameLeagueList,
   type DbLeagueRow,
 } from './leagueRows';
@@ -520,10 +522,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
            later — the two took turns forever, which is what the flashing was.
            A name is only ever replaced by another name. */
         setLeagues((previous) => {
-          const merged = mergeLeagueNames(
-            leaguesForSwitcher,
-            stored ? [...previous, stored] : previous,
+          /* Three sources, weakest last: the rows themselves, then whatever is
+             already in memory, then names this device has seen before. The
+             cache is what makes a cold API harmless — without it every name in
+             the switcher depends on one request succeeding on every load. */
+          const merged = applyCachedLeagueNames(
+            mergeLeagueNames(leaguesForSwitcher, stored ? [...previous, stored] : previous),
           );
+          rememberLeagueNames(merged);
           /* Same list -> same reference, so the name refresh downstream is not
              woken up to redo work it already did. */
           return sameLeagueList(merged, previous) ? previous : merged;
@@ -655,6 +661,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           (league, index) => league.leagueName !== leagues[index]?.leagueName,
         );
         if (changed) {
+          rememberLeagueNames(refreshed);
           setLeagues(refreshed);
           if (userIdRef.current && active) void saveLeagueRows(userIdRef.current, refreshed, active);
         }
@@ -793,6 +800,11 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
          league's name. */
       const learnedName = data.league?.name;
       if (learnedName && String(data.league.id) === String(connection.leagueId)) {
+        /* Written down before it is rendered, because this is the ONLY place an
+           ESPN league's name ever comes from: the Sleeper account lookup that
+           names everything else knows nothing about ESPN. Without this, Andre's
+           ESPN row read "Andre Vlahakis" on every load forever. */
+        rememberLeagueNames([{ ...connection, leagueName: learnedName }]);
         setLeagues((previous) =>
           previous.map((league) =>
             leagueKey(league) === leagueKey(connection) && league.leagueName !== learnedName
@@ -900,7 +912,9 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
            than a fix — but it is the one invariant that stops this field from
            being clobbered, and it is worth holding everywhere rather than in
            the one place it has already gone wrong. */
-        return mergeLeagueNames(merged, prev);
+        const named = mergeLeagueNames(merged, prev);
+        rememberLeagueNames(named);
+        return named;
       });
       // Persist to the account so it's there on every device.
       if (userIdRef.current) void saveLeagueRows(userIdRef.current, knownConnections, active);

@@ -74,6 +74,94 @@ export function mergeLeagueNames<T extends { provider: string; leagueId: string;
 }
 
 /**
+ * League names, remembered on this device.
+ *
+ * Measured against a real account before writing this: every Sleeper league in
+ * the switcher was showing the manager's username instead of its name, and the
+ * only thing wrong was that the API had gone cold. GET /api/connect/:username
+ * answered 503, the client's single 1.2s retry hit the same cold server, the
+ * failure was swallowed, and nothing tried again for the rest of the session.
+ * Warming the server and reloading brought all thirteen names back with no code
+ * change at all. So the names were never missing — they were one flaky request
+ * away from existing, every single time the app opened.
+ *
+ * That is too fragile a footing for the label on every row. A name we have
+ * already seen is now written down here and read back instantly on the next
+ * load, so a cold start, an offline moment or a slow provider costs nothing.
+ * The network becomes an upgrade path rather than a prerequisite.
+ *
+ * This is deliberately a cache and not a source of truth: it only ever fills in
+ * a name that is otherwise absent, and any real name from the account or a
+ * provider overwrites it. It is also per-device, which is exactly why the
+ * league_name column still matters for a second device — this is the floor,
+ * not the ceiling.
+ */
+const NAME_CACHE_KEY = 'og.olympus.league-names';
+
+type NameCache = Record<string, string>;
+
+function readNameCache(): NameCache {
+  try {
+    const raw = window.localStorage.getItem(NAME_CACHE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: NameCache = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'string' && value.trim()) out[key] = value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Records every name present; never erases one. Returns true if anything changed. */
+export function rememberLeagueNames(
+  leagues: readonly { provider: string; leagueId: string; leagueName?: string }[],
+): boolean {
+  try {
+    const cache = readNameCache();
+    let changed = false;
+    for (const league of leagues) {
+      const name = league.leagueName?.trim();
+      if (!name) continue;
+      const key = `${league.provider}:${league.leagueId}`;
+      if (cache[key] === name) continue;
+      cache[key] = name;
+      changed = true;
+    }
+    if (changed) window.localStorage.setItem(NAME_CACHE_KEY, JSON.stringify(cache));
+    return changed;
+  } catch {
+    /* Private browsing. Names still work for this session; they just do not
+       survive it, which is the behaviour we already had. */
+    return false;
+  }
+}
+
+/** Fills in names we have seen before, for leagues that currently have none. */
+export function applyCachedLeagueNames<
+  T extends { provider: string; leagueId: string; leagueName?: string },
+>(leagues: T[]): T[] {
+  const cache = readNameCache();
+  if (Object.keys(cache).length === 0) return leagues;
+  return leagues.map((league) =>
+    league.leagueName
+      ? league
+      : { ...league, leagueName: cache[`${league.provider}:${league.leagueId}`] },
+  );
+}
+
+/** Test seam. */
+export function clearLeagueNameCache() {
+  try {
+    window.localStorage.removeItem(NAME_CACHE_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
+
+/**
  * Are these two switcher lists the same, as far as anything on screen cares?
  *
  * React compares state by reference, so handing back a freshly built array of
