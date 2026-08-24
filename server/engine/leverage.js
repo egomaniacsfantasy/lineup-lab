@@ -15,6 +15,27 @@
  *
  * The same conditioning is what the playoff machine needs, which is why it
  * lives here rather than inside the Game of the Week endpoint.
+ *
+ * NOT YET WIRED TO A ROUTE, and the reason is worth recording rather than
+ * rediscovering. weekLeverage calls simulateSeason directly, which expects a
+ * PREPARED context: a projectionMap keyed by player id, slotLabels, and a seed.
+ * assembleLeagueCtx in routes/api.js produces the upstream shape instead —
+ * `projections` as a version plus a list — and the step that turns one into the
+ * other lives inside priceLeague. Pointing this at a real league fails with
+ * "projectionMap is not iterable", which is the honest symptom of asking for a
+ * prepared ctx and being handed a raw one.
+ *
+ * There are two ways through and both are Franco's call. Either the engine
+ * exports its context-preparation step so callers can build a prepared ctx
+ * without re-deriving it, or leverage is computed inside priceLeague where a
+ * prepared ctx already exists. Rebuilding that preparation out here is the one
+ * option to avoid: it would duplicate overlay application, live locks and
+ * replacement levels, and would drift from the real pricing path silently —
+ * producing importance scores that look plausible and are computed against
+ * different projections than the board beside them.
+ *
+ * Everything below is verified against a synthetic prepared context in
+ * test/leverage.test.mjs and needs no changes when it is wired.
  */
 import { simulateSeason } from './engine.js';
 
