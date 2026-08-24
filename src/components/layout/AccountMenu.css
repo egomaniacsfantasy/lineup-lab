@@ -411,3 +411,18 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
+
+/* An ESPN league that cannot open until its team is picked. It used to be
+   indistinguishable from a working row and simply did nothing when clicked. */
+.account-menu__league-flag {
+  flex-shrink: 0;
+  padding: 2px var(--space-2xs);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--amber) 20%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-condensed);
+  font-size: 0.62rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

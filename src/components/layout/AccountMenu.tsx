@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
+import { needsEspnTeamPick, useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import { PROVIDER_LABEL } from '../../utils/provider';
 import './AccountMenu.css';
@@ -155,6 +155,10 @@ export function AccountMenu() {
                 const key = `${league.provider}:${league.leagueId}`;
                 const title = leagueLabel(league, isActive ? activeName : null);
                 const isConfirming = confirmRemove === key;
+                /* An ESPN league linked before the team confirmation existed
+                   cannot be opened until its team is picked here. It used to
+                   look like every other row and simply not respond. */
+                const needsPick = needsEspnTeamPick(league);
                 return (
                   <div
                     className={[
@@ -191,11 +195,14 @@ export function AccountMenu() {
                             username was on every row identically: it is always
                             you, so it distinguished nothing. */}
                         <span className="account-menu__league-sub">
-                          {PROVIDER_LABEL[league.provider]}
-                          {league.season ? ` · ${league.season}` : ''}
+                          {needsPick
+                            ? 'Tap to pick your team'
+                            : `${PROVIDER_LABEL[league.provider]}${league.season ? ` · ${league.season}` : ''}`}
                         </span>
                       </span>
-                      {isActive ? (
+                      {needsPick ? (
+                        <span className="account-menu__league-flag">Action needed</span>
+                      ) : isActive ? (
                         <span className="account-menu__league-dot" aria-hidden="true" />
                       ) : null}
                     </button>

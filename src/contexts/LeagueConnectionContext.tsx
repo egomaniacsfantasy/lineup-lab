@@ -250,6 +250,24 @@ function trustedForIdentity(connection: StoredConnection | null | undefined): bo
   return readConfirmed().has(String(connection.leagueId));
 }
 
+/**
+ * Does this ESPN league still need its team picked on this device?
+ *
+ * Exported because the switcher has to be able to SAY so. Trust is only ever
+ * granted inside connect(), so a league linked before that mechanism existed
+ * can never earn it — and until now nothing told anyone that. The hydrate
+ * quietly opened a different league instead, and clicking the row did nothing
+ * at all, which is what "I click on it and it disappears" was.
+ *
+ * This asks the same question trustedForIdentity does. It is deliberately a
+ * separate name because the two have opposite audiences: one gates what may be
+ * shown, this one drives what to offer.
+ */
+export function needsEspnTeamPick(connection: { provider: string; leagueId: string }): boolean {
+  if (connection.provider !== 'espn') return false;
+  return !readConfirmed().has(String(connection.leagueId));
+}
+
 function flagIdentityRecheck() {
   try {
     window.localStorage.setItem(IDENTITY_RECHECK_KEY, '1');
@@ -929,6 +947,15 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
         (l) => l.provider === provider && l.leagueId === leagueId,
       );
       if (!target || (stored && leagueKey(target) === leagueKey(stored))) return;
+      /* An ESPN league whose team has not been confirmed on this device cannot
+         be opened: it might be pointing at somebody else's roster, which is the
+         leak the confirmation exists to stop. It must not silently do nothing
+         either. Send them to the picker, which is the one screen that can
+         resolve it, and which shows no roster until they choose. */
+      if (needsEspnTeamPick(target)) {
+        window.location.hash = '#connect-espn';
+        return;
+      }
       activateLocal(target);
       if (userIdRef.current) void activateLeagueRow(userIdRef.current, target);
     },
