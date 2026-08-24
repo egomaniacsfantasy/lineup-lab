@@ -4,6 +4,7 @@ import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueWeekMatchup } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
+import { weekMovement } from '../../utils/openAnchors';
 import { OddsChart, type OddsChartPoint } from '../charts/OddsChart';
 import { TeamAvatar } from './TeamAvatar';
 import './MatchupSlate.css';
@@ -81,17 +82,29 @@ function closingByDay(points: RawMovement[]) {
   return [...byDay.values()].sort((left, right) => left.at - right.at);
 }
 
-function movementSummary(points: RawMovement[] | null, leftSide: 'a' | 'b') {
-  if (!points) return null;
-  const latest = points.at(-1);
-  if (!latest) return null;
-  const sameDay = points.filter(
-    (point) => dayKey(point.at) === dayKey(latest.at),
-  );
-  const open = sameDay[0];
-  if (!open || sameDay.length < 2) return null;
-  const move = valueForSide(latest, leftSide) - valueForSide(open, leftSide);
-  if (!isMaterialMove(move)) return null;
+/**
+ * Movement for a side, measured from the price this week OPENED at.
+ *
+ * This used to anchor to the first snapshot of the same calendar day while the
+ * caption underneath said "since the week opened". The label and the number
+ * disagreed, and not harmlessly: most of a week's movement happens before
+ * today, so the figure shown was a fraction of the real one. It also returned
+ * nothing whenever today had fewer than two snapshots, which hides a line that
+ * moved four points on Wednesday and has been still since.
+ *
+ * The anchor now comes from openAnchors, which is the same one the futures
+ * board and the ticket read, so "moved since the open" means one thing
+ * everywhere in the product.
+ */
+function movementSummary(
+  moves: Map<string, number>,
+  matchupId: number | null | undefined,
+  rosterId: number | null | undefined,
+  latest: RawMovement | null,
+) {
+  if (matchupId == null || rosterId == null || !latest) return null;
+  const move = moves.get(`${matchupId}:${rosterId}`);
+  if (move == null || !isMaterialMove(move)) return null;
   return { point: latest, move };
 }
 
@@ -166,6 +179,17 @@ function moveLabel(value: number) {
 }
 
 export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupSlateProps) {
+  /* Every side's move against this week's opening line, keyed matchup:roster.
+     Computed once for the slate rather than re-derived per row. */
+  const openMoves = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!leagueChartFlags.lineMovement) return map;
+    for (const move of weekMovement(history ?? [], currentWeek)) {
+      map.set(`${move.matchupId}:${move.rosterId}`, move.movePp);
+    }
+    return map;
+  }, [history, currentWeek]);
+
   const rows = useMemo(
     () =>
       matchups
@@ -173,7 +197,12 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
           const teams = teamsFor(matchup);
           const movement = historyFor(matchup, history);
           const detailClosings = movement ? closingByDay(movement) : [];
-          const summary = movementSummary(movement, teams.left.side);
+          const summary = movementSummary(
+            openMoves,
+            matchup.matchupId,
+            teams.left.rosterId,
+            movement?.at(-1) ?? null,
+          );
           const favorite = teams.left.winProb >= teams.right.winProb ? teams.left : teams.right;
           return {
             matchup,
@@ -189,7 +218,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
           if (left.matchup.isUserGame !== right.matchup.isUserGame) return left.matchup.isUserGame ? -1 : 1;
           return right.favorite.winProb - left.favorite.winProb;
         }),
-    [history, matchups],
+    [history, matchups, openMoves],
   );
 
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(rows[0]?.rowKey ?? null);
@@ -221,7 +250,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
     y: valueForSide(point, selectedRow.left.side),
   })) ?? [];
   const chartFooter = selectedRow?.summary
-    ? `${selectedRow.left.name} moved ${selectedRow.summary.move >= 0 ? 'up' : 'down'} ${Math.abs(selectedRow.summary.move).toFixed(1)} points since the week opened.`
+    ? `${selectedRow.left.name} has moved ${selectedRow.summary.move >= 0 ? 'up' : 'down'} ${Math.abs(selectedRow.summary.move).toFixed(1)} percentage points since this week's line opened.`
     : chartPoints.length > 1
       ? 'No real movement today.'
       : 'No material moves yet this week.';
