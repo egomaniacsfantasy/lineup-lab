@@ -8,6 +8,7 @@ import { PlayoffSettings } from '../components/league/PlayoffSettings';
 import { StandingsTable } from '../components/league/StandingsTable';
 import { LuckBoard, type LuckBoardTeam } from '../components/league/LuckBoard';
 import { computeAllPlay } from '../utils/allPlay';
+import { formatVsBook, vsBookRecords } from '../utils/vsBook';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
@@ -225,6 +226,42 @@ export function LeaguePage() {
       bootstrap.teams.map((team) => [team.rosterId, team.record.wins]),
     );
     const byRoster = new Map(bootstrap.teams.map((team) => [team.rosterId, team]));
+
+    /* Graded against the closing spread we actually posted. Needs the final
+       score AND the stored line, so it only covers weeks that have both. */
+    const matchupByWeekRoster = new Map<string, number>();
+    const opponentPoints = new Map<string, number>();
+    for (const weekEntry of schedule) {
+      const byMatchup = new Map<number, typeof weekEntry.matchups>();
+      for (const matchup of weekEntry.matchups) {
+        byMatchup.set(matchup.matchupId, [...(byMatchup.get(matchup.matchupId) ?? []), matchup]);
+      }
+      for (const [matchupId, pair] of byMatchup) {
+        if (pair.length !== 2) continue;
+        for (const [index, side] of pair.entries()) {
+          const key = `${weekEntry.week}:${side.rosterId}`;
+          matchupByWeekRoster.set(key, matchupId);
+          opponentPoints.set(key, pair[1 - index].points ?? 0);
+        }
+      }
+    }
+
+    const gradedResults = scores
+      .filter((score) => score.points > 0)
+      .map((score) => ({
+        week: score.week,
+        rosterId: String(score.rosterId),
+        points: score.points,
+        opponentPoints: opponentPoints.get(`${score.week}:${score.rosterId}`) ?? 0,
+      }))
+      .filter((result) => result.opponentPoints > 0);
+
+    const vsBookByRoster = new Map(
+      vsBookRecords(lineHistory ?? [], gradedResults, (week, rosterId) =>
+        matchupByWeekRoster.get(`${week}:${rosterId}`) ?? null,
+      ).map((record) => [record.rosterId, record]),
+    );
+
     return computeAllPlay(scores, headToHead)
       .map((row) => {
         const team = byRoster.get(row.rosterId);
@@ -235,10 +272,11 @@ export function LeaguePage() {
           ownerName: team.ownerName,
           isUser: team.isUser,
           record: team.record,
+          vsBook: formatVsBook(vsBookByRoster.get(String(row.rosterId))),
         };
       })
       .filter((row): row is LuckBoardTeam => row != null);
-  }, [bootstrap, schedule]);
+  }, [bootstrap, schedule, lineHistory]);
 
   const connectedScheduleItems = useMemo(() => {
     if (!connectedSeason) return [];

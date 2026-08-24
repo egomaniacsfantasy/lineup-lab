@@ -73,7 +73,21 @@ export function recordPricing(leagueId, pricing, { force = false } = {}) {
       sides: Object.fromEntries(
         Object.entries(line.sides).map(([rosterId, side]) => [
           rosterId,
-          { moneyline: side.moneyline, winProbability: side.winProbability },
+          {
+            moneyline: side.moneyline,
+            winProbability: side.winProbability,
+            /* The closing spread and projected score, kept so a result can
+               later be graded against the number we actually posted.
+               Without them, "did this team beat the number" is not a question
+               the stored history can answer: a moneyline alone only says who
+               was favoured, which a final score already tells you, so any
+               record built from it collapses back into plain wins and losses.
+               These are two numbers per side per snapshot and they cannot be
+               recovered after the fact — a week that passes unstored is a week
+               that can never be graded. */
+            spread: side.spread,
+            projection: side.projection,
+          },
         ]),
       ),
     })),

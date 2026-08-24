@@ -94,6 +94,15 @@
   overflow: hidden;
 }
 
+/* Every derived column carries its definition on hover, per the rule that
+   definitions are never a gate: no glossary box above the table, nothing to
+   read before the numbers mean something. */
+.luck-board__table thead th[title] {
+  cursor: help;
+  text-decoration: underline dotted color-mix(in srgb, var(--text-dim) 55%, transparent);
+  text-underline-offset: 4px;
+}
+
 .luck-board__table thead th {
   padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border-subtle);
@@ -196,4 +205,12 @@
 .luck-board__foot strong {
   color: var(--text-soft);
   font-weight: 600;
+}
+
+/* Record against the closing number. Quieter than the schedule figure beside
+   it: that one is the page's headline, this is a second opinion on it. */
+.luck-board__vsbook {
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
 }

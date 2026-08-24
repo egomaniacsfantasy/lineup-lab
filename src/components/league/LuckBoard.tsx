@@ -14,6 +14,9 @@ export interface LuckBoardTeam extends AllPlayRow {
   isUser: boolean;
   /** Real head-to-head record, for the "what you got" column. */
   record: { wins: number; losses: number; ties: number };
+  /** "5-3" against our closing spreads, or null when nothing is graded yet.
+   *  Required rather than optional so the row builder cannot quietly omit it. */
+  vsBook: string | null;
 }
 
 /**
@@ -60,6 +63,11 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
 
   /* The extremes are the story, so they are named rather than left to be found
      by scanning a column. */
+  /* The column appears only once at least one team has been graded. A week
+     whose closing spreads were never stored cannot be graded at all, and a
+     header over a column of blanks claims a metric we do not have. */
+  const showVsBook = rows.some((row) => row.vsBook);
+
   const luckiest = rows.reduce((best, row) => (row.luck > best.luck ? row : best), rows[0]);
   const unluckiest = rows.reduce((worst, row) => (row.luck < worst.luck ? row : worst), rows[0]);
 
@@ -94,10 +102,23 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
         <thead>
           <tr>
             <th scope="col">Team</th>
-            <th scope="col" className="luck-board__num">Record</th>
-            <th scope="col" className="luck-board__num">All-play</th>
-            <th scope="col" className="luck-board__num" title="Your record with the schedule removed: all-play win rate applied to the games you have played.">xW-L</th>
-            <th scope="col" className="luck-board__num">Schedule</th>
+            <th scope="col" className="luck-board__num" title="The real head-to-head record: who you actually played, and who won.">
+              Record
+            </th>
+            <th scope="col" className="luck-board__num" title="Your record if you had played every team, every week. Ranks the league on scoring alone, with the schedule taken out.">
+              All-play
+            </th>
+            <th scope="col" className="luck-board__num" title="The record your scoring earned: all-play win rate applied to the games you have played. Your record with the schedule removed.">
+              xW-L
+            </th>
+            <th scope="col" className="luck-board__num" title="Record minus xW-L. What the schedule gave you, or took away, in wins.">
+              Schedule
+            </th>
+            {showVsBook ? (
+              <th scope="col" className="luck-board__num" title="Your record against our own closing spread. Covering as a favourite and covering as an underdog count the same: it asks whether you beat the number, not whether you won.">
+                vs Book
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -134,6 +155,9 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
                 <td className={`luck-board__num luck-board__luck luck-board__luck--${tone}`}>
                   {formatLuck(row.luck)}
                 </td>
+                {showVsBook ? (
+                  <td className="luck-board__num luck-board__vsbook">{row.vsBook ?? ''}</td>
+                ) : null}
               </tr>
             );
           })}
@@ -144,7 +168,7 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
         All-play is your record against every team, every week, so it ranks the
         league on scoring with the schedule taken out. <strong>xW-L</strong> is the
         record that scoring earned. <strong>Schedule</strong> is what you got minus
-        what you earned.
+        what you earned.{showVsBook ? ' vs Book is your record against our own closing spread.' : ''}
       </p>
     </section>
   );

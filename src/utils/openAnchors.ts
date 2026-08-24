@@ -33,6 +33,11 @@
 export interface HistorySide {
   moneyline: number;
   winProbability: number;
+  /* Both optional because history is never rewritten: snapshots taken before
+     these were persisted simply do not have them, and code that reads them has
+     to treat absence as "cannot answer" rather than as zero. */
+  spread?: number;
+  projection?: number;
 }
 
 export interface HistoryEntry {

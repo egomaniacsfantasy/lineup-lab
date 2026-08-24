@@ -285,7 +285,12 @@ export interface LineHistoryEntry {
   trigger?: string;
   lines: {
     matchupId: number;
-    sides: Record<string, { moneyline: number; winProbability: number }>;
+    /* spread and projection are absent on snapshots recorded before they were
+       persisted, which is why both are optional: history is not rewritten. */
+    sides: Record<
+      string,
+      { moneyline: number; winProbability: number; spread?: number; projection?: number }
+    >;
   }[];
   titleOdds?: Record<string, number>;
   playoffOdds?: Record<string, number>;
