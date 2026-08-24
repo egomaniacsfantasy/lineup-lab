@@ -9,6 +9,8 @@ import { StandingsTable } from '../components/league/StandingsTable';
 import { LuckBoard, type LuckBoardTeam } from '../components/league/LuckBoard';
 import { computeAllPlay } from '../utils/allPlay';
 import { formatVsBook, vsBookRecords } from '../utils/vsBook';
+import { buildTicket } from '../utils/ticket';
+import { YourTicket } from '../components/league/YourTicket';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
@@ -278,6 +280,14 @@ export function LeaguePage() {
       .filter((row): row is LuckBoardTeam => row != null);
   }, [bootstrap, schedule, lineHistory]);
 
+  /* The user's own season position, marked from the opening book. Null
+     whenever there is nothing honest to quote, which the component treats as
+     "do not render" rather than as an empty state to fill. */
+  const ticket = useMemo(
+    () => buildTicket(lineHistory ?? [], connectedSeason?.userTeam.rosterId ?? null),
+    [lineHistory, connectedSeason],
+  );
+
   const connectedScheduleItems = useMemo(() => {
     if (!connectedSeason) return [];
     if (!bootstrap || !liveBoardLine) return connectedSeason.scheduleItems;
@@ -491,6 +501,13 @@ export function LeaguePage() {
 
       {activeView === 'futures' ? (
         <>
+          {ticket && connectedSeason && bootstrap ? (
+            <YourTicket
+              leagueName={bootstrap.league.name}
+              teamName={connectedSeason.userTeam.teamName}
+              ticket={ticket}
+            />
+          ) : null}
           {connectedSeason ? (
             <SeasonHeadline
               /* No mock fallback for a real league. An unpriced team says so. */

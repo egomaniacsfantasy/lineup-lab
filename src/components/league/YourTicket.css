@@ -1,0 +1,147 @@
+/* Shaped like a ticket, with a perforated stub. The form is the point: this is
+   the one object on the page that is meant to feel like a keepsake rather than
+   a readout. */
+.ticket {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.ticket--up {
+  border-color: color-mix(in srgb, var(--green) 26%, var(--border-subtle));
+}
+
+.ticket--down {
+  border-color: color-mix(in srgb, var(--red) 22%, var(--border-subtle));
+}
+
+/* The stub. Divided by a dashed rule, the way a torn ticket is. */
+.ticket__stub {
+  display: grid;
+  align-content: center;
+  gap: var(--space-2xs);
+  padding: var(--space-lg) var(--space-md);
+  border-right: 1px dashed color-mix(in srgb, var(--text-dim) 40%, transparent);
+  background: var(--bg-inset);
+  text-align: center;
+}
+
+.ticket__stub-label,
+.ticket__stub-week {
+  color: var(--text-dim);
+  font-family: var(--font-condensed);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ticket__stub-label {
+  font-size: 0.6rem;
+}
+
+.ticket__stub-week {
+  color: var(--text-soft);
+  font-size: var(--type-body);
+}
+
+.ticket__body {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+}
+
+.ticket__kicker {
+  margin: 0;
+  color: var(--text-amber);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ticket__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--type-title-md);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.ticket__prices {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.ticket__price {
+  display: grid;
+  gap: 2px;
+}
+
+.ticket__price-label {
+  color: var(--text-dim);
+  font-family: var(--font-condensed);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ticket__price-value {
+  font-family: var(--font-price);
+  font-weight: var(--font-price-weight);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* Where it opened is the receipt; where it is now is the news. */
+.ticket__price--open .ticket__price-value {
+  color: var(--text-dim);
+  font-size: var(--type-title-md);
+}
+
+.ticket__price--now .ticket__price-value {
+  font-size: var(--type-display);
+}
+
+.ticket--up .ticket__price--now .ticket__price-value { color: var(--green); }
+.ticket--down .ticket__price--now .ticket__price-value { color: var(--red); }
+.ticket--flat .ticket__price--now .ticket__price-value { color: var(--text-primary); }
+
+.ticket__price-prob {
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: var(--type-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket__arrow {
+  color: var(--text-dim);
+  font-size: var(--type-title-md);
+}
+
+.ticket__verdict {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--type-body);
+}
+
+.ticket__multiplier {
+  font-family: var(--font-price);
+  font-size: var(--type-stat);
+  font-weight: var(--font-price-weight);
+}
+
+.ticket--up .ticket__multiplier { color: var(--green); }
+.ticket--down .ticket__multiplier { color: var(--red); }
+
+.ticket__verdict-copy {
+  color: var(--text-muted);
+}
