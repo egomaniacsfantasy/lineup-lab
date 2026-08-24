@@ -391,6 +391,7 @@ export function LeaguePage() {
       avatarUrl: row.avatarUrl ?? null,
       isUser: Boolean(row.isUser),
       playoffProb: row.playoffProb ?? 0,
+      playoffOdds: row.playoffOdds,
       /* The futures row carries the price, not the raw probability; the
          Predictor only needs the price for the baseline column. */
       titleProb: 0,

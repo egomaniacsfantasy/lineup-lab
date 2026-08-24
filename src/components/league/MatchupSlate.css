@@ -62,12 +62,13 @@
 .matchup-slate__board-head,
 .matchup-slate__row-button {
   display: grid;
+  /* Two 46px columns went with the Win% cells: a price and a win probability
+     are the same fact in two units, and the header toggle already converts
+     between them. */
   grid-template-columns:
     minmax(0, 1fr)
     64px
-    46px
     var(--matchup-slate-bar-width)
-    46px
     64px
     minmax(0, 1fr)
     var(--matchup-slate-rail-width);
@@ -85,14 +86,21 @@
   text-transform: uppercase;
 }
 
-.matchup-slate__board-head span:nth-child(2),
-.matchup-slate__board-head span:nth-child(3),
-.matchup-slate__board-head span:nth-child(5),
-.matchup-slate__board-head span:nth-child(6) {
+/* Positional alignment, re-indexed after the two Win% columns went, and each
+   header follows the cell beneath it rather than a rule of its own. The two
+   price columns mirror outward from the bar: the left one is right-aligned,
+   the right one left-aligned, so their headers do the same. Pointing these at
+   the old positions silently aligned the wrong headers, which reads as a
+   spacing bug rather than as an index that moved. */
+.matchup-slate__board-head span:nth-child(2) {
   text-align: right;
 }
 
-.matchup-slate__board-head span:nth-child(8) {
+.matchup-slate__board-head span:nth-child(4) {
+  text-align: left;
+}
+
+.matchup-slate__board-head span:nth-child(6) {
   text-align: right;
 }
 
@@ -381,9 +389,7 @@
     grid-template-columns:
       minmax(0, 1fr)
       62px
-      44px
       minmax(120px, 1fr)
-      44px
       62px
       minmax(0, 1fr)
       44px;
@@ -404,10 +410,9 @@
     grid-template-columns:
       minmax(0, 1fr)
       auto
-      auto
       minmax(110px, 1fr)
       auto
-      auto;
+      minmax(0, 1fr);
   }
 
   .matchup-slate__team--right {
@@ -567,4 +572,30 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em;
   white-space: nowrap;
+}
+
+/* Both teams named, then the number. A glance row that says "Apollo 68%"
+   answers half a question — favourite over whom? — and the missing half is the
+   part worth reading. */
+.matchup-slate__glance-row strong {
+  display: grid;
+  gap: 1px;
+  justify-items: end;
+  text-align: right;
+}
+
+.matchup-slate__glance-teams {
+  color: var(--text-soft);
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.matchup-slate__glance-value {
+  color: var(--text-primary);
+  font-family: var(--font-price);
+  font-size: var(--type-body);
+  font-weight: var(--font-price-weight);
+  font-variant-numeric: tabular-nums;
 }

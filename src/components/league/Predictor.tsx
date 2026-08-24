@@ -29,6 +29,7 @@ export interface PredictorBaselineRow {
   avatarUrl?: string | null;
   isUser: boolean;
   playoffProb: number;
+  playoffOdds: number;
   titleProb: number;
   titleOdds: number;
 }
@@ -332,7 +333,11 @@ export function Predictor({
                     <span className="predictor__suspended" aria-label="repricing" />
                   ) : (
                     <>
-                      {(next?.playoffProb ?? row.playoffProb).toFixed(0)}%
+                      {/* Through the same formatter as the title column, so
+                          the two follow the header toggle together. A raw "%"
+                          beside a formatted price put two scales in one row
+                          and made the toggle look broken. */}
+                      {formatAmericanOdds(next?.playoffOdds ?? row.playoffOdds)}
                       {playoffDelta != null && Math.abs(playoffDelta) >= 0.5 ? (
                         <span
                           className={`predictor__delta predictor__delta--${playoffDelta > 0 ? 'up' : 'down'}`}

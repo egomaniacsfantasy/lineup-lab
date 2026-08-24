@@ -98,5 +98,12 @@ test('the closest line is quoted as a price, not as "pts"', async () => {
   const source = await fs.readFile(path.resolve(SLATE), 'utf8');
   /* "1.5 pts" on a page full of fantasy points reads as fantasy scoring. */
   assert.doesNotMatch(source, /winProb - 50\)\.toFixed\(1\)\} pts/);
-  assert.match(source, /closestLine\.favorite\.name\} · \{formatAmericanOdds\(closestLine\.favorite\.odds\)\}/);
+  assert.match(
+    source,
+    /formatAmericanOdds\(closestLine\.favorite\.odds\)/,
+    'the closest line stopped quoting a price',
+  );
+  /* And it names both sides now: "closest line, Poseidon" answered half a
+     question. */
+  assert.match(source, /\{closestLine\.left\.name\} vs \{closestLine\.right\.name\}/);
 });

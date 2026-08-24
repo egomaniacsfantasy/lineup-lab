@@ -166,7 +166,7 @@ export function ScheduleGrid({
           your expected wins but still advances the baseline by half a win, so
           a bye alone read as falling behind, and every playoff week did the
           same thing again at the end of the season. It also mixed two
-          questions — how good you are, and what a .500 schedule looks like —
+          questions, how good you are, and what a .500 schedule looks like ,
           into one number nobody could interpret.
 
           The priced standings below answer the question it was reaching for,

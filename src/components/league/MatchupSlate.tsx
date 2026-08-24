@@ -286,11 +286,14 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
       <div className="matchup-slate__layout">
         <div className="matchup-slate__board-shell">
           <div className="matchup-slate__board-head" role="presentation">
+            {/* No Win% columns. A price and a win probability are the same
+                fact in two units, and the header carries a global toggle that
+                turns one into the other, so printing both put two scales on
+                one row and made the toggle look like it did nothing. The bar
+                keeps the visual read without repeating the number. */}
             <span>Matchup</span>
             <span>Price</span>
-            <span>Win%</span>
             <span>Spread &amp; total</span>
-            <span>Win%</span>
             <span>Price</span>
             <span>Move</span>
           </div>
@@ -322,10 +325,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                     {formatAmericanOdds(left.odds)}
                   </span>
 
-                  <span className="matchup-slate__prob-number matchup-slate__prob-number--left">
-                    {formatPercent(left.winProb)}
-                  </span>
-
                   <span className="matchup-slate__line-cell">
                     <span className="matchup-slate__prob-track" aria-hidden="true">
                       <span className="matchup-slate__prob-fill" style={{ width: `${left.winProb}%` }} />
@@ -352,10 +351,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
                         return parts.join(' · ');
                       })()}
                     </span>
-                  </span>
-
-                  <span className="matchup-slate__prob-number matchup-slate__prob-number--right">
-                    {formatPercent(right.winProb)}
                   </span>
 
                   <span className={['matchup-slate__moneyline matchup-slate__moneyline--right', !leftFavored ? 'matchup-slate__moneyline--favorite' : '', summary ? 'matchup-slate__moneyline--moving' : ''].filter(Boolean).join(' ')}>
@@ -417,29 +412,58 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             </section>
           ) : null}
 
+          {/* Every line names both teams. "Biggest favourite: Apollo 68%"
+              answers half a question, favourite over whom?, and the missing
+              half is the part that makes it worth reading.
+
+              And one unit at a time. The header carries a global price/percent
+              toggle, so every price here goes through formatAmericanOdds and
+              follows it. Printing a percentage beside an American price in the
+              same three-row card asks the reader to hold two scales at once
+              for no reason. The total is the exception and is not a unit
+              question: it is fantasy points, which is what it says. */}
           <section className="matchup-slate__glance">
             <span className="matchup-slate__glance-title">The week at a glance</span>
             {biggestFavorite ? (
               <div className="matchup-slate__glance-row">
                 <span>Biggest favorite</span>
-                <strong>{biggestFavorite.favorite.name} · {formatPercent(biggestFavorite.favorite.winProb)}</strong>
+                <strong>
+                  <span className="matchup-slate__glance-teams">
+                    {biggestFavorite.favorite.name} over{' '}
+                    {biggestFavorite.favorite.side === biggestFavorite.left.side
+                      ? biggestFavorite.right.name
+                      : biggestFavorite.left.name}
+                  </span>
+                  <span className="matchup-slate__glance-value">
+                    {formatAmericanOdds(biggestFavorite.favorite.odds)}
+                  </span>
+                </strong>
               </div>
             ) : null}
             {closestLine ? (
               <div className="matchup-slate__glance-row">
                 <span>Closest line</span>
-                {/* The price, not a distance from 50 labelled "pts". This
-                    page is covered in fantasy points and a coin-flip line
-                    reads better as the number a book would quote anyway. */}
                 <strong>
-                  {closestLine.favorite.name} · {formatAmericanOdds(closestLine.favorite.odds)}
+                  <span className="matchup-slate__glance-teams">
+                    {closestLine.left.name} vs {closestLine.right.name}
+                  </span>
+                  <span className="matchup-slate__glance-value">
+                    {formatAmericanOdds(closestLine.favorite.odds)}
+                  </span>
                 </strong>
               </div>
             ) : null}
             {highestTotal?.matchup.totalProjection != null ? (
               <div className="matchup-slate__glance-row">
                 <span>Highest total</span>
-                <strong>{highestTotal.matchup.totalProjection.toFixed(1)} pts</strong>
+                <strong>
+                  <span className="matchup-slate__glance-teams">
+                    {highestTotal.left.name} vs {highestTotal.right.name}
+                  </span>
+                  <span className="matchup-slate__glance-value">
+                    {highestTotal.matchup.totalProjection.toFixed(1)} pts
+                  </span>
+                </strong>
               </div>
             ) : null}
           </section>
