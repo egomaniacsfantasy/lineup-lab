@@ -598,16 +598,20 @@ export function LeaguePage() {
         <>
           {connected ? (
             <>
+              {/* Verdict first. The schedule used to open this page as
+                  seventeen tall, near-empty rows, so the finding the page
+                  exists to deliver was below the fold behind a list. */}
+              <LuckBoard teams={luckTeams} />
               {connectedSeason && connectedSeason.scheduleItems.length > 0 ? (
                 <ScheduleGrid
                   items={connectedScheduleItems}
                   onSelectWeek={(item) => setSelectedWeek(item.week)}
-                  title="Your season, priced"
+                  stripOnly
+                  title="Your season, week by week"
                 />
               ) : (
                 <SeasonalNotice>Loading your schedule…</SeasonalNotice>
               )}
-              <LuckBoard teams={luckTeams} />
               <LeagueRecords records={records} />
             </>
           ) : (

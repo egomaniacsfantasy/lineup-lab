@@ -36,28 +36,36 @@
   text-transform: uppercase;
 }
 
-/* The sentence is the product. Sized so it is read, not skimmed past. */
+/* The sentence IS the page. It is the headline, not a caption under one. */
 .luck-board__lede {
   margin: var(--space-2xs) 0 0;
-  max-width: 62ch;
-  color: var(--text-soft);
-  font-size: var(--type-body);
-  line-height: 1.5;
+  max-width: 46ch;
+  color: var(--text-primary);
+  /* Sans, not the display face. The display face is a caps face, and a full
+     sentence set in caps is a paragraph the eye has to decode rather than
+     read. Headings can shout; findings have to be legible. */
+  font-family: var(--font-sans);
+  font-size: var(--type-title-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  text-transform: none;
 }
 
+/* Context for the headline, sitting with it. These were two full-width cards
+   rendering a secondary number at display size, which made the loudest thing
+   on the page something other than what the page is about. */
 .luck-board__extremes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  margin: var(--space-sm) 0 0;
 }
 
 .luck-board__extreme {
-  display: grid;
-  gap: var(--space-2xs);
-  padding: var(--space-md) var(--space-lg);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--bg-surface);
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-xs);
 }
 
 .luck-board__extreme-label {
@@ -69,15 +77,16 @@
 }
 
 .luck-board__extreme-team {
-  color: var(--text-primary);
+  color: var(--text-soft);
   font-family: var(--font-condensed);
-  font-size: var(--type-title-md);
+  font-size: var(--type-caption);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .luck-board__extreme-value {
   font-family: var(--font-price);
-  font-size: var(--type-display);
+  font-size: var(--type-body);
   font-weight: var(--font-price-weight);
   line-height: 1;
 }
@@ -87,6 +96,10 @@
 
 .luck-board__table {
   width: 100%;
+  /* The team name earns the room; the four number columns are fixed and equal
+     so they line up as a block the eye can run down. Even distribution left
+     the name cramped and the numbers marooned across a wide gap. */
+  table-layout: fixed;
   border-collapse: collapse;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
@@ -118,10 +131,21 @@
 .luck-board__table thead th.luck-board__num,
 .luck-board__table tbody td.luck-board__num {
   text-align: right;
+  width: 15%;
+}
+
+.luck-board__table thead th:first-child {
+  width: auto;
 }
 
 .luck-board__row {
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+}
+
+/* Banding. Twelve rows of identical dark cells is a wall; alternating them
+   gives the eye a line to track across. */
+.luck-board__row:nth-child(even) {
+  background: var(--bg-stripe, rgba(255, 255, 255, 0.014));
 }
 
 .luck-board__row:last-child {
@@ -183,9 +207,12 @@
 .luck-board__earned { color: var(--text-soft); }
 
 /* The number the page exists for, set like a price on the board. */
-.luck-board__luck {
+/* Scoped through the table so it out-ranks `.luck-board__table tbody td`,
+   which sets the shared cell size. The bare class lost to it, so the column
+   the page exists for was rendering at body size next to everything else. */
+.luck-board__table tbody td.luck-board__luck {
   font-family: var(--font-price);
-  font-size: var(--type-stat);
+  font-size: var(--type-title-md);
   font-weight: var(--font-price-weight);
   letter-spacing: 0.01em;
 }

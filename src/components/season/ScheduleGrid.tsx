@@ -68,7 +68,18 @@ function heatTakeaway(items: ScheduleGridItem[]) {
 
 
 
-export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) {
+export function ScheduleGrid({
+  title,
+  items,
+  onSelectWeek,
+  /* Strip only, no row list.
+     On the Season tab the heat strip and the row list are the same seventeen
+     weeks rendered twice, one directly under the other. The strip is the better
+     of the two — it fits on one line, colours by price, and opens the same week
+     detail on click — so the rows are seventeen tall, near-empty duplicates
+     between the reader and the thing they came for. */
+  stripOnly = false,
+}: ScheduleGridProps & { stripOnly?: boolean }) {
   const rowRefs = useRef<Record<number, HTMLElement | null>>({});
   const hasFutureBestLineupRows = items.some(
     (item) => item.status === 'projected' && !item.isPlayoff && typeof item.yourLine === 'number',
@@ -91,19 +102,30 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
 
       {leagueChartFlags.scheduleHeatStrip && items.length > 0 ? (
         <div className="schedule-grid__chart-card schedule-grid__chart-card--heat-nav">
-          <span className="schedule-grid__chart-head">
-            <span>
-              <span className="schedule-grid__chart-title">Season heat strip</span>
-              <span className="schedule-grid__chart-subtitle">Jump to any week by price.</span>
-            </span>
-          </span>
+          {/* No inner heading: the section directly above already names this,
+              and two titles stacked on one strip reads as two components. */}
           <span className="schedule-grid__heat" aria-label="Season win probability heat strip">
             {items.map((item) => {
-              const winProb = item.winProb ?? (item.status === 'win' ? 100 : item.status === 'loss' ? 0 : 50);
+              const settled = item.status === 'win' || item.status === 'loss';
+              /* A finished week is a RESULT. Painting it 100% or 0% dressed a
+                 win up as a probability, which is the one thing a book must
+                 never do: those numbers were never quoted, they are just the
+                 scoreboard wearing a percentage sign. Settled weeks show W or
+                 L and the price they closed at; only unplayed weeks show a
+                 probability, because only they still have one. */
+              const winProb = item.winProb ?? 50;
+              const heatFor = settled
+                ? item.status === 'win' ? 72 : 28
+                : winProb;
+              const closing = typeof item.yourLine === 'number'
+                ? formatAmericanOdds(item.yourLine)
+                : null;
+
               return (
                 <button
                   className={[
                     'schedule-grid__heat-cell',
+                    settled ? `schedule-grid__heat-cell--${item.status}` : '',
                     item.isPlayoff ? 'schedule-grid__heat-cell--playoff' : '',
                     item.status === 'bye' ? 'schedule-grid__heat-cell--bye' : '',
                     item.status === 'live' ? 'schedule-grid__heat-cell--current' : '',
@@ -112,12 +134,23 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
                     .join(' ')}
                   key={`heat-${item.week}`}
                   onClick={() => jumpToWeek(item.week)}
-                  style={{ '--heat-color': heatColor(winProb) } as CSSProperties}
+                  style={{ '--heat-color': heatColor(heatFor) } as CSSProperties}
                   title={`Week ${item.week}${item.isPlayoff ? ': playoff TBD' : typeof item.winProb === 'number' ? `: ${item.winProb.toFixed(1)}%` : ''}`}
                   type="button"
                 >
-                  <span>{item.week}</span>
-                  <span>{item.isPlayoff ? 'TBD' : item.status === 'bye' ? 'BYE' : formatWinProb(item).replace('.0%', '%')}</span>
+                  <span className="schedule-grid__heat-week">{item.week}</span>
+                  <span className="schedule-grid__heat-value">
+                    {item.isPlayoff
+                      ? 'TBD'
+                      : item.status === 'bye'
+                        ? 'BYE'
+                        : settled
+                          ? item.status === 'win' ? 'W' : 'L'
+                          : formatWinProb(item).replace('.0%', '%')}
+                  </span>
+                  {settled && closing ? (
+                    <span className="schedule-grid__heat-close">{closing}</span>
+                  ) : null}
                 </button>
               );
             })}
@@ -140,6 +173,7 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
           correctly: xW-L is your record with the schedule removed, and
           Schedule is the difference. */}
 
+      {stripOnly ? null : (
       <div className="schedule-grid__rows">
         {items.map((item) => {
           const clickable = Boolean(onSelectWeek) && item.status !== 'bye' && !item.isPlayoff;
@@ -242,6 +276,7 @@ export function ScheduleGrid({ title, items, onSelectWeek }: ScheduleGridProps) 
           );
         })}
       </div>
+      )}
     </section>
   );
 }

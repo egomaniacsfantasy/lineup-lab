@@ -73,30 +73,40 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
 
   return (
     <section aria-labelledby="luck-board-title" className="luck-board">
+      {/* The finding leads. It used to sit as small grey type above two cards
+          that rendered a secondary fact at display size, so the loudest thing
+          on the page was not the thing the page is about. */}
       <header className="luck-board__head">
         <p className="luck-board__kicker">Through {weeks} {weeks === 1 ? 'week' : 'weeks'}</p>
-        <h2 className="luck-board__title" id="luck-board-title">
-          If everyone played everyone
-        </h2>
-        {you ? <p className="luck-board__lede">{luckSentence(you, you.teamName)}</p> : null}
-      </header>
+        {you ? (
+          <h2 className="luck-board__lede" id="luck-board-title">
+            {luckSentence(you, you.teamName)}
+          </h2>
+        ) : (
+          <h2 className="luck-board__lede" id="luck-board-title">
+            If everyone played everyone
+          </h2>
+        )}
 
-      <div className="luck-board__extremes">
-        <div className="luck-board__extreme">
-          <span className="luck-board__extreme-label">Schedule helped most</span>
-          <span className="luck-board__extreme-team">{luckiest.teamName}</span>
-          <span className="luck-board__extreme-value luck-board__extreme-value--up">
-            {formatLuck(luckiest.luck)}
+        {/* The extremes are context for that sentence, so they sit with it as
+            chips rather than owning a band of their own. */}
+        <p className="luck-board__extremes">
+          <span className="luck-board__extreme">
+            <span className="luck-board__extreme-label">Helped most</span>
+            <span className="luck-board__extreme-team">{luckiest.teamName}</span>
+            <span className="luck-board__extreme-value luck-board__extreme-value--up">
+              {formatLuck(luckiest.luck)}
+            </span>
           </span>
-        </div>
-        <div className="luck-board__extreme">
-          <span className="luck-board__extreme-label">Schedule hurt most</span>
-          <span className="luck-board__extreme-team">{unluckiest.teamName}</span>
-          <span className="luck-board__extreme-value luck-board__extreme-value--down">
-            {formatLuck(unluckiest.luck)}
+          <span className="luck-board__extreme">
+            <span className="luck-board__extreme-label">Hurt most</span>
+            <span className="luck-board__extreme-team">{unluckiest.teamName}</span>
+            <span className="luck-board__extreme-value luck-board__extreme-value--down">
+              {formatLuck(unluckiest.luck)}
+            </span>
           </span>
-        </div>
-      </div>
+        </p>
+      </header>
 
       <table className="luck-board__table">
         <thead>

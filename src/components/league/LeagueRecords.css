@@ -35,14 +35,14 @@
 
 .league-records__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: var(--space-md);
 }
 
 .league-records__card {
   display: grid;
-  gap: var(--space-2xs);
-  padding: var(--space-md) var(--space-lg);
+  gap: 2px;
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--bg-surface);
@@ -63,10 +63,13 @@
   text-transform: uppercase;
 }
 
+/* Sized as a record, not as the page's headline. These were three display-size
+   numbers competing with the verdict above them, two of which are usually
+   blank. */
 .league-records__value {
   color: var(--text-amber);
   font-family: var(--font-price);
-  font-size: var(--type-display);
+  font-size: var(--type-title-md);
   font-weight: var(--font-price-weight);
   line-height: 1;
 }

@@ -424,3 +424,59 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* The heat strip, restrained.
+   It used to paint each week as a saturated block of pure green or red — a
+   spreadsheet's conditional formatting, not a board. The colour now sits as a
+   tint behind the cell with a matching edge, so the strip reads as a row of
+   priced weeks rather than a bar chart of moods. */
+.schedule-grid__heat-cell {
+  position: relative;
+  background: color-mix(in srgb, var(--heat-color) 26%, var(--bg-inset)) !important;
+  border: 1px solid color-mix(in srgb, var(--heat-color) 42%, transparent) !important;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.schedule-grid__heat-cell::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: var(--heat-color);
+  opacity: 0.85;
+}
+
+.schedule-grid__heat-week {
+  color: var(--text-soft);
+  font-family: var(--font-condensed);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+}
+
+/* W or L, set like a result. */
+.schedule-grid__heat-value {
+  color: var(--text-primary);
+  font-family: var(--font-price);
+  font-size: var(--type-body);
+  font-weight: var(--font-price-weight);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.schedule-grid__heat-cell--win .schedule-grid__heat-value { color: var(--green); }
+.schedule-grid__heat-cell--loss .schedule-grid__heat-value { color: var(--red); }
+
+/* The price it closed at, under the result. This is the whole reason the strip
+   is ours and not a calendar. */
+.schedule-grid__heat-close {
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-grid__heat-cell--current {
+  border-color: var(--amber) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 45%, transparent);
+}
