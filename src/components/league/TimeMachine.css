@@ -76,6 +76,8 @@
 
 .time-machine__table {
   width: 100%;
+  /* Name takes the slack, numbers are a fixed block the eye runs down. */
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -97,8 +99,14 @@
   text-underline-offset: 4px;
 }
 
-.time-machine__num {
+/* Scoped through the table so it beats `.time-machine__table thead th`, which
+   sets left alignment for the header row. The bare class lost to it, so every
+   numeric header sat left of the column it labelled. Same specificity trap as
+   the standings table. */
+.time-machine__table thead th.time-machine__num,
+.time-machine__table tbody td.time-machine__num {
   text-align: right;
+  width: 16%;
 }
 
 .time-machine__row {
