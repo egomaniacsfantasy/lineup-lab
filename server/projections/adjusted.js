@@ -25,10 +25,15 @@ function num(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// The last consensus we successfully read. On a timeout/error we reuse THIS instead
+// of dropping to no-consensus, so the +/-10% agreement tilt can't flip on and off
+// between 60s refreshes -- that flip reshuffled every team's odds on reload.
+let _lastGoodConsensus = null;
+
 /** Average agreement score per player: { position: { name: avg } }. */
 async function loadConsensus() {
   const admin = getSupabaseAdmin();
-  if (!admin) return {};
+  if (!admin) return _lastGoodConsensus ?? {};
   // Never let a slow/hung DB call stall league pricing — time out to no-consensus.
   const timeout = new Promise((resolve) =>
     setTimeout(() => resolve({ data: null, error: { message: 'consensus timeout' } }), 4000),
@@ -39,7 +44,7 @@ async function loadConsensus() {
   ]);
   if (error) {
     console.error('[adjusted] consensus read failed:', error.message ?? error);
-    return {};
+    return _lastGoodConsensus ?? {};   // keep the tilt stable across a transient failure
   }
   const acc = {};
   for (const row of data ?? []) {
@@ -58,6 +63,9 @@ async function loadConsensus() {
       out[pos][pl] = sum / n;
     }
   }
+  // Only a real, non-empty read updates the fallback (an empty success shouldn't
+  // wipe a good consensus we could reuse on the next timeout).
+  if (Object.keys(out).length > 0) _lastGoodConsensus = out;
   return out;
 }
 
@@ -115,6 +123,14 @@ function _refreshInBackground(suf) {
   e.refreshing = true;
   _computeAdjusted(CONSENSUS_ENABLED, suf)
     .then((d) => {
+      // Never let a refresh that came back WITHOUT consensus overwrite a warm build
+      // that HAS it -- that on/off flip is what jumped the odds on reload.
+      if (e.data && (e.data.consensusCount ?? 0) > 0 && (d.consensusCount ?? 0) === 0) {
+        e.at = Date.now();          // mark fresh so we don't retry-hammer
+        e.refreshing = false;
+        console.log(`[adjusted:${suf || 'ppr'}] kept warm consensus build (refresh had none)`);
+        return;
+      }
       e.at = Date.now();
       e.data = d;
       e.refreshing = false;
