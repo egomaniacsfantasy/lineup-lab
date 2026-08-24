@@ -1839,7 +1839,19 @@ function MatchupLive({
           disabled={!pickable}
           // Tapping a player IS the start/sit flow: it picks them and shows
           // the bench options the book can actually price against them.
-          onClick={() => handleComparePick(player)}
+          //
+          // The slot label has to go with it, including from the bench. The
+          // first pick is what sets compareSlot, and every starter card is
+          // gated on `compareSlot != null` — so a bench player picked first
+          // used to leave it null and disable every starter on the page.
+          // Starting from a starter worked, starting from the bench was a dead
+          // end, which is exactly backwards: the bench is where a start/sit
+          // question usually begins.
+          //
+          // A bench player's slot context is their position. It is a real key
+          // in SLOT_ELIGIBILITY, so an RB on the bench opens up the RB slots
+          // and the flex ones that accept an RB, and nothing else.
+          onClick={() => handleComparePick(player, isLineupSlot ? slotLabel : player.position)}
           type="button"
         >
           {showSlotLabel ? (
