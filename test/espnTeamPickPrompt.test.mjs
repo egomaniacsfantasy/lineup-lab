@@ -33,7 +33,7 @@ test('an unconfirmed ESPN league is offered rather than ignored', async () => {
   );
   assert.match(
     context,
-    /if \(needsEspnTeamPick\(target\)\) \{\s*\n\s*window\.location\.hash = '#connect-espn';/,
+    /if \(needsEspnTeamPick\(target\)\) \{[\s\S]*?navigate\('\/league#connect-espn'\)/,
     'clicking an unconfirmed ESPN league no longer routes to the picker, which '
       + 'is what made it look like the league simply vanished',
   );
@@ -91,5 +91,25 @@ test('the leak this guards is still shut', async () => {
     `confirmEspnLeague is called ${confirmCalls.length} times (expected the '
       + 'definition and exactly one caller) — a new caller could grant trust '
       + 'without anybody picking a team`,
+  );
+});
+
+test('the pick prompt routes, rather than only setting a hash', async () => {
+  const context = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+
+  /* Only the League page reads location.hash to open the ESPN flow. Setting the
+     hash from the Hub — where the switcher usually is — changed the address bar
+     and nothing else, so the row said "Tap to pick your team" and then did
+     nothing at all. That is worse than the silent failure it replaced. */
+  assert.match(
+    context,
+    /navigate\('\/league#connect-espn'\)/,
+    'the pick prompt is not routing to the League page, so it does nothing '
+      + 'anywhere except on that page',
+  );
+  assert.doesNotMatch(
+    context,
+    /window\.location\.hash = '#connect-espn'/,
+    'the bare hash assignment is back',
   );
 });

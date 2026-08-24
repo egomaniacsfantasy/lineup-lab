@@ -38,6 +38,7 @@ import {
   sameLeagueList,
   type DbLeagueRow,
 } from './leagueRows';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'og.olympus.connected-league';
@@ -102,6 +103,45 @@ function confirmEspnLeague(leagueId: string) {
        extra pick next visit rather than a wrong team. */
   }
 }
+/**
+ * Leagues removed on this device, remembered across reloads.
+ *
+ * Removing a league did two things: it deleted the account row, and it held
+ * the league in an in-memory Set so the hydrate — which re-reads the rows
+ * immediately, before the delete has landed — would not put it straight back.
+ *
+ * The Set was a useRef, so it lived exactly as long as the page. And the delete
+ * was fired with `void`, so its result was discarded and a failure was
+ * indistinguishable from success. Put those together and any delete that did
+ * not commit — a policy refusing it, a dropped connection, a reload a second
+ * too early — left no trace anywhere: the row was still on the account, the
+ * tombstone died with the page, and the league reappeared on the next load.
+ * Several people have reported exactly that, which means it is not a rare race.
+ *
+ * The tombstone is written down now, so a removal sticks even when the delete
+ * does not, and the delete is retried on the next load rather than forgotten.
+ */
+const REMOVED_KEY = 'og.olympus.removed-leagues';
+
+function readRemovedKeys(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(REMOVED_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeRemovedKeys(keys: Set<string>) {
+  try {
+    window.localStorage.setItem(REMOVED_KEY, JSON.stringify([...keys]));
+  } catch {
+    /* Private browsing: the removal lasts the session, which is the behaviour
+       we already had rather than a new failure. */
+  }
+}
+
 const MARKET_SCAN_KEY = 'og.market.last-scan';
 const MARKET_SCAN_COOLDOWN_MS = 30_000;
 
@@ -464,10 +504,11 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     () => (stored ? readLastMarketScan(stored.leagueId) : null),
   );
   const { user } = useAuth();
+  const navigate = useNavigate();
   const userIdRef = useRef<string | null>(null);
   /* Leagues removed in this session. See removeLeague: the row delete is async
      and the hydrate that follows would otherwise restore what was just removed. */
-  const removedKeysRef = useRef<Set<string>>(new Set());
+  const removedKeysRef = useRef<Set<string>>(readRemovedKeys());
   const lastHydrateKeyRef = useRef<string | null>(null);
   const pricingRef = useRef<LeaguePricing | null>(null);
   const marketScanPromiseRef = useRef<Promise<LeaguePricing | null> | null>(null);
@@ -521,6 +562,27 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
         const all = rows
           .map((row) => ({ ...rowToConnection(row), wasActive: row.is_active }))
           .filter((connection) => !removedKeysRef.current.has(leagueKey(connection)));
+
+        /* A row that is still here despite being removed means the delete never
+           committed. Hiding it forever would leave the account quietly wrong on
+           every other device, so the delete is retried now that we are online
+           and authenticated again. */
+        const stillPresent = rows
+          .map((row) => rowToConnection(row))
+          .filter((connection) => removedKeysRef.current.has(leagueKey(connection)));
+        for (const zombie of stillPresent) {
+          void supabase
+            .from('olympus_leagues')
+            .delete()
+            .eq('user_id', user.id)
+            .eq('provider', zombie.provider)
+            .eq('league_id', zombie.leagueId)
+            .then(({ error }) => {
+              if (error) return;
+              removedKeysRef.current.delete(leagueKey(zombie));
+              writeRemovedKeys(removedKeysRef.current);
+            });
+        }
         if (all.length === 0 && rows.length > 0) {
           /* Everything the account still lists was removed here a moment ago.
              Treat it as no leagues rather than restoring them. */
@@ -908,6 +970,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       /* Reconnecting a league you removed has to un-tombstone it, or the
          hydrate would keep filtering out the thing you just added. */
       removedKeysRef.current.delete(leagueKey(incoming));
+      writeRemovedKeys(removedKeysRef.current);
       /* Recorded on the way in. Connecting an ESPN league means the team was
          either matched to your own cookie or picked by you from the list, and
          both are confirmations. Recorded by league id rather than stamped on
@@ -953,13 +1016,18 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
          either. Send them to the picker, which is the one screen that can
          resolve it, and which shows no roster until they choose. */
       if (needsEspnTeamPick(target)) {
-        window.location.hash = '#connect-espn';
+        /* Route, do not just set a hash. Only the League page reads
+           location.hash to open the ESPN flow, so setting it from the Hub —
+           where the switcher usually is — changed the address bar and nothing
+           else. The row said "Tap to pick your team" and then did nothing,
+           which is worse than the silent failure it replaced. */
+        navigate('/league#connect-espn');
         return;
       }
       activateLocal(target);
       if (userIdRef.current) void activateLeagueRow(userIdRef.current, target);
     },
-    [leagues, stored, activateLocal],
+    [leagues, stored, activateLocal, navigate],
   );
 
   /**
@@ -979,18 +1047,43 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
        list the league and it comes straight back: remove it and it reappears.
        The row delete is the durable fix; this is what makes the removal stick
        in the second before the delete commits. */
-    if (removing) removedKeysRef.current.add(leagueKey(removing));
+    if (removing) {
+      removedKeysRef.current.add(leagueKey(removing));
+      writeRemovedKeys(removedKeysRef.current);
+    }
     const remaining = removing
       ? leagues.filter((l) => leagueKey(l) !== leagueKey(removing))
       : leagues;
 
     if (userIdRef.current && removing) {
+      /* The result is read rather than discarded. A delete that does not commit
+         used to be invisible: the row stayed on the account, the in-memory
+         tombstone died with the page, and the league came back on the next
+         load with nothing anywhere explaining why. Keeping the tombstone means
+         the removal still sticks on this device, and the retry on the next load
+         is what eventually clears the row. */
       void supabase
         .from('olympus_leagues')
         .delete()
         .eq('user_id', userIdRef.current)
         .eq('provider', removing.provider)
-        .eq('league_id', removing.leagueId);
+        .eq('league_id', removing.leagueId)
+        .then(({ error }) => {
+          if (!error) {
+            /* Committed, so the tombstone has done its job and should not
+               outlive it — otherwise re-adding the league later would be
+               filtered out by a note about a removal that already happened. */
+            removedKeysRef.current.delete(leagueKey(removing));
+            writeRemovedKeys(removedKeysRef.current);
+            return;
+          }
+          console.error(
+            '[leagues] could not delete the account row for',
+            leagueKey(removing),
+            error.message,
+            '- it stays hidden on this device and the delete is retried next load.',
+          );
+        });
     }
 
     setLeagues(remaining);
