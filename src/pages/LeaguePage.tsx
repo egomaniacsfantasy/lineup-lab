@@ -12,6 +12,8 @@ import { formatVsBook, vsBookRecords } from '../utils/vsBook';
 import { buildTicket } from '../utils/ticket';
 import { YourTicket } from '../components/league/YourTicket';
 import { TimeMachine } from '../components/league/TimeMachine';
+import { LeagueRecords } from '../components/league/LeagueRecords';
+import { leagueRecords } from '../utils/leagueRecords';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { ScheduleGrid, type ScheduleGridItem } from '../components/season/ScheduleGrid';
@@ -288,6 +290,33 @@ export function LeaguePage() {
     () => buildTicket(lineHistory ?? [], connectedSeason?.userTeam.rosterId ?? null),
     [lineHistory, connectedSeason],
   );
+
+  /* The record book, over every completed game we have priced. Empty holders
+     are expected early and are rendered as such rather than hidden. */
+  const records = useMemo(() => {
+    if (!bootstrap || !schedule) return [];
+    const games = schedule.flatMap((weekEntry) => {
+      const byMatchup = new Map<number, typeof weekEntry.matchups>();
+      for (const matchup of weekEntry.matchups) {
+        byMatchup.set(matchup.matchupId, [...(byMatchup.get(matchup.matchupId) ?? []), matchup]);
+      }
+      return [...byMatchup.entries()].flatMap(([matchupId, pair]) => {
+        if (pair.length !== 2) return [];
+        if (!pair.every((side) => (side.points ?? 0) > 0)) return [];
+        return pair.map((side, index) => ({
+          week: weekEntry.week,
+          matchupId,
+          rosterId: String(side.rosterId),
+          opponentRosterId: String(pair[1 - index].rosterId),
+          points: side.points ?? 0,
+          opponentPoints: pair[1 - index].points ?? 0,
+        }));
+      });
+    });
+    return leagueRecords(lineHistory ?? [], games, (rosterId) =>
+      bootstrap.teams.find((team) => String(team.rosterId) === rosterId)?.teamName ?? null,
+    );
+  }, [bootstrap, schedule, lineHistory]);
 
   const connectedScheduleItems = useMemo(() => {
     if (!connectedSeason) return [];
@@ -579,6 +608,7 @@ export function LeaguePage() {
                 <SeasonalNotice>Loading your schedule…</SeasonalNotice>
               )}
               <LuckBoard teams={luckTeams} />
+              <LeagueRecords records={records} />
             </>
           ) : (
             <ScheduleGrid items={preseasonSchedule} title="Upcoming schedule" />
