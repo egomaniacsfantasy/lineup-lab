@@ -43,7 +43,6 @@ import {
 import type { ManagerFile } from '../services/managerFiles';
 import { compileManagerFile } from '../services/managerFiles';
 import {
-  loadTradeTraitsRecord,
   resolveTradeTraits,
   NEUTRAL_READ,
 } from '../utils/tradeTraits';
