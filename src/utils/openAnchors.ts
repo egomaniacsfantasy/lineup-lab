@@ -45,6 +45,16 @@ export interface HistoryEntry {
   titleProb?: Record<string, number>;
 }
 
+/**
+ * Percent to a fair American price. No vig: this is the same no-juice
+ * conversion the rest of the board uses, so a derived open sits on exactly the
+ * same scale as a stored one.
+ */
+export function americanFromPercent(percent: number): number {
+  const p = percent / 100;
+  return p >= 0.5 ? -Math.round((100 * p) / (1 - p)) : Math.round((100 * (1 - p)) / p);
+}
+
 /** Oldest first. The stored file is append-ordered, but nothing guarantees it. */
 function byTime(history: readonly HistoryEntry[]): HistoryEntry[] {
   return [...history].sort((a, b) => a.computedAt - b.computedAt);
@@ -119,6 +129,8 @@ export function weekMovement(
   return moves;
 }
 
+export type FuturesMarket = 'title' | 'playoff';
+
 export interface TitleMove {
   rosterId: string;
   openOdds: number;
@@ -130,24 +142,53 @@ export interface TitleMove {
 }
 
 /**
- * Season-long title movement: the league's opening book against today's.
+ * Season-long movement in a futures market: the opening book against today's.
  *
  * This is what the futures Open column and the ticket both read. A team absent
  * from the opening book — one that joined late, or a league whose first
  * snapshot predates it — is omitted rather than anchored to today, which would
  * render as "no movement" for a team we simply cannot speak about.
+ *
+ * Playoff odds carry no stored probability alongside them the way title odds
+ * do, so movePp is null there and the caller shows the two prices instead of a
+ * points figure.
+ *
+ * Older snapshots stored the probability and not the price. Rather than leave
+ * those leagues with a blank Open column, the price is derived from the stored
+ * probability — the same percent-to-American-odds conversion the board already
+ * performs on every live number, applied to a figure the sim genuinely
+ * produced. That is a display transform, not an invention; the alternative is
+ * hiding real history because of the shape it happens to be stored in.
  */
-export function titleMovement(history: readonly HistoryEntry[]): TitleMove[] {
+export function marketMovement(
+  history: readonly HistoryEntry[],
+  market: FuturesMarket = 'title',
+): TitleMove[] {
   const open = seasonOpen(history);
   const now = latestSnapshot(history);
   if (!open || !now || open.computedAt === now.computedAt) return [];
 
+  const probOf = (entry: HistoryEntry) => (market === 'playoff' ? undefined : entry.titleProb);
+
+  /* A stored price wins. Where there is none, one is derived from the stored
+     probability so history recorded before prices were persisted still reads. */
+  const oddsOf = (entry: HistoryEntry): Record<string, number> => {
+    const stored = (market === 'playoff' ? entry.playoffOdds : entry.titleOdds) ?? {};
+    const probs = probOf(entry);
+    if (!probs) return stored;
+    const out: Record<string, number> = { ...stored };
+    for (const [rosterId, prob] of Object.entries(probs)) {
+      if (out[rosterId] == null && prob > 0 && prob < 100) out[rosterId] = americanFromPercent(prob);
+    }
+    return out;
+  };
+
   const moves: TitleMove[] = [];
-  for (const [rosterId, nowOdds] of Object.entries(now.titleOdds ?? {})) {
-    const openOdds = open.titleOdds?.[rosterId];
+  for (const [rosterId, nowOdds] of Object.entries(oddsOf(now))) {
+    const openOdds = oddsOf(open)[rosterId];
     if (openOdds == null) continue;
-    const openProb = open.titleProb?.[rosterId] ?? null;
-    const nowProb = now.titleProb?.[rosterId] ?? null;
+    const openProb = probOf(open)?.[rosterId] ?? null;
+    const nowProb = probOf(now)?.[rosterId] ?? null;
     moves.push({
       rosterId,
       openOdds,
@@ -158,6 +199,11 @@ export function titleMovement(history: readonly HistoryEntry[]): TitleMove[] {
     });
   }
   return moves;
+}
+
+/** The title market, which is the one the ticket is written against. */
+export function titleMovement(history: readonly HistoryEntry[]): TitleMove[] {
+  return marketMovement(history, 'title');
 }
 
 /**

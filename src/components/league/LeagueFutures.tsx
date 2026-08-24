@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ScoringFormat } from '../../types';
 import { formatAmericanOdds, impliedProbability } from '../../utils/formatOdds';
-import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueFutureRow } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
@@ -11,7 +10,7 @@ import {
   type OddsChartPoint,
   type OddsChartRangeOption,
 } from '../charts/OddsChart';
-import { LeagueMovementChip } from './LeagueMovementChip';
+import { marketMovement, formatMovePp } from '../../utils/openAnchors';
 import { TeamAvatar } from './TeamAvatar';
 import './LeagueFutures.css';
 
@@ -119,21 +118,7 @@ function envelopePoints(rows: { team: LeagueFutureRow; series: { at: number; pro
     }));
 }
 
-function movementFor(series: { probability: number }[]) {
-  const first = series[0]?.probability;
-  const last = series.at(-1)?.probability;
-  if (first == null || last == null) return null;
-  const move = last - first;
-  return isMaterialMove(move) ? move : null;
-}
 
-function recentSeriesFor(series: { at: number; probability: number }[]) {
-  const latest = series.at(-1);
-  if (!latest) return series;
-  const trailingWindow = latest.at - 6 * 24 * 60 * 60 * 1000;
-  const recent = series.filter((point) => point.at >= trailingWindow);
-  return recent.length > 1 ? recent : series;
-}
 
 function comparisonTakeaway(
   userTeam: LeagueFutureRow,
@@ -190,6 +175,13 @@ export function LeagueFutures({
     ? comparisonTakeaway(userTeam, comparisonTeam, userHistory?.series, comparisonHistory?.series)
     : 'This chart builds as the league updates.';
 
+  /* The opening book, read once. Keyed by roster id because team names are
+     not stable across a season and the history stores roster ids. */
+  const openByRoster = useMemo(() => {
+    const moves = marketMovement(history ?? [], isPlayoffMarket ? 'playoff' : 'title');
+    return new Map(moves.map((move) => [move.rosterId, move]));
+  }, [history, isPlayoffMarket]);
+
   return (
     <section aria-labelledby="league-futures-title" className="league-futures">
       <div className="league-futures__header">
@@ -244,12 +236,17 @@ export function LeagueFutures({
               which made the market toggle look like it did nothing useful:
               96% and -2400 are the same number. */}
           <span>{isPlayoffMarket ? 'Title %' : 'Playoff %'}</span>
+          <span>Open</span>
           <span>{isPlayoffMarket ? 'Playoff price' : 'Title price'}</span>
           <span>Move</span>
         </div>
         {futures.map((team, index) => {
-          const teamSeries = historyTeams.find((row) => row.team.rosterId === team.rosterId)?.series ?? [];
-          const move = movementFor(recentSeriesFor(teamSeries));
+          /* Movement is measured from where the market OPENED, not from a
+             rolling recent window. "You were +900 in week 1 and you are +475
+             now" is the sentence this board exists to make, and a trailing
+             window cannot say it. */
+          const opened = openByRoster.get(String(team.rosterId ?? ''));
+          const movePp = formatMovePp(opened?.movePp ?? null);
           const selected = comparisonTeam?.rosterId === team.rosterId;
           const odds = isPlayoffMarket ? team.playoffOdds : team.championOdds;
 
@@ -299,14 +296,29 @@ export function LeagueFutures({
                     return complement != null ? formatPercent(complement) : 'N/A';
                   })()}
                 </span>
+                {/* Where this team's book opened. Blank, not a dash and never
+                    today's price, when the league has no opening snapshot to
+                    quote — a season that began before we were pricing it has
+                    no open, and inventing one would invent the movement too. */}
+                <span className="league-futures__cell league-futures__open" role="cell">
+                  {opened ? formatAmericanOdds(opened.openOdds) : ''}
+                </span>
                 <span className="league-futures__price" role="cell">
                   <span className={['league-futures__odds', team.isUser ? 'league-futures__odds--selected' : ''].filter(Boolean).join(' ')}>
                     {formatAmericanOdds(odds)}
                   </span>
                 </span>
                 <span className="league-futures__move-cell" role="cell">
-                  {move != null ? (
-                    <LeagueMovementChip className="league-futures__move-chip" move={move} timeframe="" variant="quiet" />
+                  {movePp ? (
+                    <span
+                      className={[
+                        'league-futures__move-pp',
+                        (opened?.movePp ?? 0) > 0 ? 'league-futures__move-pp--up' : 'league-futures__move-pp--down',
+                      ].join(' ')}
+                      title="Change in title probability since the market opened, in percentage points."
+                    >
+                      {movePp}
+                    </span>
                   ) : null}
                 </span>
               </button>

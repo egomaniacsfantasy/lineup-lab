@@ -103,11 +103,16 @@
 
 .league-futures__row {
   display: grid;
+  /* Team · proj wins · avg seed · complement % · OPEN · price · move.
+     The Open column arrived with the ambient-movement work; without widening
+     this template the move value wrapped onto a second grid row and sat under
+     the team name. */
   grid-template-columns:
     minmax(190px, 1.8fr)
     minmax(72px, 0.65fr)
     minmax(72px, 0.65fr)
     minmax(76px, 0.7fr)
+    minmax(66px, 0.55fr)
     minmax(92px, 0.72fr)
     62px;
   align-items: center;
@@ -304,7 +309,7 @@
   }
 
   .league-futures__row {
-    grid-template-columns: minmax(150px, 1.7fr) repeat(2, minmax(54px, 0.6fr)) minmax(82px, 0.8fr) minmax(72px, 0.72fr) 52px;
+    grid-template-columns: minmax(150px, 1.7fr) repeat(2, minmax(54px, 0.6fr)) minmax(70px, 0.7fr) minmax(58px, 0.5fr) minmax(72px, 0.72fr) 52px;
     gap: 8px;
     padding-inline: 12px;
   }
@@ -339,4 +344,26 @@
   .league-futures__price {
     justify-content: flex-end;
   }
+}
+
+/* Movement since the market opened. Percentage points, never percent: 17.4%
+   from 10.0% is +7.4pp, and calling that "+74%" would be a different and much
+   larger claim. */
+.league-futures__move-pp {
+  font-family: var(--font-price);
+  font-size: var(--type-caption);
+  font-weight: var(--font-price-weight);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.league-futures__move-pp--up { color: var(--green); }
+.league-futures__move-pp--down { color: var(--red); }
+
+/* The opening price is context, not the headline. It sits quieter than the
+   live price beside it so the eye lands on what the market says now. */
+.league-futures__open {
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
 }

@@ -122,3 +122,41 @@ test('movement is percentage points, and a flat line prints nothing', () => {
   assert.equal(formatMovePp(0), null);
   assert.equal(formatMovePp(null), null);
 });
+
+test('history stored as probability still yields an open price', async () => {
+  const { americanFromPercent } = await import('../src/utils/openAnchors.ts');
+
+  /* Snapshots recorded before prices were persisted carry titleProb and no
+     titleOdds. Leaving those leagues with a blank Open column would hide real
+     history because of the shape it happens to be stored in. Percent to
+     American odds is the same conversion the board runs on every live number. */
+  const probOnly = [
+    { computedAt: 1, week: 1, titleProb: { '1': 10, '2': 60 } },
+    { computedAt: 2, week: 2, titleProb: { '1': 17.4, '2': 55 } },
+  ];
+  const moves = titleMovement(probOnly);
+  const you = moves.find((m) => m.rosterId === '1');
+
+  assert.equal(you.openOdds, americanFromPercent(10), 'open price not derived');
+  assert.equal(you.nowOdds, americanFromPercent(17.4));
+  assert.ok(Math.abs(you.movePp - 7.4) < 1e-9);
+
+  /* +900 at 10%, and a favourite goes negative. Round-trips through the same
+     no-vig scale the live board uses. */
+  assert.equal(americanFromPercent(10), 900);
+  assert.equal(americanFromPercent(50), -100);
+  assert.equal(americanFromPercent(60), -150);
+});
+
+test('a stored price always beats a derived one', async () => {
+  /* If both exist they must agree, and the recorded number is the truth. A
+     derived value silently overriding a stored one would quietly rewrite what
+     the sim actually quoted. */
+  const both = [
+    { computedAt: 1, week: 1, titleOdds: { '1': 850 }, titleProb: { '1': 10 } },
+    { computedAt: 2, week: 2, titleOdds: { '1': 475 }, titleProb: { '1': 17.4 } },
+  ];
+  const you = titleMovement(both)[0];
+  assert.equal(you.openOdds, 850, 'the stored open price was overwritten by a derived one');
+  assert.equal(you.nowOdds, 475);
+});
