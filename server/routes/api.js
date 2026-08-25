@@ -11,8 +11,9 @@ import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import {
   getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
-  computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
+  computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS, SEASON_SIMS,
 } from '../engine/engine.js';
+import { predictSeason } from '../engine/leverage.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { registerLeague, readRegistry } from '../engine/leagueRegistry.js';
 import {
@@ -1109,6 +1110,25 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${version}:${overlay ? 'ov' : 'base'}:${build}:${readsSig}`;
     const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position, readsByRoster }));
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Predictor: condition the season on user-chosen results and re-price playoff/title
+ * odds for every team. Body: { userId, picks: [{week, matchupId, winnerRosterId,
+ * winnerPoints?, loserPoints?}], fast? }. fast=true -> 2500 sims (~instant); default ->
+ * 10000. The seed is stable across pick sets (CRN), so identical picks quote identically;
+ * pickSetHash echoes the picks the run used so the client can drop a stale response.
+ */
+apiRouter.post('/league/:leagueId/predictor', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const { userId, picks = [], fast = false } = req.body ?? {};
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
+    res.json(predictSeason(ctx, { picks, sims: fast ? 2500 : SEASON_SIMS }));
   } catch (error) {
     next(error);
   }

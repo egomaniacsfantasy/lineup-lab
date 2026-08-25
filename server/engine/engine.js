@@ -19,7 +19,7 @@ import { getActiveProjections } from '../projections/store.js';
 import { cached } from '../cache.js';
 import { closedFormWinProb, buildLiveTeamDistribution } from './liveWinProb.js';
 
-const SEASON_SIMS = 10_000; // player-level season Monte Carlo — Futures and movers
+export const SEASON_SIMS = 10_000; // player-level season Monte Carlo — Futures and movers
 const MATCHUP_SIMS = 5_000; // seeded player-level sims for the headline matchup win%
 // EVERY trade evaluation — the finder (best deals / per-manager / hub), the
 // Build-a-Trade analyzer, and the counter-offer search — runs at THIS sim count.
@@ -122,7 +122,7 @@ function playerDistribution(playerId, projectionMap, catalogEntry, week = null) 
   return { mean, stdev, unpriced: false, zeroed: false };
 }
 
-function teamDistribution(starterIds, projectionMap, catalog, week = null) {
+export function teamDistribution(starterIds, projectionMap, catalog, week = null) {
   let mean = 0;
   let variance = 0;
   const unpriced = [];
@@ -653,24 +653,36 @@ export function applyOverlay(projectionMap, overlay) {
  * Price one league: matchup lines, user swap deltas, season futures.
  * @param {object} ctx { league, teams, matchups, week, catalog, scheduleWeeks }
  */
-export function priceLeague(ctx) {
+/**
+ * Prepare a raw league ctx (projections = version + list) into the shape every sim
+ * needs: a projectionMap keyed by player id (overlay + live-locks applied), slotLabels,
+ * catalog, and the stable per-league seed. ONE place, so the Predictor / leverage
+ * endpoints price against the EXACT same projections as priceLeague -- no drift, which
+ * is the whole point of not rebuilding this outside the engine. Returns null if there
+ * are no projections.
+ */
+export function prepareLeagueCtx(ctx) {
   const active = ctx.projections ?? getActiveProjections();
+  if (!active) return null;
+  const { league, teams, week, overlay } = ctx;
+  // Starting slots for this league (exclude bench/IR/taxi).
+  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+  const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
+  applyOverlay(projectionMap, overlay);               // user's numbers on top of Franco
+  applyLiveLocks(projectionMap, ctx.liveLocks, week); // lock finished players (no-op until live)
+  // Stable seed from rosters + week + overlay only (NOT record/schedule), so conditioning
+  // a season on a pick reuses the identical random draws (common random numbers).
+  const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
+  return { ...ctx, catalog: ctx.catalog ?? ctx.players, active, slotLabels, projectionMap, seed };
+}
 
-  if (!active) {
+export function priceLeague(ctx) {
+  const prepared = prepareLeagueCtx(ctx);
+  if (!prepared) {
     return { available: false, reason: 'no_projections' };
   }
-
-  const { league, teams, matchups, week, catalog, scheduleWeeks, overlay } = ctx;
-  // Starting slots for this league (exclude bench/IR/taxi). Used by swaps + the
-  // weekly schedule's optimal-lineup sims.
-  const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
-
-  const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
-  // Layer the user's own numbers on top of Franco before any sim runs.
-  applyOverlay(projectionMap, overlay);
-  // Lock finished players to their live final score for the current week. Empty
-  // in the normal path, so this changes nothing until a game week is live.
-  applyLiveLocks(projectionMap, ctx.liveLocks, week);
+  const { league, teams, matchups, week, catalog, scheduleWeeks, overlay,
+          active, slotLabels, projectionMap, seed } = prepared;
 
   const inputsHash = computeInputsHash({
     projectionVersion: active.version,
@@ -715,8 +727,8 @@ export function priceLeague(ctx) {
     byMatchup.set(m.matchupId, list);
   });
 
-  // one seed per inputs state: identical inputs always price identically
-  const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
+  // `seed` comes from prepareLeagueCtx above (one seed per inputs state; identical
+  // inputs always price identically).
   const linesRng = mulberry32(seed);
 
   const lines = [];

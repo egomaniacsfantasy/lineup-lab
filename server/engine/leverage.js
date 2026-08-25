@@ -37,7 +37,7 @@
  * Everything below is verified against a synthetic prepared context in
  * test/leverage.test.mjs and needs no changes when it is wired.
  */
-import { simulateSeason } from './engine.js';
+import { simulateSeason, prepareLeagueCtx, teamDistribution, SEASON_SIMS } from './engine.js';
 
 /** Cheap enough to run twice per matchup; see the note on sims below. */
 export const LEVERAGE_SIMS = 2_000;
@@ -171,4 +171,82 @@ export function weekLeverage(ctx, week, projectedPoints = () => 0) {
       importance: biggest > 0 ? Math.round((row.distance / biggest) * 100) : 0,
     }))
     .sort((left, right) => right.importance - left.importance);
+}
+
+/**
+ * Server hash of a pick set, matching the client's pickSetHash in
+ * src/services/predictor.ts: "week:matchupId:winnerRosterId" per pick, sorted, joined
+ * by "|". The response echoes it so the client discards a run whose picks it has
+ * already moved past (a slow run landing after a fast one).
+ */
+export function pickSetHash(picks = []) {
+  return picks
+    .map((p) => `${p.week}:${p.matchupId}:${p.winnerRosterId}`)
+    .sort()
+    .join('|');
+}
+
+/**
+ * The Predictor: condition the season on a set of user-chosen results and re-price
+ * playoff/title odds for every team.
+ *
+ * Each pick forces one matchup's winner and credits points. Points-for is the seeding
+ * tiebreaker, so a forced result credits points that keep the winner ahead:
+ *   winner = max(winnerProjection, loserProjection + 1); loser = loserProjection
+ * (minimal bump, so an upset pick distorts points-for as little as possible). The
+ * request may override either side's points (custom input).
+ *
+ * The seed comes from prepareLeagueCtx (rosters + week + overlay) and a pick never
+ * changes those, so every pick set simulates against the identical random draws (CRN):
+ * the board moves by the pick's true effect, not sim noise, and identical pick sets
+ * quote identical prices.
+ */
+export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
+  const prepared = prepareLeagueCtx(ctx);
+  if (!prepared) return { available: false, reason: 'no_projections' };
+  const { teams, projectionMap, catalog } = prepared;
+
+  const startersByRoster = new Map(teams.map((t) => [t.rosterId, t.starters ?? []]));
+  const projPoints = (rosterId, week) =>
+    teamDistribution(startersByRoster.get(rosterId) ?? [], projectionMap, catalog, week).mean;
+
+  let conditioned = prepared;
+  let picked = 0;
+  for (const pick of picks) {
+    const week = Number(pick.week);
+    const entry = (conditioned.scheduleWeeks ?? []).find((e) => e.week === week);
+    if (!entry) continue;
+    const rosters = (entry.matchups ?? [])
+      .filter((m) => String(m.matchupId) === String(pick.matchupId))
+      .map((m) => m.rosterId);
+    if (rosters.length !== 2) continue;
+    const winnerId = rosters.find((r) => String(r) === String(pick.winnerRosterId));
+    const loserId = rosters.find((r) => String(r) !== String(pick.winnerRosterId));
+    if (winnerId == null || loserId == null) continue;
+    const wProj = projPoints(winnerId, week);
+    const lProj = projPoints(loserId, week);
+    const winnerPoints = pick.winnerPoints != null ? Number(pick.winnerPoints)
+      : Math.max(wProj, lProj + 1);            // picked winner clears the loser by >= 1
+    const loserPoints = pick.loserPoints != null ? Number(pick.loserPoints) : lProj;
+    conditioned = forceResult(conditioned, { week, winnerId, loserId, winnerPoints, loserPoints });
+    picked += 1;
+  }
+
+  // Remaining (unforced) matchups are what actually get simulated.
+  const simulated = (conditioned.scheduleWeeks ?? []).reduce((n, entry) => {
+    const ids = new Set((entry.matchups ?? []).map((m) => m.matchupId));
+    return n + ids.size;
+  }, 0);
+
+  const result = simulateSeason({ ...conditioned, sims });
+  const rows = result.map((r) => ({
+    rosterId: String(r.rosterId),
+    playoffProb: r.playoffProb,
+    titleProb: r.titleProb,
+    avgSeed: r.avgSeed,
+    playoffOdds: r.playoffOdds,
+    titleOdds: r.championOdds,
+  }));
+
+  return { available: true, pickSetHash: pickSetHash(picks), picked, simulated, sims, rows };
 }
