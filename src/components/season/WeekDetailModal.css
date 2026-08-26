@@ -11,6 +11,13 @@
 
 .week-detail {
   width: min(100%, 480px);
+  /* A future week shows a full optimal lineup + the whole bench, which can be
+     taller than the viewport. The scrim centers the card, so without a height
+     cap the top (header + projected totals) overflowed above the screen edge
+     with no way to reach it. Cap to the viewport (minus the scrim's padding)
+     and scroll inside instead. */
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   background: var(--bg-surface);
