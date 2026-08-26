@@ -37,7 +37,13 @@
  * Everything below is verified against a synthetic prepared context in
  * test/leverage.test.mjs and needs no changes when it is wired.
  */
-import { simulateSeason, prepareLeagueCtx, teamDistribution, SEASON_SIMS } from './engine.js';
+import {
+  simulateSeason,
+  prepareLeagueCtx,
+  teamWeekProjection,
+  replacementLevels,
+  SEASON_SIMS,
+} from './engine.js';
 
 /** Cheap enough to run twice per matchup; see the note on sims below. */
 export const LEVERAGE_SIMS = 2_000;
@@ -221,11 +227,16 @@ export function pickSetHash(picks = []) {
 export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
   const prepared = prepareLeagueCtx(ctx);
   if (!prepared) return { available: false, reason: 'no_projections' };
-  const { teams, projectionMap, catalog } = prepared;
+  const { teams, projectionMap, catalog, slotLabels, week: currentWeek } = prepared;
 
-  const startersByRoster = new Map(teams.map((t) => [t.rosterId, t.starters ?? []]));
-  const projPoints = (rosterId, week) =>
-    teamDistribution(startersByRoster.get(rosterId) ?? [], projectionMap, catalog, week).mean;
+  const teamById = new Map(teams.map((t) => [t.rosterId, t]));
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
+  // Current week = actual set starters; future weeks = optimal lineup — the same
+  // rule the sim and the weekly lines use, so the credited points match the odds.
+  const projPoints = (rosterId, week) => {
+    const t = teamById.get(rosterId);
+    return t ? teamWeekProjection(t, week, currentWeek, slotLabels, projectionMap, catalog, replacementFor) : 0;
+  };
 
   let conditioned = prepared;
   let picked = 0;
@@ -311,15 +322,18 @@ const yieldToLoop = () => new Promise((resolve) => setImmediate(resolve));
 export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
   const prepared = prepareLeagueCtx(ctx);
   if (!prepared) return { available: false, week: week ?? null, forks: [] };
-  const { teams, projectionMap, catalog, scheduleWeeks } = prepared;
+  const { teams, projectionMap, catalog, scheduleWeeks, slotLabels, week: currentWeek } = prepared;
 
   const targetWeek = week ?? prepared.week;
   const entry = (scheduleWeeks ?? []).find((e) => e.week === targetWeek);
   if (!entry) return { available: true, week: targetWeek ?? null, forks: [], gameOfTheWeek: null };
 
-  const startersByRoster = new Map(teams.map((t) => [t.rosterId, t.starters ?? []]));
-  const projPoints = (rosterId) =>
-    teamDistribution(startersByRoster.get(rosterId) ?? [], projectionMap, catalog, targetWeek).mean;
+  const teamById = new Map(teams.map((t) => [t.rosterId, t]));
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
+  const projPoints = (rosterId) => {
+    const t = teamById.get(rosterId);
+    return t ? teamWeekProjection(t, targetWeek, currentWeek, slotLabels, projectionMap, catalog, replacementFor) : 0;
+  };
 
   // Baseline board (nothing forced) → each side's nowProb, reused for every matchup.
   const nowByRoster = new Map(
@@ -374,7 +388,8 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
 
 /**
  * Each team's projected points for every remaining week — the mean of its
- * starters' distributions that week (teamDistribution). NO Monte Carlo, so it is
+ * lineup that week (teamWeekProjection: current week = actual starters, future =
+ * optimal). NO Monte Carlo, so it is
  * cheap. Feeds the Predictor's per-matchup projection display and the default
  * shown in the score-override boxes — the SAME number the engine credits a forced
  * result by default (winner = max(winnerProj, loserProj+1), loser = loserProj).
@@ -382,8 +397,9 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
 export function weekProjections(ctx) {
   const prepared = prepareLeagueCtx(ctx);
   if (!prepared) return { available: false, weeks: [] };
-  const { teams, projectionMap, catalog, scheduleWeeks, week } = prepared;
-  const startersByRoster = new Map(teams.map((t) => [t.rosterId, t.starters ?? []]));
+  const { teams, projectionMap, catalog, scheduleWeeks, week, slotLabels } = prepared;
+  const teamById = new Map(teams.map((t) => [t.rosterId, t]));
+  const replacementFor = replacementLevels(teams, projectionMap, catalog);
   const from = week ?? 1;
   const weeks = (scheduleWeeks ?? [])
     .filter((entry) => entry.week >= from)
@@ -392,9 +408,11 @@ export function weekProjections(ctx) {
       for (const m of entry.matchups ?? []) {
         const rid = String(m.rosterId);
         if (scores[rid] != null) continue;
-        scores[rid] = Number(
-          teamDistribution(startersByRoster.get(m.rosterId) ?? [], projectionMap, catalog, entry.week).mean.toFixed(1),
-        );
+        const t = teamById.get(m.rosterId);
+        // Current week = actual starters, future weeks = optimal — matches the sim.
+        scores[rid] = t
+          ? Number(teamWeekProjection(t, entry.week, week, slotLabels, projectionMap, catalog, replacementFor).toFixed(1))
+          : 0;
       }
       return { week: entry.week, scores };
     });

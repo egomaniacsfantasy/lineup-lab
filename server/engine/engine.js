@@ -356,6 +356,21 @@ function streamedLineupParams(playerIds, slotLabels, projectionMap, catalog, wee
   return { players };
 }
 
+/**
+ * A team's projected points for one week under the ONE lineup rule the whole app
+ * shares: the CURRENT (ongoing) week uses the team's ACTUAL set starters — the user
+ * controls it, so an empty slot scores 0 — and every FUTURE week uses the optimal
+ * lineup with byes/empty slots filled at replacement level. Same split as the
+ * weekly lines (engine.js) and the season sim (seasonSetup). Exported so the
+ * Predictor / forks / projected-scores in leverage.js price weeks identically.
+ */
+export function teamWeekProjection(team, week, currentWeek, slotLabels, projectionMap, catalog, replacementFor) {
+  if (week === currentWeek) {
+    return teamDistribution(team.starters ?? [], projectionMap, catalog, week).mean;
+  }
+  return sumMeans(streamedLineupParams(team.players ?? [], slotLabels, projectionMap, catalog, week, replacementFor));
+}
+
 /** Actual starter assignment from a provider starters array (aligned to slots). */
 function actualAssign(starterIds, slotLabels) {
   return slotLabels.map((slot, i) => {
@@ -1467,7 +1482,14 @@ function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalo
   for (const t of teams) {
     const m = new Map();
     for (const wk of weeksNeeded) {
-      m.set(wk, streamedLineupParams(t.players, slotLabels, projectionMap, catalog, wk, replacementFor));
+      // Current (ongoing) week: the team's ACTUAL set starters — the user controls
+      // this week, so an empty slot scores 0. Every future/playoff week: the optimal
+      // lineup with byes/empty slots filled at replacement level. This is the same
+      // current-vs-future split the weekly lines make, so per-game odds, Futures and
+      // the Predictor all price a week the same way.
+      m.set(wk, wk === week
+        ? starterParams(t.starters, projectionMap, catalog, wk)
+        : streamedLineupParams(t.players, slotLabels, projectionMap, catalog, wk, replacementFor));
     }
     paramsBy.set(t.rosterId, m);
   }
