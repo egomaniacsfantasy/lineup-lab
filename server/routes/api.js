@@ -13,7 +13,7 @@ import {
   getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
   computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS, SEASON_SIMS,
 } from '../engine/engine.js';
-import { predictSeason } from '../engine/leverage.js';
+import { predictSeason, weekForks } from '../engine/leverage.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { registerLeague, readRegistry } from '../engine/leagueRegistry.js';
 import {
@@ -1118,17 +1118,42 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
 /**
  * Predictor: condition the season on user-chosen results and re-price playoff/title
  * odds for every team. Body: { userId, picks: [{week, matchupId, winnerRosterId,
- * winnerPoints?, loserPoints?}], fast? }. fast=true -> 2500 sims (~instant); default ->
- * 10000. The seed is stable across pick sets (CRN), so identical picks quote identically;
- * pickSetHash echoes the picks the run used so the client can drop a stale response.
+ * winnerPoints?, loserPoints?}], fast? }. ALWAYS runs the full 10000 sims: the seed is
+ * constant per league (CRN), so there is no fast-then-refine — an identical pick set
+ * quotes identically and changing one pick leaves every other game's draws untouched.
+ * `fast` is accepted for client compatibility but ignored. pickSetHash echoes the picks
+ * the run used so the client can drop a stale response.
  */
 apiRouter.post('/league/:leagueId/predictor', async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const { leagueId } = req.params;
-    const { userId, picks = [], fast = false } = req.body ?? {};
+    const { userId, picks = [] } = req.body ?? {};
     const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
-    res.json(predictSeason(ctx, { picks, sims: fast ? 2500 : SEASON_SIMS }));
+    res.json(predictSeason(ctx, { picks, sims: SEASON_SIMS }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Week forks: both branches of every matchup in a week (each side's playoff prob now /
+ * if-it-wins / if-it-loses) plus each matchup's 0-100 importance and the game of the week.
+ * Drives the "This week" fork graphic. Query: userId, week? (defaults to the resolved week).
+ * Cached per league/user/week/build/playoff-settings — same inputs as pricing, so an
+ * override edit or a new deploy busts it.
+ */
+apiRouter.get('/league/:leagueId/forks', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const userId = req.query.userId;
+    const week = req.query.week != null ? Number(req.query.week) : undefined;
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
+    const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
+    const key = `agg:forks:${leagueId}:${userId}:${week ?? ctx.week ?? '-'}:${build}:${playoffSettingsSignature(leagueId)}`;
+    const result = await cached(key, 5 * 60_000, async () => weekForks(ctx, week));
+    res.json(result);
   } catch (error) {
     next(error);
   }

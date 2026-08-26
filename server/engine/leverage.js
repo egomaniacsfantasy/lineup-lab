@@ -250,3 +250,82 @@ export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
 
   return { available: true, pickSetHash: pickSetHash(picks), picked, simulated, sims, rows };
 }
+
+/** Page-load graphic (runs 1 + 2·matchups sims), so lighter than the Predictor's
+ *  per-click 10k. Enough for the importance ranking and a directional win/loss book. */
+export const FORK_SIMS = 4_000;
+
+/**
+ * Both branches of every matchup in a week, for the "This week" fork graphic.
+ *
+ * For each matchup it conditions the season on each side winning — reusing the
+ * SAME prepared seed as the baseline (CRN), so the win/loss books differ only by
+ * the forced game — and reports each side's PLAYOFF probability now / if-it-wins /
+ * if-it-loses, plus the matchup's importance (0-100, weekLeverage's bookDistance
+ * normalised to the biggest swing in the week). gameOfTheWeek is the top one.
+ *
+ * Points on a forced win match the Predictor: winner = max(winnerProj, loserProj+1),
+ * loser = loserProj — minimal bump, points-for stays honest for seeding.
+ */
+export function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
+  const prepared = prepareLeagueCtx(ctx);
+  if (!prepared) return { available: false, week: week ?? null, forks: [] };
+  const { teams, projectionMap, catalog, scheduleWeeks } = prepared;
+
+  const targetWeek = week ?? prepared.week;
+  const entry = (scheduleWeeks ?? []).find((e) => e.week === targetWeek);
+  if (!entry) return { available: true, week: targetWeek ?? null, forks: [], gameOfTheWeek: null };
+
+  const startersByRoster = new Map(teams.map((t) => [t.rosterId, t.starters ?? []]));
+  const projPoints = (rosterId) =>
+    teamDistribution(startersByRoster.get(rosterId) ?? [], projectionMap, catalog, targetWeek).mean;
+
+  // Baseline board (nothing forced) → each side's nowProb, reused for every matchup.
+  const nowByRoster = new Map(
+    simulateSeason({ ...prepared, sims }).map((r) => [String(r.rosterId), r.playoffProb]),
+  );
+
+  const rostersByMatchup = new Map();
+  for (const m of entry.matchups ?? []) {
+    rostersByMatchup.set(m.matchupId, [...(rostersByMatchup.get(m.matchupId) ?? []), m.rosterId]);
+  }
+
+  const raw = [];
+  rostersByMatchup.forEach((rosterIds, matchupId) => {
+    if (rosterIds.length !== 2) return;
+    const [a, b] = rosterIds;
+    const aProj = projPoints(a);
+    const bProj = projPoints(b);
+    const aWins = simulateSeason({
+      ...forceResult(prepared, { week: targetWeek, winnerId: a, loserId: b, winnerPoints: Math.max(aProj, bProj + 1), loserPoints: bProj }),
+      sims,
+    });
+    const bWins = simulateSeason({
+      ...forceResult(prepared, { week: targetWeek, winnerId: b, loserId: a, winnerPoints: Math.max(bProj, aProj + 1), loserPoints: aProj }),
+      sims,
+    });
+    const aWinsBy = new Map(aWins.map((r) => [String(r.rosterId), r.playoffProb]));
+    const bWinsBy = new Map(bWins.map((r) => [String(r.rosterId), r.playoffProb]));
+    const ka = String(a);
+    const kb = String(b);
+    raw.push({
+      matchupId,
+      distance: bookDistance(aWins, bWins),
+      sides: [
+        { rosterId: ka, nowProb: nowByRoster.get(ka) ?? 0, winProb: aWinsBy.get(ka) ?? 0, lossProb: bWinsBy.get(ka) ?? 0 },
+        { rosterId: kb, nowProb: nowByRoster.get(kb) ?? 0, winProb: bWinsBy.get(kb) ?? 0, lossProb: aWinsBy.get(kb) ?? 0 },
+      ],
+    });
+  });
+
+  const biggest = raw.reduce((max, row) => Math.max(max, row.distance), 0);
+  const forks = raw
+    .map((row) => ({
+      matchupId: row.matchupId,
+      importance: biggest > 0 ? Math.round((row.distance / biggest) * 100) : 0,
+      sides: row.sides,
+    }))
+    .sort((left, right) => right.importance - left.importance);
+
+  return { available: true, week: targetWeek, forks, gameOfTheWeek: forks.length ? forks[0].matchupId : null };
+}
