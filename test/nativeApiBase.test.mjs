@@ -41,8 +41,9 @@ test('every /api path literal is wrapped in apiUrl', async () => {
     for (const match of source.matchAll(/['"`]\/api\//g)) {
       const before = source.slice(0, match.index);
       /* A literal is fine when apiUrl() opens immediately before it, or when
-         it is handed to a wrapper proven below to apply apiUrl() itself. */
-      if (/(?:apiUrl|adminFetch)\(\s*$/.test(before)) continue;
+         it is handed to a wrapper proven below to apply apiUrl() itself
+         (adminFetch, withContext). */
+      if (/(?:apiUrl|adminFetch|withContext)\(\s*$/.test(before)) continue;
       const line = before.split('\n').length;
       offenders.push(`${file}:${line}`);
     }
@@ -99,6 +100,19 @@ test('the admin wrapper really does apply apiUrl', async () => {
     /adminFetch = useCallback\(\s*\(path: string, init: RequestInit = \{\}\) =>\s*fetch\(apiUrl\(path\)/,
     'adminFetch must wrap its path in apiUrl',
   );
+});
+
+test('the withContext wrapper really does apply apiUrl', async () => {
+  /* The path guard above lets withContext('/api/...') through (used by the
+     Predictor's fetches so an ESPN league sends its provider context). That
+     exemption is only safe while withContext itself routes through apiUrl —
+     pin it, so a silent revert there can't break the native shell while the
+     guard keeps passing. */
+  const source = await fsp.readFile(path.join('src', 'services', 'leagueApi.ts'), 'utf8');
+  const start = source.indexOf('export function withContext');
+  assert.ok(start !== -1, 'withContext must exist and be exported');
+  const body = source.slice(start, start + 1000);
+  assert.match(body, /apiUrl\(/, 'withContext must wrap its path in apiUrl');
 });
 
 test('no source reads import.meta.env through an optional chain', async () => {
