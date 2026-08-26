@@ -43,6 +43,15 @@ import { simulateSeason, prepareLeagueCtx, teamDistribution, SEASON_SIMS } from 
 export const LEVERAGE_SIMS = 2_000;
 
 /**
+ * Predictor board sims per click. NOT the pricing 10k: the board is uncached and
+ * fires on every pick, and each sim blocks the event loop, so 10k would jank the
+ * whole site whenever anyone uses the Predictor. The seed is constant (CRN), so
+ * 4k is exactly as STABLE as 10k — same number every time — and lands within
+ * ~0.3% of it at ~a quarter of the cost. Matches the trade engine's count.
+ */
+export const PREDICTOR_SIMS = 4_000;
+
+/**
  * Remove one matchup from a week and credit the winner.
  *
  * Only the matchup the two teams actually share is dropped. Filtering on

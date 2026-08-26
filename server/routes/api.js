@@ -11,9 +11,9 @@ import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import {
   getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
-  computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS, SEASON_SIMS,
+  computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
 } from '../engine/engine.js';
-import { predictSeason, weekForks } from '../engine/leverage.js';
+import { predictSeason, weekForks, PREDICTOR_SIMS } from '../engine/leverage.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { registerLeague, readRegistry } from '../engine/leagueRegistry.js';
 import {
@@ -1118,11 +1118,11 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
 /**
  * Predictor: condition the season on user-chosen results and re-price playoff/title
  * odds for every team. Body: { userId, picks: [{week, matchupId, winnerRosterId,
- * winnerPoints?, loserPoints?}], fast? }. ALWAYS runs the full 10000 sims: the seed is
- * constant per league (CRN), so there is no fast-then-refine — an identical pick set
- * quotes identically and changing one pick leaves every other game's draws untouched.
- * `fast` is accepted for client compatibility but ignored. pickSetHash echoes the picks
- * the run used so the client can drop a stale response.
+ * winnerPoints?, loserPoints?}], fast? }. Runs PREDICTOR_SIMS (4k, not the pricing 10k)
+ * every time: the seed is constant per league (CRN), so there is no fast-then-refine —
+ * an identical pick set quotes identically and changing one pick leaves every other
+ * game's draws untouched. `fast` is accepted for client compatibility but ignored.
+ * pickSetHash echoes the picks the run used so the client can drop a stale response.
  */
 apiRouter.post('/league/:leagueId/predictor', async (req, res, next) => {
   try {
@@ -1130,7 +1130,7 @@ apiRouter.post('/league/:leagueId/predictor', async (req, res, next) => {
     const { leagueId } = req.params;
     const { userId, picks = [] } = req.body ?? {};
     const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
-    res.json(predictSeason(ctx, { picks, sims: SEASON_SIMS }));
+    res.json(predictSeason(ctx, { picks, sims: PREDICTOR_SIMS }));
   } catch (error) {
     next(error);
   }
