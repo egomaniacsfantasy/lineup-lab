@@ -322,17 +322,23 @@ export function Predictor({
                     </button>
                   );
                 })}
-                {pick ? (() => {
-                  const winnerSide = [game.away, game.home].find((s) => s.rosterId === pick.winnerRosterId);
-                  const loserSide = [game.away, game.home].find((s) => s.rosterId !== pick.winnerRosterId);
-                  return (
-                    <div className="predictor__scores">
-                      {[
-                        { role: 'winner' as const, side: winnerSide, value: pick.winnerPoints },
-                        { role: 'loser' as const, side: loserSide, value: pick.loserPoints },
-                      ].map(({ role, side, value }) => (
-                        <label className="predictor__score" key={role}>
-                          <span className="predictor__score-team">{side?.teamName ?? ''}</span>
+                {pick ? (
+                  /* Inputs sit in the SAME away/home order as the buttons above, so
+                     each score box lines up under its own team. The winner/loser
+                     role (which field it writes) is derived from the pick, not the
+                     column, so picking the home team no longer mislabels the box. */
+                  <div className="predictor__scores">
+                    {[game.away, game.home].map((side, index) => {
+                      const isWinner = side.rosterId === pick.winnerRosterId;
+                      const role = isWinner ? ('winner' as const) : ('loser' as const);
+                      const value = isWinner ? pick.winnerPoints : pick.loserPoints;
+                      return (
+                        <label
+                          className={['predictor__score', index === 1 ? 'predictor__score--home' : '']
+                            .filter(Boolean).join(' ')}
+                          key={side.rosterId}
+                        >
+                          <span className="predictor__score-team">{side.teamName}</span>
                           <input
                             className="predictor__score-input"
                             type="number"
@@ -341,17 +347,17 @@ export function Predictor({
                             step="0.1"
                             placeholder="proj"
                             defaultValue={value ?? ''}
-                            key={`${game.matchupId}:${role}:${value ?? ''}`}
+                            key={`${game.matchupId}:${side.rosterId}:${value ?? ''}`}
                             onBlur={(event) => setPoints(game.matchupId, role, event.target.value)}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
                             }}
                           />
                         </label>
-                      ))}
-                    </div>
-                  );
-                })() : null}
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             );
           })}

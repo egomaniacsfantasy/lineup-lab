@@ -139,6 +139,18 @@
   text-align: right;
 }
 
+/* Home box mirrors the home button (team on the outer edge) so each input reads
+   as belonging to the team directly above it. */
+.predictor__score--home {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.predictor__score--home .predictor__score-input {
+  margin-left: 0;
+  margin-right: auto;
+}
+
 /* One action per side: click to pick, click again to unpick, click across to
    flip. No confirm step, because a scenario tool people will not play with is
    a scenario tool that does not work. */
