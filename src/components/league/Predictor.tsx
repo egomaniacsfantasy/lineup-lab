@@ -32,6 +32,13 @@ export interface PredictorBaselineRow {
   playoffOdds: number;
   titleProb: number;
   titleOdds: number;
+  record: { wins: number; losses: number; ties: number };
+  pointsFor: number | null;
+}
+
+function formatRecord(r: { wins: number; losses: number; ties: number } | null | undefined) {
+  if (!r) return '—';
+  return r.ties ? `${r.wins}-${r.losses}-${r.ties}` : `${r.wins}-${r.losses}`;
 }
 
 /**
@@ -152,6 +159,26 @@ export function Predictor({
         pick.matchupId === game.matchupId ? { ...pick, winnerRosterId: rosterId } : pick,
       );
     });
+  };
+
+  /* Override the projected score for a called game. Committed on blur, never
+     per keystroke — each commit reprices the whole board (one sim), so typing
+     "124" must not fire three runs. Blank clears the override back to projected. */
+  const setPoints = (matchupId: number, side: 'winner' | 'loser', raw: string) => {
+    const n = Number(raw);
+    const val = raw.trim() === '' || Number.isNaN(n) ? undefined : n;
+    setPicks((current) =>
+      current.map((pick) => {
+        if (pick.matchupId !== matchupId) return pick;
+        const nextPick: Pick = { ...pick };
+        if (side === 'winner') {
+          if (val == null) delete nextPick.winnerPoints;
+          else nextPick.winnerPoints = val;
+        } else if (val == null) delete nextPick.loserPoints;
+        else nextPick.loserPoints = val;
+        return nextPick;
+      }),
+    );
   };
 
   /* One week at a time, with navigation, rather than every remaining week
@@ -295,6 +322,36 @@ export function Predictor({
                     </button>
                   );
                 })}
+                {pick ? (() => {
+                  const winnerSide = [game.away, game.home].find((s) => s.rosterId === pick.winnerRosterId);
+                  const loserSide = [game.away, game.home].find((s) => s.rosterId !== pick.winnerRosterId);
+                  return (
+                    <div className="predictor__scores">
+                      {[
+                        { role: 'winner' as const, side: winnerSide, value: pick.winnerPoints },
+                        { role: 'loser' as const, side: loserSide, value: pick.loserPoints },
+                      ].map(({ role, side, value }) => (
+                        <label className="predictor__score" key={role}>
+                          <span className="predictor__score-team">{side?.teamName ?? ''}</span>
+                          <input
+                            className="predictor__score-input"
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            step="0.1"
+                            placeholder="proj"
+                            defaultValue={value ?? ''}
+                            key={`${game.matchupId}:${role}:${value ?? ''}`}
+                            onBlur={(event) => setPoints(game.matchupId, role, event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
+                            }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })() : null}
               </div>
             );
           })}
@@ -306,6 +363,8 @@ export function Predictor({
         <div className="predictor__consequences">
           <div className="predictor__consequences-head">
             <span>Team</span>
+            <span className="predictor__num">Record</span>
+            <span className="predictor__num">PF</span>
             <span className="predictor__num">Playoffs</span>
             <span className="predictor__num">Title</span>
           </div>
@@ -317,6 +376,10 @@ export function Predictor({
                asked. */
             const suspended = pending && picks.length > 0;
             const playoffDelta = next ? next.playoffProb - row.playoffProb : null;
+            /* Record + PF are deterministic (base + forced picks), so they show
+               through a reprice rather than blanking like the simulated columns. */
+            const rec = next?.record ?? row.record;
+            const pf = next?.pointsFor ?? row.pointsFor;
 
             return (
               <div
@@ -327,6 +390,10 @@ export function Predictor({
                 <span className="predictor__row-team">
                   <TeamAvatar avatarUrl={row.avatarUrl} name={row.teamName} />
                   <span className="predictor__row-name">{row.teamName}</span>
+                </span>
+                <span className="predictor__num predictor__row-rec">{formatRecord(rec)}</span>
+                <span className="predictor__num predictor__row-pf">
+                  {pf != null ? pf.toFixed(0) : '—'}
                 </span>
                 <span className="predictor__num predictor__row-playoff">
                   {suspended ? (

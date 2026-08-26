@@ -181,7 +181,15 @@ export function weekLeverage(ctx, week, projectedPoints = () => 0) {
  */
 export function pickSetHash(picks = []) {
   return picks
-    .map((p) => `${p.week}:${p.matchupId}:${p.winnerRosterId}`)
+    .map((p) => {
+      const base = `${p.week}:${p.matchupId}:${p.winnerRosterId}`;
+      // Custom scores are part of the scenario: overriding a score must re-sim and
+      // must NOT collide with the same pick at projected points. Only appended when
+      // set, so a plain pick hashes identically on client and server.
+      return p.winnerPoints != null || p.loserPoints != null
+        ? `${base}:${p.winnerPoints ?? ''}:${p.loserPoints ?? ''}`
+        : base;
+    })
     .sort()
     .join('|');
 }
@@ -239,14 +247,24 @@ export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
   }, 0);
 
   const result = simulateSeason({ ...conditioned, sims });
-  const rows = result.map((r) => ({
-    rosterId: String(r.rosterId),
-    playoffProb: r.playoffProb,
-    titleProb: r.titleProb,
-    avgSeed: r.avgSeed,
-    playoffOdds: r.playoffOdds,
-    titleOdds: r.championOdds,
-  }));
+  // record + pointsFor reflect the CONDITIONED standings (base + the forced picks),
+  // so the Record / PF columns move as you call games — a picked win shows up as a
+  // win here, and forced points land in PF (the seeding tiebreaker).
+  const teamByRoster = new Map((conditioned.teams ?? []).map((t) => [String(t.rosterId), t]));
+  const rows = result.map((r) => {
+    const t = teamByRoster.get(String(r.rosterId));
+    const rec = t?.record ?? {};
+    return {
+      rosterId: String(r.rosterId),
+      playoffProb: r.playoffProb,
+      titleProb: r.titleProb,
+      avgSeed: r.avgSeed,
+      playoffOdds: r.playoffOdds,
+      titleOdds: r.championOdds,
+      record: { wins: rec.wins ?? 0, losses: rec.losses ?? 0, ties: rec.ties ?? 0 },
+      pointsFor: t?.pointsFor != null ? Number(Number(t.pointsFor).toFixed(1)) : null,
+    };
+  });
 
   return { available: true, pickSetHash: pickSetHash(picks), picked, simulated, sims, rows };
 }

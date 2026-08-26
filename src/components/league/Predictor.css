@@ -100,6 +100,45 @@
   margin-bottom: 4px;
 }
 
+/* Optional custom scores for a called game — override the projected points that
+   get credited to the forced result. Spans both columns under the two sides. */
+.predictor__scores {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.predictor__score {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  font-size: var(--type-caption);
+  color: var(--text-dim);
+}
+
+.predictor__score-team {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.predictor__score-input {
+  width: 100%;
+  min-width: 0;
+  margin-left: auto;
+  max-width: 72px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: right;
+}
+
 /* One action per side: click to pick, click again to unpick, click across to
    flip. No confirm step, because a scenario tool people will not play with is
    a scenario tool that does not work. */
@@ -169,10 +208,17 @@
 .predictor__consequences-head,
 .predictor__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px 84px;
+  grid-template-columns: minmax(0, 1fr) 52px 56px 88px 78px;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-xs) var(--space-sm);
+}
+
+/* Record + PF are context, not the headline price — dimmer than the odds. */
+.predictor__row-rec,
+.predictor__row-pf {
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
 }
 
 .predictor__consequences-head {

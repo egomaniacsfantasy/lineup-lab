@@ -23,6 +23,10 @@ export interface Pick {
   matchupId: number;
   /** Roster id of the side the user has picked to win. */
   winnerRosterId: string;
+  /** Optional custom scores. Absent = the engine credits projected points
+   *  (winner = max(winnerProj, loserProj + 1), loser = loserProj). */
+  winnerPoints?: number;
+  loserPoints?: number;
 }
 
 /** One team's row on a conditioned board. */
@@ -34,6 +38,9 @@ export interface ConditionedRow {
   avgSeed: number;
   playoffOdds: number;
   titleOdds: number;
+  /** Standings as the calls stand (base record + forced picks). */
+  record: { wins: number; losses: number; ties: number };
+  pointsFor: number | null;
 }
 
 export interface ConditionedBoard {
@@ -185,7 +192,14 @@ export async function fetchWeekForks(
  */
 export function pickSetHash(picks: readonly Pick[]): string {
   return picks
-    .map((pick) => `${pick.week}:${pick.matchupId}:${pick.winnerRosterId}`)
+    .map((pick) => {
+      const base = `${pick.week}:${pick.matchupId}:${pick.winnerRosterId}`;
+      /* Must match server pickSetHash in engine/leverage.js exactly: custom
+         scores are appended only when set, so a plain pick hashes identically. */
+      return pick.winnerPoints != null || pick.loserPoints != null
+        ? `${base}:${pick.winnerPoints ?? ''}:${pick.loserPoints ?? ''}`
+        : base;
+    })
     .sort()
     .join('|');
 }

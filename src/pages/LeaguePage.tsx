@@ -385,19 +385,31 @@ export function LeaguePage() {
 
   const predictorBaseline = useMemo<PredictorBaselineRow[]>(() => {
     if (!connected) return [];
-    return connected.futures.map((row) => ({
-      rosterId: String(row.rosterId ?? ''),
-      teamName: row.teamName,
-      avatarUrl: row.avatarUrl ?? null,
-      isUser: Boolean(row.isUser),
-      playoffProb: row.playoffProb ?? 0,
-      playoffOdds: row.playoffOdds,
-      /* The futures row carries the price, not the raw probability; the
-         Predictor only needs the price for the baseline column. */
-      titleProb: 0,
-      titleOdds: row.championOdds,
-    }));
-  }, [connected]);
+    /* Current record + PF for the baseline columns; the conditioned response
+       carries its own (base + forced picks). Keyed off the bootstrap teams,
+       which carry both. */
+    const teamByRoster = new Map(
+      (bootstrap?.teams ?? []).map((team) => [String(team.rosterId), team]),
+    );
+    return connected.futures.map((row) => {
+      const rid = String(row.rosterId ?? '');
+      const team = teamByRoster.get(rid);
+      return {
+        rosterId: rid,
+        teamName: row.teamName,
+        avatarUrl: row.avatarUrl ?? null,
+        isUser: Boolean(row.isUser),
+        playoffProb: row.playoffProb ?? 0,
+        playoffOdds: row.playoffOdds,
+        /* The futures row carries the price, not the raw probability; the
+           Predictor only needs the price for the baseline column. */
+        titleProb: 0,
+        titleOdds: row.championOdds,
+        record: team?.record ?? { wins: 0, losses: 0, ties: 0 },
+        pointsFor: team?.pointsFor ?? null,
+      };
+    });
+  }, [connected, bootstrap]);
 
   const connectedScheduleItems = useMemo(() => {
     if (!connectedSeason) return [];
