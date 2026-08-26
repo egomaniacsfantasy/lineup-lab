@@ -303,12 +303,17 @@ export function LeaguePage() {
     [lineHistory, connectedSeason],
   );
 
-  /* Season is retrospective, so before a draft it is a page about a season
-     that has not happened: an empty all-play table, an empty record book and a
-     schedule of unplayed weeks. Hidden until there is something behind it. */
+  /* The retrospective half of Season — all-play, record book, time machine —
+     only means something once games have been played. */
   const seasonHasContent = !preDraft && luckTeams.some((team) => team.weeksCounted > 0);
+  /* But Season also carries the forward-looking schedule (opponents, odds and
+     projected points, week by week), which is worth showing the moment a league
+     is drafted — well before any game is played. So the tab appears whenever
+     there is a real schedule, and the retrospective blocks inside stay hidden
+     until seasonHasContent. */
+  const seasonHasSchedule = !preDraft && (connectedSeason?.scheduleItems.length ?? 0) > 0;
   const visibleViews = LEAGUE_VIEWS.filter(
-    (view) => view.key !== 'season' || seasonHasContent,
+    (view) => view.key !== 'season' || seasonHasContent || seasonHasSchedule,
   );
   /* Admins can still reach the standings diagnostic by URL; it is not a tab. */
   const reachableViews = isAdmin ? [...visibleViews, ...ADMIN_LEAGUE_VIEWS] : visibleViews;
@@ -743,10 +748,10 @@ export function LeaguePage() {
         <>
           {connected ? (
             <>
-              {/* Verdict first. The schedule used to open this page as
-                  seventeen tall, near-empty rows, so the finding the page
-                  exists to deliver was below the fold behind a list. */}
-              <LuckBoard teams={luckTeams} />
+              {/* Verdict first, once there is a season behind it. Before any game
+                  is played the all-play board is empty, so it stays hidden and the
+                  schedule leads. */}
+              {seasonHasContent ? <LuckBoard teams={luckTeams} /> : null}
               {connectedSeason && connectedSeason.scheduleItems.length > 0 ? (
                 <ScheduleGrid
                   items={connectedScheduleItems}
@@ -756,11 +761,10 @@ export function LeaguePage() {
               ) : (
                 <SeasonalNotice>Loading your schedule…</SeasonalNotice>
               )}
-              <LeagueRecords records={records} />
-              {/* Retrospective, so it belongs with the past rather than above
-                  the forward-looking market. Having it lead Futures is a large
-                  part of why Season and Futures read as the same tab. */}
-              {bootstrap ? (
+              {/* Record book + time machine are retrospective — hidden until games
+                  have actually been played. */}
+              {seasonHasContent ? <LeagueRecords records={records} /> : null}
+              {seasonHasContent && bootstrap ? (
                 <TimeMachine
                   history={lineHistory}
                   nameFor={(rosterId) =>
