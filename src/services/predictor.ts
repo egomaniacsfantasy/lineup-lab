@@ -187,6 +187,28 @@ export async function fetchWeekForks(
   }
 }
 
+/** Each team's projected points per remaining week (no sims). Feeds the
+ *  per-matchup projection display and the override-box default. */
+export interface ProjectedScores {
+  available: boolean;
+  weeks: { week: number; scores: Record<string, number> }[];
+}
+
+export async function fetchProjectedScores(
+  leagueId: string,
+  userId: string,
+): Promise<ProjectedScores> {
+  try {
+    const query = new URLSearchParams({ userId });
+    const [url, init] = withContext(`/api/league/${leagueId}/projected-scores?${query}`);
+    const response = await fetch(url, init);
+    if (!response.ok) return { available: false, weeks: [] };
+    return (await response.json()) as ProjectedScores;
+  } catch {
+    return { available: false, weeks: [] };
+  }
+}
+
 /**
  * A stable fingerprint for a pick-set.
  *

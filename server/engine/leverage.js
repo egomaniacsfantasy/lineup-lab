@@ -371,3 +371,32 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
 
   return { available: true, week: targetWeek, forks, gameOfTheWeek: forks.length ? forks[0].matchupId : null };
 }
+
+/**
+ * Each team's projected points for every remaining week — the mean of its
+ * starters' distributions that week (teamDistribution). NO Monte Carlo, so it is
+ * cheap. Feeds the Predictor's per-matchup projection display and the default
+ * shown in the score-override boxes — the SAME number the engine credits a forced
+ * result by default (winner = max(winnerProj, loserProj+1), loser = loserProj).
+ */
+export function weekProjections(ctx) {
+  const prepared = prepareLeagueCtx(ctx);
+  if (!prepared) return { available: false, weeks: [] };
+  const { teams, projectionMap, catalog, scheduleWeeks, week } = prepared;
+  const startersByRoster = new Map(teams.map((t) => [t.rosterId, t.starters ?? []]));
+  const from = week ?? 1;
+  const weeks = (scheduleWeeks ?? [])
+    .filter((entry) => entry.week >= from)
+    .map((entry) => {
+      const scores = {};
+      for (const m of entry.matchups ?? []) {
+        const rid = String(m.rosterId);
+        if (scores[rid] != null) continue;
+        scores[rid] = Number(
+          teamDistribution(startersByRoster.get(m.rosterId) ?? [], projectionMap, catalog, entry.week).mean.toFixed(1),
+        );
+      }
+      return { week: entry.week, scores };
+    });
+  return { available: true, weeks };
+}

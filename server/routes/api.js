@@ -13,7 +13,7 @@ import {
   getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
   computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
 } from '../engine/engine.js';
-import { predictSeason, weekForks, PREDICTOR_SIMS } from '../engine/leverage.js';
+import { predictSeason, weekForks, weekProjections, PREDICTOR_SIMS } from '../engine/leverage.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { registerLeague, readRegistry } from '../engine/leagueRegistry.js';
 import {
@@ -1153,6 +1153,26 @@ apiRouter.get('/league/:leagueId/forks', async (req, res, next) => {
     const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
     const key = `agg:forks:${leagueId}:${userId}:${week ?? ctx.week ?? '-'}:${build}:${playoffSettingsSignature(leagueId)}`;
     const result = await cached(key, 5 * 60_000, () => weekForks(ctx, week));
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Each team's projected points per remaining week (no Monte Carlo — distribution
+ * means). Drives the Predictor's per-matchup projection + the override-box default.
+ * Query: userId. Cached 5m per league/user/build.
+ */
+apiRouter.get('/league/:leagueId/projected-scores', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const userId = req.query.userId;
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
+    const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
+    const key = `agg:projscores:${leagueId}:${userId}:${build}`;
+    const result = await cached(key, 5 * 60_000, () => weekProjections(ctx));
     res.json(result);
   } catch (error) {
     next(error);

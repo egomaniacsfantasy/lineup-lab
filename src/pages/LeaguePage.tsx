@@ -16,7 +16,12 @@ import { LeagueRecords } from '../components/league/LeagueRecords';
 import { Predictor, type PredictorGame, type PredictorBaselineRow } from '../components/league/Predictor';
 import { WeekFork } from '../components/league/WeekFork';
 import { forkRows } from '../utils/forkRows';
-import { fetchWeekForks, type WeekForksResult } from '../services/predictor';
+import {
+  fetchWeekForks,
+  fetchProjectedScores,
+  type WeekForksResult,
+  type ProjectedScores,
+} from '../services/predictor';
 import { leagueRecords } from '../utils/leagueRecords';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -354,6 +359,31 @@ export function LeaguePage() {
     };
   }, [stored, bootstrap]);
 
+  /* Each team's projected points per remaining week — shown on the Predictor's
+     matchups and used as the override-box default. Cheap (no sims) and cached. */
+  const [projScores, setProjScores] = useState<ProjectedScores | null>(null);
+  useEffect(() => {
+    if (!stored || !bootstrap) return undefined;
+    let cancelled = false;
+    void fetchProjectedScores(String(stored.leagueId), String(stored.userId))
+      .then((result) => {
+        if (!cancelled) setProjScores(result);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stored, bootstrap]);
+
+  const projByWeekRoster = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of projScores?.weeks ?? []) {
+      for (const [rosterId, points] of Object.entries(entry.scores)) {
+        map.set(`${entry.week}:${rosterId}`, points);
+      }
+    }
+    return map;
+  }, [projScores]);
+
   /* Remaining games, and the board as it stands with nothing forced. Both are
      read off data the page already holds; the conditioned numbers come from
      the engine, not from here. */
@@ -375,13 +405,14 @@ export function LeaguePage() {
             rosterId: String(side.rosterId),
             teamName: team?.teamName ?? '',
             avatarUrl: team?.avatarUrl ?? null,
+            projPoints: projByWeekRoster.get(`${weekEntry.week}:${String(side.rosterId)}`),
           };
         });
         if (named.some((side) => !side.teamName)) return [];
         return [{ week: weekEntry.week, matchupId, away: named[0], home: named[1] }];
       });
     });
-  }, [bootstrap, schedule]);
+  }, [bootstrap, schedule, projByWeekRoster]);
 
   const predictorBaseline = useMemo<PredictorBaselineRow[]>(() => {
     if (!connected) return [];

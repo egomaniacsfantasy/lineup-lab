@@ -14,6 +14,9 @@ export interface PredictorSide {
   teamName: string;
   avatarUrl?: string | null;
   winProb?: number;
+  /** Projected points this week — shown on the matchup and used as the
+   *  override-box default. */
+  projPoints?: number;
 }
 
 export interface PredictorGame {
@@ -206,6 +209,30 @@ export function Predictor({
     return new Map(board.map((row) => [row.rosterId, row]));
   }, [board]);
 
+  /* Standings order: current record, then points-for, then — on an exact tie or
+     before any games are called (everyone 0-0, PF 0) — championship odds. Uses
+     the conditioned values when a scenario is live so calling games reorders the
+     board the way real results would. */
+  const sortedRows = useMemo(() => {
+    const recScore = (r: { wins?: number; ties?: number } | null | undefined) =>
+      (r?.wins ?? 0) + 0.5 * (r?.ties ?? 0);
+    const implied = (american: number | null | undefined) => {
+      if (american == null) return 0;
+      return american < 0 ? -american / (-american + 100) : 100 / (american + 100);
+    };
+    return [...baseline].sort((a, b) => {
+      const na = conditioned?.get(a.rosterId);
+      const nb = conditioned?.get(b.rosterId);
+      const wa = recScore(na?.record ?? a.record);
+      const wb = recScore(nb?.record ?? b.record);
+      if (wb !== wa) return wb - wa;
+      const pa = na?.pointsFor ?? a.pointsFor ?? 0;
+      const pb = nb?.pointsFor ?? b.pointsFor ?? 0;
+      if (pb !== pa) return pb - pa;
+      return implied(nb?.titleOdds ?? b.titleOdds) - implied(na?.titleOdds ?? a.titleOdds);
+    });
+  }, [baseline, conditioned]);
+
   const totalRemaining = games.length;
 
   return (
@@ -315,7 +342,9 @@ export function Predictor({
                       <TeamAvatar avatarUrl={side.avatarUrl} name={side.teamName} />
                       <span className="predictor__side-copy">
                         <span className="predictor__side-name">{side.teamName}</span>
-                        {typeof side.winProb === 'number' ? (
+                        {typeof side.projPoints === 'number' ? (
+                          <span className="predictor__side-prob">{side.projPoints.toFixed(1)}</span>
+                        ) : typeof side.winProb === 'number' ? (
                           <span className="predictor__side-prob">{side.winProb.toFixed(0)}%</span>
                         ) : null}
                       </span>
@@ -345,7 +374,7 @@ export function Predictor({
                             inputMode="numeric"
                             min={0}
                             step="0.1"
-                            placeholder="proj"
+                            placeholder={side.projPoints != null ? side.projPoints.toFixed(1) : 'proj'}
                             defaultValue={value ?? ''}
                             key={`${game.matchupId}:${side.rosterId}:${value ?? ''}`}
                             onBlur={(event) => setPoints(game.matchupId, role, event.target.value)}
@@ -374,7 +403,7 @@ export function Predictor({
             <span className="predictor__num">Playoffs</span>
             <span className="predictor__num">Title</span>
           </div>
-          {baseline.map((row) => {
+          {sortedRows.map((row) => {
             const next = conditioned?.get(row.rosterId) ?? null;
             /* Suspended, not stale. While a run is in flight the numbers it
                will replace are held rather than shown, because an old price
@@ -399,7 +428,7 @@ export function Predictor({
                 </span>
                 <span className="predictor__num predictor__row-rec">{formatRecord(rec)}</span>
                 <span className="predictor__num predictor__row-pf">
-                  {pf != null ? pf.toFixed(0) : '—'}
+                  {pf != null ? pf.toFixed(1) : '—'}
                 </span>
                 <span className="predictor__num predictor__row-playoff">
                   {suspended ? (

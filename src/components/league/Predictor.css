@@ -220,7 +220,7 @@
 .predictor__consequences-head,
 .predictor__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 52px 56px 88px 78px;
+  grid-template-columns: minmax(0, 1fr) 54px 66px 86px 76px;
   align-items: center;
   gap: var(--space-sm);
   padding: var(--space-xs) var(--space-sm);
