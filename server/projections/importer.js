@@ -44,7 +44,7 @@ export function normalizeName(name) {
     .trim();
 }
 
-function normalizeTeam(team) {
+export function normalizeTeam(team) {
   const t = String(team ?? '').toUpperCase().trim();
   return TEAM_ALIASES[t] ?? t;
 }

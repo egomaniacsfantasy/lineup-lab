@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normalizeTeam } from './importer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIR = path.join(__dirname, '..', '..', 'projections');
@@ -68,12 +69,18 @@ export function loadProjections({ force = false } = {}) {
     // Group weekly rows by identity. Key on name+team, not name alone: a player
     // wrongly listed on two teams (bad depth chart) would otherwise pool both
     // teams' weeks into one 34-game record. team is blank for K/DEF weekly? use ''.
+    // Normalize the team code to the site's Sleeper canonical (LA->LAR, JAC->JAX, …)
+    // so DEF/players match the roster-keyed indexes. Without this the pushed pipeline
+    // emits "LA" for the Rams while rosters are keyed "LAR", and the Rams DST silently
+    // fails to resolve (31 defenses, no Rams). For DEF the identity IS that team code.
+    const teamOf = (row) => normalizeTeam(row.team) || null;
     const idOf = (name, team) => `${name}||${team ?? ''}`.toLowerCase();
     const weeklyBy = new Map();
     for (const g of gameRows) {
-      const name = String(g[cfg.nameKey] ?? g.team ?? '').trim();
+      const gTeam = teamOf(g);
+      const name = cfg.nameKey === 'team' ? (gTeam ?? '') : String(g[cfg.nameKey] ?? '').trim();
       if (!name) continue;
-      const key = idOf(name, g.team);
+      const key = idOf(name, gTeam);
       const arr = weeklyBy.get(key) ?? [];
       arr.push(g);
       weeklyBy.set(key, arr);
@@ -81,9 +88,9 @@ export function loadProjections({ force = false } = {}) {
 
     let n = 0;
     for (const s of seasonRows) {
-      const name = String(s[cfg.nameKey] ?? '').trim();
+      const team = teamOf(s);
+      const name = cfg.nameKey === 'team' ? (team ?? '') : String(s[cfg.nameKey] ?? '').trim();
       if (!name) continue;
-      const team = s.team ?? null;
       const weekly = (weeklyBy.get(idOf(name, team)) ?? [])
         .slice()
         .sort((a, b) => (Number(a.week) || 0) - (Number(b.week) || 0));
