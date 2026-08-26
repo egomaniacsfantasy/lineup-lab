@@ -1152,7 +1152,7 @@ apiRouter.get('/league/:leagueId/forks', async (req, res, next) => {
     const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
     const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
     const key = `agg:forks:${leagueId}:${userId}:${week ?? ctx.week ?? '-'}:${build}:${playoffSettingsSignature(leagueId)}`;
-    const result = await cached(key, 5 * 60_000, async () => weekForks(ctx, week));
+    const result = await cached(key, 5 * 60_000, () => weekForks(ctx, week));
     res.json(result);
   } catch (error) {
     next(error);

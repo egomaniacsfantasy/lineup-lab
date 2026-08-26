@@ -251,9 +251,20 @@ export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
   return { available: true, pickSetHash: pickSetHash(picks), picked, simulated, sims, rows };
 }
 
-/** Page-load graphic (runs 1 + 2·matchups sims), so lighter than the Predictor's
- *  per-click 10k. Enough for the importance ranking and a directional win/loss book. */
-export const FORK_SIMS = 4_000;
+/**
+ * Page-load graphic that runs 1 + 2·matchups full-season sims. A single 10k sim
+ * is one pricing call (fine), but 13 of them back-to-back is ~13× that and would
+ * time out the request AND block the event loop. Two things keep it cheap:
+ *   - Fewer sims. CRN (the SAME seed for a-wins and b-wins) cancels the Monte
+ *     Carlo noise between the two branches, so the importance/book stays clean at
+ *     a low count where each branch alone would look noisy.
+ *   - It yields between sims (below), so the loop is never blocked for long.
+ */
+export const FORK_SIMS = 800;
+
+/** Hand the event loop back so a Predictor POST fired mid-forks is serviced
+ *  instead of queuing behind 13 blocking sims (the "can't reach the simulator"). */
+const yieldToLoop = () => new Promise((resolve) => setImmediate(resolve));
 
 /**
  * Both branches of every matchup in a week, for the "This week" fork graphic.
@@ -266,8 +277,11 @@ export const FORK_SIMS = 4_000;
  *
  * Points on a forced win match the Predictor: winner = max(winnerProj, loserProj+1),
  * loser = loserProj — minimal bump, points-for stays honest for seeding.
+ *
+ * async + yielding so the per-page-load cost never stalls the server; the route
+ * caches the result for 5 minutes.
  */
-export function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
+export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
   const prepared = prepareLeagueCtx(ctx);
   if (!prepared) return { available: false, week: week ?? null, forks: [] };
   const { teams, projectionMap, catalog, scheduleWeeks } = prepared;
@@ -289,17 +303,18 @@ export function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
   for (const m of entry.matchups ?? []) {
     rostersByMatchup.set(m.matchupId, [...(rostersByMatchup.get(m.matchupId) ?? []), m.rosterId]);
   }
+  const pairs = [...rostersByMatchup.entries()].filter(([, ids]) => ids.length === 2);
 
   const raw = [];
-  rostersByMatchup.forEach((rosterIds, matchupId) => {
-    if (rosterIds.length !== 2) return;
-    const [a, b] = rosterIds;
+  for (const [matchupId, [a, b]] of pairs) {
+    await yieldToLoop();
     const aProj = projPoints(a);
     const bProj = projPoints(b);
     const aWins = simulateSeason({
       ...forceResult(prepared, { week: targetWeek, winnerId: a, loserId: b, winnerPoints: Math.max(aProj, bProj + 1), loserPoints: bProj }),
       sims,
     });
+    await yieldToLoop();
     const bWins = simulateSeason({
       ...forceResult(prepared, { week: targetWeek, winnerId: b, loserId: a, winnerPoints: Math.max(bProj, aProj + 1), loserPoints: aProj }),
       sims,
@@ -316,7 +331,7 @@ export function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
         { rosterId: kb, nowProb: nowByRoster.get(kb) ?? 0, winProb: bWinsBy.get(kb) ?? 0, lossProb: aWinsBy.get(kb) ?? 0 },
       ],
     });
-  });
+  }
 
   const biggest = raw.reduce((max, row) => Math.max(max, row.distance), 0);
   const forks = raw
