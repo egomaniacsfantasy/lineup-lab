@@ -751,7 +751,6 @@ export function LeaguePage() {
                 <ScheduleGrid
                   items={connectedScheduleItems}
                   onSelectWeek={(item) => setSelectedWeek(item.week)}
-                  stripOnly
                   title="Your season, week by week"
                 />
               ) : (
