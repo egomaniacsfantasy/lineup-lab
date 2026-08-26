@@ -1,4 +1,4 @@
-import { apiUrl } from './apiBase.ts';
+import { withContext } from './leagueApi.ts';
 
 /**
  * The contract between the Predictor's UI and the conditioned sim behind it.
@@ -123,12 +123,15 @@ export async function fetchConditionedBoard(
   { fast = true }: { fast?: boolean } = {},
 ): Promise<ConditionedResult> {
   try {
-    const response = await fetch(apiUrl(`/api/league/${leagueId}/predictor`), {
+    /* withContext carries the provider (ESPN vs Sleeper) + auth headers; a raw
+       fetch here made every ESPN league fall through to the Sleeper provider. */
+    const [url, init] = withContext(`/api/league/${leagueId}/predictor`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, picks, fast }),
       signal,
     });
+    const response = await fetch(url, init);
 
     if (response.status === 404 || response.status === 501) return NOT_IMPLEMENTED;
     if (!response.ok) {
@@ -158,7 +161,8 @@ export async function fetchWeekForks(
   try {
     const query = new URLSearchParams({ userId });
     if (week != null) query.set('week', String(week));
-    const response = await fetch(apiUrl(`/api/league/${leagueId}/forks?${query}`));
+    const [url, init] = withContext(`/api/league/${leagueId}/forks?${query}`);
+    const response = await fetch(url, init);
 
     if (response.status === 404 || response.status === 501) {
       return { available: false, week: week ?? null, forks: [], message: NOT_IMPLEMENTED.message };

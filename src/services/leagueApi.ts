@@ -490,8 +490,10 @@ export function setProjectionOverlay(encoded: string | null) {
 
 export { apiUrl } from './apiBase.ts';
 
-/** Decorate a request path + init with the active provider + overlay context. */
-function withContext(path: string, init: RequestInit = {}): [string, RequestInit] {
+/** Decorate a request path + init with the active provider + overlay context.
+ *  Exported so leaf service modules (e.g. the Predictor) send the SAME provider
+ *  context — without it, an ESPN league falls back to the Sleeper provider. */
+export function withContext(path: string, init: RequestInit = {}): [string, RequestInit] {
   const headers: Record<string, string> = { ...(init.headers as Record<string, string>) };
   // Opt-out sentinel: fetch the house (pure-Franco) line for side-by-side baselines.
   const skipOverlay = headers['x-skip-overlay'];
