@@ -55,12 +55,11 @@ export const LEVERAGE_SIMS = 2_000;
  * 4k is exactly as STABLE as 10k — same number every time — and lands within
  * ~0.3% of it at ~a quarter of the cost. Matches the trade engine's count.
  */
-// MUST equal SEASON_SIMS (Futures). The Predictor's no-pick baseline shows the
-// Futures numbers; if the conditioned run used a different count, every untouched
-// team would shift by pure 10k-vs-4k Monte-Carlo noise the moment you make one pick,
-// and the deltas would carry that noise instead of the pick's real effect. Same seed
-// + same count = untouched teams identical to the baseline (CRN), clean deltas.
-export const PREDICTOR_SIMS = SEASON_SIMS;
+// Predictor conditioned board per click. 4k keeps clicks snappy; the no-pick
+// baseline shows the 10k Futures numbers, so untouched teams can shift by a small
+// Monte-Carlo amount on the first pick (10k baseline vs 4k conditioned) — an
+// accepted tradeoff for responsiveness. Same seed as Futures either way.
+export const PREDICTOR_SIMS = 4_000;
 
 /**
  * Remove one matchup from a week and credit the winner.
@@ -347,8 +346,13 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
   };
 
   // Baseline board (nothing forced) → each side's nowProb, reused for every matchup.
+  // "Current odds" (nowProb) at the FULL Futures count + same seed, so the number
+  // the This-week strip shows is byte-identical to the Futures tab (no 800-vs-10k
+  // drift). The win/loss BRANCHES below stay at the lighter `sims` — forking every
+  // game at 10k would time out (the earlier "cannot reach the simulator") — so a
+  // branch swing is a directional read layered on the exact current number.
   const nowByRoster = new Map(
-    simulateSeason({ ...prepared, sims }).map((r) => [String(r.rosterId), r.playoffProb]),
+    simulateSeason({ ...prepared, sims: SEASON_SIMS }).map((r) => [String(r.rosterId), r.playoffProb]),
   );
 
   const rostersByMatchup = new Map();
