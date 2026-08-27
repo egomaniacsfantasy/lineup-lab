@@ -529,14 +529,28 @@ export function toScheduleItems(
       const mine = weekEntry.matchups.find((m) => m.rosterId === userTeam.rosterId);
 
       if (!mine || mine.matchupId == null) {
+        const isPlayoff =
+          typeof bootstrap.league.playoffWeekStart === 'number' &&
+          weekEntry.week >= bootstrap.league.playoffWeekStart;
+        // A future playoff week has no assigned opponent yet — that's NOT a bye. Mark
+        // it as a projected playoff week so the grid shows the user's projected points
+        // (opponent TBD) instead of "BYE" (which would win the render's status check).
+        if (isPlayoff) {
+          return {
+            week: weekEntry.week,
+            opponent: 'Opponent TBD',
+            opponentRecord: '',
+            status: 'projected',
+            isPlayoff: true,
+            isHome: true,
+          };
+        }
         return {
           week: weekEntry.week,
           opponent: 'Bye',
           opponentRecord: '',
           status: 'bye',
-          isPlayoff:
-            typeof bootstrap.league.playoffWeekStart === 'number' &&
-            weekEntry.week >= bootstrap.league.playoffWeekStart,
+          isPlayoff: false,
         };
       }
 
