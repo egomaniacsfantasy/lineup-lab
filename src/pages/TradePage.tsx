@@ -57,6 +57,7 @@ import { drawTradeCard, type TradeCardProposal, type TradeCardAsset } from '../u
 import { shareFilename, tradeShareMessage } from '../utils/shareMessage';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 import { LeagueDealBoard, type LeagueDealRow } from '../components/trade/LeagueDealBoard';
+import { acceptableDeals } from '../utils/dealBoardPolicy';
 
 type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
@@ -343,7 +344,18 @@ function TradeDealsView() {
        acceptance probability is no longer part of the value. The server already
        guarantees youDelta > 0, so every shown deal still nudges your title up.
        Acceptance % is still displayed as context, just not used to rank. */
-    return sortByTradeFairness(leagueDeals)
+    /* Filter, then sort. The board only ever sorted, so the fifteen
+       least-bad ideas carried the heading "best deals" however bad they were.
+       See dealBoardPolicy: a quarterback straight across for a skill player
+       in a one-quarterback league, and any deal where one side takes nearly
+       all of the value, are not deals this heading can honestly make. */
+    const { kept } = acceptableDeals(
+      leagueDeals,
+      (playerId) => bootstrap.players[playerId]?.position ?? null,
+      bootstrap.league.rosterPositions,
+    );
+
+    return sortByTradeFairness(kept)
       .slice(0, 15)
       .map((suggestion) => {
         const accept = acceptanceProbability(suggestion.partnerDelta, 5, 5);

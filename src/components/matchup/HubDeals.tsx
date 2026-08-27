@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { fetchTradeSuggestions, type TradeSuggestion } from '../../services/leagueApi';
 import { sortByTradeFairness } from '../../utils/tradeSuggestionDisplay';
+import { acceptableDeals } from '../../utils/dealBoardPolicy';
 import { signedPct } from '../../utils/tradeVerdict';
 import { toPlayer } from '../../adapters/connectedLeague';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
@@ -94,10 +95,20 @@ export function HubDeals() {
     })
       .then((response) => {
         if (cancelled || !response.available) return;
-        /* Fairest first: the trade that moves BOTH teams' championship odds the
-           least (|youDelta| + |partnerDelta|). Acceptance probability is not part
-           of this — this is the exact same ranking the Trades tab uses. */
-        const ranked = sortByTradeFairness(response.suggestions ?? []).slice(0, SHOWN);
+        /* Same filter as the Trades board, then the same sort. Applied in
+           both places rather than one: the Hub and the Trades tab draw from
+           the same pool, so a deal barred from one and shown on the other is
+           the product disagreeing with itself in front of the reader.
+
+           Fairest first after that: the trade that moves BOTH teams'
+           championship odds the least (|youDelta| + |partnerDelta|).
+           Acceptance probability is not part of this. */
+        const { kept } = acceptableDeals(
+          response.suggestions ?? [],
+          (playerId) => bootstrap.players[playerId]?.position ?? null,
+          bootstrap.league.rosterPositions,
+        );
+        const ranked = sortByTradeFairness(kept).slice(0, SHOWN);
         setDeals(ranked);
         writeCache(cacheKey, ranked);
       })
