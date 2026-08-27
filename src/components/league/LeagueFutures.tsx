@@ -25,12 +25,35 @@ interface LeagueFuturesProps {
   history?: LineHistoryEntry[] | null;
 }
 
-type ChartMarket = 'title' | 'playoff';
+type SortKey = 'team' | 'projWins' | 'avgSeed' | 'playoffProb' | 'open' | 'title' | 'move';
+type SortState = { key: SortKey; direction: 'asc' | 'desc' };
 
-const CHART_OPTIONS: { label: string; value: ChartMarket }[] = [
-  { label: 'Title odds', value: 'title' },
-  { label: 'Playoff odds', value: 'playoff' },
+/**
+ * Every column, and which way it points when you first click it.
+ *
+ * "Descending" is not the same as "best first" from column to column: the
+ * best average seed is the lowest number, and the best price is the shortest
+ * one. Each column declares the direction that puts the strongest team on
+ * top, so one click always means "rank them by this".
+ */
+const SORTABLE: { key: SortKey; label: string; firstDirection: 'asc' | 'desc' }[] = [
+  { key: 'team', label: 'Team', firstDirection: 'asc' },
+  { key: 'projWins', label: 'Proj wins', firstDirection: 'desc' },
+  { key: 'avgSeed', label: 'Avg seed', firstDirection: 'asc' },
+  { key: 'playoffProb', label: 'Playoff %', firstDirection: 'desc' },
+  { key: 'open', label: 'Open', firstDirection: 'desc' },
+  { key: 'title', label: 'Title price', firstDirection: 'desc' },
+  { key: 'move', label: 'Move', firstDirection: 'desc' },
 ];
+
+/* Title odds, always.
+
+   The board carried a two-way toggle, and switching it repriced one column
+   while every other number on the row stayed put — because the row already
+   shows both markets: playoff probability in its own column and the title
+   price beside it. The toggle was not revealing a second view of the league,
+   it was swapping which of two facts already on screen got the big type.
+   One board, one headline market. */
 
 const CHART_RANGES: OddsChartRangeOption[] = [
   { id: 'week', label: 'Week', windowMs: 7 * 24 * 60 * 60 * 1000 },
@@ -67,13 +90,12 @@ function summaryText(openValue: number, currentValue: number) {
 function rawSeriesFor(
   team: LeagueFutureRow,
   history: LineHistoryEntry[] | null | undefined,
-  chartMarket: ChartMarket,
 ) {
   if (!team.rosterId || !history?.length) return [];
   const rosterId = String(team.rosterId);
   return history
     .map((entry) => {
-      const rawProb = (chartMarket === 'playoff' ? entry.playoffProb : entry.titleProb)?.[rosterId];
+      const rawProb = entry.titleProb?.[rosterId];
       if (rawProb == null) return null;
       return {
         at: entry.computedAt,
@@ -87,10 +109,9 @@ function rawSeriesFor(
 function closingSeriesFor(
   team: LeagueFutureRow,
   history: LineHistoryEntry[] | null | undefined,
-  chartMarket: ChartMarket,
 ) {
   const byDay = new Map<string, { at: number; probability: number }>();
-  rawSeriesFor(team, history, chartMarket).forEach((point) => {
+  rawSeriesFor(team, history).forEach((point) => {
     const key = dayKey(point.at);
     const current = byDay.get(key);
     if (!current || point.at > current.at) byDay.set(key, point);
@@ -151,21 +172,20 @@ export function LeagueFutures({
   playoffTeams = 6,
   history = null,
 }: LeagueFuturesProps) {
-  const [chartMarket, setChartMarket] = useState<ChartMarket>('title');
   const [comparisonRosterId, setComparisonRosterId] = useState<number | null>(null);
+  const [sort, setSort] = useState<SortState | null>(null);
   const userTeam = futures.find((team) => team.isUser) ?? futures[0] ?? null;
   const comparisonTeam =
     futures.find((team) => team.rosterId != null && team.rosterId === comparisonRosterId && !team.isUser) ?? null;
   const allTeamsReachPlayoffs = playoffTeams >= totalTeams;
-  const isPlayoffMarket = chartMarket === 'playoff';
-  const chartTitle = isPlayoffMarket ? 'Your playoff odds, day by day' : 'Your title odds, day by day';
+  const chartTitle = 'Your title odds, day by day';
 
   const historyTeams = useMemo(
     () =>
       futures
-        .map((team) => ({ team, series: closingSeriesFor(team, history, chartMarket) }))
+        .map((team) => ({ team, series: closingSeriesFor(team, history) }))
         .filter((row) => row.series.length > 1),
-    [chartMarket, futures, history],
+    [futures, history],
   );
 
   const userHistory = userTeam ? historyTeams.find((row) => row.team.rosterId === userTeam.rosterId) : null;
@@ -178,9 +198,72 @@ export function LeagueFutures({
   /* The opening book, read once. Keyed by roster id because team names are
      not stable across a season and the history stores roster ids. */
   const openByRoster = useMemo(() => {
-    const moves = marketMovement(history ?? [], isPlayoffMarket ? 'playoff' : 'title');
+    const moves = marketMovement(history ?? [], 'title');
     return new Map(moves.map((move) => [move.rosterId, move]));
-  }, [history, isPlayoffMarket]);
+  }, [history]);
+
+  /**
+   * The board in the order the user asked for, or the engine's if they have
+   * not asked.
+   *
+   * Two things this must not do. It must not sort a price as a number:
+   * +2400 is arithmetically larger than −500 and the team holding it is far
+   * worse, so the two price columns rank by the probability behind the price
+   * instead. And it must not sort a missing value as a small one — a team with
+   * no opening snapshot goes to the bottom whichever way the arrow points,
+   * because "we never priced this" is not a rank.
+   */
+  const rows = useMemo(() => {
+    if (!sort) return futures;
+    const rank = (team: LeagueFutureRow): number | string | null => {
+      const opened = openByRoster.get(String(team.rosterId ?? ''));
+      switch (sort.key) {
+        case 'team':
+          return team.teamName.toLocaleLowerCase();
+        case 'projWins':
+          return team.projWins ?? null;
+        case 'avgSeed':
+          return team.avgSeed ?? null;
+        case 'playoffProb':
+          return team.playoffProb ?? null;
+        case 'open':
+          return opened?.openProb ?? null;
+        case 'title':
+          return impliedProbability(team.championOdds);
+        case 'move':
+          return opened?.movePp ?? null;
+        default:
+          return null;
+      }
+    };
+
+    const factor = sort.direction === 'asc' ? 1 : -1;
+    return [...futures].sort((left, right) => {
+      const a = rank(left);
+      const b = rank(right);
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      if (typeof a === 'string' || typeof b === 'string') {
+        return String(a).localeCompare(String(b)) * factor;
+      }
+      return (a - b) * factor;
+    });
+  }, [futures, openByRoster, sort]);
+
+  const toggleSort = (key: SortKey) => {
+    const column = SORTABLE.find((entry) => entry.key === key);
+    if (!column) return;
+    setComparisonRosterId(null);
+    setSort((current) => {
+      if (current?.key !== key) return { key, direction: column.firstDirection };
+      /* Second click reverses, third returns the board to the engine's own
+         order — which matters more here than it usually would, because the
+         playoff line below is only meaningful in that order. */
+      const flipped = current.direction === 'asc' ? 'desc' : 'asc';
+      return flipped === column.firstDirection ? null : { key, direction: flipped };
+    });
+  };
 
   return (
     <section aria-labelledby="league-futures-title" className="league-futures">
@@ -200,47 +283,36 @@ export function LeagueFutures({
         </p>
       ) : null}
 
-      <div
-        aria-label="Futures market"
-        className="league-futures__markets"
-        role="group"
-      >
-        {CHART_OPTIONS.map((option) => (
-          <button
-            aria-pressed={chartMarket === option.value}
-            className={[
-              'league-futures__market-option',
-              chartMarket === option.value ? 'league-futures__market-option--active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            key={option.value}
-            onClick={() => {
-              setChartMarket(option.value);
-              setComparisonRosterId(null);
-            }}
-            type="button"
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
       <div className="league-futures__board" role="table" aria-label="League futures board">
         <div className="league-futures__row league-futures__row--head" role="row">
-          <span>Team</span>
-          <span>Proj wins</span>
-          <span>Avg seed</span>
-          {/* The complement of whichever market is priced. Showing "Playoff %"
-              beside "Playoff price" printed one fact twice in two formats,
-              which made the market toggle look like it did nothing useful:
-              96% and -2400 are the same number. */}
-          <span>{isPlayoffMarket ? 'Title %' : 'Playoff %'}</span>
-          <span>Open</span>
-          <span>{isPlayoffMarket ? 'Playoff price' : 'Title price'}</span>
-          <span>Move</span>
+          {SORTABLE.map((column) => (
+            <button
+              aria-sort={
+                sort?.key === column.key
+                  ? sort.direction === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                  : 'none'
+              }
+              className={[
+                'league-futures__sort',
+                sort?.key === column.key ? 'league-futures__sort--active' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              key={column.key}
+              onClick={() => toggleSort(column.key)}
+              role="columnheader"
+              type="button"
+            >
+              {column.label}
+              <span aria-hidden="true" className="league-futures__sort-caret">
+                {sort?.key === column.key ? (sort.direction === 'asc' ? '▲' : '▼') : ''}
+              </span>
+            </button>
+          ))}
         </div>
-        {futures.map((team, index) => {
+        {rows.map((team, index) => {
           /* Movement is measured from where the market OPENED, not from a
              rolling recent window. "You were +900 in week 1 and you are +475
              now" is the sentence this board exists to make, and a trailing
@@ -248,11 +320,15 @@ export function LeagueFutures({
           const opened = openByRoster.get(String(team.rosterId ?? ''));
           const movePp = formatMovePp(opened?.movePp ?? null);
           const selected = comparisonTeam?.rosterId === team.rosterId;
-          const odds = isPlayoffMarket ? team.playoffOdds : team.championOdds;
+          const odds = team.championOdds;
 
           return (
             <div className="league-futures__slot" key={team.teamName}>
-              {index === playoffTeams ? (
+              {/* Only in the engine's own order. The line marks the cut in
+                  the seeding the sim produced; drawn across a board sorted by
+                  points-for or team name it would be a rule through an
+                  arbitrary row, claiming a cut that ordering does not decide. */}
+              {sort == null && index === playoffTeams ? (
                 <div className="league-futures__cutoff" role="presentation">
                   <span className="league-futures__cutoff-line" />
                   <span className="league-futures__cutoff-label">Playoff line</span>
@@ -289,12 +365,7 @@ export function LeagueFutures({
                   {team.avgSeed != null ? team.avgSeed.toFixed(1) : 'N/A'}
                 </span>
                 <span className="league-futures__cell" role="cell">
-                  {(() => {
-                    const complement = isPlayoffMarket
-                      ? impliedProbability(team.championOdds)
-                      : team.playoffProb;
-                    return complement != null ? formatPercent(complement) : 'N/A';
-                  })()}
+                  {team.playoffProb != null ? formatPercent(team.playoffProb) : 'N/A'}
                 </span>
                 {/* Where this team's book opened. Blank, not a dash and never
                     today's price, when the league has no opening snapshot to
@@ -353,7 +424,7 @@ export function LeagueFutures({
               id: 'user-history',
               name: userHistory.team.teamName,
               avatarUrl: userHistory.team.avatarUrl,
-              endpointDetail: formatAmericanOdds(isPlayoffMarket ? userHistory.team.playoffOdds : userHistory.team.championOdds),
+              endpointDetail: formatAmericanOdds(userHistory.team.championOdds),
               points: userHistory.series.map<OddsChartPoint>((point) => ({
                 x: point.at,
                 y: point.probability,

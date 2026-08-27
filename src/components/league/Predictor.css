@@ -95,60 +95,94 @@
 
 .predictor__game {
   display: grid;
+  gap: var(--space-xs);
+  margin-bottom: 4px;
+}
+
+.predictor__game-sides {
+  display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2px;
-  margin-bottom: 4px;
 }
 
 /* Optional custom scores for a called game — override the projected points that
    get credited to the forced result. Spans both columns under the two sides. */
 .predictor__scores {
-  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-sm);
-  margin-top: var(--space-xs);
 }
 
+/* Name above box, each stacked in its own half of the row, directly under the
+   team it belongs to.
+
+   The old row laid the two out horizontally — name, then a 72px box, mirrored
+   for the home side — so the label was ellipsised to a word, the box was too
+   small to read the number you had typed into it, and the mirroring meant the
+   two sides were laid out in opposite directions. Stacking removes all three
+   problems and needs no mirroring, because the column already says whose
+   score it is. */
 .predictor__score {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
+  display: grid;
+  justify-items: center;
+  gap: 5px;
   min-width: 0;
-  font-size: var(--type-caption);
-  color: var(--text-dim);
 }
 
 .predictor__score-team {
+  color: var(--text-soft);
+  font-size: 12px;
   overflow: hidden;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .predictor__score-input {
-  width: 100%;
+  /* Wide enough for "124.5" and no wider. Stretched across half the row it
+     read as a search field rather than a score. */
+  width: min(100%, 132px);
   min-width: 0;
-  margin-left: auto;
-  max-width: 72px;
-  padding: 4px 6px;
+  height: 38px;
+  padding: 0 10px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--bg-surface);
+  background: var(--bg-inset);
   color: var(--text-primary);
-  font: inherit;
-  text-align: right;
+  font-family: var(--font-price);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
 
-/* Home box mirrors the home button (team on the outer edge) so each input reads
-   as belonging to the team directly above it. */
-.predictor__score--home {
-  flex-direction: row-reverse;
-  text-align: right;
+/* The projected score shows through as the placeholder, so an empty box is
+   already telling you what it will use. */
+.predictor__score-input::placeholder {
+  color: var(--ink-3);
 }
 
-.predictor__score--home .predictor__score-input {
-  margin-left: 0;
-  margin-right: auto;
+.predictor__score-input:hover {
+  border-color: var(--border-strong);
+}
+
+.predictor__score-input:focus {
+  outline: none;
+  border-color: var(--amber);
+  background: var(--bg-surface);
+}
+
+/* Chrome's spinners crowd a centred number and are useless for a score you
+   type in full. */
+.predictor__score-input::-webkit-outer-spin-button,
+.predictor__score-input::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.predictor__score-input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 /* One action per side: click to pick, click again to unpick, click across to
@@ -165,11 +199,14 @@
   background: var(--bg-inset);
   color: var(--text-soft);
   cursor: pointer;
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  letter-spacing: 0.02em;
+  /* Sentence case at a readable size. Condensed uppercase at eleven pixels
+     turned every team in the league into the same grey bar, on the one
+     control whose entire job is "click your team". */
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0;
   text-align: left;
-  text-transform: uppercase;
+  text-transform: none;
   transition: border-color var(--transition-fast), color var(--transition-fast);
 }
 
@@ -202,7 +239,7 @@
 .predictor__side-prob {
   color: var(--text-dim);
   font-family: var(--font-num);
-  font-size: 0.62rem;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -220,24 +257,31 @@
 .predictor__consequences-head,
 .predictor__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 54px 66px 86px 76px;
+  grid-template-columns: minmax(0, 1fr) 56px 68px 78px 74px;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
+  padding: 9px var(--space-sm);
 }
 
-/* Record + PF are context, not the headline price — dimmer than the odds. */
+/* Record + PF are context, not the headline price — dimmer than the odds, and
+   in the numeric face. They were inheriting the body font at body size, which
+   is why a record and a price sitting in the same row looked like they came
+   from two different tables. */
 .predictor__row-rec,
 .predictor__row-pf {
   color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .predictor__consequences-head {
+  margin-bottom: 2px;
+  padding-bottom: var(--space-xs);
   border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-family: var(--font-condensed);
-  font-size: var(--type-caption);
+  font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -259,10 +303,10 @@
 
 .predictor__row-team {
   color: var(--text-primary);
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -271,7 +315,7 @@
 .predictor__row-playoff,
 .predictor__row-title {
   font-family: var(--font-price);
-  font-size: var(--type-caption);
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -469,8 +513,9 @@
 
 .predictor__side-name {
   color: inherit;
-  font-size: var(--type-caption);
-  letter-spacing: 0.03em;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 
 .predictor__side--picked .predictor__side-name {
@@ -478,12 +523,13 @@
 }
 
 /* The divider. Reads as a fixture rather than two buttons that happen to
-   touch. */
-.predictor__game {
+   touch. On the sides wrapper, not the game: the game grows a score row when
+   it is called, and a divider centred on the game slid down into that row. */
+.predictor__game-sides {
   position: relative;
 }
 
-.predictor__game::after {
+.predictor__game-sides::after {
   content: 'vs';
   position: absolute;
   top: 50%;

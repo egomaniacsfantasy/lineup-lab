@@ -320,6 +320,10 @@ export function Predictor({
             const pick = pickedFor(game.matchupId);
             return (
               <div className="predictor__game" key={game.matchupId}>
+                {/* The two sides are wrapped so the "vs" divider can anchor to
+                    them. Centred on the whole game instead, it slid halfway
+                    down the score-entry row the moment a game was called. */}
+                <div className="predictor__game-sides">
                 {[game.away, game.home].map((side, index) => {
                   const chosen = pick?.winnerRosterId === side.rosterId;
                   const beaten = pick != null && !chosen;
@@ -351,21 +355,20 @@ export function Predictor({
                     </button>
                   );
                 })}
+                </div>
+
                 {pick ? (
                   /* Inputs sit in the SAME away/home order as the buttons above, so
                      each score box lines up under its own team. The winner/loser
                      role (which field it writes) is derived from the pick, not the
                      column, so picking the home team no longer mislabels the box. */
                   <div className="predictor__scores">
-                    {[game.away, game.home].map((side, index) => {
+                    {[game.away, game.home].map((side) => {
                       const isWinner = side.rosterId === pick.winnerRosterId;
                       const role = isWinner ? ('winner' as const) : ('loser' as const);
                       const value = isWinner ? pick.winnerPoints : pick.loserPoints;
                       return (
-                        <label
-                          className={['predictor__score', index === 1 ? 'predictor__score--home' : '']
-                            .filter(Boolean).join(' ')}
-                          key={side.rosterId}
+                        <label className="predictor__score" key={side.rosterId}
                         >
                           <span className="predictor__score-team">{side.teamName}</span>
                           <input
@@ -374,7 +377,11 @@ export function Predictor({
                             inputMode="numeric"
                             min={0}
                             step="0.1"
-                            placeholder={side.projPoints != null ? side.projPoints.toFixed(1) : 'proj'}
+                            /* The projection itself, not the word "proj". A
+                               placeholder that names the concept tells you
+                               less than one that shows the number the box
+                               will use if you leave it alone. */
+                            placeholder={side.projPoints != null ? side.projPoints.toFixed(1) : ''}
                             defaultValue={value ?? ''}
                             key={`${game.matchupId}:${side.rosterId}:${value ?? ''}`}
                             onBlur={(event) => setPoints(game.matchupId, role, event.target.value)}

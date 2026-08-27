@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueWeekMatchup } from '../../mocks/league';
@@ -13,6 +13,8 @@ interface MatchupSlateProps {
   matchups: LeagueWeekMatchup[];
   currentWeek: number;
   history?: LineHistoryEntry[] | null;
+  /** Rendered directly under the board's own heading. */
+  intro?: ReactNode;
 }
 
 type RawMovement = {
@@ -178,7 +180,7 @@ function moveLabel(value: number) {
   return `${value >= 0 ? '▲' : '▼'}${Math.abs(value).toFixed(1)}`;
 }
 
-export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupSlateProps) {
+export function MatchupSlate({ matchups, currentWeek, history = null, intro = null }: MatchupSlateProps) {
   /* Every side's move against this week's opening line, keyed matchup:roster.
      Computed once for the slate rather than re-derived per row. */
   const openMoves = useMemo(() => {
@@ -282,6 +284,12 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
           </h2>
         </div>
       </div>
+
+      {/* The week-fork strip, under the title rather than above it. Sitting
+          above, it was the first thing on the tab and the heading for the
+          board arrived after it, so the page opened on an unlabelled chart.
+          It belongs to this board and now reads as part of it. */}
+      {intro}
 
       <div className="matchup-slate__layout">
         <div className="matchup-slate__board-shell">

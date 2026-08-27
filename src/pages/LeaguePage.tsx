@@ -639,23 +639,6 @@ export function LeaguePage() {
         ))}
       </div>
 
-      {activeView === 'this-week' && bootstrap ? (
-        <WeekFork
-          pairs={forkPairs(
-            forks?.forks ?? [],
-            (rosterId) => {
-              const team = bootstrap.teams.find((entry) => String(entry.rosterId) === rosterId);
-              return team ? { teamName: team.teamName, avatarUrl: team.avatarUrl } : null;
-            },
-            connectedSeason ? String(connectedSeason.userTeam.rosterId) : null,
-          )}
-          expectedGames={slate.length}
-          loading={forks == null}
-          unavailableMessage={forks && !forks.available ? forks.message : undefined}
-          week={forks?.week ?? bootstrap.week}
-        />
-      ) : null}
-
       {activeView === 'this-week' ? (
         <>
           {!connected ? <TradeTargetTeaser groups={MOCK_TRADE_TARGET_GROUPS} /> : null}
@@ -663,6 +646,28 @@ export function LeaguePage() {
           {slate.length > 0 ? (
             <MatchupSlate
               currentWeek={connection.currentWeek}
+              intro={
+                bootstrap ? (
+                  <WeekFork
+                    expectedGames={slate.length}
+                    loading={forks == null}
+                    pairs={forkPairs(
+                      forks?.forks ?? [],
+                      (rosterId) => {
+                        const team = bootstrap.teams.find(
+                          (entry) => String(entry.rosterId) === rosterId,
+                        );
+                        return team
+                          ? { teamName: team.teamName, avatarUrl: team.avatarUrl }
+                          : null;
+                      },
+                      connectedSeason ? String(connectedSeason.userTeam.rosterId) : null,
+                    )}
+                    unavailableMessage={forks && !forks.available ? forks.message : undefined}
+                    week={forks?.week ?? bootstrap.week}
+                  />
+                ) : null
+              }
               history={lineHistory}
               matchups={slate}
             />

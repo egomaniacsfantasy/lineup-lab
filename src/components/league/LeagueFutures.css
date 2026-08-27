@@ -13,7 +13,7 @@
   gap: 8px;
 }
 
-.league-futures__market-option,
+.league-futures__sort,
 .league-futures__odds,
 .league-futures__cell,
 .league-futures__cutoff-label,
@@ -55,39 +55,8 @@
   font-size: 13px;
 }
 
-.league-futures__markets {
-  display: inline-grid;
-  grid-template-columns: repeat(var(--market-count, 2), minmax(0, 1fr));
-  gap: 4px;
-  width: min(100%, calc(var(--market-count, 2) * 140px));
-  padding: 4px;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--bg-inset) 88%, transparent);
-}
 
-.league-futures__market-option {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding-inline: 12px;
-  border-radius: var(--radius-pill);
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  transition:
-    background-color var(--transition-fast),
-    color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
 
-.league-futures__market-option--active {
-  background: var(--amber);
-  color: var(--bg-deep);
-}
 
 .league-futures__board {
   display: grid;
@@ -138,8 +107,10 @@
 }
 
 /* Numeric headers were left-aligned while their values were right-aligned,
-   so no column read as a column. */
-.league-futures__row--head > span:not(:first-child) {
+   so no column read as a column. Element-agnostic since the headers became
+   buttons: a selector naming the tag would have silently stopped applying. */
+.league-futures__row--head > :not(:first-child) {
+  justify-content: flex-end;
   text-align: right;
 }
 
@@ -151,6 +122,45 @@
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+/* A header you can click, that still looks like a header.
+
+   The affordance is carried by hover and by the caret on the active column
+   rather than by giving seven table headings the chrome of seven buttons —
+   a row of pills above the board would compete with the board. */
+.league-futures__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.league-futures__sort:hover {
+  color: var(--text-primary);
+}
+
+.league-futures__sort--active {
+  color: var(--text-amber);
+}
+
+.league-futures__sort:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.league-futures__sort-caret {
+  font-size: 7px;
+  line-height: 1;
 }
 
 .league-futures__row--user {
@@ -304,9 +314,6 @@
 }
 
 @media (max-width: 767px) {
-  .league-futures__markets {
-    width: 100%;
-  }
 
   .league-futures__row {
     grid-template-columns: minmax(150px, 1.7fr) repeat(2, minmax(54px, 0.6fr)) minmax(70px, 0.7fr) minmax(58px, 0.5fr) minmax(72px, 0.72fr) 52px;
@@ -315,7 +322,7 @@
   }
 
   .league-futures__row > span:nth-child(4),
-  .league-futures__row--head > span:nth-child(4) {
+  .league-futures__row--head > :nth-child(4) {
     display: none;
   }
 

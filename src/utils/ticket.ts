@@ -1,5 +1,5 @@
 import type { HistoryEntry } from './openAnchors.ts';
-import { titleMovement } from './openAnchors.ts';
+import { americanFromPercent, titleMovement } from './openAnchors.ts';
 
 /**
  * Your preseason ticket, re-marked.
@@ -32,6 +32,16 @@ export interface Ticket {
   /** Percentage points, signed. */
   movePp: number;
   direction: 'up' | 'down' | 'flat';
+  /** Every snapshot of this ticket, oldest first. The receipt's heartbeat. */
+  series: { at: number; week: number; prob: number }[];
+  /** The best this ticket was ever worth, and when. */
+  peak: { prob: number; odds: number; week: number } | null;
+  /** Where this price sat in the league book, then and now. */
+  rankOpen: number | null;
+  rankNow: number | null;
+  fieldSize: number | null;
+  /** Weeks between the open and the latest snapshot, inclusive. */
+  weeksHeld: number | null;
 }
 
 /**
@@ -56,6 +66,43 @@ export function buildTicket(
   if (openProb == null || nowProb == null || openProb <= 0) return null;
 
   const movePp = nowProb - openProb;
+
+  /* Every snapshot that priced this roster, oldest first. Snapshots that never
+     carried a title book are skipped rather than plotted at zero: a gap in the
+     record is not a week the ticket was worthless. */
+  const series = [...history]
+    .sort((left, right) => left.computedAt - right.computedAt)
+    .map((entry) => {
+      const prob = entry.titleProb?.[id];
+      if (prob == null) return null;
+      return { at: entry.computedAt, week: entry.week, prob };
+    })
+    .filter((point): point is { at: number; week: number; prob: number } => point !== null);
+
+  /* The high-water mark. This is the "you could have cashed out at" number,
+     which is most of what makes a ticket worth re-reading, and it is a
+     maximum over prices already recorded rather than anything re-simulated. */
+  const best = series.reduce<{ at: number; week: number; prob: number } | null>(
+    (top, point) => (top == null || point.prob > top.prob ? point : top),
+    null,
+  );
+
+  /* Rank in the league book, then and now. Both are counts of teams priced
+     shorter than this one in a snapshot that already exists — a reading of the
+     engine's order, not a re-ordering of it. */
+  const rankIn = (book: Record<string, number> | undefined) => {
+    if (!book) return null;
+    const mine = book[id];
+    if (mine == null) return null;
+    return Object.values(book).filter((prob) => prob > mine).length + 1;
+  };
+  const sorted = [...history].sort((left, right) => left.computedAt - right.computedAt);
+  const openBook = sorted.find((entry) => entry.titleProb?.[id] != null)?.titleProb;
+  const nowBook = [...sorted].reverse().find((entry) => entry.titleProb?.[id] != null)?.titleProb;
+
+  const firstWeek = series[0]?.week ?? null;
+  const lastWeek = series[series.length - 1]?.week ?? null;
+
   return {
     rosterId: id,
     openOdds: move.openOdds,
@@ -65,6 +112,15 @@ export function buildTicket(
     multiplier: nowProb / openProb,
     movePp,
     direction: Math.abs(movePp) < 0.05 ? 'flat' : movePp > 0 ? 'up' : 'down',
+    series,
+    peak: best
+      ? { prob: best.prob, odds: americanFromPercent(best.prob), week: best.week }
+      : null,
+    rankOpen: rankIn(openBook),
+    rankNow: rankIn(nowBook),
+    fieldSize: nowBook ? Object.keys(nowBook).length : null,
+    weeksHeld:
+      firstWeek != null && lastWeek != null ? Math.max(1, lastWeek - firstWeek + 1) : null,
   };
 }
 
