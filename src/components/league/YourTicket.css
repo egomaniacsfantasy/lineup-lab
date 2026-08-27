@@ -1,262 +1,259 @@
-/* Shaped like a ticket, with a perforated stub. The form is the point: this is
-   the one object on the page that is meant to feel like a keepsake rather than
-   a readout.
+/* A printed slip, not a dashboard band.
 
-   Three panels, because the card is twelve hundred pixels wide and the first
-   build spent the right two thirds of that on nothing. Stub, then the bet
-   written across the middle, then what the position is worth now. */
+   The version this replaces spanned the full width of the page and put six
+   numbers in the left third of it, so most of the card was empty and the
+   thing read as a widget that had not finished loading. The fix was not more
+   content — it was giving the object a size. A ticket is something you were
+   handed; it has edges, and they are closer together than the page is wide. */
 .ticket {
+  --ticket-accent: var(--text-soft);
+
+  position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: stretch;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  background: var(--bg-surface);
-  overflow: hidden;
+  gap: var(--space-xs);
+  width: min(100%, 420px);
+  padding: var(--space-lg) var(--space-lg) var(--space-xl);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 30%),
+    var(--bg-raised);
+  /* Torn top and bottom: the notches are the card's own background punched
+     out of a repeating radial gradient, so they sit on whatever is behind. */
+  -webkit-mask-image:
+    radial-gradient(6px 6px at 6px 0, transparent 5.5px, #000 6px),
+    radial-gradient(6px 6px at 6px 100%, transparent 5.5px, #000 6px);
+  -webkit-mask-size: 12px 100%;
+  -webkit-mask-repeat: repeat-x;
+  mask-image:
+    radial-gradient(6px 6px at 6px 0, transparent 5.5px, #000 6px),
+    radial-gradient(6px 6px at 6px 100%, transparent 5.5px, #000 6px);
+  mask-size: 12px 100%;
+  mask-repeat: repeat-x;
 }
 
-.ticket--up {
-  border-color: color-mix(in srgb, var(--green) 26%, var(--border-subtle));
+.ticket--up { --ticket-accent: var(--green); }
+.ticket--down { --ticket-accent: var(--red); }
+
+.ticket__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px dashed color-mix(in srgb, var(--text-dim) 34%, transparent);
 }
 
-.ticket--down {
-  border-color: color-mix(in srgb, var(--red) 22%, var(--border-subtle));
-}
-
-/* The stub. Divided by a dashed rule, the way a torn ticket is. */
-.ticket__stub {
-  display: grid;
-  align-content: center;
-  gap: var(--space-2xs);
-  padding: var(--space-lg) var(--space-md);
-  border-right: 1px dashed color-mix(in srgb, var(--text-dim) 40%, transparent);
-  background: var(--bg-inset);
-  text-align: center;
-}
-
-.ticket__stub-label,
-.ticket__stub-week {
-  color: var(--text-dim);
+.ticket__kicker {
+  color: var(--text-amber);
   font-family: var(--font-condensed);
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.ticket__stub-label {
-  font-size: 0.6rem;
-}
-
-.ticket__stub-week {
-  color: var(--text-soft);
-  font-size: var(--type-title-md);
-}
-
-.ticket__stub-held {
+.ticket__placed {
   color: var(--ink-3);
   font-family: var(--font-num);
   font-size: 10px;
-  letter-spacing: 0.04em;
-}
-
-.ticket__body {
-  display: grid;
-  align-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-lg);
-}
-
-/* The value panel: the multiplier is the headline and the sparkline under it
-   is the ticket's own recorded price path. A dashed rule again, so the card
-   reads as one object torn twice rather than as three cards. */
-.ticket__value {
-  display: grid;
-  align-content: center;
-  justify-items: end;
-  gap: 6px;
-  min-width: 200px;
-  padding: var(--space-lg);
-  border-left: 1px dashed color-mix(in srgb, var(--text-dim) 40%, transparent);
-  background: color-mix(in srgb, var(--bg-inset) 55%, transparent);
-  text-align: right;
-}
-
-/* Facts that make the receipt worth re-reading: what it was worth at its
-   best, and where it sits in the book. */
-.ticket__facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-lg);
-  margin: 0;
-}
-
-.ticket__fact {
-  display: grid;
-  gap: 2px;
-}
-
-.ticket__fact dt {
-  color: var(--text-dim);
-  font-family: var(--font-condensed);
-  font-size: 0.6rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.ticket__fact dd {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin: 0;
-  color: var(--text-soft);
-  font-family: var(--font-price);
-  font-size: var(--type-body);
-  font-variant-numeric: tabular-nums;
-}
-
-.ticket__fact-note {
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 11px;
-}
-
-.ticket__spark {
-  width: 160px;
-  height: 40px;
-  overflow: visible;
-}
-
-.ticket__spark-line {
-  fill: none;
-  stroke: var(--text-dim);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.6;
-  vector-effect: non-scaling-stroke;
-}
-
-.ticket__spark-dot {
-  fill: var(--text-dim);
-}
-
-.ticket__spark--up .ticket__spark-line,
-.ticket__spark--up .ticket__spark-dot {
-  stroke: var(--green);
-  fill: var(--green);
-}
-
-.ticket__spark--up .ticket__spark-line { fill: none; }
-
-.ticket__spark--down .ticket__spark-line,
-.ticket__spark--down .ticket__spark-dot {
-  stroke: var(--red);
-  fill: var(--red);
-}
-
-.ticket__spark--down .ticket__spark-line { fill: none; }
-
-.ticket__kicker {
-  margin: 0;
-  color: var(--text-amber);
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .ticket__title {
-  margin: 0;
+  margin: var(--space-2xs) 0 0;
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: var(--type-title-md);
+  font-size: 27px;
+  line-height: 1.05;
   letter-spacing: 0.01em;
   text-transform: uppercase;
 }
 
-.ticket__prices {
-  display: flex;
-  align-items: center;
-  gap: var(--space-lg);
-  flex-wrap: wrap;
-}
-
-.ticket__price {
-  display: grid;
-  gap: 2px;
-}
-
-.ticket__price-label {
-  color: var(--text-dim);
-  font-family: var(--font-condensed);
-  font-size: 0.6rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.ticket__price-value {
-  font-family: var(--font-price);
-  font-weight: var(--font-price-weight);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-/* Where it opened is the receipt; where it is now is the news. */
-.ticket__price--open .ticket__price-value {
-  color: var(--text-dim);
-  font-size: var(--type-title-md);
-}
-
-.ticket__price--now .ticket__price-value {
-  font-size: var(--type-display);
-}
-
-.ticket--up .ticket__price--now .ticket__price-value { color: var(--green); }
-.ticket--down .ticket__price--now .ticket__price-value { color: var(--red); }
-.ticket--flat .ticket__price--now .ticket__price-value { color: var(--text-primary); }
-
-.ticket__price-prob {
-  color: var(--text-dim);
-  font-family: var(--font-num);
-  font-size: var(--type-caption);
-  font-variant-numeric: tabular-nums;
-}
-
-.ticket__arrow {
-  color: var(--text-dim);
-  font-size: var(--type-title-md);
-}
-
-.ticket__multiplier {
-  color: var(--text-primary);
-  font-family: var(--font-price);
-  font-size: 44px;
-  font-weight: var(--font-price-weight);
-  line-height: 1;
-}
-
-.ticket--up .ticket__multiplier { color: var(--green); }
-.ticket--down .ticket__multiplier { color: var(--red); }
-
-.ticket__verdict-copy {
-  max-width: 200px;
+.ticket__market {
   margin: 0;
   color: var(--text-muted);
   font-size: 12px;
-  line-height: 1.35;
 }
 
-@media (max-width: 900px) {
-  .ticket {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
+/* The lead fact. "Ninth to second" is the only line on this card that is a
+   sentence rather than a figure, so it is the only one set at headline size. */
+.ticket__rank {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: var(--space-2xs) 0 0;
+  font-family: var(--font-price);
+  font-variant-numeric: tabular-nums;
+}
 
-  /* The stub is the one panel that survives the fold: it is the date on the
-     receipt. The value panel becomes a full-width footer rather than a third
-     column squeezed to nothing. */
-  .ticket__value {
-    grid-column: 1 / -1;
-    justify-items: start;
-    border-left: 0;
-    border-top: 1px dashed color-mix(in srgb, var(--text-dim) 40%, transparent);
-    text-align: left;
+.ticket__rank-from {
+  color: var(--ink-3);
+  font-size: 20px;
+}
+
+.ticket__rank-arrow {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.ticket__rank-to {
+  color: var(--ticket-accent);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.ticket__rank--flat .ticket__rank-to { color: var(--text-primary); }
+
+.ticket__rank-note {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+/* Receipt rows: label left, figure right, leader dots between. */
+.ticket__lines {
+  display: grid;
+  gap: 3px;
+  margin: var(--space-2xs) 0 0;
+  padding-top: var(--space-xs);
+  border-top: 1px dashed color-mix(in srgb, var(--text-dim) 34%, transparent);
+}
+
+.ticket__line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ticket__line dt {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The dotted leader that makes a list of figures read as a printed receipt. */
+.ticket__line::after {
+  content: '';
+  order: 1;
+  flex: 1 1 auto;
+  height: 1px;
+  border-bottom: 1px dotted color-mix(in srgb, var(--text-dim) 28%, transparent);
+  transform: translateY(-3px);
+}
+
+.ticket__line dd {
+  order: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-price);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket__line--now dd {
+  color: var(--text-primary);
+  font-size: 19px;
+}
+
+.ticket__implied {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 10px;
+}
+
+/* The season, one closing price per week. Absent under three weeks, where a
+   line would be inventing a trend. */
+.ticket__season {
+  display: grid;
+  gap: 2px;
+  margin-top: var(--space-2xs);
+}
+
+.ticket__season-chart {
+  width: 100%;
+  height: 46px;
+  overflow: visible;
+}
+
+.ticket__season-line {
+  fill: none;
+  stroke: var(--ticket-accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.ticket__season-dot {
+  fill: var(--ticket-accent);
+  stroke: none;
+}
+
+.ticket__season-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Season line left, stamp right, sharing the foot. */
+.ticket__foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-top: var(--space-2xs);
+}
+
+.ticket__foot .ticket__season {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 0;
+}
+
+/* Stamped after the fact, which is exactly what it is. */
+.ticket__stamp {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 6px 12px 5px;
+  border: 2px solid color-mix(in srgb, var(--ticket-accent) 55%, transparent);
+  border-radius: 3px;
+  color: var(--ticket-accent);
+  transform: rotate(-4deg);
+  opacity: 0.92;
+}
+
+.ticket__stamp-value {
+  font-family: var(--font-price);
+  font-size: 26px;
+  font-weight: var(--font-price-weight);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket__stamp-note {
+  font-family: var(--font-condensed);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+@media (max-width: 520px) {
+  .ticket {
+    width: 100%;
+    padding-inline: var(--space-md);
   }
 }

@@ -106,3 +106,45 @@ test('the sentence is about the position, not about the manager', () => {
     assert.doesNotMatch(up, new RegExp(word, 'i'));
   }
 });
+
+test('the season line is one point per week, not one per snapshot', () => {
+  /**
+   * What made the first chart useless.
+   *
+   * History is sampled several times a day. Plotted raw, a ticket six days
+   * old produced a jagged line with a shape, and a shape reads as a trend
+   * whether or not the season has produced one. Collapsing to the price each
+   * week closed at is the difference between a season and intraday noise.
+   */
+  const sameWeekManyTimes = [
+    { computedAt: 10, week: 1, titleProb: { 1: 8.0, 2: 20 } },
+    { computedAt: 20, week: 1, titleProb: { 1: 9.4, 2: 20 } },
+    { computedAt: 30, week: 1, titleProb: { 1: 8.2, 2: 20 } },
+    { computedAt: 40, week: 1, titleProb: { 1: 9.9, 2: 20 } },
+    { computedAt: 50, week: 2, titleProb: { 1: 10.5, 2: 20 } },
+    { computedAt: 60, week: 2, titleProb: { 1: 11.1, 2: 20 } },
+    { computedAt: 70, week: 3, titleProb: { 1: 12.1, 2: 20 } },
+  ];
+
+  const ticket = buildTicket(sameWeekManyTimes, 1);
+  assert.ok(ticket, 'no ticket built');
+
+  assert.deepEqual(
+    ticket.series.map((point) => point.week),
+    [1, 2, 3],
+    'the series still carries one point per snapshot',
+  );
+  /* The close, not the open or an average: week 1 saw 8.0 first and 9.9 last. */
+  assert.equal(ticket.series[0].prob, 9.9, 'the weekly point is not the week close');
+  assert.equal(ticket.series[2].prob, 12.1);
+});
+
+test('the season line refuses to draw a trend out of two points', async () => {
+  const source = await fs.readFile(
+    path.resolve('src/components/league/YourTicket.tsx'),
+    'utf8',
+  );
+  /* Two points and a slope is a line the season has not produced yet, on a
+     card whose whole claim is that its numbers are a receipt. */
+  assert.match(source, /points\.length < 3/);
+});

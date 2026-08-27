@@ -3,72 +3,76 @@ import { formatMultiplier, type Ticket } from '../../utils/ticket';
 import './YourTicket.css';
 
 /**
- * A sparkline of the ticket's own price, drawn from stored snapshots.
+ * The season so far, one closing price per week.
  *
- * Scaled to its own range rather than to 0-100, because a title price that
- * moved from 9% to 12% is a real swing in the life of a ticket and would be a
- * flat line on an absolute axis. The only claim it makes is relative shape,
- * and the numbers beside it carry the levels.
+ * Drawn only once there are three weeks to draw. Below that the line is two
+ * points and a slope, which reads as a trend the season has not produced yet
+ * — and this card's whole claim is that its numbers are a receipt rather than
+ * a story told about one.
  */
-function Sparkline({ points, tone }: { points: { prob: number }[]; tone: string }) {
-  if (points.length < 2) return null;
+function SeasonLine({ points, tone }: { points: { week: number; prob: number }[]; tone: string }) {
+  if (points.length < 3) return null;
 
   const values = points.map((point) => point.prob);
   const low = Math.min(...values);
   const high = Math.max(...values);
-  const span = Math.max(0.4, high - low);
-  const width = 160;
-  const height = 40;
+  const span = Math.max(0.5, high - low);
+  const width = 260;
+  const height = 46;
 
-  const path = points
+  const at = (index: number, prob: number) => ({
+    x: (index / (points.length - 1)) * width,
+    y: height - ((prob - low) / span) * height,
+  });
+
+  const line = points
     .map((point, index) => {
-      const x = (index / (points.length - 1)) * width;
-      const y = height - ((point.prob - low) / span) * height;
+      const { x, y } = at(index, point.prob);
       return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
     })
     .join(' ');
 
-  const lastX = width;
-  const lastY = height - ((values[values.length - 1] - low) / span) * height;
+  const last = at(points.length - 1, values[values.length - 1]);
 
   return (
-    <svg
-      aria-hidden="true"
-      className={`ticket__spark ticket__spark--${tone}`}
-      preserveAspectRatio="none"
-      viewBox={`0 -3 ${width} ${height + 6}`}
-    >
-      <path className="ticket__spark-line" d={path} />
-      <circle className="ticket__spark-dot" cx={lastX} cy={lastY} r={2.6} />
-    </svg>
+    <div className={`ticket__season ticket__season--${tone}`}>
+      <svg
+        aria-hidden="true"
+        className="ticket__season-chart"
+        viewBox={`0 -4 ${width} ${height + 8}`}
+      >
+        <path className="ticket__season-line" d={line} />
+        <circle className="ticket__season-dot" cx={last.x} cy={last.y} r={3} />
+      </svg>
+      <span className="ticket__season-scale">
+        <span>Wk {points[0].week}</span>
+        <span>Wk {points[points.length - 1].week}</span>
+      </span>
+    </div>
   );
 }
 
 /**
- * The preseason ticket, re-marked.
+ * Your preseason ticket, re-marked.
  *
- * Shaped like a ticket because that is the emotional object: a thing you were
- * handed before any of this happened, that is now worth more or less than it
- * was. The whole appeal is that the opening price is a receipt, quoted before
- * the season and never retconned.
+ * Built as a printed slip rather than a dashboard card, because that is the
+ * whole appeal: a thing you were handed before any of this happened, that is
+ * now worth more or less than it was. The previous version stretched the same
+ * six numbers across the full width of the page, so it read as a widget with
+ * a lot of empty space in it — the fix was not more content, it was giving the
+ * object a size. A ticket is something you hold.
  *
- * The first build put all of that in the left third of a card twelve hundred
- * pixels wide, at caption size, and left the rest empty — a receipt with
- * nothing on it. This one is laid out as the object it is imitating: a stub
- * you tear off, the bet written across the middle, and what the position is
- * worth now down the right.
+ * The lead fact is the rank move. "You opened ninth and you are second" is the
+ * sentence a manager repeats out loud; the multiplier is the same news in a
+ * quieter unit, and the two prices are the receipt underneath it. Ordered any
+ * other way this card is a table of six figures with no argument.
  *
- * Three facts were added, and all three are readings of snapshots that already
- * exist rather than anything re-simulated. The sparkline is the ticket's own
- * recorded price path, which is what makes it feel alive rather than printed.
- * The peak is the high-water mark — the "you could have cashed out at" number,
- * which is most of why anyone re-reads a ticket. The rank is a count of teams
- * priced shorter in a book the engine already produced.
- *
- * What is still deliberately absent: money. No stake, no payout, no cash-out
- * value. Value is carried by the two prices, their implied probabilities, and
- * a multiplier — the honest version of the cash-out feeling, because the ratio
- * of the probabilities is exactly what changed.
+ * Every number is a reading of snapshots that already exist. Nothing here is
+ * re-simulated, and there is no money anywhere — no stake, no payout, no
+ * cash-out value. Value is carried by the prices, their implied
+ * probabilities, and the multiplier, which is the honest version of the
+ * cash-out feeling because the ratio of the probabilities is exactly what
+ * changed.
  */
 export function YourTicket({
   ticket,
@@ -81,91 +85,94 @@ export function YourTicket({
 }) {
   const tone = ticket.direction;
   const openWeek = ticket.series[0]?.week ?? 1;
-  const rankMoved =
-    ticket.rankOpen != null && ticket.rankNow != null && ticket.rankOpen !== ticket.rankNow;
+  const climbed =
+    ticket.rankOpen != null && ticket.rankNow != null && ticket.rankNow < ticket.rankOpen;
+  const slipped =
+    ticket.rankOpen != null && ticket.rankNow != null && ticket.rankNow > ticket.rankOpen;
 
   return (
     <section aria-labelledby="your-ticket-title" className={`ticket ticket--${tone}`}>
-      <div className="ticket__stub">
-        <span className="ticket__stub-label">Opened</span>
-        <span className="ticket__stub-week">Week {openWeek}</span>
-        {ticket.weeksHeld != null ? (
-          <span className="ticket__stub-held">
-            Held {ticket.weeksHeld} {ticket.weeksHeld === 1 ? 'week' : 'weeks'}
-          </span>
-        ) : null}
-      </div>
+      <header className="ticket__head">
+        <span className="ticket__kicker">Your ticket</span>
+        <span className="ticket__placed">Placed Wk {openWeek}</span>
+      </header>
 
-      <div className="ticket__body">
-        <p className="ticket__kicker">Your ticket</p>
-        <h2 className="ticket__title" id="your-ticket-title">
-          {teamName} to win {leagueName}
-        </h2>
+      <h2 className="ticket__title" id="your-ticket-title">
+        {teamName}
+      </h2>
+      <p className="ticket__market">to win {leagueName}</p>
 
-        <div className="ticket__prices">
-          <span className="ticket__price ticket__price--open">
-            <span className="ticket__price-label">Opened</span>
-            <span className="ticket__price-value">{formatAmericanOdds(ticket.openOdds)}</span>
-            <span className="ticket__price-prob">{ticket.openProb.toFixed(1)}%</span>
-          </span>
-
-          <span aria-hidden="true" className="ticket__arrow">
+      {/* The lead. A rank move is the one fact on this card that is a sentence
+          rather than a figure, so it goes first and it goes big. */}
+      {ticket.rankNow != null && (climbed || slipped) ? (
+        <p className={`ticket__rank ticket__rank--${climbed ? 'up' : 'down'}`}>
+          <span className="ticket__rank-from">#{ticket.rankOpen}</span>
+          <span aria-hidden="true" className="ticket__rank-arrow">
             →
           </span>
-
-          <span className="ticket__price ticket__price--now">
-            <span className="ticket__price-label">Now</span>
-            <span className="ticket__price-value">{formatAmericanOdds(ticket.nowOdds)}</span>
-            <span className="ticket__price-prob">{ticket.nowProb.toFixed(1)}%</span>
+          <span className="ticket__rank-to">#{ticket.rankNow}</span>
+          <span className="ticket__rank-note">
+            in the book{ticket.fieldSize != null ? ` of ${ticket.fieldSize}` : ''}
           </span>
+        </p>
+      ) : ticket.rankNow != null ? (
+        <p className="ticket__rank ticket__rank--flat">
+          <span className="ticket__rank-to">#{ticket.rankNow}</span>
+          <span className="ticket__rank-note">
+            in the book{ticket.fieldSize != null ? ` of ${ticket.fieldSize}` : ''}, where it opened
+          </span>
+        </p>
+      ) : null}
+
+      {/* The receipt itself, set like one. */}
+      <dl className="ticket__lines">
+        <div className="ticket__line">
+          <dt>Opened</dt>
+          <dd>
+            {formatAmericanOdds(ticket.openOdds)}
+            <span className="ticket__implied">{ticket.openProb.toFixed(1)}%</span>
+          </dd>
         </div>
+        <div className="ticket__line ticket__line--now">
+          <dt>Now</dt>
+          <dd>
+            {formatAmericanOdds(ticket.nowOdds)}
+            <span className="ticket__implied">{ticket.nowProb.toFixed(1)}%</span>
+          </dd>
+        </div>
+        {/* Only when the best price is not the one printed directly above it. */}
+        {ticket.peak && ticket.peak.prob > ticket.nowProb + 0.05 ? (
+          <div className="ticket__line">
+            <dt>Best</dt>
+            <dd>
+              {formatAmericanOdds(ticket.peak.odds)}
+              <span className="ticket__implied">Wk {ticket.peak.week}</span>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
 
-        <dl className="ticket__facts">
-          {/* The high-water mark is only worth printing when it is not the
-              price you are already looking at. "Best: the number above it" is
-              a row that says nothing. */}
-          {ticket.peak && ticket.peak.prob > ticket.nowProb + 0.05 ? (
-            <div className="ticket__fact">
-              <dt>Best</dt>
-              <dd>
-                {formatAmericanOdds(ticket.peak.odds)}
-                <span className="ticket__fact-note">Week {ticket.peak.week}</span>
-              </dd>
-            </div>
-          ) : null}
+      {/* The season and the stamp share the foot of the slip. The stamp was
+          absolutely positioned over the card at first and landed on top of
+          the chart's last week and its own axis label. */}
+      <div className="ticket__foot">
+        <SeasonLine points={ticket.series} tone={tone} />
 
-          {ticket.rankNow != null ? (
-            <div className="ticket__fact">
-              <dt>In the book</dt>
-              <dd>
-                #{ticket.rankNow}
-                {ticket.fieldSize != null ? ` of ${ticket.fieldSize}` : ''}
-                {rankMoved ? (
-                  <span className="ticket__fact-note">Opened #{ticket.rankOpen}</span>
-                ) : null}
-              </dd>
-            </div>
-          ) : null}
-        </dl>
-      </div>
-
-      <div className="ticket__value">
-        {/* The multiplier, not a dollar figure. 10% to 17.4% is 1.74x, and
-            that ratio is the only thing that actually changed. */}
-        {tone === 'flat' ? (
-          <>
-            <span className="ticket__multiplier">Level</span>
-            <p className="ticket__verdict-copy">The market has not moved on you.</p>
-          </>
-        ) : (
-          <>
-            <span className="ticket__multiplier">{formatMultiplier(ticket.multiplier)}</span>
-            <p className="ticket__verdict-copy">
-              what it opened at, {tone === 'up' ? 'in your favour' : 'against you'}
-            </p>
-          </>
-        )}
-        <Sparkline points={ticket.series} tone={tone} />
+        {/* Stamped rather than printed: the one part of the slip that was
+            added after it was issued. */}
+        <div className="ticket__stamp" role="presentation">
+          {tone === 'flat' ? (
+            <>
+              <span className="ticket__stamp-value">Level</span>
+              <span className="ticket__stamp-note">since open</span>
+            </>
+          ) : (
+            <>
+              <span className="ticket__stamp-value">{formatMultiplier(ticket.multiplier)}</span>
+            <span className="ticket__stamp-note">since open</span>
+            </>
+          )}
+        </div>
       </div>
     </section>
   );

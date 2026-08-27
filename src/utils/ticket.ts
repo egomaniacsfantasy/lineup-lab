@@ -32,8 +32,15 @@ export interface Ticket {
   /** Percentage points, signed. */
   movePp: number;
   direction: 'up' | 'down' | 'flat';
-  /** Every snapshot of this ticket, oldest first. The receipt's heartbeat. */
-  series: { at: number; week: number; prob: number }[];
+  /**
+   * One closing price per week, oldest first.
+   *
+   * Per-week rather than per-snapshot on purpose. The raw history samples
+   * several times a day, so drawn straight it was a line of intraday jitter
+   * rather than a season: a ticket six days old produced a chart with a shape,
+   * and a shape reads as a trend whether or not one is there.
+   */
+  series: { week: number; prob: number }[];
   /** The best this ticket was ever worth, and when. */
   peak: { prob: number; odds: number; week: number } | null;
   /** Where this price sat in the league book, then and now. */
@@ -67,22 +74,21 @@ export function buildTicket(
 
   const movePp = nowProb - openProb;
 
-  /* Every snapshot that priced this roster, oldest first. Snapshots that never
-     carried a title book are skipped rather than plotted at zero: a gap in the
-     record is not a week the ticket was worthless. */
-  const series = [...history]
-    .sort((left, right) => left.computedAt - right.computedAt)
-    .map((entry) => {
-      const prob = entry.titleProb?.[id];
-      if (prob == null) return null;
-      return { at: entry.computedAt, week: entry.week, prob };
-    })
-    .filter((point): point is { at: number; week: number; prob: number } => point !== null);
+  /* One point per week: the price that week closed at. Snapshots with no title
+     book are skipped rather than plotted at zero — a gap in the record is not a
+     week the ticket was worthless. */
+  const byWeek = new Map<number, { week: number; prob: number }>();
+  for (const entry of [...history].sort((left, right) => left.computedAt - right.computedAt)) {
+    const prob = entry.titleProb?.[id];
+    if (prob == null) continue;
+    byWeek.set(entry.week, { week: entry.week, prob });
+  }
+  const series = [...byWeek.values()].sort((left, right) => left.week - right.week);
 
   /* The high-water mark. This is the "you could have cashed out at" number,
      which is most of what makes a ticket worth re-reading, and it is a
      maximum over prices already recorded rather than anything re-simulated. */
-  const best = series.reduce<{ at: number; week: number; prob: number } | null>(
+  const best = series.reduce<{ week: number; prob: number } | null>(
     (top, point) => (top == null || point.prob > top.prob ? point : top),
     null,
   );
