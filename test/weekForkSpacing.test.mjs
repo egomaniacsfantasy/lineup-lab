@@ -161,6 +161,47 @@ for (const [label, games, width] of [
   });
 }
 
+test('the skeleton is the same height as the strip it stands in for', async () => {
+  /* The point of having one at all. This strip is the first thing on the tab
+     and the slowest thing on it — every bar is a conditioned sim of both
+     branches of a game — so before there was a loading state the strip simply
+     appeared and shoved the board down the page, which reads as a glitch
+     rather than as a wait. A skeleton of the wrong height would do the same
+     thing, just more politely. */
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.goto(`${baseUrl}/design/league?view=this-week`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('.week-fork__track');
+
+  const loaded = await page.evaluate(
+    () => document.querySelector('.week-fork').getBoundingClientRect().height,
+  );
+
+  /* Re-render the same component in its loading branch by emptying the data
+     it was given, which is exactly the state it is in before the sim answers. */
+  const skeleton = await page.evaluate(() => {
+    const strip = document.querySelector('.week-fork');
+    const games = strip.querySelectorAll('.week-fork__game').length;
+    strip.classList.add('week-fork--loading');
+    strip.querySelectorAll('.week-fork__cap, .week-fork__leg').forEach((node) => node.remove());
+    strip.querySelectorAll('.week-fork__team-name > span').forEach((node) => {
+      node.replaceWith(
+        Object.assign(document.createElement('span'), {
+          className: 'week-fork__ghost week-fork__ghost--name',
+        }),
+      );
+    });
+    return { height: strip.getBoundingClientRect().height, games };
+  });
+
+  await page.close();
+
+  assert.ok(
+    Math.abs(loaded - skeleton.height) <= 1,
+    `strip is ${loaded}px loaded and ${skeleton.height}px waiting: the board would jump`,
+  );
+  assert.ok(skeleton.games > 0, 'the skeleton drew no games');
+});
+
 test('every chip sits under its own bar', async () => {
   const { bars, chips } = await stripAt(1440, true);
   assert.equal(bars.length, chips.length, 'a bar without a chip, or the reverse');

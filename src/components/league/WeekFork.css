@@ -384,3 +384,66 @@
     content: none;
   }
 }
+
+/* The waiting state.
+
+   Grey stand-ins at the exact size of the things they stand in for, so the
+   strip does not resize when the conditioned sim answers. The pulse is slow
+   and low contrast on purpose: this sits above the board a user is trying to
+   read, and a bright shimmer there would pull the eye to the one element that
+   has nothing to say yet. */
+.week-fork__ghost {
+  display: block;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(244, 245, 242, 0.05),
+    rgba(244, 245, 242, 0.1),
+    rgba(244, 245, 242, 0.05)
+  );
+  background-size: 200% 100%;
+  animation: week-fork-pulse 1.6s ease-in-out infinite;
+}
+
+/* Centred on the now-line, so the placeholder reads as a bar that has not
+   picked a direction yet rather than as a bar of zero swing. */
+.week-fork__track > .week-fork__ghost {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 34%;
+  transform: translateY(-50%);
+}
+
+.week-fork__ghost--crest {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+}
+
+.week-fork__ghost--name {
+  width: 72%;
+  max-width: 88px;
+  height: 8px;
+  margin: 2px auto 0;
+}
+
+@keyframes week-fork-pulse {
+  0%,
+  100% {
+    background-position: 0% 0;
+    opacity: 0.65;
+  }
+
+  50% {
+    background-position: 100% 0;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .week-fork__ghost {
+    animation: none;
+  }
+}

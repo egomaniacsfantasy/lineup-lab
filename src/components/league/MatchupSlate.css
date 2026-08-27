@@ -22,7 +22,6 @@
 .matchup-slate__glance-row,
 .matchup-slate__detail-kicker,
 .matchup-slate__detail-line,
-.matchup-slate__board-note,
 .matchup-slate__movement-note {
   font-family: var(--font-mono);
 }
@@ -108,13 +107,6 @@
   display: grid;
 }
 
-.matchup-slate__board-note {
-  padding: 10px 18px 14px;
-  border-top: 1px solid var(--glass-border);
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.45;
-}
 
 .matchup-slate__row-button {
   width: 100%;
@@ -281,16 +273,20 @@
   box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
 }
 
+/* A card heading, not a footnote. These were 10px at 52% white, which is the
+   styling of a disclaimer, sitting over the card's actual content — so the
+   two cards in this column read as unlabelled grey blocks. Amber condensed is
+   what a kicker looks like everywhere else on the site. */
 .matchup-slate__glance-title,
 .matchup-slate__detail-kicker {
-  color: rgba(244, 245, 242, 0.52);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  color: var(--text-amber);
+  font-family: var(--font-condensed);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
-.matchup-slate__glance-row,
 .matchup-slate__detail-line {
   display: flex;
   align-items: center;
@@ -300,14 +296,12 @@
   font-size: 11px;
 }
 
-.matchup-slate__glance-row strong,
 .matchup-slate__detail-head strong,
 .matchup-slate__detail-line span:last-child,
 .matchup-slate__feed-row strong {
   color: var(--text-primary);
 }
 
-.matchup-slate__glance-row strong,
 .matchup-slate__detail-head strong {
   font-family: var(--font-ui);
   font-size: 13px;
@@ -440,12 +434,10 @@
     width: 100%;
   }
 
-  .matchup-slate__glance-row,
   .matchup-slate__detail-line {
     display: grid;
   }
 
-  .matchup-slate__glance-row strong,
   .matchup-slate__detail-line span:last-child {
     text-align: left;
   }
@@ -492,17 +484,13 @@
     gap: 6px;
   }
 
-  .matchup-slate__board-note {
-    padding-block: 6px;
-    font-size: 11.5px;
-  }
 }
 
 /* What the week did to the title market. Reads open → now, the same grammar
    as the futures board, so the two surfaces teach each other. */
 .matchup-slate__movers {
   display: grid;
-  gap: var(--space-xs);
+  gap: var(--space-2xs);
   padding: var(--space-md);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
@@ -514,14 +502,21 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-md);
+  padding-block: var(--space-2xs);
 }
 
+.matchup-slate__mover + .matchup-slate__mover {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Sentence case, at a size you can read. Uppercase condensed at caption size
+   turns a twenty-eight character team name into a grey bar, and this card is
+   nothing but team names and prices. */
 .matchup-slate__mover-name {
-  color: var(--text-soft);
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -530,27 +525,28 @@
 .matchup-slate__mover-prices {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--space-2xs);
+  gap: 6px;
   flex-shrink: 0;
   font-family: var(--font-price);
   font-variant-numeric: tabular-nums;
 }
 
-/* Where it opened is context; where it is now is the news. */
+/* Where it opened is context; where it is now is the news. The arrow already
+   says the first price is the old one, so the strikethrough on top of it was
+   a second way of saying the same thing, and it made the number harder to
+   read to say it. */
 .matchup-slate__mover-open {
-  color: var(--text-dim);
-  font-size: var(--type-caption);
-  text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, var(--text-dim) 60%, transparent);
+  color: var(--ink-3);
+  font-size: 13px;
 }
 
 .matchup-slate__mover-arrow {
-  color: var(--text-dim);
-  font-size: var(--type-caption);
+  color: var(--ink-3);
+  font-size: 12px;
 }
 
 .matchup-slate__mover-now {
-  font-size: var(--type-body);
+  font-size: 19px;
   font-weight: var(--font-price-weight);
 }
 
@@ -574,28 +570,64 @@
   white-space: nowrap;
 }
 
-/* Both teams named, then the number. A glance row that says "Apollo 68%"
-   answers half a question — favourite over whom? — and the missing half is the
-   part worth reading. */
-.matchup-slate__glance-row strong {
+/* Three facts about the week, each with a hierarchy.
+
+   The old row put the label left and a two-line stack right, with the team
+   names set smaller than everything else — in condensed uppercase, at ten
+   pixels, wrapping across the width of the card. That is the longest content
+   in the row rendered as the least readable thing in it, which is why the
+   whole card read as grey noise: nothing in it was allowed to be the
+   headline.
+
+   Now the price is the headline, at the size a price gets everywhere else on
+   the site; the label is a quiet kicker beside it; and the teams read as a
+   sentence underneath in sentence case, because they are a sentence. */
+.matchup-slate__glance-row {
   display: grid;
-  gap: 1px;
-  justify-items: end;
-  text-align: right;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 5px var(--space-sm);
+  padding-block: var(--space-xs);
+}
+
+.matchup-slate__glance-row + .matchup-slate__glance-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.matchup-slate__glance-row:last-child {
+  padding-bottom: 0;
+}
+
+.matchup-slate__glance-label {
+  color: var(--text-muted);
+  font-family: var(--font-condensed);
+  font-size: 12px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 .matchup-slate__glance-teams {
+  grid-column: 1 / -1;
   color: var(--text-soft);
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
+  font-family: var(--font-ui);
+  font-size: 12px;
   font-weight: 400;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+.matchup-slate__glance-unit {
+  margin-left: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
 }
 
 .matchup-slate__glance-value {
   color: var(--text-primary);
   font-family: var(--font-price);
-  font-size: var(--type-body);
+  font-size: 24px;
+  line-height: 1;
   font-weight: var(--font-price-weight);
   font-variant-numeric: tabular-nums;
 }

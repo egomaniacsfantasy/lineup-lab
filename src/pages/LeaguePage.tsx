@@ -649,6 +649,8 @@ export function LeaguePage() {
             },
             connectedSeason ? String(connectedSeason.userTeam.rosterId) : null,
           )}
+          expectedGames={slate.length}
+          loading={forks == null}
           unavailableMessage={forks && !forks.available ? forks.message : undefined}
           week={forks?.week ?? bootstrap.week}
         />

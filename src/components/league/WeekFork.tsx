@@ -19,6 +19,21 @@ export interface ForkPair {
   sides: [ForkSide, ForkSide];
 }
 
+/* Shared by the strip and its skeleton: the caption is the one part that is
+   known before the sim answers, so it should not blink in with the bars. */
+function ForkGutter({ week }: { week: number | null }) {
+  return (
+    <div className="week-fork__gutter">
+      <p className="week-fork__axis-label">Playoff swing</p>
+      {week != null ? <p className="week-fork__week">Week {week}</p> : null}
+      <p className="week-fork__key">
+        <span className="week-fork__key-item week-fork__key-item--win">Win</span>
+        <span className="week-fork__key-item week-fork__key-item--loss">Lose</span>
+      </p>
+    </div>
+  );
+}
+
 function TeamChip({ side }: { side: ForkSide }) {
   return (
     <span
@@ -71,11 +86,73 @@ export function WeekFork({
   pairs,
   week,
   unavailableMessage,
+  loading = false,
+  expectedGames = 0,
 }: {
   pairs: ForkPair[];
   week: number | null;
   unavailableMessage?: string;
+  /** The conditioned sim has not answered yet. */
+  loading?: boolean;
+  /** Games this week, from the schedule, so the skeleton is the right width. */
+  expectedGames?: number;
 }) {
+  /* Waiting is the normal case, not an edge one.
+
+     This strip is the first thing on the tab and the slowest thing on it:
+     every bar is a conditioned sim of both branches of a game, so the server
+     is doing real work while the rest of the page is already painted. With
+     nothing rendered for that second the strip simply appeared out of
+     nowhere and shoved the board down the page, which reads as a glitch
+     rather than as a wait.
+
+     The skeleton is the finished layout with the numbers missing, drawn at
+     the same height and the same game count the real strip will use, so
+     nothing moves when the answer lands. */
+  if (loading && pairs.length === 0 && expectedGames > 0) {
+    return (
+      <section
+        aria-busy="true"
+        aria-label="Loading playoff odds for this week"
+        className="week-fork week-fork--loading"
+      >
+        <ForkGutter week={week} />
+        <div className="week-fork__games">
+          {Array.from({ length: expectedGames }, (_, game) => (
+            <div className="week-fork__game" key={game}>
+              <div aria-hidden="true" className="week-fork__grid">
+                <span className="week-fork__gridline" style={{ top: '0%' }} />
+                <span className="week-fork__gridline week-fork__gridline--now" style={{ top: '50%' }} />
+                <span className="week-fork__gridline" style={{ top: '100%' }} />
+              </div>
+              <div className="week-fork__plot">
+                {[0, 1].map((side) => (
+                  <div className="week-fork__col" key={side}>
+                    <div className="week-fork__track">
+                      <span className="week-fork__ghost" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="week-fork__teams">
+                {[0, 1].map((side) => (
+                  <span className="week-fork__team" key={side}>
+                    <span className="week-fork__team-top">
+                      <span className="week-fork__ghost week-fork__ghost--crest" />
+                    </span>
+                    <span className="week-fork__team-name">
+                      <span className="week-fork__ghost week-fork__ghost--name" />
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   if (unavailableMessage) {
     return (
       <section className="week-fork week-fork--empty">
@@ -121,14 +198,7 @@ export function WeekFork({
           this chart: every bar already prints its own two endpoints, so the
           axis was offering a slower way to read a number that was sitting
           right there. A ruler beside a labelled quantity is furniture. */}
-      <div className="week-fork__gutter">
-        <p className="week-fork__axis-label">Playoff swing</p>
-        {week != null ? <p className="week-fork__week">Week {week}</p> : null}
-        <p className="week-fork__key">
-          <span className="week-fork__key-item week-fork__key-item--win">Win</span>
-          <span className="week-fork__key-item week-fork__key-item--loss">Lose</span>
-        </p>
-      </div>
+      <ForkGutter week={week} />
 
       <div className="week-fork__games">
         {ordered.map((pair) => (

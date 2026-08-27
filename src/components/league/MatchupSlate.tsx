@@ -372,7 +372,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
               );
             })}
           </div>
-          <div className="matchup-slate__board-note">Moves this week only show once the board shifts at least one point.</div>
         </div>
 
         <aside className="matchup-slate__aside">
@@ -426,44 +425,39 @@ export function MatchupSlate({ matchups, currentWeek, history = null }: MatchupS
             <span className="matchup-slate__glance-title">The week at a glance</span>
             {biggestFavorite ? (
               <div className="matchup-slate__glance-row">
-                <span>Biggest favorite</span>
-                <strong>
-                  <span className="matchup-slate__glance-teams">
-                    {biggestFavorite.favorite.name} over{' '}
-                    {biggestFavorite.favorite.side === biggestFavorite.left.side
-                      ? biggestFavorite.right.name
-                      : biggestFavorite.left.name}
-                  </span>
-                  <span className="matchup-slate__glance-value">
-                    {formatAmericanOdds(biggestFavorite.favorite.odds)}
-                  </span>
-                </strong>
+                <span className="matchup-slate__glance-label">Biggest favorite</span>
+                <span className="matchup-slate__glance-value">
+                  {formatAmericanOdds(biggestFavorite.favorite.odds)}
+                </span>
+                <span className="matchup-slate__glance-teams">
+                  {biggestFavorite.favorite.name} over{' '}
+                  {biggestFavorite.favorite.side === biggestFavorite.left.side
+                    ? biggestFavorite.right.name
+                    : biggestFavorite.left.name}
+                </span>
               </div>
             ) : null}
             {closestLine ? (
               <div className="matchup-slate__glance-row">
-                <span>Closest line</span>
-                <strong>
-                  <span className="matchup-slate__glance-teams">
-                    {closestLine.left.name} vs {closestLine.right.name}
-                  </span>
-                  <span className="matchup-slate__glance-value">
-                    {formatAmericanOdds(closestLine.favorite.odds)}
-                  </span>
-                </strong>
+                <span className="matchup-slate__glance-label">Closest line</span>
+                <span className="matchup-slate__glance-value">
+                  {formatAmericanOdds(closestLine.favorite.odds)}
+                </span>
+                <span className="matchup-slate__glance-teams">
+                  {closestLine.left.name} vs {closestLine.right.name}
+                </span>
               </div>
             ) : null}
             {highestTotal?.matchup.totalProjection != null ? (
               <div className="matchup-slate__glance-row">
-                <span>Highest total</span>
-                <strong>
-                  <span className="matchup-slate__glance-teams">
-                    {highestTotal.left.name} vs {highestTotal.right.name}
-                  </span>
-                  <span className="matchup-slate__glance-value">
-                    {highestTotal.matchup.totalProjection.toFixed(1)} pts
-                  </span>
-                </strong>
+                <span className="matchup-slate__glance-label">Highest total</span>
+                <span className="matchup-slate__glance-value">
+                  {highestTotal.matchup.totalProjection.toFixed(1)}
+                  <span className="matchup-slate__glance-unit">pts</span>
+                </span>
+                <span className="matchup-slate__glance-teams">
+                  {highestTotal.left.name} vs {highestTotal.right.name}
+                </span>
               </div>
             ) : null}
           </section>
