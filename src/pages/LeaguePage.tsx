@@ -15,7 +15,7 @@ import { TimeMachine } from '../components/league/TimeMachine';
 import { LeagueRecords } from '../components/league/LeagueRecords';
 import { Predictor, type PredictorGame, type PredictorBaselineRow } from '../components/league/Predictor';
 import { WeekFork } from '../components/league/WeekFork';
-import { forkRows } from '../utils/forkRows';
+import { forkPairs } from '../utils/forkRows';
 import {
   fetchWeekForks,
   fetchProjectedScores,
@@ -632,10 +632,12 @@ export function LeaguePage() {
 
       {activeView === 'this-week' && bootstrap ? (
         <WeekFork
-          rows={forkRows(
+          pairs={forkPairs(
             forks?.forks ?? [],
-            (rosterId) =>
-              bootstrap.teams.find((team) => String(team.rosterId) === rosterId)?.teamName ?? null,
+            (rosterId) => {
+              const team = bootstrap.teams.find((entry) => String(entry.rosterId) === rosterId);
+              return team ? { teamName: team.teamName, avatarUrl: team.avatarUrl } : null;
+            },
             connectedSeason ? String(connectedSeason.userTeam.rosterId) : null,
           )}
           unavailableMessage={forks && !forks.available ? forks.message : undefined}

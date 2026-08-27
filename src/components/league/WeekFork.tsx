@@ -1,46 +1,76 @@
+import { forkScale } from '../../utils/forkRows.ts';
+import { TeamAvatar } from './TeamAvatar';
 import './WeekFork.css';
 
-export interface ForkRow {
+export interface ForkSide {
   rosterId: string;
   teamName: string;
+  avatarUrl: string | null;
   isUser: boolean;
   nowProb: number;
   winProb: number;
   lossProb: number;
-  /** 0-100 for the matchup this side belongs to. */
+}
+
+export interface ForkPair {
+  matchupId: number;
+  /** 0-100, relative to the biggest swing in the same week. */
   importance: number;
-  opponentName: string;
+  sides: [ForkSide, ForkSide];
+}
+
+function TeamChip({ side }: { side: ForkSide }) {
+  return (
+    <span
+      className={['week-fork__team', side.isUser ? 'week-fork__team--you' : '']
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <span className="week-fork__team-top">
+        <TeamAvatar avatarUrl={side.avatarUrl} className="week-fork__crest" name={side.teamName} />
+        <span className="week-fork__team-now">{side.nowProb.toFixed(0)}%</span>
+      </span>
+      <span className="week-fork__team-name">{side.teamName}</span>
+    </span>
+  );
 }
 
 /**
- * What this week is worth, one team at a time.
+ * What this week is worth, as a strip above the board rather than a table
+ * below it.
  *
  * Every other surface in the product answers "where do you stand". This one
  * answers "what is on the line", which is a different and more urgent
- * question, and it is the one a weekly board should be able to answer at a
- * glance.
+ * question, and the one a weekly board should answer before you have read
+ * anything.
  *
- * Each row is a track from the worst outcome to the best. The two ticks are
- * the two branches — where a loss puts you, where a win puts you — and the
- * span between them is the point of the whole graphic: a wide bar means this
- * game decides something, a narrow one means it does not, and you can see
- * which is which without reading a single number.
+ * Each team gets a bar hanging off a shared now-line. Green above is what a
+ * win adds, red below is what a loss costs, and the two are rarely the same
+ * size — a team can have a game with far more downside than upside, which is
+ * the fact a single bar drawn from loss to win cannot express at all. Read
+ * across the strip and the longest bars are the week's real games.
  *
- * The marker between them is where the team stands right now, with nothing
- * forced. It sits between the branches because it is the probability-weighted
- * blend of them, which is also why it is drawn as a line rather than a third
- * tick: it is not an outcome, it is the price of the two.
+ * Games are grouped in pairs because the two branches of a matchup are mirror
+ * images: if you win, they lose. Ordered by the engine's own importance, so
+ * left to right walks the week from the game that decides most to the one
+ * that decides least.
+ *
+ * The axis lives in the left gutter rather than in a header. A header would
+ * cost a title, a subtitle and the space between them — 60-odd pixels above a
+ * graphic whose entire purpose is to introduce the board without pushing it
+ * down the page — to say what an axis label and two swatches say in a column
+ * that was empty anyway.
  *
  * Draws nothing at all without a conditioned sim behind it. A fork with
- * invented branches is worse than no fork, because the width of that bar reads
- * as a claim about how much a week matters.
+ * invented branches is worse than no fork, because the length of those bars
+ * reads as a claim about how much a week matters.
  */
 export function WeekFork({
-  rows,
+  pairs,
   week,
   unavailableMessage,
 }: {
-  rows: ForkRow[];
+  pairs: ForkPair[];
   week: number | null;
   unavailableMessage?: string;
 }) {
@@ -53,85 +83,138 @@ export function WeekFork({
     );
   }
 
-  if (rows.length === 0) return null;
+  if (pairs.length === 0) return null;
 
-  /* One scale for every row, so bar widths are comparable down the column.
-     Scaling each row to its own range would make a team with nothing at stake
-     look exactly like a team whose season is on the line. */
-  const lowest = Math.min(...rows.map((row) => Math.min(row.lossProb, row.winProb, row.nowProb)));
-  const highest = Math.max(...rows.map((row) => Math.max(row.lossProb, row.winProb, row.nowProb)));
-  const floor = Math.max(0, Math.floor((lowest - 4) / 5) * 5);
-  const ceiling = Math.min(100, Math.ceil((highest + 4) / 5) * 5);
-  const span = Math.max(1, ceiling - floor);
-  const pct = (value: number) => ((value - floor) / span) * 100;
+  /* Every bar hangs off a common now-line rather than being plotted on an
+     absolute 0-100 axis.
 
-  const ordered = [...rows].sort(
-    (a, b) => Math.abs(b.winProb - b.lossProb) - Math.abs(a.winProb - a.lossProb),
-  );
+     The absolute version was the first build and it wasted the widget. A
+     league with a 93% team and an 11% team forces the axis to span 82 points,
+     so the largest thing on screen becomes the gap between two teams that are
+     not even playing each other, and the swings the graphic exists to show
+     end up as stubs using a fifth of the height. In a strip this short that
+     is the whole budget spent on the wrong quantity.
+
+     Level is not lost, it is moved: each team's standing is printed under its
+     own crest, which is where you look for it anyway. What the geometry now
+     carries is the thing that is otherwise invisible: how far a team moves,
+     and whether it moves further up than down. */
+  const { reach, leg } = forkScale(pairs);
+
+  /* Biggest swing first. The engine's importance is the ranking to trust —
+     it is the number the sim actually produced — and reading left to right
+     then walks the week from the game that decides most to the one that
+     decides least. */
+  const ordered = [...pairs].sort((a, b) => b.importance - a.importance);
 
   return (
-    <section aria-labelledby="week-fork-title" className="week-fork">
-      <header className="week-fork__head">
-        <div>
-          <p className="week-fork__kicker">What this week is worth</p>
-          <h2 className="week-fork__title" id="week-fork-title">
-            Playoff odds, win or lose{week != null ? ` · Week ${week}` : ''}
-          </h2>
-        </div>
-        <p className="week-fork__legend">
-          <span className="week-fork__legend-item week-fork__legend-item--loss">Loss</span>
-          <span className="week-fork__legend-item week-fork__legend-item--now">Now</span>
-          <span className="week-fork__legend-item week-fork__legend-item--win">Win</span>
+    <section
+      aria-label={`Playoff odds if each team wins or loses${week != null ? `, week ${week}` : ''}`}
+      className="week-fork"
+    >
+      <div className="week-fork__gutter">
+        <p className="week-fork__axis-label">
+          <span>Playoff swing</span>
+          {week != null ? <span className="week-fork__week">Wk {week}</span> : null}
         </p>
-      </header>
-
-      <div className="week-fork__rows">
-        {ordered.map((row) => {
-          const low = Math.min(row.winProb, row.lossProb);
-          const high = Math.max(row.winProb, row.lossProb);
-          const swing = high - low;
-
-          return (
-            <div
-              className={['week-fork__row', row.isUser ? 'week-fork__row--you' : '']
-                .filter(Boolean)
-                .join(' ')}
-              key={row.rosterId}
-            >
-              <span className="week-fork__team">
-                <span className="week-fork__team-name">{row.teamName}</span>
-                <span className="week-fork__team-opp">vs {row.opponentName}</span>
-              </span>
-
-              <span className="week-fork__track">
-                {/* The span between the two branches. Its width IS the story. */}
-                <span
-                  className="week-fork__span"
-                  style={{ left: `${pct(low)}%`, width: `${Math.max(0.6, pct(high) - pct(low))}%` }}
-                />
-                <span className="week-fork__tick week-fork__tick--loss" style={{ left: `${pct(row.lossProb)}%` }} />
-                <span className="week-fork__tick week-fork__tick--win" style={{ left: `${pct(row.winProb)}%` }} />
-                <span className="week-fork__now" style={{ left: `${pct(row.nowProb)}%` }} />
-              </span>
-
-              <span className="week-fork__numbers">
-                <span className="week-fork__num week-fork__num--loss">{row.lossProb.toFixed(0)}%</span>
-                <span className="week-fork__num week-fork__num--now">{row.nowProb.toFixed(0)}%</span>
-                <span className="week-fork__num week-fork__num--win">{row.winProb.toFixed(0)}%</span>
-              </span>
-
-              {/* Percentage points of playoff probability riding on one game. */}
-              <span className="week-fork__swing">{swing.toFixed(0)}</span>
-            </div>
-          );
-        })}
+        <div className="week-fork__scale">
+          <span className="week-fork__gridline-label" style={{ top: '0%' }}>
+            +{reach}
+          </span>
+          <span className="week-fork__gridline-label week-fork__gridline-label--zero" style={{ top: '50%' }}>
+            Now
+          </span>
+          <span className="week-fork__gridline-label" style={{ top: '100%' }}>
+            −{reach}
+          </span>
+        </div>
+        <p className="week-fork__key">
+          <span className="week-fork__key-item week-fork__key-item--win">Win</span>
+          <span className="week-fork__key-item week-fork__key-item--loss">Lose</span>
+        </p>
       </div>
 
-      <p className="week-fork__foot">
-        The bar spans where a loss and a win leave each team&apos;s playoff odds.
-        Wider means more is riding on it. The last column is the gap, in
-        percentage points.
-      </p>
+      <div className="week-fork__games">
+        {ordered.map((pair) => (
+          <div
+            className={[
+              'week-fork__game',
+              pair.sides.some((side) => side.isUser) ? 'week-fork__game--you' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            key={pair.matchupId}
+          >
+            {/* One baseline per game, edge to edge, so adjacent games join
+                into a line that runs the width of the strip. Drawn per game
+                rather than as one overlay because the strip wraps to two rows
+                on a phone, and an overlay can only be right about one of
+                them. */}
+            <div aria-hidden="true" className="week-fork__grid">
+              <span className="week-fork__gridline" style={{ top: '0%' }} />
+              <span className="week-fork__gridline week-fork__gridline--now" style={{ top: '50%' }} />
+              <span className="week-fork__gridline" style={{ top: '100%' }} />
+            </div>
+
+            <div className="week-fork__plot">
+              {pair.sides.map((side) => {
+                /* The bar is split at where the team stands now, not drawn as
+                   one block from loss to win. The pivot is the point of the
+                   graphic: green is what a win ADDS, red is what a loss TAKES,
+                   and those two are rarely the same size. A single gradient
+                   bar hid that asymmetry behind a colour ramp — it showed how
+                   much was at stake without showing which way it leaned. */
+                /* A floor on each leg so a branch worth almost nothing is
+                   still a mark you can see, not a hairline that reads as a
+                   rendering fault. */
+                const up = Math.max(2, leg(side.winProb - side.nowProb));
+                const down = Math.max(2, leg(side.nowProb - side.lossProb));
+
+                return (
+                  <div className="week-fork__col" key={side.rosterId}>
+                    <div
+                      className="week-fork__track"
+                      title={`${side.teamName}: ${side.nowProb.toFixed(0)}% now, ${side.winProb.toFixed(0)}% with a win, ${side.lossProb.toFixed(0)}% with a loss`}
+                    >
+                      <span
+                        className="week-fork__leg week-fork__leg--up"
+                        style={{ bottom: '50%', height: `${up}%` }}
+                      />
+                      <span
+                        className="week-fork__leg week-fork__leg--down"
+                        style={{ top: '50%', height: `${down}%` }}
+                      />
+                      {/* The destinations, not the deltas: the leg length is
+                          already the delta, so labelling its end with the
+                          same fact twice would leave "and then where am I?"
+                          unanswered. */}
+                      <span
+                        className="week-fork__cap week-fork__cap--win"
+                        style={{ bottom: `${50 + up}%` }}
+                      >
+                        {side.winProb.toFixed(0)}
+                      </span>
+                      <span
+                        className="week-fork__cap week-fork__cap--loss"
+                        style={{ top: `${50 + down}%` }}
+                      >
+                        {side.lossProb.toFixed(0)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Same two-column grid as the plot above, so every chip sits
+                under its own candle. */}
+            <div className="week-fork__teams">
+              <TeamChip side={pair.sides[0]} />
+              <TeamChip side={pair.sides[1]} />
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

@@ -43,6 +43,45 @@ const MATCHUP_IDS = {
   poseidon: 803,
 };
 
+/**
+ * Conditioned playoff odds for the replay week.
+ *
+ * `nowProb` matches each team's `playoffProb` in the futures block below on
+ * purpose: they are the same quantity from the same sim, and a fixture where
+ * the fork and the futures table disagree would train the eye to accept a
+ * contradiction the real product must never ship.
+ */
+const DESIGN_FORKS = {
+  week: WEEK,
+  available: true,
+  forks: [
+    {
+      matchupId: MATCHUP_IDS.user,
+      importance: 100,
+      sides: [
+        { rosterId: '1', nowProb: 75.6, winProb: 88.2, lossProb: 61.0 },
+        { rosterId: '2', nowProb: 64.3, winProb: 79.4, lossProb: 47.1 },
+      ],
+    },
+    {
+      matchupId: MATCHUP_IDS.apollo,
+      importance: 90,
+      sides: [
+        { rosterId: '3', nowProb: 85.1, winProb: 93.4, lossProb: 75.2 },
+        { rosterId: '4', nowProb: 43.1, winProb: 61.8, lossProb: 26.4 },
+      ],
+    },
+    {
+      matchupId: MATCHUP_IDS.poseidon,
+      importance: 94,
+      sides: [
+        { rosterId: '5', nowProb: 71.7, winProb: 84.0, lossProb: 57.9 },
+        { rosterId: '6', nowProb: 23.7, winProb: 39.6, lossProb: 11.2 },
+      ],
+    },
+  ],
+};
+
 type FixtureBundle = {
   bootstrap: LeagueBootstrap;
   schedule: ScheduleWeek[];
@@ -1159,6 +1198,9 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
   }
   if (endpoint === 'line-history' && method === 'GET') {
     return { history: bundle.history };
+  }
+  if (endpoint === 'forks' && method === 'GET') {
+    return DESIGN_FORKS;
   }
   if (endpoint === 'trade-suggestions' && method === 'POST') {
     return bundle.suggestions;

@@ -1,43 +1,43 @@
 /* What this week is worth.
-   One row per team, one shared scale, so the width of a bar is comparable down
-   the whole column. Per-row scaling would make a team with nothing at stake
-   look identical to one whose season is on the line, which is the single thing
-   this graphic exists to distinguish. */
+
+   A strip, not a stack. The old rendering was one horizontal row per team, so
+   height grew with the size of the league: twelve teams pushed the board they
+   were supposed to introduce most of a screen down the page. Turning the bars
+   vertical transposes that — a bigger league now costs width, which the strip
+   has, instead of height, which the page does not.
+
+   One shared scale across every candle. Scaling each game to its own range
+   would make a matchup with nothing at stake look exactly like one with a
+   season on it, which is the single distinction this graphic exists to draw. */
+
 .week-fork {
+  --fork-track: 80px;
+  --fork-cap: 13px;
+  --fork-win: var(--green);
+  --fork-loss: var(--red);
+
   display: grid;
-  gap: var(--space-md);
-  padding: var(--space-lg);
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-md) var(--space-sm);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--bg-surface);
 }
 
 .week-fork--empty {
+  display: grid;
+  grid-template-columns: 1fr;
   gap: var(--space-2xs);
-}
-
-.week-fork__head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-lg);
-  flex-wrap: wrap;
+  padding: var(--space-lg);
 }
 
 .week-fork__kicker {
-  margin: 0 0 var(--space-2xs);
+  margin: 0;
   color: var(--text-amber);
   font-family: var(--font-condensed);
   font-size: var(--type-caption);
   letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.week-fork__title {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: var(--type-title-md);
   text-transform: uppercase;
 }
 
@@ -47,162 +47,327 @@
   font-size: var(--type-caption);
 }
 
-.week-fork__legend {
-  display: inline-flex;
-  gap: var(--space-md);
-  margin: 0;
+/* The gutter carries the axis and the key. It replaces the header: the same
+   two facts a title would state, in a column that was empty anyway, for no
+   vertical cost. */
+.week-fork__gutter {
+  display: grid;
+  grid-template-rows: auto var(--fork-track) auto;
+  row-gap: 0;
+  padding-block: var(--fork-cap);
 }
 
-.week-fork__legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--text-dim);
+.week-fork__axis-label {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 4px;
+  color: var(--text-amber);
   font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
-.week-fork__legend-item::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
+.week-fork__week {
+  color: var(--ink-3);
 }
 
-.week-fork__legend-item--loss::before { background: var(--red); }
-.week-fork__legend-item--win::before { background: var(--green); }
-.week-fork__legend-item--now::before {
-  width: 2px;
-  height: 12px;
-  border-radius: 1px;
-  background: var(--text-primary);
+.week-fork__scale {
+  position: relative;
 }
 
-.week-fork__rows {
+.week-fork__gridline-label--zero {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.week-fork__gridline-label {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.week-fork__key {
   display: grid;
   gap: 2px;
+  margin: 6px 0 0;
 }
 
-.week-fork__row {
-  display: grid;
-  grid-template-columns: minmax(120px, 1.1fr) minmax(0, 3fr) 128px 44px;
+.week-fork__key-item {
+  display: flex;
   align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-xs) var(--space-sm);
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.week-fork__key-item::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: currentcolor;
+}
+
+.week-fork__key-item--win::before {
+  background: var(--fork-win);
+}
+
+.week-fork__key-item--loss::before {
+  background: var(--fork-loss);
+}
+
+/* Games run across. Each is a fixed-minimum column so a six-game week and a
+   three-game week draw candles of the same width, rather than one league
+   getting fat bars because it happens to be small. Wraps rather than scrolls:
+   a strip that runs off the side of a phone hides half the week behind a
+   gesture nobody knows is there. */
+.week-fork__games {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  row-gap: var(--space-xs);
+}
+
+.week-fork__grid {
+  position: absolute;
+  inset: var(--fork-cap) 0 auto 0;
+  height: var(--fork-track);
+  pointer-events: none;
+}
+
+.week-fork__gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+/* The now-line every bar pivots on. Brighter than the two edge rules because
+   it is the only one that is a fact rather than a ruler mark. */
+.week-fork__gridline--now {
+  height: 1px;
+  background: rgba(244, 245, 242, 0.42);
+}
+
+.week-fork__game {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 138px;
+  max-width: 230px;
+  /* Wider gutters between games than between the two teams inside one, so
+     twelve bars group into six matchups by proximity rather than by asking
+     the reader to trace a divider line. */
+  padding: 0 var(--space-sm) 2px;
   border-radius: var(--radius-sm);
 }
 
-.week-fork__row:nth-child(even) {
-  background: rgba(255, 255, 255, 0.014);
+.week-fork__game + .week-fork__game::before {
+  content: '';
+  position: absolute;
+  top: var(--fork-cap);
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: var(--border-subtle);
 }
 
-.week-fork__row--you {
-  background: color-mix(in srgb, var(--amber) 8%, transparent);
-  box-shadow: inset 3px 0 0 var(--amber);
+/* Your game, marked without being shouted. The wash alone: a rule across the
+   top of the column landed a pixel from the axis gridline and read as part of
+   the chart rather than as a highlight of it. */
+.week-fork__game--you {
+  background: linear-gradient(180deg, rgba(232, 84, 29, 0.1), transparent 78%);
 }
 
-.week-fork__team {
+/* Plot and chips share one two-column grid so every candle stands directly
+   over the crest it belongs to. Centring them independently drifted apart as
+   soon as one team's name was longer than the other's. */
+.week-fork__plot,
+.week-fork__teams {
   display: grid;
-  gap: 1px;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2xs);
+}
+
+.week-fork__plot {
+  padding-block: var(--fork-cap);
+}
+
+.week-fork__col {
+  display: flex;
+  justify-content: center;
   min-width: 0;
 }
 
-.week-fork__team-name {
-  color: var(--text-primary);
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.week-fork__team-opp {
-  color: var(--text-dim);
-  font-size: 0.62rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* The track. Everything on it is positioned on one shared scale. */
 .week-fork__track {
   position: relative;
-  height: 22px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-inset);
+  width: 100%;
+  max-width: 20px;
+  height: var(--fork-track);
+  overflow: visible;
 }
 
-/* The distance between the two branches: the actual subject of the graphic. */
-.week-fork__span {
+/* Two legs meeting at where the team stands now: green up, red down. Solid
+   fills rather than one gradient bar, because the length of each leg is the
+   fact — how much a win adds, how much a loss costs — and a ramp between two
+   hues reads as neither. */
+.week-fork__leg {
   position: absolute;
-  top: 50%;
-  height: 6px;
-  transform: translateY(-50%);
-  border-radius: 3px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--red) 55%, transparent),
-    color-mix(in srgb, var(--green) 55%, transparent)
-  );
+  left: 0;
+  right: 0;
 }
 
-.week-fork__tick {
+.week-fork__leg--up {
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, var(--fork-win), rgba(52, 210, 123, 0.55));
+}
+
+.week-fork__leg--down {
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, rgba(255, 92, 77, 0.55), var(--fork-loss));
+}
+
+/* The endpoint numbers grow outward from the candle ends, so they label the
+   thing they sit against and never cross it. */
+.week-fork__cap {
   position: absolute;
-  top: 50%;
-  width: 3px;
-  height: 14px;
-  margin-left: -1.5px;
-  transform: translateY(-50%);
-  border-radius: 2px;
-}
-
-.week-fork__tick--loss { background: var(--red); }
-.week-fork__tick--win { background: var(--green); }
-
-/* Where it stands with nothing forced. A line rather than a third tick,
-   because it is not an outcome — it is the price of the two. */
-.week-fork__now {
-  position: absolute;
-  top: 50%;
-  width: 2px;
-  height: 22px;
-  margin-left: -1px;
-  transform: translateY(-50%);
-  background: var(--text-primary);
-  box-shadow: 0 0 0 1px var(--bg-surface);
-}
-
-.week-fork__numbers {
-  display: inline-flex;
-  justify-content: space-between;
-  gap: var(--space-xs);
+  left: 50%;
+  transform: translateX(-50%);
   font-family: var(--font-num);
-  font-size: var(--type-caption);
-  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.week-fork__num--loss { color: var(--red); }
-.week-fork__num--now { color: var(--text-soft); }
-.week-fork__num--win { color: var(--green); }
-
-/* Percentage points riding on one game. */
-.week-fork__swing {
-  color: var(--text-primary);
-  font-family: var(--font-price);
-  font-size: var(--type-body);
-  font-weight: var(--font-price-weight);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+.week-fork__cap--win {
+  margin-bottom: 3px;
+  color: var(--fork-win);
 }
 
-.week-fork__foot {
-  margin: 0;
-  max-width: 82ch;
+.week-fork__cap--loss {
+  margin-top: 3px;
+  color: var(--fork-loss);
+}
+
+/* Crest and standing on one line, name on its own beneath it. Laid out in a
+   row the three fought over about forty pixels and the name lost to an
+   ellipsis after four characters. */
+.week-fork__team {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.week-fork__team-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.week-fork__crest {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  font-size: 8px;
+}
+
+.week-fork__team--you .week-fork__crest {
+  box-shadow: 0 0 0 1.5px var(--amber);
+}
+
+.week-fork__team-now {
   color: var(--text-dim);
-  font-size: var(--type-caption);
-  line-height: 1.6;
+  font-family: var(--font-num);
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* Two lines, not one. At twelve teams a chip is about eighty pixels wide and
+   a single nowrap line ellipsised most real team names to a word and a half,
+   which defeats the crest sitting above it. The clamp is paid for out of the
+   track height, so the strip is the same size it was. */
+.week-fork__team-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-height: 23px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.week-fork__team--you .week-fork__team-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  /* The gutter is an axis, and an axis can only label one row of bars. Once
+     the strip wraps, its scale marks line up with nothing, so it stops being
+     a scale and becomes a caption: the same label and key, laid out along one
+     line above the games. */
+  .week-fork {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-xs);
+    padding-inline: var(--space-sm);
+  }
+
+  .week-fork__gutter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px var(--space-sm);
+    padding-block: 0;
+  }
+
+  .week-fork__axis-label {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .week-fork__scale {
+    display: none;
+  }
+
+  .week-fork__key {
+    display: flex;
+    gap: var(--space-sm);
+    margin: 0;
+  }
+
+  /* Two games per row on a phone. Six charts cannot share a 375px screen at
+     any width that leaves the bars readable, so the strip gives up its single
+     row before it gives up legibility. */
+  .week-fork__game {
+    flex: 1 1 46%;
+    min-width: 0;
+    max-width: none;
+    padding-inline: var(--space-2xs);
+  }
+
+  /* The divider marks a boundary between neighbours in a row; on a wrapped
+     grid the first game of each row has no left neighbour to be divided
+     from. */
+  .week-fork__game + .week-fork__game::before {
+    content: none;
+  }
 }

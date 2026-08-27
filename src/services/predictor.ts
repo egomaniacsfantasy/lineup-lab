@@ -1,3 +1,4 @@
+import { maybeHandleDesignFixtureRequest } from '../dev/designFixtures.ts';
 import { withContext } from './leagueApi.ts';
 
 /**
@@ -162,6 +163,18 @@ export async function fetchWeekForks(
     const query = new URLSearchParams({ userId });
     if (week != null) query.set('week', String(week));
     const [url, init] = withContext(`/api/league/${leagueId}/forks?${query}`);
+
+    /* Design-fixture leagues answer locally. Without this the replay page hit
+       the real API, which has no conditioned sim behind it yet, so the one
+       surface built to be designed against could only ever render its own
+       error state. Reads the resolved url rather than a hoisted path literal:
+       the native-shell guard requires every /api literal to sit directly
+       inside withContext(), and the fixture matcher only looks at pathname. */
+    const fixture = (await maybeHandleDesignFixtureRequest(url)) as
+      | { week: number; forks: WeekFork[] }
+      | null;
+    if (fixture) return { available: true, week: fixture.week, forks: fixture.forks ?? [] };
+
     const response = await fetch(url, init);
 
     if (response.status === 404 || response.status === 501) {
