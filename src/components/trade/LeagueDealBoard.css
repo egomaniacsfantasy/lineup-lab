@@ -17,6 +17,19 @@
   gap: 8px;
 }
 
+.ldb__title {
+  display: grid;
+  gap: 2px;
+}
+
+.ldb__sub {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .ldb__label {
   color: var(--ink-3);
   font-family: var(--font-ui);
@@ -49,14 +62,44 @@
 }
 
 /* The whole row opens the deal. A wide surface beats a small target when the
-   row is already a single idea. */
+   row is already a single idea.
+
+   Six columns, and the same six are labelled once at the top of the list. The
+   two numbers on the right used to be a green percentage beside a grey one
+   with nothing saying which was which: one is what the trade does to your
+   title odds and the other is how likely the other manager is to say yes, and
+   they are not the same kind of number. */
+.ldb__columns,
 .ldb__open {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) minmax(0, 200px);
+  grid-template-columns:
+    minmax(0, 1fr)
+    18px
+    minmax(0, 1fr)
+    72px
+    76px;
   align-items: center;
   gap: 14px;
+}
+
+.ldb__columns {
+  padding: 0 12px 2px;
+  color: var(--text-muted);
+  font-family: var(--font-condensed);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ldb__columns > :nth-child(4),
+.ldb__columns > :nth-child(5) {
+  text-align: right;
+}
+
+.ldb__open {
+  position: relative;
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   border-radius: 13px;
   background: color-mix(in srgb, var(--bg-inset) 45%, transparent);
@@ -71,81 +114,94 @@
   background: color-mix(in srgb, var(--bg-inset) 70%, transparent);
 }
 
+/* Who the deal is with, above the row it belongs to. It used to be stacked on
+   top of the two numbers on the right, which put the manager's name in the
+   column of figures. */
+.ldb__partner {
+  grid-column: 1 / -1;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
 .ldb__side {
   display: grid;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
 }
 
-.ldb__side--get {
-  justify-items: end;
-  text-align: right;
-}
-
-.ldb__faces {
-  display: inline-flex;
+.ldb__player {
+  display: flex;
   align-items: center;
+  gap: 9px;
+  min-width: 0;
 }
 
 .ldb__face {
-  width: 30px;
-  height: 30px;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
 }
 
-.ldb__face + .ldb__face {
-  margin-left: -9px;
+.ldb__player-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
 }
 
-.ldb__names {
+.ldb__player-name {
   overflow: hidden;
-  color: var(--text-soft);
+  color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ldb__arrow {
-  color: color-mix(in srgb, var(--amber) 75%, transparent);
-  font-size: 16px;
-}
-
-.ldb__read {
-  display: grid;
-  gap: 2px;
-  justify-items: end;
-  min-width: 0;
-}
-
-.ldb__partner {
-  overflow: hidden;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ldb__numbers {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+.ldb__player-meta {
+  color: var(--ink-3);
   font-family: var(--font-num);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.ldb__player-more {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* The side you give up reads quieter than the side you receive, so the
+   direction of the trade is legible before the arrow is. */
+.ldb__side--send .ldb__player-name {
+  color: var(--text-soft);
+}
+
+.ldb__arrow {
+  justify-self: center;
+  color: color-mix(in srgb, var(--amber) 80%, transparent);
+  font-size: 17px;
+}
+
+.ldb__delta,
+.ldb__accept {
+  justify-self: end;
+  font-family: var(--font-price);
   font-variant-numeric: tabular-nums;
 }
 
 .ldb__delta {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 19px;
 }
 
 .ldb__delta--up { color: var(--green); }
 .ldb__delta--down { color: var(--red); }
 
 .ldb__accept {
-  color: var(--text-muted);
-  font-size: 11.5px;
+  color: var(--text-soft);
+  font-size: 15px;
 }
 
 .ldb__share {

@@ -173,3 +173,27 @@ test('both surfaces filter, so they cannot disagree', async () => {
     );
   }
 });
+
+test('a deal that lowers your title odds is not one you would call about', () => {
+  /* The board's heading promises both sides gain. A row showing your own
+     title odds falling contradicts it on the same line, in red. The list
+     builder carried a comment asserting the server guarantees a positive
+     move for you — nothing enforces that, and the design fixture ships a
+     suggestion at -2.7 which rendered under the heading unchallenged. */
+  const costsYou = {
+    give: [{ id: 'mccaffrey' }],
+    get: [{ id: 'jefferson' }],
+    youDelta: -2.7,
+    partnerDelta: 1.9,
+  };
+
+  const rejection = dealRejection(costsYou, positionOf, ONE_QB);
+  assert.ok(rejection, 'a deal that costs you title odds was called worth a call');
+  assert.equal(rejection.reason, 'costs-you');
+
+  /* And a flat one: no gain is not a gain. */
+  assert.equal(
+    dealRejection({ ...costsYou, youDelta: 0, partnerDelta: 0 }, positionOf, ONE_QB)?.reason,
+    'costs-you',
+  );
+});

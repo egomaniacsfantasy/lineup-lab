@@ -165,17 +165,30 @@ export async function drawTradeCard(
     const x = PAD + (colW + 44) * index;
     const cx = x + colW / 2;
 
+    /* Coloured by outcome, not by whose column it is.
+
+       The panels were amber for you and grey for them, which says who is
+       reading the card rather than anything about the trade. The card's whole
+       argument is what the deal does to both teams, and it was making that
+       argument only in two small figures under the panels while the panels
+       themselves stayed neutral. The side that gains is edged green now and
+       the side that gives up ground is edged red, so the argument survives
+       being glanced at in a group chat. */
+    const gains = side.titleUp;
+    const edge = gains ? 'rgba(52,210,123,0.55)' : 'rgba(255,92,77,0.5)';
+    const wash = gains ? 'rgba(52,210,123,0.09)' : 'rgba(255,92,77,0.08)';
+
     /* Lifted off the background rather than drawn into it, so the two sides
        read as two objects on a table. */
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.55)';
     ctx.shadowBlur = 34;
     ctx.shadowOffsetY = 14;
-    ctx.fillStyle = index === 0 ? 'rgba(232,84,29,0.10)' : 'rgba(244,245,242,0.05)';
+    ctx.fillStyle = wash;
     roundRect(ctx, x, top, colW, cardH, 30);
     ctx.fill();
     ctx.restore();
-    ctx.strokeStyle = index === 0 ? 'rgba(232,84,29,0.42)' : 'rgba(244,245,242,0.12)';
+    ctx.strokeStyle = edge;
     ctx.lineWidth = 2;
     roundRect(ctx, x, top, colW, cardH, 30);
     ctx.stroke();
@@ -204,7 +217,7 @@ export async function drawTradeCard(
     ctx.font = `700 ${managerSize}px ${P.ui}`;
     ctx.fillText(side.manager, mX + mR + 12, top + 61);
 
-    label(index === 0 ? 'Gets' : 'Gets', cx, top + 108, 'center');
+    label('Gets', cx, top + 108, 'center');
 
     /* Headshots are the point of the card, so they get the room. One player
        gets a portrait; three still clear 62px of radius, which is the size
@@ -227,7 +240,7 @@ export async function drawTradeCard(
         ctx.textAlign = 'center';
         ctx.fillText(initialsFor(asset.name), cx, fy + faceR * 0.24);
       }
-      ctx.strokeStyle = index === 0 ? 'rgba(232,84,29,0.55)' : 'rgba(244,245,242,0.22)';
+      ctx.strokeStyle = edge;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(cx, fy, faceR, 0, Math.PI * 2);

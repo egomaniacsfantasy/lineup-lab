@@ -23,7 +23,8 @@ export interface DealShape {
 
 export type DealRejection =
   | { reason: 'qb-for-skill'; detail: string }
-  | { reason: 'lopsided'; detail: string };
+  | { reason: 'lopsided'; detail: string }
+  | { reason: 'costs-you'; detail: string };
 
 /**
  * Below this much combined championship movement, nobody is being fleeced and
@@ -85,6 +86,22 @@ export function dealRejection(
         detail: `${gave} for ${got} straight across in a one-quarterback league`,
       };
     }
+  }
+
+  /* A deal that leaves you worse off.
+
+     The board's heading now says both sides gain, and a row showing your
+     title odds falling contradicts it on the same line. The code that built
+     this list carried a comment asserting the server guarantees a positive
+     move for you; that assertion is not enforced anywhere, and a suggestion
+     with a negative one renders in red under a heading promising the
+     opposite. Cheap to check, and it makes the heading true. */
+  const yourMove = deal.youDelta ?? 0;
+  if (yourMove <= 0) {
+    return {
+      reason: 'costs-you',
+      detail: `your title odds move ${yourMove.toFixed(1)} points`,
+    };
   }
 
   /* One side taking nearly all of the gain.
