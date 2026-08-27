@@ -30,7 +30,9 @@ function TeamChip({ side }: { side: ForkSide }) {
         <TeamAvatar avatarUrl={side.avatarUrl} className="week-fork__crest" name={side.teamName} />
         <span className="week-fork__team-now">{side.nowProb.toFixed(0)}%</span>
       </span>
-      <span className="week-fork__team-name">{side.teamName}</span>
+      <span className="week-fork__team-name">
+        <span>{side.teamName}</span>
+      </span>
     </span>
   );
 }
@@ -99,7 +101,7 @@ export function WeekFork({
      own crest, which is where you look for it anyway. What the geometry now
      carries is the thing that is otherwise invisible: how far a team moves,
      and whether it moves further up than down. */
-  const { reach, leg } = forkScale(pairs);
+  const { leg } = forkScale(pairs);
 
   /* Biggest swing first. The engine's importance is the ranking to trust —
      it is the number the sim actually produced — and reading left to right
@@ -112,22 +114,16 @@ export function WeekFork({
       aria-label={`Playoff odds if each team wins or loses${week != null ? `, week ${week}` : ''}`}
       className="week-fork"
     >
+      {/* No numeric scale down the side.
+
+          It was there as a ruler, on the reasoning that bars you cannot
+          measure are decoration. That reasoning does not survive contact with
+          this chart: every bar already prints its own two endpoints, so the
+          axis was offering a slower way to read a number that was sitting
+          right there. A ruler beside a labelled quantity is furniture. */}
       <div className="week-fork__gutter">
-        <p className="week-fork__axis-label">
-          <span>Playoff swing</span>
-          {week != null ? <span className="week-fork__week">Wk {week}</span> : null}
-        </p>
-        <div className="week-fork__scale">
-          <span className="week-fork__gridline-label" style={{ top: '0%' }}>
-            +{reach}
-          </span>
-          <span className="week-fork__gridline-label week-fork__gridline-label--zero" style={{ top: '50%' }}>
-            Now
-          </span>
-          <span className="week-fork__gridline-label" style={{ top: '100%' }}>
-            −{reach}
-          </span>
-        </div>
+        <p className="week-fork__axis-label">Playoff swing</p>
+        {week != null ? <p className="week-fork__week">Week {week}</p> : null}
         <p className="week-fork__key">
           <span className="week-fork__key-item week-fork__key-item--win">Win</span>
           <span className="week-fork__key-item week-fork__key-item--loss">Lose</span>

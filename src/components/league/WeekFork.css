@@ -17,8 +17,13 @@
   --fork-loss: var(--red);
 
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
   gap: var(--space-sm);
+  /* Less at the bottom than the top on purpose. The chip's name box reserves
+     two lines for every team so the card has a stable bottom edge, which
+     means a one-line name carries about eleven pixels of empty box under it.
+     Symmetric padding therefore reads bottom-heavy; this pays that slack
+     back. */
   padding: var(--space-md) var(--space-md) var(--space-sm);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
@@ -47,57 +52,45 @@
   font-size: var(--type-caption);
 }
 
-/* The gutter carries the axis and the key. It replaces the header: the same
-   two facts a title would state, in a column that was empty anyway, for no
-   vertical cost. */
+/* The gutter names the chart and decodes its two colours. It replaces the
+   header: the same facts a title would state, in a column that was empty
+   anyway, for no vertical cost.
+
+   Its box is exactly the plot band, and the content centres inside it, so the
+   caption sits on the now-line every bar hangs from rather than floating at
+   the top of a column of mostly nothing. */
 .week-fork__gutter {
   display: grid;
-  grid-template-rows: auto var(--fork-track) auto;
-  row-gap: 0;
+  align-content: center;
+  gap: 3px;
+  height: calc(var(--fork-track) + var(--fork-cap) * 2);
   padding-block: var(--fork-cap);
 }
 
 .week-fork__axis-label {
-  display: grid;
-  gap: 2px;
-  margin: 0 0 4px;
+  margin: 0;
   color: var(--text-amber);
   font-family: var(--font-condensed);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  line-height: 1;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  line-height: 1.05;
   text-transform: uppercase;
 }
 
 .week-fork__week {
-  color: var(--ink-3);
-}
-
-.week-fork__scale {
-  position: relative;
-}
-
-.week-fork__gridline-label--zero {
+  margin: 0 0 5px;
   color: var(--text-muted);
-  font-family: var(--font-ui);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.week-fork__gridline-label {
-  position: absolute;
-  right: 6px;
-  transform: translateY(-50%);
-  color: var(--ink-3);
-  font-family: var(--font-num);
-  font-size: 9px;
+  font-family: var(--font-condensed);
+  font-size: 12px;
+  letter-spacing: 0.08em;
   line-height: 1;
+  text-transform: uppercase;
 }
 
 .week-fork__key {
   display: grid;
-  gap: 2px;
-  margin: 6px 0 0;
+  gap: 3px;
+  margin: 0;
 }
 
 .week-fork__key-item {
@@ -299,17 +292,28 @@
 /* Two lines, not one. At twelve teams a chip is about eighty pixels wide and
    a single nowrap line ellipsised most real team names to a word and a half,
    which defeats the crest sitting above it. The clamp is paid for out of the
-   track height, so the strip is the same size it was. */
+   track height, so the strip is the same size it was.
+
+   The box always reserves both lines so the card has a stable bottom edge,
+   and the text centres inside it. Top-aligned, a real league's mix of one and
+   two line names left half the columns ending eleven pixels short of the
+   others, and that ragged white is what reads as dead space along the bottom
+   of the strip. */
 .week-fork__team-name {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: grid;
+  align-content: center;
   min-height: 23px;
-  overflow: hidden;
   color: var(--text-muted);
   font-size: 10px;
   line-height: 1.15;
   text-align: center;
+}
+
+.week-fork__team-name > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
 
@@ -332,20 +336,21 @@
   .week-fork__gutter {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: baseline;
     gap: 4px var(--space-sm);
+    /* The desktop gutter is sized to the plot band so its caption lands on
+       the now-line. Wrapped, there is no single band to centre against, so it
+       goes back to hugging its own content. */
+    height: auto;
     padding-block: 0;
   }
 
   .week-fork__axis-label {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    margin: 0;
+    font-size: 13px;
   }
 
-  .week-fork__scale {
-    display: none;
+  .week-fork__week {
+    margin: 0;
   }
 
   .week-fork__key {
