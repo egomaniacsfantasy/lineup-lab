@@ -303,6 +303,27 @@
   font-weight: 700;
 }
 
+/* Playoff week: opponent unknown, but the team's own projected points ARE known. */
+.schedule-grid__proj {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.schedule-grid__proj-val {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-grid__proj-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
 .schedule-grid__row--win .schedule-grid__result-badge {
   color: var(--green);
 }

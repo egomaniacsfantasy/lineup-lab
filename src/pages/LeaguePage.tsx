@@ -449,19 +449,28 @@ export function LeaguePage() {
 
   const connectedScheduleItems = useMemo(() => {
     if (!connectedSeason) return [];
-    if (!bootstrap || !liveBoardLine) return connectedSeason.scheduleItems;
-    return connectedSeason.scheduleItems.map((item) =>
-      item.week === bootstrap.week && item.status === 'live'
-        ? {
-            ...item,
-            yourLine: liveBoardLine.moneyline,
-            winProb: liveBoardLine.winProb ?? item.winProb,
-            projection: liveBoardLine.projection ?? item.projection,
-            opponentProjection: liveBoardLine.opponentProjection ?? item.opponentProjection,
-          }
-        : item,
-    );
-  }, [bootstrap, connectedSeason, liveBoardLine]);
+    const userRosterId = String(connectedSeason.userTeam.rosterId);
+    return connectedSeason.scheduleItems.map((item) => {
+      let next = item;
+      // Live current-week line overlay.
+      if (bootstrap && liveBoardLine && item.week === bootstrap.week && item.status === 'live') {
+        next = {
+          ...next,
+          yourLine: liveBoardLine.moneyline,
+          winProb: liveBoardLine.winProb ?? next.winProb,
+          projection: liveBoardLine.projection ?? next.projection,
+          opponentProjection: liveBoardLine.opponentProjection ?? next.opponentProjection,
+        };
+      }
+      // Playoff weeks have no opponent yet, so the schedule leaves projection empty.
+      // Show the user's own optimal-lineup projection for the week anyway.
+      if (next.isPlayoff && next.projection == null) {
+        const proj = projByWeekRoster.get(`${next.week}:${userRosterId}`);
+        if (proj != null) next = { ...next, projection: proj };
+      }
+      return next;
+    });
+  }, [bootstrap, connectedSeason, liveBoardLine, projByWeekRoster]);
 
   const setLeagueView = (view: LeagueView) => {
     /* The default view owns the bare URL, so /league and /league?view=board are

@@ -412,24 +412,27 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
 export function weekProjections(ctx) {
   const prepared = prepareLeagueCtx(ctx);
   if (!prepared) return { available: false, weeks: [] };
-  const { teams, projectionMap, catalog, scheduleWeeks, week, slotLabels } = prepared;
-  const teamById = new Map(teams.map((t) => [t.rosterId, t]));
+  const { teams, projectionMap, catalog, scheduleWeeks, week, slotLabels, league } = prepared;
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
   const from = week ?? 1;
-  const weeks = (scheduleWeeks ?? [])
-    .filter((entry) => entry.week >= from)
-    .map((entry) => {
-      const scores = {};
-      for (const m of entry.matchups ?? []) {
-        const rid = String(m.rosterId);
-        if (scores[rid] != null) continue;
-        const t = teamById.get(m.rosterId);
-        // Current week = actual starters, future weeks = optimal — matches the sim.
-        scores[rid] = t
-          ? Number(teamWeekProjection(t, entry.week, week, slotLabels, projectionMap, catalog, replacementFor).toFixed(1))
-          : 0;
-      }
-      return { week: entry.week, scores };
-    });
+  // Iterate TEAMS x WEEKS rather than matchups, so the PLAYOFF weeks (15-17) are
+  // covered too: they have no scheduled opponent yet, but each team's own
+  // optimal-lineup projection for that week is well-defined. Range runs from the
+  // current week through the last playoff week the schedule reaches.
+  const regularWeeks = league?.regularSeasonWeeks ?? 14;
+  const playoffWeekStart = league?.playoffWeekStart ?? (regularWeeks + 1);
+  const scheduleLast = (scheduleWeeks ?? []).reduce((m, e) => Math.max(m, e.week), 0);
+  const lastWeek = Math.max(scheduleLast, playoffWeekStart + 2);
+  const weeks = [];
+  for (let w = from; w <= lastWeek; w += 1) {
+    const scores = {};
+    for (const t of teams) {
+      // Current week = actual starters, future/playoff weeks = optimal — matches the sim.
+      scores[String(t.rosterId)] = Number(
+        teamWeekProjection(t, w, week, slotLabels, projectionMap, catalog, replacementFor).toFixed(1),
+      );
+    }
+    weeks.push({ week: w, scores });
+  }
   return { available: true, weeks };
 }

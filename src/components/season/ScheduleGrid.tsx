@@ -252,7 +252,14 @@ export function ScheduleGrid({
               ) : item.status === 'bye' ? (
                 <span className="schedule-grid__result-bye">BYE</span>
               ) : item.isPlayoff ? (
-                <span className="schedule-grid__result-bye">TBD</span>
+                typeof item.projection === 'number' ? (
+                  <span className="schedule-grid__proj">
+                    <span className="schedule-grid__proj-val">{item.projection.toFixed(1)}</span>
+                    <span className="schedule-grid__proj-label">proj pts</span>
+                  </span>
+                ) : (
+                  <span className="schedule-grid__result-bye">TBD</span>
+                )
               ) : (
                 <>
                   <span className="schedule-grid__odds">
