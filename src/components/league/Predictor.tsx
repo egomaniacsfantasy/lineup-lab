@@ -522,7 +522,7 @@ export function Predictor({
                 );
               })}
               {activeStep.matchups.length === 0 ? (
-                <p className="predictor__empty">This round isn’t set yet — call the earlier round first.</p>
+                <p className="predictor__empty">Call the earlier round first to set this one.</p>
               ) : null}
             </>
           ) : (
