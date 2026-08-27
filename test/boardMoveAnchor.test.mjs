@@ -104,6 +104,8 @@ test('the closest line is quoted as a price, not as "pts"', async () => {
     'the closest line stopped quoting a price',
   );
   /* And it names both sides now: "closest line, Poseidon" answered half a
-     question. */
-  assert.match(source, /\{closestLine\.left\.name\} vs \{closestLine\.right\.name\}/);
+     question. The glance card takes the two teams as props and draws each
+     with its crest, so the naming is in the arguments rather than inline. */
+  assert.match(source, /left=\{closestLine\.left\}/);
+  assert.match(source, /right=\{closestLine\.right\}/);
 });

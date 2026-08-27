@@ -38,6 +38,63 @@ type BoardTeam = {
 };
 
 
+/**
+ * One fact about the week, with both teams named and both crests shown.
+ *
+ * The crests are the point of the redesign: four rows of small grey text was
+ * a list you had to read to use, and a league's teams are recognisable by
+ * their logo long before their name has finished being read.
+ */
+function GlanceCard({
+  label,
+  left,
+  right,
+  separator,
+  value,
+  unit,
+  tone,
+}: {
+  label: string;
+  left: BoardTeam;
+  right: BoardTeam;
+  separator: 'over' | 'vs';
+  value: string;
+  unit?: string;
+  tone?: 'up' | 'down';
+}) {
+  return (
+    <div className="matchup-slate__glance-card">
+      <span className="matchup-slate__glance-label">{label}</span>
+      <span
+        className={[
+          'matchup-slate__glance-value',
+          tone ? `matchup-slate__glance-value--${tone}` : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {value}
+        {unit ? <span className="matchup-slate__glance-unit">{unit}</span> : null}
+      </span>
+      <span className="matchup-slate__glance-teams">
+        <span className="matchup-slate__glance-team">
+          {leagueChartFlags.avatars ? (
+            <TeamAvatar avatarUrl={left.avatarUrl} name={left.name} />
+          ) : null}
+          <span className="matchup-slate__glance-team-name">{left.name}</span>
+        </span>
+        <span className="matchup-slate__glance-sep">{separator}</span>
+        <span className="matchup-slate__glance-team">
+          {leagueChartFlags.avatars ? (
+            <TeamAvatar avatarUrl={right.avatarUrl} name={right.name} />
+          ) : null}
+          <span className="matchup-slate__glance-team-name">{right.name}</span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
 function impliedProbability(odds: number) {
   if (odds < 0) {
     return (Math.abs(odds) / (Math.abs(odds) + 100)) * 100;
@@ -263,6 +320,14 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
     if (!current || total > (current.matchup.totalProjection ?? 0)) return row;
     return current;
   }, null);
+  /* The week's biggest repricing. Every row already carries its own move, so
+     this only names the largest of them — it is a pointer into the board
+     rather than a number the board does not have. */
+  const biggestMove = rows.reduce<typeof rows[number] | null>((current, row) => {
+    if (!row.summary) return current;
+    if (!current?.summary) return row;
+    return Math.abs(row.summary.move) > Math.abs(current.summary.move) ? row : current;
+  }, null);
 
   const chartPoints = selectedRow?.detailClosings.map<OddsChartPoint>((point) => ({
     x: point.at,
@@ -303,7 +368,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
             <span>Price</span>
             <span>Spread &amp; total</span>
             <span>Price</span>
-            <span>Move</span>
           </div>
           <div className="matchup-slate__rows">
             {rows.map(({ matchup, left, right, favorite, summary, rowKey }) => {
@@ -327,6 +391,14 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                       <span className="matchup-slate__team-meta">{boardHandle(left.ownerName, left.record)}</span>
                       <span className="matchup-slate__team-name" title={left.name}>{boardDisplayName(left.name)}</span>
                     </span>
+                    {/* Each side carries its own move, on the inside edge of
+                        its lockup. A single figure in a rail off the end of
+                        the row left both team blocks short of the edges they
+                        should sit against, and never said which of the two
+                        teams it was describing. */}
+                    {summary ? (
+                      <span className="matchup-slate__team-move">{moveLabel(summary.move)}</span>
+                    ) : null}
                   </span>
 
                   <span className={['matchup-slate__moneyline', leftFavored ? 'matchup-slate__moneyline--favorite' : '', summary ? 'matchup-slate__moneyline--moving' : ''].filter(Boolean).join(' ')}>
@@ -366,6 +438,14 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                   </span>
 
                   <span className="matchup-slate__team matchup-slate__team--right">
+                    {/* The mirror of the left side's figure. The two sides of a
+                        matchup sum to a hundred, so this is the same movement
+                        signed the other way — printed because a team's own
+                        number belongs beside that team, not inferred from its
+                        opponent's. */}
+                    {summary ? (
+                      <span className="matchup-slate__team-move">{moveLabel(-summary.move)}</span>
+                    ) : null}
                     <span className="matchup-slate__team-copy">
                       <span className="matchup-slate__team-meta">{boardHandle(right.ownerName, right.record)}</span>
                       <span className="matchup-slate__team-name" title={right.name}>{boardDisplayName(right.name)}</span>
@@ -373,13 +453,83 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                     {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={right.avatarUrl} name={right.name} /> : null}
                   </span>
 
-                  <span className="matchup-slate__rail">
-                    {summary ? <span className="matchup-slate__move">{moveLabel(summary.move)}</span> : null}
-                  </span>
                 </button>
               );
             })}
           </div>
+
+          {/* The week at a glance, under the board rather than beside it.
+
+              In the aside it was a narrow card stacked under a chart, so the
+              right column ran well past the bottom of the board and the page
+              finished lopsided. It is four facts about six games — it wants
+              width, not depth, and down here it can carry the crests that
+              make each one identifiable without reading it.
+
+              Every card names both teams. "Biggest favourite: Apollo −141"
+              answers half a question, favourite over whom?, and the missing
+              half is the part worth reading.
+
+              One unit at a time, too. The header carries a global
+              price/percent toggle, so every price here goes through
+              formatAmericanOdds and follows it. The total is the exception
+              and is not a unit question: it is fantasy points, which is what
+              it says. */}
+          <section className="matchup-slate__glance">
+            <span className="matchup-slate__glance-title">The week at a glance</span>
+            <div className="matchup-slate__glance-cards">
+              {biggestFavorite ? (
+                <GlanceCard
+                  label="Biggest favorite"
+                  left={
+                    biggestFavorite.favorite.side === biggestFavorite.left.side
+                      ? biggestFavorite.left
+                      : biggestFavorite.right
+                  }
+                  right={
+                    biggestFavorite.favorite.side === biggestFavorite.left.side
+                      ? biggestFavorite.right
+                      : biggestFavorite.left
+                  }
+                  separator="over"
+                  value={formatAmericanOdds(biggestFavorite.favorite.odds)}
+                />
+              ) : null}
+
+              {closestLine ? (
+                <GlanceCard
+                  label="Closest line"
+                  left={closestLine.left}
+                  right={closestLine.right}
+                  separator="vs"
+                  value={formatAmericanOdds(closestLine.favorite.odds)}
+                />
+              ) : null}
+
+              {highestTotal?.matchup.totalProjection != null ? (
+                <GlanceCard
+                  label="Highest total"
+                  left={highestTotal.left}
+                  right={highestTotal.right}
+                  separator="vs"
+                  unit="pts"
+                  value={highestTotal.matchup.totalProjection.toFixed(1)}
+                />
+              ) : null}
+
+              {biggestMove?.summary ? (
+                <GlanceCard
+                  label="Biggest move"
+                  left={biggestMove.left}
+                  right={biggestMove.right}
+                  separator="vs"
+                  tone={biggestMove.summary.move >= 0 ? 'up' : 'down'}
+                  unit="pp"
+                  value={moveLabel(biggestMove.summary.move)}
+                />
+              ) : null}
+            </div>
+          </section>
         </div>
 
         <aside className="matchup-slate__aside">
@@ -419,56 +569,6 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
             </section>
           ) : null}
 
-          {/* Every line names both teams. "Biggest favourite: Apollo 68%"
-              answers half a question, favourite over whom?, and the missing
-              half is the part that makes it worth reading.
-
-              And one unit at a time. The header carries a global price/percent
-              toggle, so every price here goes through formatAmericanOdds and
-              follows it. Printing a percentage beside an American price in the
-              same three-row card asks the reader to hold two scales at once
-              for no reason. The total is the exception and is not a unit
-              question: it is fantasy points, which is what it says. */}
-          <section className="matchup-slate__glance">
-            <span className="matchup-slate__glance-title">The week at a glance</span>
-            {biggestFavorite ? (
-              <div className="matchup-slate__glance-row">
-                <span className="matchup-slate__glance-label">Biggest favorite</span>
-                <span className="matchup-slate__glance-value">
-                  {formatAmericanOdds(biggestFavorite.favorite.odds)}
-                </span>
-                <span className="matchup-slate__glance-teams">
-                  {biggestFavorite.favorite.name} over{' '}
-                  {biggestFavorite.favorite.side === biggestFavorite.left.side
-                    ? biggestFavorite.right.name
-                    : biggestFavorite.left.name}
-                </span>
-              </div>
-            ) : null}
-            {closestLine ? (
-              <div className="matchup-slate__glance-row">
-                <span className="matchup-slate__glance-label">Closest line</span>
-                <span className="matchup-slate__glance-value">
-                  {formatAmericanOdds(closestLine.favorite.odds)}
-                </span>
-                <span className="matchup-slate__glance-teams">
-                  {closestLine.left.name} vs {closestLine.right.name}
-                </span>
-              </div>
-            ) : null}
-            {highestTotal?.matchup.totalProjection != null ? (
-              <div className="matchup-slate__glance-row">
-                <span className="matchup-slate__glance-label">Highest total</span>
-                <span className="matchup-slate__glance-value">
-                  {highestTotal.matchup.totalProjection.toFixed(1)}
-                  <span className="matchup-slate__glance-unit">pts</span>
-                </span>
-                <span className="matchup-slate__glance-teams">
-                  {highestTotal.left.name} vs {highestTotal.right.name}
-                </span>
-              </div>
-            ) : null}
-          </section>
 
           {/* What the week did to the title market. Only shown when the week
               actually moved something: an empty list means the board opened

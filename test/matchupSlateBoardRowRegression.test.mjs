@@ -61,30 +61,43 @@ test.after(async () => {
   if (vite && ownsVite) vite.kill('SIGTERM');
 });
 
-test('your-game row keeps the avatar outside the fixed rail even after the pill is removed', async () => {
+/**
+ * Each team's movement figure sits on the INSIDE of its own lockup.
+ *
+ * It used to be one figure in a rail column off the end of the row, which
+ * cost twice: both team lockups stopped short of the edges they should sit
+ * against, and the figure never said which of the two teams it described.
+ *
+ * So the invariants are positional, not just "it rendered": the chip is
+ * between the name and the middle of the row on both sides, and the crest is
+ * the outermost thing in the row on both sides.
+ */
+test('the movement figure sits inside each lockup, and the crests stay on the edges', async () => {
   for (const width of [1512, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, colorScheme: 'dark' });
     try {
       await page.goto(`${baseUrl}/design/board-row/collision`, { waitUntil: 'domcontentloaded' });
       await page.locator('.matchup-slate__row-button').first().waitFor({ state: 'visible' });
       const layout = await page.evaluate(() => {
-        const avatar = document.querySelector('.matchup-slate__team--right .team-avatar');
-        const tag = document.querySelector('.matchup-slate__tag');
-        const move = document.querySelector('.matchup-slate__rail .matchup-slate__move');
-        const rail = document.querySelector('.matchup-slate__rail');
-        const rightName = document.querySelector('.matchup-slate__team--right .matchup-slate__team-name');
-        const rightMeta = document.querySelector('.matchup-slate__team--right .matchup-slate__team-meta');
         const rect = (element) => {
           if (!element) return null;
-          const { top, right, bottom, left, width, height } = element.getBoundingClientRect();
-          return { top, right, bottom, left, width, height };
+          const { top, right, bottom, left, width: w, height } = element.getBoundingClientRect();
+          return { top, right, bottom, left, width: w, height };
         };
+        const row = document.querySelector('.matchup-slate__row-button');
+        const leftBlock = document.querySelector('.matchup-slate__team:not(.matchup-slate__team--right)');
+        const rightBlock = document.querySelector('.matchup-slate__team--right');
+        const rightMeta = document.querySelector('.matchup-slate__team--right .matchup-slate__team-meta');
         return {
-          avatar: rect(avatar),
-          tag: rect(tag),
-          move: rect(move),
-          rail: rect(rail),
-          rightName: rect(rightName),
+          row: rect(row),
+          tag: rect(document.querySelector('.matchup-slate__tag')),
+          rail: document.querySelector('.matchup-slate__rail') != null,
+          leftAvatar: rect(leftBlock?.querySelector('.team-avatar')),
+          leftName: rect(leftBlock?.querySelector('.matchup-slate__team-name')),
+          leftMove: rect(leftBlock?.querySelector('.matchup-slate__team-move')),
+          rightAvatar: rect(rightBlock?.querySelector('.team-avatar')),
+          rightName: rect(rightBlock?.querySelector('.matchup-slate__team-name')),
+          rightMove: rect(rightBlock?.querySelector('.matchup-slate__team-move')),
           rightMeta: rightMeta
             ? {
                 clientWidth: rightMeta.clientWidth,
@@ -95,15 +108,52 @@ test('your-game row keeps the avatar outside the fixed rail even after the pill 
         };
       });
 
-      assert.ok(layout.avatar, `missing right avatar at ${width}px`);
+      assert.equal(layout.rail, false, `the movement rail is back at ${width}px`);
       assert.equal(layout.tag, null, `unexpected YOUR GAME pill still rendered at ${width}px`);
-      assert.ok(layout.move, `missing movement chip at ${width}px`);
-      assert.ok(layout.rail, `missing chip rail at ${width}px`);
-      assert.ok(layout.rightName, `missing right team name at ${width}px`);
-      assert.ok(layout.rightMeta, `missing right team meta at ${width}px`);
-      assert.equal(overlaps(layout.avatar, layout.move), false, `avatar overlaps movement chip at ${width}px`);
-      assert.equal(overlaps(layout.avatar, layout.rightName), false, `avatar overlaps right team name at ${width}px`);
-      assert.ok(layout.avatar.right <= layout.rail.left, `avatar bleeds into chip rail at ${width}px`);
+
+      for (const key of ['leftAvatar', 'leftName', 'leftMove', 'rightAvatar', 'rightName', 'rightMove']) {
+        assert.ok(layout[key], `missing ${key} at ${width}px`);
+      }
+
+      /* Each side gets its own figure, so neither is inferred from the other. */
+      assert.equal(
+        overlaps(layout.leftMove, layout.leftName),
+        false,
+        `left movement chip overlaps its team name at ${width}px`,
+      );
+      assert.equal(
+        overlaps(layout.rightMove, layout.rightName),
+        false,
+        `right movement chip overlaps its team name at ${width}px`,
+      );
+
+      /* Inside: the chip is between its own name and the middle of the row. */
+      assert.ok(
+        layout.leftMove.left >= layout.leftName.right - 1,
+        `left movement chip is outside its name rather than inside at ${width}px`,
+      );
+      assert.ok(
+        layout.rightMove.right <= layout.rightName.left + 1,
+        `right movement chip is outside its name rather than inside at ${width}px`,
+      );
+
+      /* Outside: the crest is the outermost thing on its side of the row.
+         Nothing may sit beyond it, which is what the rail used to do. */
+      assert.ok(
+        layout.leftAvatar.left <= layout.leftName.left,
+        `left crest is not the outermost element at ${width}px`,
+      );
+      assert.ok(
+        layout.rightAvatar.right >= layout.rightMove.right &&
+          layout.rightAvatar.right >= layout.rightName.right,
+        `right crest is not the outermost element at ${width}px`,
+      );
+
+      assert.equal(
+        overlaps(layout.rightAvatar, layout.rightName),
+        false,
+        `avatar overlaps right team name at ${width}px`,
+      );
       assert.ok(
         layout.rightMeta.scrollWidth <= layout.rightMeta.clientWidth,
         `right handle line clips before the grid runs out of space at ${width}px`,

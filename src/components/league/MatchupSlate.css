@@ -1,6 +1,5 @@
 .matchup-slate {
   --matchup-slate-bar-width: 162px;
-  --matchup-slate-rail-width: 56px;
   display: grid;
   gap: 16px;
 }
@@ -17,7 +16,7 @@
 .matchup-slate__moneyline,
 .matchup-slate__prob-number,
 .matchup-slate__board-head,
-.matchup-slate__move,
+.matchup-slate__team-move,
 .matchup-slate__glance-title,
 .matchup-slate__glance-row,
 .matchup-slate__detail-kicker,
@@ -64,13 +63,15 @@
   /* Two 46px columns went with the Win% cells: a price and a win probability
      are the same fact in two units, and the header toggle already converts
      between them. */
+  /* No rail column. The movement figure moved inside each team's own lockup,
+     which is what lets both lockups sit flush against the edges of the row
+     instead of stopping short of a reserved column at the end. */
   grid-template-columns:
     minmax(0, 1fr)
     64px
     var(--matchup-slate-bar-width)
     64px
-    minmax(0, 1fr)
-    var(--matchup-slate-rail-width);
+    minmax(0, 1fr);
   align-items: center;
   gap: 10px;
 }
@@ -138,20 +139,24 @@
   box-shadow: inset 3px 0 0 var(--amber);
 }
 
+/* Flex, not a fixed column template. The move figure is only there when the
+   line has actually moved, and under a three-column grid an absent one left
+   the right-hand lockup's name in the avatar's column and its avatar in the
+   name's — the layout silently reshuffled on the rows with nothing to say. */
 .matchup-slate__team {
-  display: grid;
+  display: flex;
   align-items: center;
-  grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   min-width: 0;
 }
 
-.matchup-slate__team--right {
-  grid-template-columns: minmax(0, 1fr) auto;
+.matchup-slate__team > .team-avatar {
+  flex: 0 0 auto;
 }
 
 .matchup-slate__team-copy {
   display: grid;
+  flex: 1 1 auto;
   gap: 3px;
   min-width: 0;
 }
@@ -238,14 +243,11 @@
   box-shadow: 0 0 14px rgba(232, 84, 29, 0.34);
 }
 
-.matchup-slate__rail {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  min-width: 0;
-}
 
-.matchup-slate__move {
+/* Sits on the inner edge of its own team block, so the crest and the name
+   stay against the outer edge of the row. */
+.matchup-slate__team-move {
+  flex: 0 0 auto;
   color: rgba(244, 245, 242, 0.62);
   font-size: 11px;
   font-weight: 800;
@@ -259,7 +261,6 @@
   gap: 16px;
 }
 
-.matchup-slate__glance,
 .matchup-slate__detail,
 .matchup-slate__feed {
   display: grid;
@@ -304,9 +305,13 @@
 
 .matchup-slate__detail-head strong {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  text-align: right;
+  /* Left, like every other heading on the page. It was right-aligned because
+     it once shared a rule with the numeric detail lines below it, where right
+     alignment is correct — but this is a title, and a title that starts in a
+     different place from the kicker directly above it reads as a mistake. */
+  text-align: left;
 }
 
 .matchup-slate__detail-head {
@@ -385,8 +390,7 @@
       62px
       minmax(120px, 1fr)
       62px
-      minmax(0, 1fr)
-      44px;
+      minmax(0, 1fr);
     gap: 10px;
   }
 }
@@ -413,9 +417,6 @@
     display: none;
   }
 
-  .matchup-slate__rail {
-    justify-content: flex-start;
-  }
 }
 
 @media (max-width: 639px) {
@@ -426,9 +427,6 @@
 
   .matchup-slate__moneyline,
   .matchup-slate__prob-number,
-  .matchup-slate__rail {
-    text-align: left;
-  }
 
   .matchup-slate__prob-track {
     width: 100%;
@@ -570,32 +568,42 @@
   white-space: nowrap;
 }
 
-/* Three facts about the week, each with a hierarchy.
+/* The week at a glance: four cards across the width of the board.
 
-   The old row put the label left and a two-line stack right, with the team
-   names set smaller than everything else — in condensed uppercase, at ten
-   pixels, wrapping across the width of the card. That is the longest content
-   in the row rendered as the least readable thing in it, which is why the
-   whole card read as grey noise: nothing in it was allowed to be the
-   headline.
-
-   Now the price is the headline, at the size a price gets everywhere else on
-   the site; the label is a quiet kicker beside it; and the teams read as a
-   sentence underneath in sentence case, because they are a sentence. */
-.matchup-slate__glance-row {
+   It was three rows in a narrow aside card, each a label, a price and a line
+   of grey team names — a list you had to read to use. Down here it has the
+   room for crests, and a league's teams are recognisable by their logo long
+   before their name has finished being read. */
+.matchup-slate__glance {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 5px var(--space-sm);
-  padding-block: var(--space-xs);
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 26%),
+    color-mix(in srgb, var(--bg-surface) 95%, transparent);
+  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
 }
 
-.matchup-slate__glance-row + .matchup-slate__glance-row {
-  border-top: 1px solid var(--border-subtle);
+.matchup-slate__glance-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--space-md);
 }
 
-.matchup-slate__glance-row:last-child {
-  padding-bottom: 0;
+.matchup-slate__glance-card {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding-left: var(--space-md);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.matchup-slate__glance-card:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .matchup-slate__glance-label {
@@ -606,28 +614,63 @@
   text-transform: uppercase;
 }
 
-.matchup-slate__glance-teams {
-  grid-column: 1 / -1;
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.35;
+.matchup-slate__glance-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-price);
+  font-size: 26px;
+  line-height: 1;
+  font-weight: var(--font-price-weight);
+  font-variant-numeric: tabular-nums;
 }
 
+.matchup-slate__glance-value--up { color: var(--green); }
+.matchup-slate__glance-value--down { color: var(--red); }
+
 .matchup-slate__glance-unit {
-  margin-left: 3px;
   color: var(--text-muted);
   font-size: 12px;
   letter-spacing: 0.04em;
 }
 
-.matchup-slate__glance-value {
-  color: var(--text-primary);
-  font-family: var(--font-price);
-  font-size: 24px;
-  line-height: 1;
-  font-weight: var(--font-price-weight);
-  font-variant-numeric: tabular-nums;
+/* Crest, name, separator, crest, name. Wraps rather than ellipsising: these
+   are the only place on the board a team's full name is printed, and half a
+   name under a logo is worse than a second line. */
+.matchup-slate__glance-teams {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 7px;
+  min-width: 0;
+}
+
+.matchup-slate__glance-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.matchup-slate__glance-team .team-avatar {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  font-size: 9px;
+}
+
+.matchup-slate__glance-team-name {
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.matchup-slate__glance-sep {
+  color: var(--ink-3);
+  font-family: var(--font-condensed);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
