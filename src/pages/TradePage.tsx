@@ -174,6 +174,9 @@ function TradeDealsView() {
   const [analysis, setAnalysis] = useState<TradeAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  /* The pricing call's own failure. It used to be discarded, which is most of
+     why a broken trade looked like a button that did nothing. */
+  const [priceError, setPriceError] = useState<string | null>(null);
   const [counter, setCounter] = useState<TradeCounter | null>(null);
   const [counterLoading, setCounterLoading] = useState(false);
   const [giveSearch, setGiveSearch] = useState('');
@@ -630,6 +633,7 @@ function TradeDealsView() {
     setResult(null);
     setAnalysis(null);
     setAnalysisError(null);
+    setPriceError(null);
     setCounter(null);
     setCounterLoading(false);
     setIsEditingTrade(true);
@@ -665,13 +669,25 @@ function TradeDealsView() {
     setCounter(null);
     setIsEditingTrade(false);
     setIsPricing(true);
+    setPriceError(null);
+    /* Same swallow as runPricing had, in the path that applies a counter.
+       Pressing the counter's add button and getting no response is the same
+       dead button by another route. */
     const pricePromise = priceTrade(stored.leagueId, {
       userId: stored.userId,
       partnerRosterId: partnerRosterId!,
       give: nextGive,
       get: nextGet,
       traits: NEUTRAL_TRADE_TRAITS,
-    }).then(setResult).catch(() => {});
+    })
+      .then(setResult)
+      .catch((error: unknown) => {
+        setPriceError(
+          error instanceof Error && error.message
+            ? error.message
+            : 'The trade could not be priced.',
+        );
+      });
     const analysisPromise = runAnalysis(nextGive, nextGet);
     void Promise.allSettled([pricePromise, analysisPromise]).finally(() => {
       setIsPricing(false);
@@ -729,6 +745,7 @@ function TradeDealsView() {
     if (partnerRosterId == null || give.length === 0 || getIds.length === 0) return;
     setIsPricing(true);
     setCounter(null);
+    setPriceError(null);
     // One press: price the trade AND simulate its full-season impact.
     const pricePromise = priceTrade(stored.leagueId, {
       userId: stored.userId,
@@ -738,7 +755,18 @@ function TradeDealsView() {
       traits: NEUTRAL_TRADE_TRAITS,
     })
       .then(setResult)
-      .catch(() => {});
+      /* Not swallowed. This caught every failure and threw it away, so a
+         request that timed out or answered 500 left `result` null — and null
+         is neither "priced" nor "unavailable", so the panel below rendered
+         nothing at all. The loader flashed and the screen went back to how it
+         was, which is indistinguishable from a dead button. */
+      .catch((error: unknown) => {
+        setPriceError(
+          error instanceof Error && error.message
+            ? error.message
+            : 'The trade could not be priced.',
+        );
+      });
     const analysisPromise = runAnalysis(give, getIds);
     try {
       await Promise.allSettled([pricePromise, analysisPromise]);
@@ -1553,11 +1581,54 @@ function TradeDealsView() {
           ) : null}
         </section>
       ) : result && !result.available ? (
+        /* Say why it did not price.
+
+           This printed "pick at least one player on each side" for every
+           reason except missing projections — including the reasons that
+           arise with both sides already full, which is the only way to reach
+           this branch by pressing the button. Being told to do the thing you
+           just did reads as the app not having noticed you at all. */
         <SeasonalNotice>
           {result.reason === 'no_projections'
             ? 'Trades price once projections are imported.'
-            : 'Pick at least one player on each side to price the trade.'}
+            : give.length === 0 || getIds.length === 0
+              ? 'Pick at least one player on each side to price the trade.'
+              : `This trade could not be priced${result.reason ? ` (${result.reason})` : ''}. It is worth trying again.`}
         </SeasonalNotice>
+      ) : priceError || analysisError ? (
+        /* Anything that went wrong, said out loud.
+
+           This branch did not exist. The only place a failure was ever
+           reported was the analyzer panel, which sits INSIDE the verdict
+           block above — and that block only renders when both calls have
+           already succeeded. So the message explaining why the trade could
+           not be priced was gated behind the trade having been priced, and
+           the three ways this screen can fail all rendered the same nothing:
+           pricing rejected, analysis rejected, or pricing fine and analysis
+           not. The button looked dead in every one of them. */
+        <section className="trade-cc__failure" role="status">
+          {/* The heading has to agree with the sentence under it. It said
+              "did not price" in every case, including the one where the price
+              came back fine and only the season impact failed. */}
+          <p className="trade-cc__failure-head">
+            {priceError ? 'This trade did not price.' : 'Only half of this ran.'}
+          </p>
+          <p className="trade-cc__failure-detail">
+            {priceError && analysisError
+              ? `${priceError} The season impact did not run either.`
+              : priceError
+                ? priceError
+                : `The trade priced, but its season impact did not run. ${analysisError}`}
+          </p>
+          <button
+            className="trade-cc__failure-retry"
+            disabled={isPricing || !canPrice}
+            onClick={() => void runPricing()}
+            type="button"
+          >
+            Try again
+          </button>
+        </section>
       ) : null}
       <DismissToast onUndo={undo} visible={pendingUndoSignature != null} />
     </div>

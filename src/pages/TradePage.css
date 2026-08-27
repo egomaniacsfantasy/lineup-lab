@@ -3466,3 +3466,55 @@
 .trade-cc__share:hover {
   background: color-mix(in srgb, var(--amber) 20%, transparent);
 }
+
+/* The trade failed to price, said where it failed. */
+.trade-cc__failure {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2xs);
+  padding: var(--space-md);
+  border: 1px solid color-mix(in srgb, var(--red) 34%, var(--border-subtle));
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--bg-negative) 42%, transparent);
+}
+
+.trade-cc__failure-head {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.trade-cc__failure-detail {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.trade-cc__failure-retry {
+  margin-top: var(--space-2xs);
+  padding: 7px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.trade-cc__failure-retry:hover:not(:disabled),
+.trade-cc__failure-retry:focus-visible {
+  border-color: rgba(232, 84, 29, 0.5);
+  color: var(--text-amber);
+}
+
+.trade-cc__failure-retry:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

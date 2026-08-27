@@ -1171,6 +1171,23 @@ async function maybeDelay(bundle: FixtureBundle) {
   if (bundle.delayMs) await delay(bundle.delayMs);
 }
 
+/**
+ * Read ?failTrade when this module loads, and keep it.
+ *
+ * Evaluated at import rather than on first use: the builder restores its
+ * state from the query string on mount and rewrites it, so by the time the
+ * first trade request is made the switch is already gone from the URL. Read
+ * lazily it was reliably missed.
+ */
+const failTradeMode: string | null =
+  typeof window === 'undefined'
+    ? null
+    : new URL(window.location.href).searchParams.get('failTrade');
+
+function designFailTrade() {
+  return failTradeMode;
+}
+
 export async function maybeHandleDesignFixtureRequest(path: string, init?: RequestInit) {
   if (!import.meta.env.DEV || typeof window === 'undefined') return null;
 
@@ -1227,6 +1244,20 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
     Array.isArray(body.get) ? body.get : [],
   );
   const trade = bundle.trades[key];
+
+  /* ?failTrade makes the two pricing calls reject, which is the state a real
+     league reaches on a timeout or a 500 and the one the design scene could
+     not otherwise produce — the fixture answers every request successfully,
+     so the failure path was unreachable by hand and untestable.
+     ?failTrade=analysis fails only the season-impact half, which is the more
+     common real failure: it is the heavier call. */
+  const failTrade = designFailTrade();
+  if (failTrade && endpoint === 'trade' && method === 'POST' && failTrade !== 'analysis') {
+    throw new Error('The simulation is not reachable.');
+  }
+  if (failTrade && endpoint === 'trade-analyze' && method === 'POST') {
+    throw new Error('The season impact could not be simulated.');
+  }
 
   if (endpoint === 'trade' && method === 'POST') {
     return trade?.result ?? { available: false, reason: 'design_fixture_missing_trade' };
