@@ -14,7 +14,13 @@
    A surface, not floating text: the bar sat transparent and read as a
    spreadsheet row, so a faint gradient gives it edges to be composed inside. */
 .season-band {
-  display: block;
+  /* The stat row is a nowrap flex that clips its own overflow, so anything
+     placed inside it competes with the numbers for width and loses silently.
+     The action is a sibling of that row rather than a member of it: the row
+     keeps whatever width is left, the action always gets its own. */
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   position: relative;
   padding: 7px 12px 9px;
   background: linear-gradient(
@@ -51,6 +57,8 @@
 /* Nothing in this row may push the row wider than the screen. */
 .season-band__items {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   flex-wrap: nowrap;
   /* Centred, not bottom-aligned. flex-end pinned every small stat's baseline
      to the championship block's, which is 10px taller — so the four supporting
@@ -247,5 +255,33 @@
 
   .season-band__trend--down .season-band__trend-delta {
     color: var(--red);
+  }
+}
+
+/* Pinned to the end of the bar and outside the stat scroller, so it reads as
+   something to press rather than as one more figure, and so it can never be
+   the thing that gets clipped when the numbers need room. */
+.season-band__action {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+/* On a narrow screen the stat row is already wider than the viewport and
+   clips its own tail. Left in the same row, the card button is simply the
+   last thing in it and therefore the thing that disappears — which is the
+   exact problem this button was moved here to solve. It takes its own row
+   instead, where nothing can crowd it out.
+
+   The stat row's own overflow on a phone is older than this button and is
+   left alone deliberately; mobile layout is a separate pass. */
+@media (max-width: 720px) {
+  .season-band {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .season-band__action {
+    width: 100%;
   }
 }

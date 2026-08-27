@@ -3,6 +3,12 @@ import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { SeasonBand } from '../components/matchup/SeasonBand';
 import { drawShareCard, type ShareCardLine } from '../utils/shareCard';
+import { tradePage } from '../utils/tradeRotation';
+
+/* How often the rail reprices itself while you are looking at it. The
+   start/sit call moves on the order of projections updating, not on the order
+   of a person pressing a button. */
+const BACKGROUND_SCAN_MS = 10 * 60 * 1000;
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 import { HubDeals } from '../components/matchup/HubDeals';
 import { PlayerChip } from '../components/player/PlayerChip';
@@ -1371,7 +1377,10 @@ function MatchupLive({
     () => movers.filter((mover) => mover.kind === 'trade'),
     [movers],
   );
-  const marketRows = useMemo(() => {
+  /* Which page of the pool the rail is showing. Refresh advances it. */
+  const [tradePageIndex, setTradePageIndex] = useState(0);
+
+  const marketPool = useMemo(() => {
     const nonTradeMovers = movers.filter((mover) => mover.kind !== 'trade');
     const { visible, longShotFallback } = applyTradeDisplayPolicy(tradeMovers);
     const taggedTrades = visible.map((mover) => ({
@@ -1381,8 +1390,21 @@ function MatchupLive({
         longShotFallback === mover,
       ),
     }));
-    return [...nonTradeMovers, ...taggedTrades].slice(0, 3);
+    return [...nonTradeMovers, ...taggedTrades];
   }, [movers, tradeMovers]);
+
+  const marketPage = useMemo(
+    () => tradePage(marketPool, tradePageIndex, 3),
+    [marketPool, tradePageIndex],
+  );
+  const marketRows = marketPage.visible;
+
+  /* A pool that reprices under a reader who has paged into it would leave them
+     on a page that no longer exists. Back to the top when the pool changes
+     size, which is the only change they could not have caused. */
+  useEffect(() => {
+    setTradePageIndex(0);
+  }, [marketPool.length]);
   const showSuggestionSkeletons = isConnected && suggestionsFetching && !suggestionsResolved;
 
   useEffect(() => {
@@ -1907,7 +1929,73 @@ function MatchupLive({
       <div className="matchup-page__frame">
         {userFuture ? (
           <div className="matchup-page__season--band">
-            <SeasonBand currentWeek={matchup.week} future={userFuture} history={titleHistory} />
+            {/* The card sits at the end of the season bar.
+
+                It was a flat text link in the hero's meta row, between the
+                spread and the total, which is a row of captions — so it read
+                as one. Early users could not find it and the ones who did
+                liked it, which is a discovery problem rather than a feature
+                problem. Up here it is the one filled control on the page's
+                most-looked-at strip.
+
+                "Your card" rather than "Share your card": the second names a
+                chore and asks for something, the first names a thing you own
+                and have not seen yet. */}
+            <SeasonBand
+              action={
+              <button
+                aria-label="Open your shareable card"
+                className="matchup-page__share"
+              onClick={() => setSharePayload({
+                  eyebrow: `Week ${matchup.week}`,
+                  you: matchup.yourTeam.teamName,
+                  /* The league is the context for every number on the card,
+                     and the manager is who to blame for them. Both were
+                     missing; the card named a team and nothing else. */
+                  leagueName: bootstrap?.league.name ?? stored?.leagueName ?? null,
+                  owner: shareOwner,
+                  record: matchup.yourTeam.record ?? null,
+                  yourAvatar: resolveApiUrl(matchup.yourTeam.avatarUrl) ?? null,
+                  /* The season leads. These are the same four numbers the
+                     season band prints above the matchup, formatted there and
+                     passed through here. */
+                  titleOdds: userFuture ? formatAmericanOdds(userFuture.championOdds) : null,
+                  playoffs:
+                    userFuture?.playoffProb != null
+                      ? `${Math.round(userFuture.playoffProb)}%`
+                      : null,
+                  finish:
+                    userFuture?.projRecord
+                    ?? (userFuture?.projWins != null && userFuture?.projLosses != null
+                      ? `${userFuture.projWins.toFixed(1)}-${userFuture.projLosses.toFixed(1)}`
+                      : null),
+                  seed:
+                    userFuture?.avgSeed != null ? userFuture.avgSeed.toFixed(1) : null,
+                  starters: shareStarters,
+                  standing: sharePower,
+                  /* The same list the rail widget ranks, so the card and the
+                     widget cannot draw different fields. */
+                  ladder: titles
+                    ? [...titles]
+                        .sort((a, b) => b.titleProb - a.titleProb)
+                        .map((row) => ({ prob: row.titleProb, isUser: row.isUser }))
+                    : null,
+                  /* One week, as a strip. It is this week's card, but it is
+                     not this week's story. */
+                  week: `${formatAmericanOdds(engine.activeLine.yours.moneyline)} to win`,
+                  opponent: matchup.opponentTeam.teamName,
+                  opponentAvatar: resolveApiUrl(matchup.opponentTeam.avatarUrl) ?? null,
+              })}
+              type="button"
+            >
+                <span aria-hidden="true" className="matchup-page__share-glyph">◈</span>
+                Your card
+              </button>
+              }
+              currentWeek={matchup.week}
+              future={userFuture}
+              history={titleHistory}
+            />
           </div>
         ) : null}
 
@@ -2089,55 +2177,7 @@ function MatchupLive({
               </span>
             </span>
 
-            {/* The book's job is to settle the group chat, so the line has to
-                leave the app in one tap. Every value below is the same one
-                rendered above it. */}
-            <button
-              className="matchup-page__share"
-              onClick={() => setSharePayload({
-                  eyebrow: `Week ${matchup.week}`,
-                  you: matchup.yourTeam.teamName,
-                  /* The league is the context for every number on the card,
-                     and the manager is who to blame for them. Both were
-                     missing; the card named a team and nothing else. */
-                  leagueName: bootstrap?.league.name ?? stored?.leagueName ?? null,
-                  owner: shareOwner,
-                  record: matchup.yourTeam.record ?? null,
-                  yourAvatar: resolveApiUrl(matchup.yourTeam.avatarUrl) ?? null,
-                  /* The season leads. These are the same four numbers the
-                     season band prints above the matchup, formatted there and
-                     passed through here. */
-                  titleOdds: userFuture ? formatAmericanOdds(userFuture.championOdds) : null,
-                  playoffs:
-                    userFuture?.playoffProb != null
-                      ? `${Math.round(userFuture.playoffProb)}%`
-                      : null,
-                  finish:
-                    userFuture?.projRecord
-                    ?? (userFuture?.projWins != null && userFuture?.projLosses != null
-                      ? `${userFuture.projWins.toFixed(1)}-${userFuture.projLosses.toFixed(1)}`
-                      : null),
-                  seed:
-                    userFuture?.avgSeed != null ? userFuture.avgSeed.toFixed(1) : null,
-                  starters: shareStarters,
-                  standing: sharePower,
-                  /* The same list the rail widget ranks, so the card and the
-                     widget cannot draw different fields. */
-                  ladder: titles
-                    ? [...titles]
-                        .sort((a, b) => b.titleProb - a.titleProb)
-                        .map((row) => ({ prob: row.titleProb, isUser: row.isUser }))
-                    : null,
-                  /* One week, as a strip. It is this week's card, but it is
-                     not this week's story. */
-                  week: `${formatAmericanOdds(engine.activeLine.yours.moneyline)} to win`,
-                  opponent: matchup.opponentTeam.teamName,
-                  opponentAvatar: resolveApiUrl(matchup.opponentTeam.avatarUrl) ?? null,
-              })}
-              type="button"
-            >
-              Share your card
-            </button>
+
           </div>
         </section>
 
@@ -2416,24 +2456,15 @@ function MatchupLive({
                       isFetching={suggestionsFetching}
                       isStale={suggestionsStale}
                     />
-                    {/* The rescan came with the market module this widget
-                        absorbed, so it comes here rather than disappearing. */}
+                    {/* No refresh here. A start/sit call answers "who should
+                        I play", and the answer moves when projections move,
+                        not when you ask again — so pressing it mostly redrew
+                        the same two names. It reprices itself on a timer
+                        instead, and the button went where pressing it
+                        actually produces something new: the trades. */}
                     {marketScan.isScanning ? (
                       <SimulationLoader label="Scanning the market" size="compact" variant="scan" />
-                    ) : (
-                      <button
-                        aria-label="Scan the market"
-                        className={[
-                          'matchup-page__market-refresh',
-                          marketScan.coolingDown ? 'matchup-page__market-refresh--cooldown' : '',
-                        ].filter(Boolean).join(' ')}
-                        disabled={marketScan.coolingDown}
-                        onClick={() => onScanMarket?.()}
-                        type="button"
-                      >
-                        {marketScan.coolingDown ? marketScan.buttonLabel : <span aria-hidden="true">↻</span>}
-                      </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 <div className="matchup-page__rail-call-swap">
@@ -2455,6 +2486,36 @@ function MatchupLive({
                   </span>
                 </div>
                 {marketRows.length > 0 ? (
+                  <>
+                    {/* The refresh lives here, on the one list where pressing
+                        it changes what you are looking at. A page at a time,
+                        so no trade you just rejected is still on screen. */}
+                    <div className="matchup-page__adds-head">
+                      <span className="matchup-page__adds-title">Trades to try</span>
+                      {marketPage.pages > 1 ? (
+                        <span className="matchup-page__adds-count">
+                          {marketPage.page + 1} of {marketPage.pages}
+                        </span>
+                      ) : null}
+                      <button
+                        aria-label="Show different trades"
+                        className="matchup-page__adds-refresh"
+                        disabled={marketScan.isScanning || (marketPage.exhausted && marketScan.coolingDown)}
+                        onClick={() => {
+                          /* Rotate first: it is instant and it is the part the
+                             reader asked for. Only go back to the engine when
+                             the pool is too small to rotate within. */
+                          if (marketPage.exhausted) onScanMarket?.();
+                          else setTradePageIndex((current) => current + 1);
+                        }}
+                        type="button"
+                      >
+                        <span aria-hidden="true">↻</span>
+                        <span className="matchup-page__adds-refresh-copy">
+                          {marketPage.exhausted ? 'Rescan' : 'More'}
+                        </span>
+                      </button>
+                    </div>
                   <div className="matchup-page__adds">
                     {marketRows.map((mover) => (
                       <MarketMoverRow
@@ -2487,6 +2548,7 @@ function MatchupLive({
                       />
                     ))}
                   </div>
+                  </>
                 ) : null}
                 <div className="matchup-page__edge-actions">
                   <button className="matchup-page__row-action" onClick={inspectBiggestEdge} type="button">
@@ -2895,6 +2957,32 @@ export function MatchupPage() {
     });
   }, [pricing, currentWeek]);
 
+
+  /**
+   * The start/sit call keeps itself current, quietly.
+   *
+   * It used to carry the only refresh button on the rail, which was the wrong
+   * home for one: the answer to "who should I play" moves when projections
+   * move, not when you ask again, so pressing it usually redrew the same two
+   * names and taught people the control did nothing.
+   *
+   * Ten minutes because that is the order the underlying answer changes on,
+   * and only while the tab is actually being looked at — a Hub left open in a
+   * background tab overnight has nobody to keep current for. The scan itself
+   * carries a cooldown, so this can never stack with a press of the trade
+   * refresh beside it.
+   */
+  useEffect(() => {
+    if (!stored || !bootstrap) return undefined;
+    if (typeof window === 'undefined') return undefined;
+
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      void scanMarket();
+    };
+    const timer = window.setInterval(tick, BACKGROUND_SCAN_MS);
+    return () => window.clearInterval(timer);
+  }, [bootstrap, scanMarket, stored]);
 
   if (stored && !bootstrap) {
     if (isLoading) {

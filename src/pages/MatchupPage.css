@@ -2810,25 +2810,44 @@
    button, but it has to be reachable without a menu. It also needs room: sat
    tight against the card above it, it read as part of the price block rather
    than as an action on it. */
+/* Filled, not outlined.
+
+   This was a hairline pill in a row of captions, at the same weight as the
+   text beside it, and early users could not find it — the ones who did liked
+   what was behind it, so the problem was that nothing on screen said there was
+   anything behind it. It is the only filled control on the season bar now. */
 .matchup-page__share {
-  margin-top: 6px;
-  margin-left: auto;
-  padding: 6px 12px;
-  border: 1px solid var(--border-subtle);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 0;
   border-radius: 999px;
-  background: none;
-  color: var(--text-muted);
+  background: var(--amber);
+  color: var(--bg-deep);
   font-family: var(--font-ui);
   font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   cursor: pointer;
-  transition: border-color 140ms ease, color 140ms ease;
+  transition: background-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
 
 .matchup-page__share:hover,
 .matchup-page__share:focus-visible {
-  border-color: rgba(232, 84, 29, 0.5);
-  color: var(--text-amber);
+  background: var(--amber-bright);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(232, 84, 29, 0.28);
+}
+
+.matchup-page__share:active {
+  transform: translateY(0);
+}
+
+.matchup-page__share-glyph {
+  font-size: 13px;
+  line-height: 1;
 }
 
 /* ---------------------------------------------------------------------------
@@ -3327,4 +3346,60 @@
 .pricing-odds {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
+}
+
+/* The trades header. The refresh moved here from the start/sit call above it,
+   which is the one list on the rail where pressing it produces something the
+   reader has not already seen. */
+.matchup-page__adds-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.matchup-page__adds-title {
+  color: var(--text-muted);
+  font-family: var(--font-condensed);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.matchup-page__adds-count {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 10px;
+}
+
+.matchup-page__adds-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 4px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.matchup-page__adds-refresh:hover:not(:disabled),
+.matchup-page__adds-refresh:focus-visible {
+  border-color: rgba(232, 84, 29, 0.5);
+  color: var(--text-amber);
+}
+
+.matchup-page__adds-refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.matchup-page__adds-refresh-copy {
+  letter-spacing: 0.02em;
 }

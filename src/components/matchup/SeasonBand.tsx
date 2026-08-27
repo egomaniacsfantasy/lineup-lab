@@ -1,5 +1,5 @@
 import type { LeaguePricing, PricedFuture } from '../../services/leagueApi';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { formatAmericanOdds, impliedProbability } from '../../utils/formatOdds';
 import { displayedDelta, formatSignedDisplayedDeltaValue } from '../../utils/displayDelta';
 import './SeasonBand.css';
@@ -96,10 +96,13 @@ export function SeasonBand({
   future,
   history = null,
   currentWeek = 1,
+  action = null,
 }: {
   future: PricedFuture;
   history?: LeaguePricing['titleHistory'] | null;
   currentWeek?: number;
+  /** Pinned to the end of the bar. The card lives here now; see MatchupPage. */
+  action?: ReactNode;
 }) {
   /* `short` is the label as it reads on one line on a phone. Truncating the
      full labels there put an ellipsis on every one of them and still ran the
@@ -186,6 +189,7 @@ export function SeasonBand({
           </div>
         ) : null}
       </div>
+      {action ? <div className="season-band__action">{action}</div> : null}
     </section>
   );
 }
