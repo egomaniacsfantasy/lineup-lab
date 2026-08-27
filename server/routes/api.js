@@ -1128,9 +1128,9 @@ apiRouter.post('/league/:leagueId/predictor', async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const { leagueId } = req.params;
-    const { userId, picks = [] } = req.body ?? {};
+    const { userId, picks = [], bracketPicks = [] } = req.body ?? {};
     const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
-    res.json(predictSeason(ctx, { picks, sims: PREDICTOR_SIMS }));
+    res.json(predictSeason(ctx, { picks, bracketPicks, sims: PREDICTOR_SIMS }));
   } catch (error) {
     next(error);
   }

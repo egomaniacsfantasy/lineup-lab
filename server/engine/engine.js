@@ -1452,7 +1452,7 @@ export const LIVE_SIMS = 2500;
 
 /** Shared season setup used by simulateSeason, computeSeasonBaseline and the
  *  live engine — so seeding/bracket/params logic never drifts between them. */
-function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels }) {
+function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, forcedBracket }) {
   const regularWeeks = league.regularSeasonWeeks ?? 14;
   const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
@@ -1502,7 +1502,7 @@ function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalo
   }
   return {
     regularWeeks, playoffTeams, rosterIds, remaining, playoffWeeks, paramsBy,
-    playoff: { playoffTeams, playoffWeeks, bracketOrder, divisionOf, divisionsEnabled, playoffReseed },
+    playoff: { playoffTeams, playoffWeeks, bracketOrder, divisionOf, divisionsEnabled, playoffReseed, forcedBracket },
   };
 }
 
@@ -1531,9 +1531,22 @@ function seedStandings(rosterIds, wins, pf, coin, playoff) {
   return { standings, seeded: standings.slice(0, playoff.playoffTeams) };
 }
 
-/** Single-elim bracket (reseed or fixed). drawScore(rosterId, wk) -> team score. */
+/** Single-elim bracket (reseed or fixed). drawScore(rosterId, wk) -> team score.
+ *  playoff.forcedBracket (optional) maps "round:idx" -> winner rosterId (round and
+ *  idx 0-based); a matchup the user has picked uses that winner instead of drawing,
+ *  while every unpicked matchup still simulates — so the Predictor can condition the
+ *  title on a partially-clicked-through bracket. */
 function runBracket(seeded, playoff, drawScore) {
-  const { playoffTeams, playoffWeeks, bracketOrder, playoffReseed } = playoff;
+  const { playoffTeams, playoffWeeks, bracketOrder, playoffReseed, forcedBracket } = playoff;
+  // Forced winner for matchup (round, idx) between a and b, else null. Only honored
+  // when the pick is actually one of the two teams in that matchup.
+  const forcedWin = (round, idx, a, b) => {
+    if (!forcedBracket) return null;
+    const w = forcedBracket[`${round}:${idx}`];
+    if (w == null) return null;
+    const s = String(w);
+    return String(a) === s ? a : String(b) === s ? b : null;
+  };
   if (playoffReseed) {
     let survivors = seeded.map((id, i) => ({ id, seed: i + 1 }));
     let r = 0;
@@ -1546,7 +1559,9 @@ function runBracket(seeded, playoff, drawScore) {
       for (let i = 0; i < playing.length / 2; i += 1) {
         const hi = playing[i];
         const lo = playing[playing.length - 1 - i];
-        advancing.push(drawScore(hi.id, wk) >= drawScore(lo.id, wk) ? hi : lo);
+        const forced = forcedWin(r, i, hi.id, lo.id);
+        const winId = forced != null ? forced : (drawScore(hi.id, wk) >= drawScore(lo.id, wk) ? hi.id : lo.id);
+        advancing.push(winId === hi.id ? hi : lo);
       }
       survivors = advancing;
       r += 1;
@@ -1564,12 +1579,114 @@ function runBracket(seeded, playoff, drawScore) {
       if (a == null && b == null) next.push(null);
       else if (a == null) next.push(b);
       else if (b == null) next.push(a);
-      else next.push(drawScore(a, wk) >= drawScore(b, wk) ? a : b);
+      else {
+        const forced = forcedWin(r, i / 2, a, b);
+        next.push(forced != null ? forced : (drawScore(a, wk) >= drawScore(b, wk) ? a : b));
+      }
     }
     alive = next;
     r += 1;
   }
   return alive[0];
+}
+
+/**
+ * The bracket as a renderable, pick-through view (NOT a sim): each round's
+ * matchups with both sides + seeds, the winner where the user has forced one, and
+ * `null` where it is still pending. Future rounds only materialize once the current
+ * one is fully picked (their teams are unknown until then). Mirrors runBracket's
+ * structure exactly, so the "round:idx" keys the client sends back as forcedBracket
+ * line up with what the sim forces.
+ */
+export function bracketView(seeded, playoff) {
+  const { playoffTeams, playoffWeeks, bracketOrder, playoffReseed, forcedBracket } = playoff;
+  const wkOf = (r) => playoffWeeks[Math.min(r, playoffWeeks.length - 1)];
+  const forcedWin = (round, idx, a, b) => {
+    if (!forcedBracket) return null;
+    const w = forcedBracket[`${round}:${idx}`];
+    if (w == null) return null;
+    const s = String(w);
+    return String(a) === s ? a : String(b) === s ? b : null;
+  };
+  const seeds = seeded.map((id, i) => ({ rosterId: String(id), seed: i + 1 }));
+  const rounds = [];
+  let champion = null;
+
+  if (playoffReseed) {
+    let survivors = seeded.map((id, i) => ({ id, seed: i + 1 }));
+    let r = 0;
+    while (survivors.length > 1) {
+      survivors.sort((x, y) => x.seed - y.seed);
+      const byes = nextPow2(survivors.length) - survivors.length;
+      const advancing = survivors.slice(0, byes);
+      const playing = survivors.slice(byes);
+      const matchups = [];
+      let pending = false;
+      for (let i = 0; i < playing.length / 2; i += 1) {
+        const hi = playing[i];
+        const lo = playing[playing.length - 1 - i];
+        const forced = forcedWin(r, i, hi.id, lo.id);
+        matchups.push({ round: r, idx: i, week: wkOf(r),
+          a: { rosterId: String(hi.id), seed: hi.seed }, b: { rosterId: String(lo.id), seed: lo.seed },
+          winnerRosterId: forced != null ? String(forced) : null });
+        if (forced != null) advancing.push(forced === hi.id ? hi : lo);
+        else pending = true;
+      }
+      rounds.push({ round: r, week: wkOf(r), matchups });
+      if (pending) return { seeds, rounds, champion };
+      survivors = advancing;
+      r += 1;
+    }
+    champion = survivors.length === 1 ? String(survivors[0].id) : null;
+    return { seeds, rounds, champion };
+  }
+
+  let alive = bracketOrder.map((s) => (s <= playoffTeams ? { id: seeded[s - 1], seed: s } : null));
+  let r = 0;
+  while (alive.filter(Boolean).length > 1) {
+    const next = [];
+    const matchups = [];
+    let pending = false;
+    for (let i = 0; i < alive.length; i += 2) {
+      const a = alive[i];
+      const b = alive[i + 1];
+      if (a == null && b == null) { next.push(null); continue; }
+      if (a == null) { next.push(b); continue; }        // bye advances
+      if (b == null) { next.push(a); continue; }         // bye advances
+      const forced = forcedWin(r, i / 2, a.id, b.id);
+      matchups.push({ round: r, idx: i / 2, week: wkOf(r),
+        a: { rosterId: String(a.id), seed: a.seed }, b: { rosterId: String(b.id), seed: b.seed },
+        winnerRosterId: forced != null ? String(forced) : null });
+      if (forced != null) next.push(forced === a.id ? a : b);
+      else { next.push(null); pending = true; }
+    }
+    rounds.push({ round: r, week: wkOf(r), matchups });
+    if (pending) return { seeds, rounds, champion };
+    alive = next;
+    r += 1;
+  }
+  const last = alive.filter(Boolean);
+  champion = last.length === 1 ? String(last[0].id) : null;
+  return { seeds, rounds, champion };
+}
+
+/**
+ * The deterministic playoff bracket for a DECIDED regular season, ready to render
+ * and click through. Seeds come from the teams' current records via the same
+ * sim-invariant tiebreak the sim uses, so the bracket matches the odds. `ctx`
+ * carries the (optional) forcedBracket, so the view reflects the picks so far.
+ * Only meaningful when the regular season is fully decided (seeding deterministic).
+ */
+export function playoffBracket(ctx) {
+  const { teams, seed = 1 } = ctx;
+  const setup = seasonSetup(ctx);
+  const { rosterIds, playoff } = setup;
+  const wins = new Map(teams.map((t) => [t.rosterId, t.record?.wins ?? 0]));
+  const pf = new Map(teams.map((t) => [t.rosterId, t.pointsFor ?? 0]));
+  const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, 0, 0, id))()]));
+  const { seeded } = seedStandings(rosterIds, wins, pf, coin, playoff);
+  const view = bracketView(seeded, playoff);
+  return { ...view, playoffTeams: playoff.playoffTeams, reseed: playoff.playoffReseed === true };
 }
 
 /** Shared per-team result mapping for simulateSeason + simulateSeasonLive. */

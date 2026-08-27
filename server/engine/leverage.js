@@ -42,6 +42,7 @@ import {
   prepareLeagueCtx,
   teamWeekProjection,
   replacementLevels,
+  playoffBracket,
   SEASON_SIMS,
 } from './engine.js';
 
@@ -198,19 +199,19 @@ export function weekLeverage(ctx, week, projectedPoints = () => 0) {
  * by "|". The response echoes it so the client discards a run whose picks it has
  * already moved past (a slow run landing after a fast one).
  */
-export function pickSetHash(picks = []) {
-  return picks
-    .map((p) => {
-      const base = `${p.week}:${p.matchupId}:${p.winnerRosterId}`;
-      // Custom scores are part of the scenario: overriding a score must re-sim and
-      // must NOT collide with the same pick at projected points. Only appended when
-      // set, so a plain pick hashes identically on client and server.
-      return p.winnerPoints != null || p.loserPoints != null
-        ? `${base}:${p.winnerPoints ?? ''}:${p.loserPoints ?? ''}`
-        : base;
-    })
-    .sort()
-    .join('|');
+export function pickSetHash(picks = [], bracketPicks = []) {
+  const reg = (picks ?? []).map((p) => {
+    const base = `${p.week}:${p.matchupId}:${p.winnerRosterId}`;
+    // Custom scores are part of the scenario: overriding a score must re-sim and
+    // must NOT collide with the same pick at projected points. Only appended when
+    // set, so a plain pick hashes identically on client and server.
+    return p.winnerPoints != null || p.loserPoints != null
+      ? `${base}:${p.winnerPoints ?? ''}:${p.loserPoints ?? ''}`
+      : base;
+  });
+  // Playoff-bracket picks join the same hash so advancing a round re-fetches.
+  const brk = (bracketPicks ?? []).map((b) => `b:${b.round}:${b.idx}:${b.winnerRosterId}`);
+  return [...reg, ...brk].sort().join('|');
 }
 
 /**
@@ -228,7 +229,7 @@ export function pickSetHash(picks = []) {
  * the board moves by the pick's true effect, not sim noise, and identical pick sets
  * quote identical prices.
  */
-export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
+export function predictSeason(ctx, { picks = [], bracketPicks = [], sims = SEASON_SIMS } = {}) {
   const prepared = prepareLeagueCtx(ctx);
   if (!prepared) return { available: false, reason: 'no_projections' };
   const { teams, projectionMap, catalog, slotLabels, week: currentWeek } = prepared;
@@ -264,6 +265,15 @@ export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
     picked += 1;
   }
 
+  // Playoff-bracket picks: round:idx -> winner rosterId. Conditions the title sim
+  // (runBracket forces these matchups, simulates the rest) and drives the bracket view.
+  const forcedBracket = {};
+  for (const bp of bracketPicks) {
+    if (bp == null || bp.round == null || bp.idx == null || bp.winnerRosterId == null) continue;
+    forcedBracket[`${Number(bp.round)}:${Number(bp.idx)}`] = String(bp.winnerRosterId);
+  }
+  conditioned = { ...conditioned, forcedBracket };
+
   // Remaining (unforced) matchups that ACTUALLY get simulated — only regular-season
   // weeks from the current display week through the last regular week (the same
   // window seasonSetup simulates). Past weeks and playoff weeks were being counted
@@ -296,7 +306,17 @@ export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
     };
   });
 
-  return { available: true, pickSetHash: pickSetHash(picks), picked, simulated, sims, rows };
+  // The bracket is only well-defined when the regular season is fully decided
+  // (seeding deterministic). Otherwise the seeds vary sim-to-sim, so there is no
+  // single bracket to click through — return null and let the UI ask the user to
+  // finish calling the regular season first.
+  const bracket = simulated === 0 ? playoffBracket(conditioned) : null;
+
+  return {
+    available: true,
+    pickSetHash: pickSetHash(picks, bracketPicks),
+    picked, simulated, sims, rows, bracket,
+  };
 }
 
 /**
