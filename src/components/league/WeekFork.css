@@ -405,8 +405,76 @@
   animation: week-fork-pulse 1.6s ease-in-out infinite;
 }
 
+/* The searching state.
+
+   Two legs off the same now-line the real bar hangs from, swaying, in the
+   same red and green — so the wait looks like the book being searched rather
+   than like a component that has not arrived. Each column is out of phase
+   with its neighbours; in lockstep a strip of twelve reads as a metronome. */
+.week-fork__ghost-leg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 3px;
+  opacity: 0.85;
+}
+
+.week-fork__ghost-leg--up {
+  bottom: 50%;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, var(--fork-win), rgba(52, 210, 123, 0.55));
+  animation: week-fork-sway-up 1.75s ease-in-out infinite;
+}
+
+.week-fork__ghost-leg--down {
+  top: 50%;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, rgba(255, 92, 77, 0.55), var(--fork-loss));
+  animation: week-fork-sway-down 2.05s ease-in-out infinite;
+}
+
+@keyframes week-fork-sway-up {
+  0%, 100% { height: 14%; }
+  50% { height: 42%; }
+}
+
+@keyframes week-fork-sway-down {
+  0%, 100% { height: 38%; }
+  50% { height: 12%; }
+}
+
+/* Numbers that are visibly hunting.
+
+   Dimmed and changing about fourteen times a second, which is the whole
+   safeguard: a figure sitting in the slot a real playoff probability will
+   occupy must never be still long enough to be read as one. They are
+   aria-hidden for the same reason. */
+.week-fork__churn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0.5;
+  font-family: var(--font-num);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.week-fork__churn--win {
+  bottom: 100%;
+  margin-bottom: 3px;
+  color: var(--fork-win);
+}
+
+.week-fork__churn--loss {
+  top: 100%;
+  margin-top: 3px;
+  color: var(--fork-loss);
+}
+
 /* Centred on the now-line, so the placeholder reads as a bar that has not
-   picked a direction yet rather than as a bar of zero swing. */
+   picked a direction yet rather than as a bar of zero swing. Only reached
+   when motion is turned off, where the legs and the churn do not run. */
 .week-fork__track > .week-fork__ghost {
   position: absolute;
   top: 50%;
@@ -446,4 +514,14 @@
   .week-fork__ghost {
     animation: none;
   }
+
+  /* Motion off: the legs hold still at the size they average out to, and the
+     churn never starts (the hook does not run), so the strip falls back to a
+     plain placeholder. */
+  .week-fork__ghost-leg {
+    animation: none;
+  }
+
+  .week-fork__ghost-leg--up { height: 26%; }
+  .week-fork__ghost-leg--down { height: 24%; }
 }

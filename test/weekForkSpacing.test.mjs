@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import net from 'node:net';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
@@ -200,6 +202,68 @@ test('the skeleton is the same height as the strip it stands in for', async () =
     `strip is ${loaded}px loaded and ${skeleton.height}px waiting: the board would jump`,
   );
   assert.ok(skeleton.games > 0, 'the skeleton drew no games');
+});
+
+test('the loading churn can never be read as a real probability', async () => {
+  /**
+   * The risk this design carries, stated plainly.
+   *
+   * The waiting state puts moving figures in the exact slots the real playoff
+   * probabilities will occupy. That is the effect asked for and it is the
+   * right one — a probability engine should look like it is searching — but a
+   * fabricated number sitting still in that slot is precisely what this
+   * widget must never render. Its own doc comment says a fork with invented
+   * branches is worse than no fork.
+   *
+   * Two properties keep it honest, and both are exercised against the real
+   * thing rather than a copy of it: no figure is ever handed to assistive
+   * technology, and none holds still across consecutive ticks.
+   */
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  /* ?slowForks holds the fixture back so the waiting state is actually on
+     screen; without it the design scene answers instantly and this would be
+     asserting against a state it never reached. */
+  await page.goto(`${baseUrl}/design/league?view=this-week&slowForks=4000`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await page.waitForSelector('.week-fork--loading .week-fork__churn');
+
+  const rendered = await page.evaluate(() => {
+    const figures = [...document.querySelectorAll('.week-fork__churn')];
+    return {
+      count: figures.length,
+      allHidden: figures.every((node) => node.getAttribute('aria-hidden') === 'true'),
+      /* Nothing on screen may claim to be a measurement. */
+      anyPercent: figures.some((node) => node.textContent.includes('%')),
+      widths: [...new Set(figures.map((node) => node.textContent.trim().length))],
+      legs: document.querySelectorAll('.week-fork--loading .week-fork__ghost-leg').length,
+    };
+  });
+
+  await page.close();
+
+  assert.ok(rendered.count > 0, 'the waiting state rendered no churning figures');
+  assert.ok(rendered.allHidden, 'a churning figure is read aloud as a probability');
+  assert.equal(rendered.anyPercent, false, 'a churning figure is dressed as a percentage');
+  assert.deepEqual(rendered.widths, [2], 'the churn changes width, which makes the strip twitch');
+  assert.ok(rendered.legs > 0, 'the swaying bars are gone');
+
+  /* And the generator itself: consecutive ticks must never repeat, or a
+     figure holds still long enough to be read off the screen. */
+  const { churn } = await import('../src/utils/forkRows.ts');
+  for (const seed of [0, 3, 11, 97]) {
+    const values = Array.from({ length: 200 }, (_, tick) => churn(tick, seed));
+    assert.ok(
+      values.every((value) => String(value).length === 2),
+      `churn(seed ${seed}) produced a value that is not two digits`,
+    );
+    const stuck = values.findIndex((value, index) => index > 0 && value === values[index - 1]);
+    assert.equal(
+      stuck,
+      -1,
+      `churn(seed ${seed}) repeated ${values[stuck]} across ticks ${stuck - 1} and ${stuck}`,
+    );
+  }
 });
 
 test('every chip sits under its own bar', async () => {

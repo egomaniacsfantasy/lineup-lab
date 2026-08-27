@@ -1,4 +1,5 @@
-import { forkScale } from '../../utils/forkRows.ts';
+import { useEffect, useState } from 'react';
+import { churn, forkScale } from '../../utils/forkRows.ts';
 import { TeamAvatar } from './TeamAvatar';
 import './WeekFork.css';
 
@@ -17,6 +18,47 @@ export interface ForkPair {
   /** 0-100, relative to the biggest swing in the same week. */
   importance: number;
   sides: [ForkSide, ForkSide];
+}
+
+/**
+ * Drives the loading churn, and stops for anyone who has asked motion to stop.
+ *
+ * Returns null when the animation should not run at all, which the caller
+ * reads as "draw the still version".
+ */
+function useChurnTick(active: boolean) {
+  const [tick, setTick] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+
+    setTick(0);
+    /* Fast enough that no frame reads as a settled value. A slower churn is
+       the dangerous one: it gives the eye long enough to take a number off a
+       bar that has not been computed yet. */
+    const timer = window.setInterval(() => setTick((current) => (current ?? 0) + 1), 70);
+    return () => window.clearInterval(timer);
+  }, [active]);
+
+  return tick;
+}
+
+/**
+ * One churning figure.
+ *
+ * Every one on screen goes through here, so the thing that makes it safe —
+ * that it is never handed to assistive technology as a probability — is
+ * stated once rather than repeated at each call site where it could be
+ * dropped from one and kept in the others.
+ */
+function ChurnFigure({ branch, tick, seed }: { branch: 'win' | 'loss'; tick: number; seed: number }) {
+  return (
+    <span aria-hidden="true" className={`week-fork__churn week-fork__churn--${branch}`}>
+      {churn(tick, seed)}
+    </span>
+  );
 }
 
 /* Shared by the strip and its skeleton: the caption is the one part that is
@@ -97,6 +139,8 @@ export function WeekFork({
   /** Games this week, from the schedule, so the skeleton is the right width. */
   expectedGames?: number;
 }) {
+  const tick = useChurnTick(loading && pairs.length === 0 && expectedGames > 0);
+
   /* Waiting is the normal case, not an edge one.
 
      This strip is the first thing on the tab and the slowest thing on it:
@@ -126,13 +170,36 @@ export function WeekFork({
                 <span className="week-fork__gridline" style={{ top: '100%' }} />
               </div>
               <div className="week-fork__plot">
-                {[0, 1].map((side) => (
-                  <div className="week-fork__col" key={side}>
-                    <div className="week-fork__track">
-                      <span className="week-fork__ghost" />
+                {[0, 1].map((side) => {
+                  const seed = game * 2 + side;
+                  return (
+                    <div className="week-fork__col" key={side}>
+                      <div className="week-fork__track">
+                        {/* Two legs off the same line as the real bar, both
+                            swaying, out of phase with their neighbours so the
+                            strip reads as a book being searched rather than a
+                            row of identical metronomes. */}
+                        <span
+                          className="week-fork__ghost-leg week-fork__ghost-leg--up"
+                          style={{ animationDelay: `${(seed % 5) * -0.31}s` }}
+                        />
+                        <span
+                          className="week-fork__ghost-leg week-fork__ghost-leg--down"
+                          style={{ animationDelay: `${(seed % 4) * -0.37}s` }}
+                        />
+                        {/* Hidden from assistive tech: these are motion, not
+                            data, and read aloud they would be a probability
+                            nobody has computed. */}
+                        {tick != null ? (
+                          <>
+                            <ChurnFigure branch="win" seed={seed} tick={tick} />
+                            <ChurnFigure branch="loss" seed={seed + 97} tick={tick} />
+                          </>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="week-fork__teams">
                 {[0, 1].map((side) => (

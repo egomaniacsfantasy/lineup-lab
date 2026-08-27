@@ -1200,6 +1200,15 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
     return { history: bundle.history };
   }
   if (endpoint === 'forks' && method === 'GET') {
+    /* ?slowForks holds the answer back so the strip's waiting state can be
+       looked at, and asserted against, at all. The conditioned sim is the
+       slowest call the tab makes in production and the fastest here, which
+       meant the one state built to cover that wait was the one state the
+       design scene could never show. */
+    const held = Number(new URL(window.location.href).searchParams.get('slowForks'));
+    if (Number.isFinite(held) && held > 0) {
+      await new Promise((resolve) => { setTimeout(resolve, held); });
+    }
     return DESIGN_FORKS;
   }
   if (endpoint === 'trade-suggestions' && method === 'POST') {

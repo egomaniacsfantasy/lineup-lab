@@ -82,3 +82,21 @@ export function forkScale(pairs: readonly ForkPair[]) {
   const leg = (delta: number) => Math.min(50, Math.max(0, (Math.abs(delta) / reach) * 50));
   return { reach, leg };
 }
+
+/**
+ * A number that is visibly searching, for the strip's waiting state.
+ *
+ * Derived from the tick and the column rather than Math.random(), so a React
+ * re-render for any unrelated reason does not reshuffle every figure out of
+ * step with the animation driving it.
+ *
+ * Two properties make this safe to put in the slot a real playoff probability
+ * will occupy, and both are load-bearing: consecutive ticks never repeat a
+ * value, so no figure is ever still long enough to be read as a measurement,
+ * and every value is two digits, so the strip does not twitch between widths
+ * while it waits.
+ */
+export function churn(tick: number, seed: number) {
+  const mixed = Math.imul(tick + 1, 2654435761) ^ Math.imul(seed + 1, 40503);
+  return 10 + (Math.abs(mixed) % 90);
+}
