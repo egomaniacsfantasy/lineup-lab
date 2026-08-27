@@ -43,20 +43,36 @@ export function formatAmericanOdds(odds: number): string {
   return '+100';
 }
 
+/** American odds straight from a probability (0-1), NO [1.5%,98.5%] clamp — so a
+ *  99% team reads -9900, not the clamped -6567. The true 0/100 extremes are handled
+ *  by the caller (a real 100% has no finite odds). */
+function americanFromProb(p: number): string {
+  if (p > 0.5) return `${Math.round(-(p / (1 - p)) * 100)}`; // favorite (negative)
+  if (p < 0.5) return `+${Math.round(((1 - p) / p) * 100)}`; // underdog (positive)
+  return '+100';
+}
+
 /**
- * Show a playoff/title probability the honest way. In percent mode use the RAW
- * probability (0-100) so a clinched team reads 100% and an eliminated team 0% —
- * NOT the American-odds round-trip, which clamps to [1.5%, 98.5%] (odds can't be
- * infinite) and made every lock look like 98.5% and every dead team 1.5%. In
- * american mode fall back to the (clamped) odds, which is correct for odds.
+ * Show a playoff/title probability (0-100) the honest way, respecting the odds
+ * toggle but NOT the [1.5%,98.5%] american clamp (which made every lock read 98.5%).
+ *   - percent mode: raw % (100% for a lock, 0% for a dead team).
+ *   - american mode: real odds computed from the raw prob (99% -> -9900), and a
+ *     genuine lock (>=99.95%) shows a check instead of a fake-finite huge number;
+ *     an eliminated team (<=0.05%) shows a dash.
+ * The engine's server-side clamp is left untouched — this only changes how the
+ * playoff/title columns render, using the raw probability the data already carries.
  */
-export function formatProbOrOdds(prob: number, odds: number): string {
+export function formatProbOrOdds(prob: number): string {
+  const clinched = prob >= 99.95;
+  const eliminated = prob <= 0.05;
   if (currentFormat === 'percent') {
-    if (prob >= 99.95) return '100%';
-    if (prob <= 0.05) return '0%';
+    if (clinched) return '100%';
+    if (eliminated) return '0%';
     return `${prob.toFixed(1)}%`;
   }
-  return formatAmericanOdds(odds);
+  if (clinched) return '✓';
+  if (eliminated) return '—';
+  return americanFromProb(prob / 100);
 }
 
 export function formatSpread(spread: number): string {

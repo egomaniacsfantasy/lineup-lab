@@ -380,7 +380,7 @@ export function LeagueFutures({
                 </span>
                 <span className="league-futures__price" role="cell">
                   <span className={['league-futures__odds', team.isUser ? 'league-futures__odds--selected' : ''].filter(Boolean).join(' ')}>
-                    {formatProbOrOdds(team.titleProb ?? impliedProbability(odds) * 100, odds)}
+                    {formatProbOrOdds(team.titleProb ?? impliedProbability(odds) * 100)}
                   </span>
                 </span>
                 <span className="league-futures__move-cell" role="cell">

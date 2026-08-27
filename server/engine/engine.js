@@ -43,7 +43,11 @@ function slotAllows(slotLabel, position) {
 }
 
 function probToAmerican(prob) {
-  const p = Math.min(0.985, Math.max(0.015, prob));
+  // NO [1.5%,98.5%] clamp — a 99% team reads -9900, not a clamped -6567. Only guard
+  // the exact 0/1 singularity (american odds are infinite there) with a tiny epsilon
+  // so the number stays finite; the UI shows a check/dash at a genuine 100/0 off the
+  // raw probability, not this odds value.
+  const p = Math.min(1 - 1e-9, Math.max(1e-9, prob));
   const ml = p >= 0.5 ? Math.round((-100 * p) / (1 - p)) : Math.round((100 * (1 - p)) / p);
   // even money is always quoted +100, never -100
   return ml === -100 ? 100 : ml;
@@ -1376,7 +1380,7 @@ export function computeMovers(ctx) {
     // seeded sim as the headline line), then apply the CRN delta. So the card
     // reads "30.5% -> 30.5%+gain", consistent with the matchup and biggest-edge.
     const beforeWinProb = userDisplayWinProb != null ? userDisplayWinProb : baseCrn;
-    const afterWinProb = Math.min(0.985, Math.max(0.015, beforeWinProb + delta));
+    const afterWinProb = Math.min(1, Math.max(0, beforeWinProb + delta));
     movers.push({
       kind: 'waiver',
       headline: `Claim ${bestClaim.candidate.name} off waivers`,

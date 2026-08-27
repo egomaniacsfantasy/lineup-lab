@@ -44,7 +44,8 @@ function normalCdf(z: number) {
 }
 
 export function probabilityToAmerican(prob: number) {
-  const p = Math.min(0.985, Math.max(0.015, prob));
+  // No [1.5%,98.5%] clamp — real odds. Only guard the exact 0/1 singularity.
+  const p = Math.min(1 - 1e-9, Math.max(1e-9, prob));
   return p >= 0.5
     ? Math.round((-100 * p) / (1 - p))
     : Math.round((100 * (1 - p)) / p);
