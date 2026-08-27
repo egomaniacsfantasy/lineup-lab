@@ -551,3 +551,21 @@
   background: color-mix(in srgb, var(--green) 18%, var(--bg-inset));
   border-color: transparent;
 }
+
+/* Playoff round: seed prefix on a matchup side, and the champion banner. */
+.predictor__seed {
+  color: var(--text-dim);
+  font-weight: 600;
+  margin-right: 3px;
+}
+
+.predictor__champ {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 197, 66, 0.12);
+  border: 1px solid rgba(245, 197, 66, 0.35);
+  color: var(--amber-bright, #f5c542);
+  font-weight: 700;
+  text-align: center;
+}

@@ -30,6 +30,42 @@ export interface Pick {
   loserPoints?: number;
 }
 
+/** One forced playoff result: the winner of matchup `idx` in `round` (0-based). */
+export interface BracketPick {
+  round: number;
+  idx: number;
+  winnerRosterId: string;
+}
+
+export interface BracketSideRef {
+  rosterId: string;
+  seed: number;
+}
+
+export interface BracketMatchup {
+  round: number;
+  idx: number;
+  week: number;
+  a: BracketSideRef;
+  b: BracketSideRef;
+  /** Winner where the user has forced one, else null (pending). */
+  winnerRosterId: string | null;
+}
+
+export interface BracketRound {
+  round: number;
+  week: number;
+  matchups: BracketMatchup[];
+}
+
+export interface Bracket {
+  seeds: BracketSideRef[];
+  rounds: BracketRound[];
+  champion: string | null;
+  playoffTeams: number;
+  reseed: boolean;
+}
+
 /** One team's row on a conditioned board. */
 export interface ConditionedRow {
   rosterId: string;
@@ -61,6 +97,9 @@ export interface ConditionedBoard {
   /** How many runs produced this. The fast pass refines to the full count. */
   sims: number;
   rows: ConditionedRow[];
+  /** The playoff bracket to click through — present only once the regular season
+   *  is fully called (simulated === 0), otherwise null (seeds still vary). */
+  bracket: Bracket | null;
 }
 
 export interface Unavailable {
@@ -121,7 +160,7 @@ export async function fetchConditionedBoard(
   userId: string,
   picks: readonly Pick[],
   signal: AbortSignal,
-  { fast = true }: { fast?: boolean } = {},
+  { fast = true, bracketPicks = [] }: { fast?: boolean; bracketPicks?: readonly BracketPick[] } = {},
 ): Promise<ConditionedResult> {
   try {
     /* withContext carries the provider (ESPN vs Sleeper) + auth headers; a raw
@@ -129,7 +168,7 @@ export async function fetchConditionedBoard(
     const [url, init] = withContext(`/api/league/${leagueId}/predictor`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, picks, fast }),
+      body: JSON.stringify({ userId, picks, bracketPicks, fast }),
       signal,
     });
     const response = await fetch(url, init);
@@ -229,16 +268,18 @@ export async function fetchProjectedScores(
  * A, and treating them as different would throw away a cached run and, worse,
  * make two identical scenarios quote different prices.
  */
-export function pickSetHash(picks: readonly Pick[]): string {
-  return picks
-    .map((pick) => {
-      const base = `${pick.week}:${pick.matchupId}:${pick.winnerRosterId}`;
-      /* Must match server pickSetHash in engine/leverage.js exactly: custom
-         scores are appended only when set, so a plain pick hashes identically. */
-      return pick.winnerPoints != null || pick.loserPoints != null
-        ? `${base}:${pick.winnerPoints ?? ''}:${pick.loserPoints ?? ''}`
-        : base;
-    })
-    .sort()
-    .join('|');
+export function pickSetHash(
+  picks: readonly Pick[],
+  bracketPicks: readonly BracketPick[] = [],
+): string {
+  const reg = picks.map((pick) => {
+    const base = `${pick.week}:${pick.matchupId}:${pick.winnerRosterId}`;
+    /* Must match server pickSetHash in engine/leverage.js exactly: custom
+       scores are appended only when set, so a plain pick hashes identically. */
+    return pick.winnerPoints != null || pick.loserPoints != null
+      ? `${base}:${pick.winnerPoints ?? ''}:${pick.loserPoints ?? ''}`
+      : base;
+  });
+  const brk = bracketPicks.map((b) => `b:${b.round}:${b.idx}:${b.winnerRosterId}`);
+  return [...reg, ...brk].sort().join('|');
 }

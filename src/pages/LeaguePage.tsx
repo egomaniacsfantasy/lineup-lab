@@ -753,6 +753,7 @@ export function LeaguePage() {
               baseline={predictorBaseline}
               games={predictorGames}
               leagueId={String(stored?.leagueId ?? '')}
+              projByWeekRoster={projByWeekRoster}
               storageKey={`og.predictor.${stored?.provider}.${stored?.leagueId}`}
               userId={String(stored?.userId ?? '')}
             />
