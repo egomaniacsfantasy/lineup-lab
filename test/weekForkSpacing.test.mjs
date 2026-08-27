@@ -22,8 +22,15 @@ import { chromium } from 'playwright';
  */
 
 const cwd = process.cwd();
-const port = 4182;
-const baseUrl = `http://127.0.0.1:${port}`;
+/* Reuse the dev server the other browser test brings up when it happens to be
+   there already, and only fall back to our own. Two Vite servers plus two
+   Chromiums on one machine is enough contention to make a neighbouring
+   pixel-sampling test fail once in a while, and a suite that fails somewhere
+   else when you add a test here is worse than the test is good. */
+const SHARED_PORT = 4181;
+const OWN_PORT = 4182;
+let port = OWN_PORT;
+let baseUrl = `http://127.0.0.1:${OWN_PORT}`;
 const API_PORT = 8799;
 
 function isPortOpen(checkPort) {
@@ -67,14 +74,17 @@ test.before(async () => {
     ownsApi = true;
     await waitForUrl(`http://127.0.0.1:${API_PORT}/api/health`);
   }
-  if (!(await isPortOpen(port))) {
+  if (await isPortOpen(SHARED_PORT)) {
+    port = SHARED_PORT;
+  } else if (!(await isPortOpen(OWN_PORT))) {
     vite = spawn(
       'npm',
-      ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+      ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(OWN_PORT), '--strictPort'],
       { cwd, env: process.env, stdio: 'ignore' },
     );
     ownsVite = true;
   }
+  baseUrl = `http://127.0.0.1:${port}`;
   await waitForUrl(`${baseUrl}/design/league`);
   browser = await chromium.launch({ headless: true });
 });
@@ -96,7 +106,15 @@ function readStrip() {
   return { bars, chips };
 }
 
+const cache = new Map();
+
 async function stripAt(width, cloneToSixGames) {
+  /* Cached per shape: the chip-alignment check wants the same rendered strip
+     the twelve-team spacing check already measured, and loading the page
+     twice to ask two questions about one layout is pure contention. */
+  const key = `${width}:${cloneToSixGames}`;
+  if (cache.has(key)) return cache.get(key);
+
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   await page.goto(`${baseUrl}/design/league?view=this-week`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.week-fork__track');
@@ -118,6 +136,7 @@ async function stripAt(width, cloneToSixGames) {
 
   const strip = await page.evaluate(readStrip);
   await page.close();
+  cache.set(key, strip);
   return strip;
 }
 
