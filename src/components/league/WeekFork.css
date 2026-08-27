@@ -13,6 +13,12 @@
 .week-fork {
   --fork-track: 80px;
   --fork-cap: 13px;
+  /* The one number that spaces the strip. Bars sit in a two-column grid per
+     game with this as the gap, and each game carries HALF of it as outer
+     padding, so the gap between the two bars of a matchup and the gap across
+     a matchup boundary both come out to one column plus --fork-gap. Change
+     one of the two and the strip goes back to alternating 96px and 116px. */
+  --fork-gap: 14px;
   --fork-win: var(--green);
   --fork-loss: var(--red);
 
@@ -160,10 +166,13 @@
   flex: 1 1 0;
   min-width: 138px;
   max-width: 230px;
-  /* Wider gutters between games than between the two teams inside one, so
-     twelve bars group into six matchups by proximity rather than by asking
-     the reader to trace a divider line. */
-  padding: 0 var(--space-sm) 2px;
+  /* Exactly half the inner gap: see --fork-gap. Wider outer padding was a
+     deliberate attempt to group each pair by proximity, and it failed — a
+     twenty pixel difference across a hundred pixel gap is too small to read
+     as grouping and too large to read as alignment, so twelve evenly drawn
+     bars came out looking carelessly placed. The divider and the chips group
+     the pair; the spacing just has to be regular. */
+  padding: 0 calc(var(--fork-gap) / 2) 2px;
   border-radius: var(--radius-sm);
 }
 
@@ -191,7 +200,7 @@
 .week-fork__teams {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-2xs);
+  gap: var(--fork-gap);
 }
 
 .week-fork__plot {
@@ -366,7 +375,6 @@
     flex: 1 1 46%;
     min-width: 0;
     max-width: none;
-    padding-inline: var(--space-2xs);
   }
 
   /* The divider marks a boundary between neighbours in a row; on a wrapped

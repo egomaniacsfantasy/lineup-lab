@@ -1,0 +1,154 @@
+import assert from 'node:assert/strict';
+import net from 'node:net';
+import test from 'node:test';
+import { spawn } from 'node:child_process';
+import { chromium } from 'playwright';
+
+/**
+ * The bars in the week strip are evenly spaced.
+ *
+ * They were not. Each game carried more outer padding than the gap between
+ * its own two bars, on the theory that the extra space would group each pair
+ * by proximity. Measured, that produced gaps alternating 96px and 116px
+ * across the strip — a difference too small to read as grouping and too large
+ * to read as alignment, so twelve carefully drawn bars looked carelessly
+ * placed. Andre spotted it on sight in his own twelve-team league.
+ *
+ * The fix ties both numbers to one token: the grid gap inside a game, and
+ * half of it as the game's outer padding. This measures the result rather
+ * than the CSS, because the property that matters is the rendered rhythm and
+ * there are several ways to break it that all still look plausible in a
+ * stylesheet.
+ */
+
+const cwd = process.cwd();
+const port = 4182;
+const baseUrl = `http://127.0.0.1:${port}`;
+const API_PORT = 8799;
+
+function isPortOpen(checkPort) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ port: checkPort, host: '127.0.0.1' });
+    socket.once('connect', () => {
+      socket.end();
+      resolve(true);
+    });
+    socket.once('error', () => resolve(false));
+  });
+}
+
+async function waitForUrl(url, timeoutMs = 30_000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch {
+      // keep waiting
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`Timed out waiting for ${url}`);
+}
+
+let vite = null;
+let api = null;
+let browser = null;
+let ownsVite = false;
+let ownsApi = false;
+
+test.before(async () => {
+  if (!(await isPortOpen(API_PORT))) {
+    api = spawn('node', ['server/index.js'], {
+      cwd,
+      env: { ...process.env, PORT: String(API_PORT) },
+      stdio: 'ignore',
+    });
+    ownsApi = true;
+    await waitForUrl(`http://127.0.0.1:${API_PORT}/api/health`);
+  }
+  if (!(await isPortOpen(port))) {
+    vite = spawn(
+      'npm',
+      ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+      { cwd, env: process.env, stdio: 'ignore' },
+    );
+    ownsVite = true;
+  }
+  await waitForUrl(`${baseUrl}/design/league`);
+  browser = await chromium.launch({ headless: true });
+});
+
+test.after(async () => {
+  if (browser) await browser.close();
+  if (vite && ownsVite) vite.kill('SIGTERM');
+  if (api && ownsApi) api.kill('SIGTERM');
+});
+
+/* Centres of every bar, and of every chip, left to right. */
+function readStrip() {
+  const centreX = (el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.left + rect.width / 2;
+  };
+  const bars = [...document.querySelectorAll('.week-fork__track')].map(centreX);
+  const chips = [...document.querySelectorAll('.week-fork__team')].map(centreX);
+  return { bars, chips };
+}
+
+async function stripAt(width, cloneToSixGames) {
+  const page = await browser.newPage({ viewport: { width, height: 900 } });
+  await page.goto(`${baseUrl}/design/league?view=this-week`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('.week-fork__track');
+
+  if (cloneToSixGames) {
+    /* The design fixture is a six-team league. A real one is twelve, and the
+       alternating-gap bug got worse the more games there were, so the check
+       runs against both shapes. */
+    await page.evaluate(() => {
+      const row = document.querySelector('.week-fork__games');
+      const games = [...document.querySelectorAll('.week-fork__game')];
+      for (let index = 0; index < 3; index += 1) {
+        const clone = games[index].cloneNode(true);
+        clone.classList.remove('week-fork__game--you');
+        row.appendChild(clone);
+      }
+    });
+  }
+
+  const strip = await page.evaluate(readStrip);
+  await page.close();
+  return strip;
+}
+
+for (const [label, games, width] of [
+  ['a six-team league', false, 1440],
+  ['a twelve-team league', true, 1440],
+  ['a narrow laptop', true, 1180],
+]) {
+  test(`the bars are evenly spaced in ${label}`, async () => {
+    const { bars } = await stripAt(width, games);
+    assert.ok(bars.length >= 6, `expected a drawn strip, got ${bars.length} bars`);
+
+    const gaps = bars.slice(1).map((centre, index) => centre - bars[index]);
+    const spread = Math.max(...gaps) - Math.min(...gaps);
+
+    /* One pixel of slack for subpixel layout, nothing like the twenty the bug
+       produced. */
+    assert.ok(
+      spread <= 1,
+      `bar spacing varies by ${spread.toFixed(1)}px: ${gaps.map((gap) => gap.toFixed(1)).join(', ')}`,
+    );
+  });
+}
+
+test('every chip sits under its own bar', async () => {
+  const { bars, chips } = await stripAt(1440, true);
+  assert.equal(bars.length, chips.length, 'a bar without a chip, or the reverse');
+
+  const drift = bars.map((bar, index) => Math.abs(bar - chips[index]));
+  assert.ok(
+    Math.max(...drift) <= 1,
+    `crest drifted from its bar by ${Math.max(...drift).toFixed(1)}px`,
+  );
+});
