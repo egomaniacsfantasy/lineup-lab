@@ -1457,10 +1457,17 @@ function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalo
   const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
   const rosterIds = teams.map((t) => t.rosterId);
-  // Start after the last SCORED week (not the displayWeek) — see the long note in
-  // the original simulateSeason: avoids double-counting a finalized-but-unadvanced week.
+  // Which weeks are still UNDECIDED and must be simulated. Two floors, both needed:
+  //   - after the last SCORED week (avoids double-counting a finalized-but-unadvanced
+  //     week that is already in the records), and
+  //   - at or after the current display week. Weeks BELOW the display week are already
+  //     played and counted in each team's record/pointsFor; if lastScoredWeek lags the
+  //     live week (ESPN's latestScoringPeriod trails), those decided weeks would
+  //     otherwise sit in `remaining` and get RE-ROLLED with random draws every sim —
+  //     which is exactly what kept clinched teams off 100% and eliminated teams off 0%.
+  const displayWeek = Number.isFinite(week) ? week : 1;
   const lastScored = Number.isFinite(league.lastScoredWeek) ? league.lastScoredWeek : (week - 1);
-  const startWeek = Math.max(1, (lastScored ?? (week - 1)) + 1);
+  const startWeek = Math.max(displayWeek, (lastScored ?? (week - 1)) + 1);
   const remaining = (scheduleWeeks ?? []).filter((w) => w.week >= startWeek && w.week <= regularWeeks);
 
   const bracketSize = nextPow2(Math.max(1, playoffTeams));
@@ -1654,7 +1661,13 @@ export function simulateSeason(ctx) {
     }
 
     rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + wins.get(id)));
-    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, sim, 0, id))()]));
+    // Tiebreak for exact wins+PF ties. Sim-INVARIANT (no `sim` term): a fixed per-team
+    // value so a tie resolves the same way in every sim. Otherwise a per-sim coin flips
+    // seeds ~50/50 on ties — mainly forced-point ties in the Predictor, and (with
+    // divisions) a flipped division winner cascades the whole seed block — keeping a
+    // fully-decided season off 0/100. Exact ties are astronomically rare in a real
+    // simulated season (float PF), so this barely touches Futures.
+    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, 0, 0, id))()]));
     const { standings, seeded } = seedStandings(rosterIds, wins, pf, coin, playoff);
     standings.forEach((id, i) => seedSums.set(id, seedSums.get(id) + (i + 1)));
     seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
@@ -1753,7 +1766,13 @@ export function simulateSeasonLive(baseline, liveDists) {
     }
 
     rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + wins.get(id)));
-    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, sim, 0, id))()]));
+    // Tiebreak for exact wins+PF ties. Sim-INVARIANT (no `sim` term): a fixed per-team
+    // value so a tie resolves the same way in every sim. Otherwise a per-sim coin flips
+    // seeds ~50/50 on ties — mainly forced-point ties in the Predictor, and (with
+    // divisions) a flipped division winner cascades the whole seed block — keeping a
+    // fully-decided season off 0/100. Exact ties are astronomically rare in a real
+    // simulated season (float PF), so this barely touches Futures.
+    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, 0, 0, id))()]));
     const { standings, seeded } = seedStandings(rosterIds, wins, pf, coin, playoff);
     standings.forEach((id, i) => seedSums.set(id, seedSums.get(id) + (i + 1)));
     seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));

@@ -55,7 +55,12 @@ export const LEVERAGE_SIMS = 2_000;
  * 4k is exactly as STABLE as 10k — same number every time — and lands within
  * ~0.3% of it at ~a quarter of the cost. Matches the trade engine's count.
  */
-export const PREDICTOR_SIMS = 4_000;
+// MUST equal SEASON_SIMS (Futures). The Predictor's no-pick baseline shows the
+// Futures numbers; if the conditioned run used a different count, every untouched
+// team would shift by pure 10k-vs-4k Monte-Carlo noise the moment you make one pick,
+// and the deltas would carry that noise instead of the pick's real effect. Same seed
+// + same count = untouched teams identical to the baseline (CRN), clean deltas.
+export const PREDICTOR_SIMS = SEASON_SIMS;
 
 /**
  * Remove one matchup from a week and credit the winner.
@@ -260,8 +265,14 @@ export function predictSeason(ctx, { picks = [], sims = SEASON_SIMS } = {}) {
     picked += 1;
   }
 
-  // Remaining (unforced) matchups are what actually get simulated.
+  // Remaining (unforced) matchups that ACTUALLY get simulated — only regular-season
+  // weeks from the current display week through the last regular week (the same
+  // window seasonSetup simulates). Past weeks and playoff weeks were being counted
+  // here too, so the number overstated what's really random.
+  const regularWeeks = prepared.league?.regularSeasonWeeks ?? 14;
+  const fromWeek = Number.isFinite(prepared.week) ? prepared.week : 1;
   const simulated = (conditioned.scheduleWeeks ?? []).reduce((n, entry) => {
+    if (entry.week < fromWeek || entry.week > regularWeeks) return n;
     const ids = new Set((entry.matchups ?? []).map((m) => m.matchupId));
     return n + ids.size;
   }, 0);
