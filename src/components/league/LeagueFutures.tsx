@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ScoringFormat } from '../../types';
-import { formatAmericanOdds, impliedProbability } from '../../utils/formatOdds';
+import { formatAmericanOdds, formatProbOrOdds, impliedProbability } from '../../utils/formatOdds';
 import type { LeagueFutureRow } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
@@ -70,6 +70,10 @@ function dayKey(timestamp: number) {
 }
 
 function formatPercent(value: number) {
+  // A locked/eliminated team reads as exactly 100%/0%; only near-locks get the
+  // >99% / <1% hedge.
+  if (value >= 99.95) return '100%';
+  if (value <= 0.05) return '0%';
   if (value < 1) return '<1%';
   if (value > 99) return '>99%';
   return `${Math.round(value)}%`;
@@ -376,7 +380,7 @@ export function LeagueFutures({
                 </span>
                 <span className="league-futures__price" role="cell">
                   <span className={['league-futures__odds', team.isUser ? 'league-futures__odds--selected' : ''].filter(Boolean).join(' ')}>
-                    {formatAmericanOdds(odds)}
+                    {formatProbOrOdds(team.titleProb ?? impliedProbability(odds) * 100, odds)}
                   </span>
                 </span>
                 <span className="league-futures__move-cell" role="cell">

@@ -157,6 +157,7 @@ export function toLeagueFutures(
         championOdds: f.championOdds,
         playoffOdds: f.playoffOdds,
         playoffProb: f.playoffProb,
+        titleProb: f.titleProb,
         playoffClinched: f.playoffClinched,
         avgSeed: f.avgSeed,
         isUser: f.isUser,
@@ -203,6 +204,7 @@ function provisionalFutures(bootstrap: LeagueBootstrap): LeagueFutureRow[] {
       finalsOdds: probabilityToAmerican(Math.min(0.9, titleProb * 2)),
       playoffOdds: probabilityToAmerican(playoffProb),
       playoffProb: Number((playoffProb * 100).toFixed(1)),
+      titleProb: Number((titleProb * 100).toFixed(1)),
       isUser: team.isUser,
     };
   });

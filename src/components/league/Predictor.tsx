@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatAmericanOdds } from '../../utils/formatOdds';
+import { formatProbOrOdds } from '../../utils/formatOdds';
 import { TeamAvatar } from './TeamAvatar';
 import {
   fetchConditionedBoard,
@@ -574,7 +574,7 @@ export function Predictor({
                           the two follow the header toggle together. A raw "%"
                           beside a formatted price put two scales in one row
                           and made the toggle look broken. */}
-                      {formatAmericanOdds(next?.playoffOdds ?? row.playoffOdds)}
+                      {formatProbOrOdds(next?.playoffProb ?? row.playoffProb, next?.playoffOdds ?? row.playoffOdds)}
                       {playoffDelta != null && Math.abs(playoffDelta) >= 0.5 ? (
                         <span
                           className={`predictor__delta predictor__delta--${playoffDelta > 0 ? 'up' : 'down'}`}
@@ -589,7 +589,7 @@ export function Predictor({
                   {suspended ? (
                     <span className="predictor__suspended" aria-label="repricing" />
                   ) : (
-                    formatAmericanOdds(next?.titleOdds ?? row.titleOdds)
+                    formatProbOrOdds(next?.titleProb ?? row.titleProb, next?.titleOdds ?? row.titleOdds)
                   )}
                 </span>
               </div>

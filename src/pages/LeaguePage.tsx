@@ -437,9 +437,9 @@ export function LeaguePage() {
         isUser: Boolean(row.isUser),
         playoffProb: row.playoffProb ?? 0,
         playoffOdds: row.playoffOdds,
-        /* The futures row carries the price, not the raw probability; the
-           Predictor only needs the price for the baseline column. */
-        titleProb: 0,
+        /* Raw title probability so the Predictor can show a real % (100% for a
+           lock) instead of the clamped odds round-trip; titleOdds is the price. */
+        titleProb: row.titleProb ?? 0,
         titleOdds: row.championOdds,
         record: team?.record ?? { wins: 0, losses: 0, ties: 0 },
         pointsFor: team?.pointsFor ?? null,

@@ -43,6 +43,22 @@ export function formatAmericanOdds(odds: number): string {
   return '+100';
 }
 
+/**
+ * Show a playoff/title probability the honest way. In percent mode use the RAW
+ * probability (0-100) so a clinched team reads 100% and an eliminated team 0% —
+ * NOT the American-odds round-trip, which clamps to [1.5%, 98.5%] (odds can't be
+ * infinite) and made every lock look like 98.5% and every dead team 1.5%. In
+ * american mode fall back to the (clamped) odds, which is correct for odds.
+ */
+export function formatProbOrOdds(prob: number, odds: number): string {
+  if (currentFormat === 'percent') {
+    if (prob >= 99.95) return '100%';
+    if (prob <= 0.05) return '0%';
+    return `${prob.toFixed(1)}%`;
+  }
+  return formatAmericanOdds(odds);
+}
+
 export function formatSpread(spread: number): string {
   const rounded = Math.round(spread * 10) / 10;
 

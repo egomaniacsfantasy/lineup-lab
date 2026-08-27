@@ -14,6 +14,9 @@ export interface LeagueFutureRow {
   finalsOdds?: number;
   playoffOdds: number;
   playoffProb: number;
+  /** Raw title probability 0-100 (the unclamped value; championOdds is the
+   *  clamped american-odds form). */
+  titleProb?: number;
   playoffClinched?: boolean;
   avgSeed?: number;
   isUser: boolean;
