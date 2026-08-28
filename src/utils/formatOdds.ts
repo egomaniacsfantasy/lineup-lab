@@ -23,24 +23,31 @@ export function impliedProbability(moneyline: number): number {
     : (100 / (moneyline + 100)) * 100;
 }
 
-export function formatAmericanOdds(odds: number): string {
+/**
+ * The price formatAmericanOdds will print, as a number.
+ *
+ * Exported because a bet slip has to carry the price the user actually saw on
+ * the card, not the raw engine float behind it. If the leg said -113 and the
+ * slip priced 53.05% off an unrounded -112.7, a two-leg parlay would not
+ * reconcile against the two numbers on screen, and reconciling is the whole
+ * reason to trust it.
+ *
+ * Anything inside (-101, 100) is even money, quoted +100 and never -100.
+ */
+export function americanOddsValue(odds: number): number {
   const rounded = Math.round(odds);
+  if (rounded >= 100 || rounded <= -101) return rounded;
+  return 100;
+}
+
+export function formatAmericanOdds(odds: number): string {
+  const value = americanOddsValue(odds);
 
   if (currentFormat === 'percent') {
-    const p = impliedProbability(rounded <= -101 || rounded >= 100 ? rounded : 100);
-    return `${p.toFixed(1)}%`;
+    return `${impliedProbability(value).toFixed(1)}%`;
   }
 
-  if (rounded >= 100) {
-    return `+${rounded}`;
-  }
-
-  if (rounded <= -101) {
-    return `${rounded}`;
-  }
-
-  // even money is always quoted +100, never -100 (or "EVEN")
-  return '+100';
+  return value >= 100 ? `+${value}` : `${value}`;
 }
 
 /** American odds straight from a probability (0-1), NO [1.5%,98.5%] clamp — so a

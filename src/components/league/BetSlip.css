@@ -1,0 +1,235 @@
+/* The slip.
+
+   Sticky to the bottom of the scroller rather than fixed to the viewport. The
+   app shell is a flex column whose last row is the tab bar, and the board
+   scrolls in the row above it; a fixed slip would have to know the bar's
+   height and its safe-area padding to avoid sitting on top of it, and would
+   be wrong on any device where either differs. Sticky inside the scroller is
+   right by construction. */
+
+.bet-slip {
+  position: sticky;
+  bottom: var(--space-sm);
+  z-index: 6;
+  display: grid;
+  margin-top: var(--space-md);
+  border: 1px solid rgba(232, 84, 29, 0.42);
+  border-radius: var(--radius-lg);
+  /* Opaque, not a wash. The board scrolls underneath it and numbers reading
+     through a translucent panel is how a price gets misread. */
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-elevated);
+  overflow: hidden;
+}
+
+.bet-slip__handle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 0;
+  background: linear-gradient(90deg, rgba(232, 84, 29, 0.18), rgba(232, 84, 29, 0.06));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bet-slip--closed .bet-slip__handle {
+  background: linear-gradient(90deg, rgba(232, 84, 29, 0.24), rgba(232, 84, 29, 0.08));
+}
+
+.bet-slip__handle:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
+/* The leg count, as a book badges it. Reads at a glance from across a room,
+   which is the one thing the collapsed bar has to do. */
+.bet-slip__count {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bet-slip__handle-label {
+  font-family: var(--font-condensed);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.bet-slip__handle-price {
+  color: var(--text-amber);
+  font-family: var(--font-price);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.bet-slip__chevron {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.bet-slip__body {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px 10px;
+}
+
+.bet-slip__legs {
+  display: grid;
+  gap: 2px;
+  max-height: 40vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.bet-slip__leg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.bet-slip__leg + .bet-slip__leg {
+  box-shadow: 0 -1px 0 var(--border-subtle);
+}
+
+.bet-slip__leg-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bet-slip__leg-pick {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bet-slip__leg-line {
+  color: var(--text-amber);
+  font-family: var(--font-num);
+}
+
+.bet-slip__leg-meta {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bet-slip__leg-price {
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bet-slip__drop {
+  display: grid;
+  place-items: center;
+  /* 28px, not the 20 an × wants to be: this is the one control on the slip
+     that destroys something, and it sits next to a scrolling list on a
+     phone. */
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bet-slip__drop:hover {
+  background: var(--bg-inset);
+  color: var(--red);
+}
+
+.bet-slip__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 6px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bet-slip__total {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.bet-slip__total-label {
+  color: var(--text-muted);
+  font-family: var(--font-condensed);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.bet-slip__total-price {
+  color: var(--text-amber);
+  font-family: var(--font-price);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.bet-slip__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.bet-slip__action {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-soft);
+  font-family: var(--font-condensed);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.bet-slip__action:hover {
+  border-color: rgba(232, 84, 29, 0.5);
+  color: var(--text-primary);
+}
+
+@media (max-width: 720px) {
+  .bet-slip__handle-price {
+    font-size: 18px;
+  }
+
+  .bet-slip__total-price {
+    font-size: 22px;
+  }
+
+  .bet-slip__legs {
+    max-height: 34vh;
+  }
+}

@@ -1,12 +1,20 @@
+import { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
+import { BetSlip } from '../components/league/BetSlip';
+import { toggleLeg, removeLeg, type ParlayLeg } from '../utils/parlay';
 import { MatchupSlate } from '../components/league/MatchupSlate';
 import type { LeagueWeekMatchup } from '../mocks/league';
 import type { LineHistoryEntry } from '../services/leagueApi';
 
-type BoardRowVariant = 'collision' | 'truncation' | 'game-of-the-week';
+type BoardRowVariant = 'collision' | 'truncation' | 'game-of-the-week' | 'slip';
 
 function isVariant(value: string | undefined): value is BoardRowVariant {
-  return value === 'collision' || value === 'truncation' || value === 'game-of-the-week';
+  return (
+    value === 'collision' ||
+    value === 'truncation' ||
+    value === 'game-of-the-week' ||
+    value === 'slip'
+  );
 }
 
 const collisionMatchups: LeagueWeekMatchup[] = [
@@ -170,6 +178,10 @@ const gameOfTheWeekMatchups: LeagueWeekMatchup[] = [
 
 export function DesignBoardRowPage() {
   const { variant } = useParams<{ variant?: string }>();
+  /* The slip scene drives the real component with real state, so a rendered
+     test can tap cells and read what actually comes back rather than
+     asserting against a hand-built list. */
+  const [legs, setLegs] = useState<ParlayLeg[]>([]);
 
   if (!isVariant(variant)) {
     return <Navigate replace to="/design/board-row/collision" />;
@@ -206,7 +218,23 @@ export function DesignBoardRowPage() {
       >
         Design board-row stress fixture: {variant}
       </div>
-      {variant === 'game-of-the-week' ? (
+      {variant === 'slip' ? (
+        <>
+          <MatchupSlate
+            currentWeek={8}
+            gameOfTheWeek={7101}
+            matchups={matchups}
+            onToggleLeg={(leg) => setLegs((current) => toggleLeg(current, leg))}
+            slipLegs={legs}
+          />
+          <BetSlip
+            legs={legs}
+            onClear={() => setLegs([])}
+            onRemove={(key) => setLegs((current) => removeLeg(current, key))}
+            week={8}
+          />
+        </>
+      ) : variant === 'game-of-the-week' ? (
         <>
           <MatchupSlate currentWeek={8} gameOfTheWeek={7101} matchups={matchups} />
           {/* The same board a moment earlier, while the conditioned run is

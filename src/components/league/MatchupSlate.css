@@ -157,11 +157,29 @@
   text-align: center;
 }
 
+/* A button now, not a span: it opens the matchup. The card stopped being one
+   big button when the three market cells became buttons of their own, since a
+   button cannot contain a button. Everything below the display line is undoing
+   what the user agent does to a <button> so the block looks exactly as it did
+   as a span. */
 .matchup-slate__team {
   display: flex;
   align-items: center;
   gap: 9px;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.matchup-slate__team:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
 }
 
 .matchup-slate__team > .team-avatar {
@@ -218,8 +236,12 @@
 /* The three markets. Boxed like a book's, one number each: the engine posts a
    spread, a total and a price, and nothing else. A book puts juice under the
    first two, and drawing that here would be inventing a market. */
+/* Also a button wherever the board takes legs, and a plain span everywhere
+   else, so the reset has to be harmless on both. */
 .matchup-slate__cell {
   display: flex;
+  border: 1px solid transparent;
+  font: inherit;
   align-items: center;
   justify-content: center;
   min-height: 40px;
@@ -231,6 +253,34 @@
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Tapped. Solid amber, the way a book fills a selected price, because the
+   two states have to be distinguishable at a glance across a board of twelve
+   cells and a tint would not survive the card's own hover.
+
+   Only cells that ARE buttons ever get this class, so the pointer and the
+   hover lift below never appear on a board that does not take legs. */
+button.matchup-slate__cell {
+  cursor: pointer;
+}
+
+button.matchup-slate__cell:hover {
+  border-color: rgba(232, 84, 29, 0.45);
+  color: var(--text-primary);
+}
+
+button.matchup-slate__cell:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.matchup-slate__cell--taken,
+.matchup-slate__cell--taken.matchup-slate__cell--price,
+.matchup-slate__cell--taken.matchup-slate__cell--favorite {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #fff;
 }
 
 .matchup-slate__cell--price {

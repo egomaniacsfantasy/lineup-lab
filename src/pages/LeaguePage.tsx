@@ -4,6 +4,8 @@ import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { LeagueFutures } from '../components/league/LeagueFutures';
 import { MatchupSlate } from '../components/league/MatchupSlate';
+import { BetSlip } from '../components/league/BetSlip';
+import { useBetSlip } from '../hooks/useBetSlip';
 import { PlayoffSettings } from '../components/league/PlayoffSettings';
 import { StandingsTable } from '../components/league/StandingsTable';
 import { LuckBoard, type LuckBoardTeam } from '../components/league/LuckBoard';
@@ -482,6 +484,14 @@ export function LeaguePage() {
     setSearchParams({ view });
   };
 
+  /* Above every early return below. A hook that sits under one runs on some
+     renders and not others, which is the "rendered more hooks than during the
+     previous render" crash. */
+  const slip = useBetSlip(
+    connected?.connection.leagueId ?? null,
+    connected?.connection.currentWeek ?? null,
+  );
+
   if (isWizardOpen) {
     return (
       <div className="league-page">
@@ -672,6 +682,23 @@ export function LeaguePage() {
               gameOfTheWeek={forks?.mostInfluentialGame ?? null}
               history={lineHistory}
               matchups={slate}
+              onToggleLeg={connected ? slip.toggle : undefined}
+              slipLegs={slip.legs}
+            />
+          ) : null}
+
+          {/* The slip lives here and only here.
+
+              It prices this week's board, so it belongs under this week's
+              board, and a demo league is the one place it must not appear:
+              building a parlay out of numbers from a league you have not
+              connected is a slip about nothing. */}
+          {connected ? (
+            <BetSlip
+              legs={slip.legs}
+              onClear={slip.clear}
+              onRemove={slip.drop}
+              week={connection.currentWeek}
             />
           ) : null}
         </>

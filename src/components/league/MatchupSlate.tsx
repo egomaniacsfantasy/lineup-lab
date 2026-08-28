@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { formatAmericanOdds } from '../../utils/formatOdds';
+import { americanOddsValue, formatAmericanOdds } from '../../utils/formatOdds';
+import {
+  legKey,
+  moneylineLeg,
+  spreadLeg,
+  totalLeg,
+  type ParlayLeg,
+} from '../../utils/parlay';
 import { spreadLabel, teamsFor, type BoardTeam } from '../../utils/boardSides';
 import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueWeekMatchup } from '../../mocks/league';
@@ -22,6 +29,15 @@ interface MatchupSlateProps {
    * ribbon appears a beat late rather than the board waiting on it.
    */
   gameOfTheWeek?: number | null;
+  /**
+   * The slip, if this board is one you can bet into.
+   *
+   * Both or neither. Without onToggleLeg the three market cells render as
+   * plain text, which is what every surface that is not League -> This week
+   * wants: a price you can tap is a promise that tapping it does something.
+   */
+  slipLegs?: readonly ParlayLeg[];
+  onToggleLeg?: (leg: ParlayLeg) => void;
 }
 
 /**
@@ -197,6 +213,8 @@ export function MatchupSlate({
   history = null,
   intro = null,
   gameOfTheWeek = null,
+  slipLegs,
+  onToggleLeg,
 }: MatchupSlateProps) {
   /* Every side's move against this week's opening line, keyed matchup:roster.
      Computed once for the slate rather than re-derived per row. */
@@ -225,6 +243,12 @@ export function MatchupSlate({
       .sort((a, b) => Math.abs(b.movePp ?? 0) - Math.abs(a.movePp ?? 0))
       .slice(0, 3);
   }, [history, currentWeek, matchups]);
+
+  /* Which cells are lit. A set, because every cell on the board asks. */
+  const slipKeys = useMemo(
+    () => new Set((slipLegs ?? []).map((leg) => legKey(leg))),
+    [slipLegs],
+  );
 
   const rows = useMemo(
     () =>
@@ -342,67 +366,144 @@ export function MatchupSlate({
                  gets crowned every time the sim has not answered yet. */
               const isGameOfTheWeek =
                 gameOfTheWeek != null && matchup.matchupId === gameOfTheWeek;
+              /* Named the way the slip will read it back, so a leg on the
+                 slip and the card it came from say the same thing. */
+              const matchupLabel = `${left.name} vs ${right.name}`;
 
-              const sideRow = (side: typeof left, overUnder: 'O' | 'U', move: number | null) => (
-                <span className="matchup-slate__side">
-                  <span className="matchup-slate__team">
-                    {leagueChartFlags.avatars ? (
-                      <TeamAvatar avatarUrl={side.avatarUrl} name={side.name} />
-                    ) : null}
-                    <span className="matchup-slate__team-copy">
-                      <span className="matchup-slate__team-name" title={side.name}>
-                        {boardDisplayName(side.name)}
-                      </span>
-                      {/* Record only. The manager's name is the one thing on
-                          a card you already know: you are looking at your own
-                          league. It was competing with the team name directly
-                          above it for the same strip of space. */}
-                      <span className="matchup-slate__team-meta">{side.record}</span>
-                    </span>
-                    {/* Each side still owns its own movement figure. Stacked
-                        rather than facing each other, there is no rail to
-                        push it into and no ambiguity about whose it is. */}
-                    {move != null ? (
-                      <span className="matchup-slate__team-move">{moveLabel(move)}</span>
-                    ) : null}
-                  </span>
+              /* A cell is a price until it is something you can take, and
+                 then it is a button. Three things have to be true: the board
+                 accepts legs at all, the game has an id to key a leg by, and
+                 the market actually has a number. An empty cell that depresses
+                 when tapped is worse than one that does not react. */
+              const cell = (
+                content: string,
+                leg: ParlayLeg | null,
+                extraClass?: string,
+              ) => {
+                const key = leg ? legKey(leg) : null;
+                const taken = key != null && slipKeys.has(key);
+                const className = [
+                  'matchup-slate__cell',
+                  extraClass ?? '',
+                  taken ? 'matchup-slate__cell--taken' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ');
 
-                  {/* The engine prices a margin, a book posts a line, and the
-                      two run opposite ways: the side projected to win by 2.9
-                      lays 2.9, so the sign flips here. PK for a pick'em, which
-                      is what a book prints, and an empty cell when the line
-                      does not exist. A dash in the slot where a number goes
-                      reads as a number we are withholding rather than one
-                      that was never posted. */}
-                  <span className="matchup-slate__cell">{spreadLabel(side.spread)}</span>
-                  <span className="matchup-slate__cell">
-                    {typeof total === 'number' ? `${overUnder} ${total.toFixed(1)}` : ''}
-                  </span>
-                  <span
-                    className={[
-                      'matchup-slate__cell',
-                      'matchup-slate__cell--price',
-                      side.side === favorite.side ? 'matchup-slate__cell--favorite' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
+                if (!onToggleLeg || !leg || content === '') {
+                  return <span className={className}>{content}</span>;
+                }
+                return (
+                  <button
+                    aria-pressed={taken}
+                    className={className}
+                    onClick={() => onToggleLeg(leg)}
+                    type="button"
                   >
-                    {formatAmericanOdds(side.odds)}
+                    {content}
+                  </button>
+                );
+              };
+
+              const sideRow = (side: typeof left, overUnder: 'O' | 'U', move: number | null) => {
+                /* Every leg needs a game to belong to: the slip holds at most
+                   one leg per game, and a game with no id cannot hold a slot. */
+                const bettable = onToggleLeg != null && matchup.matchupId != null;
+                const context =
+                  bettable && matchup.matchupId != null
+                    ? { matchupId: matchup.matchupId, matchupLabel, selection: side.side }
+                    : null;
+                const spreadText = spreadLabel(side.spread);
+                const totalText =
+                  typeof total === 'number' ? `${overUnder} ${total.toFixed(1)}` : '';
+
+                return (
+                  <span className="matchup-slate__side">
+                    {/* The team block opens the matchup. The card itself is no
+                        longer one big button: a card that is a button cannot
+                        contain the three that price it, and nesting them is
+                        invalid markup before it is bad interaction. */}
+                    <button
+                      className="matchup-slate__team"
+                      onClick={() => setSelectedRowKey(rowKey)}
+                      type="button"
+                    >
+                      {leagueChartFlags.avatars ? (
+                        <TeamAvatar avatarUrl={side.avatarUrl} name={side.name} />
+                      ) : null}
+                      <span className="matchup-slate__team-copy">
+                        <span className="matchup-slate__team-name" title={side.name}>
+                          {boardDisplayName(side.name)}
+                        </span>
+                        {/* Record only. The manager's name is the one thing on
+                            a card you already know: you are looking at your own
+                            league. It was competing with the team name directly
+                            above it for the same strip of space. */}
+                        <span className="matchup-slate__team-meta">{side.record}</span>
+                      </span>
+                      {/* Each side still owns its own movement figure. Stacked
+                          rather than facing each other, there is no rail to
+                          push it into and no ambiguity about whose it is. */}
+                      {move != null ? (
+                        <span className="matchup-slate__team-move">{moveLabel(move)}</span>
+                      ) : null}
+                    </button>
+
+                    {/* The engine prices a margin, a book posts a line, and the
+                        two run opposite ways: the side projected to win by 2.9
+                        lays 2.9, so the sign flips here. PK for a pick'em, which
+                        is what a book prints, and an empty cell when the line
+                        does not exist. A dash in the slot where a number goes
+                        reads as a number we are withholding rather than one
+                        that was never posted. */}
+                    {cell(
+                      spreadText,
+                      context && typeof side.spread === 'number'
+                        ? spreadLeg({ ...context, teamName: side.name, line: spreadText })
+                        : null,
+                    )}
+                    {cell(
+                      totalText,
+                      context && typeof total === 'number' && matchup.matchupId != null
+                        ? totalLeg({
+                            matchupId: matchup.matchupId,
+                            matchupLabel,
+                            selection: overUnder === 'O' ? 'over' : 'under',
+                            total,
+                          })
+                        : null,
+                    )}
+                    {cell(
+                      formatAmericanOdds(side.odds),
+                      context
+                        ? moneylineLeg({
+                            ...context,
+                            teamName: side.name,
+                            price: americanOddsValue(side.odds),
+                          })
+                        : null,
+                      [
+                        'matchup-slate__cell--price',
+                        side.side === favorite.side ? 'matchup-slate__cell--favorite' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' '),
+                    )}
                   </span>
-                </span>
-              );
+                );
+              };
 
               return (
-                <button
-                  aria-pressed={selected}
+                <div
+                  aria-current={selected ? 'true' : undefined}
+                  aria-label={matchupLabel}
                   className={[
                     'matchup-slate__row-button',
                     matchup.isUserGame ? 'matchup-slate__row-button--user' : '',
                     selected ? 'matchup-slate__row-button--selected' : '',
                   ].filter(Boolean).join(' ')}
                   key={rowKey}
-                  onClick={() => setSelectedRowKey(rowKey)}
-                  type="button"
+                  role="group"
                 >
                   {/* The ribbon rides the top edge of the card, above the
                       column labels and the two teams, the way a book tags a
@@ -441,7 +542,7 @@ export function MatchupSlate({
                       style={{ width: `${left.winProb}%` }}
                     />
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>
