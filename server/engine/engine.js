@@ -2482,7 +2482,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
         for (const get of combos(theirs, j)) {
           const tv = val(get);
           const r = tv > 0 ? gv / tv : 1;
-          if (r < 0.5 || r > 2.0) continue; // fair-value band — wide enough that even mismatched rosters produce candidates; fairness ranking still keeps lopsided deals off the top
+          // Value band only prunes the ALL-managers pool (best deals) so it doesn't try
+          // to build 100k combos. A CLICKED manager keeps EVERY combo — the gap-sort
+          // below still sims the most balanced first, so you always get that manager's
+          // 5 fairest trades, never blank.
+          if (partnerRosterId == null && (r < 0.5 || r > 2.0)) continue;
           if (targetPos) {
             const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
             const afterPos = positionStarterMean(userAfter, targetPos, slotLabels, projectionMap, catalog);
@@ -2546,11 +2550,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     simmed += 1;
     if (simmed % 4 === 0) await yieldToLoop();
     if (Date.now() - t0 > 14_000) break;   // stop scanning; leave the rest of the budget for Pass 2's full-sims
-    // Show fair trades everywhere, ranked by fairness — the fairest (near-neutral)
-    // rise to the top on their own, so best-deals and each manager both stay full.
-    // The ONLY thing excluded is a trade that clearly HURTS you (a real title drop);
-    // title-neutral swaps are legitimate fair deals and are kept.
-    if (youDelta < -2.5) continue;
+    // Best-deals (all managers) still skips deals that clearly HURT you. A CLICKED
+    // manager has NO title constraint at all — its 5 fairest trades always show,
+    // ranked by fairness, exactly as asked.
+    if (partnerRosterId == null && youDelta < -2.5) continue;
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
@@ -2589,11 +2592,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
     if (Date.now() - t0 > 26_000) break;   // return what we have before the client's 30s abort
-    // Show fair trades everywhere, ranked by fairness — the fairest (near-neutral)
-    // rise to the top on their own, so best-deals and each manager both stay full.
-    // The ONLY thing excluded is a trade that clearly HURTS you (a real title drop);
-    // title-neutral swaps are legitimate fair deals and are kept.
-    if (youDelta < -2.5) continue;
+    // Best-deals (all managers) still skips deals that clearly HURT you. A CLICKED
+    // manager has NO title constraint at all — its 5 fairest trades always show,
+    // ranked by fairness, exactly as asked.
+    if (partnerRosterId == null && youDelta < -2.5) continue;
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     suggestions.push({
