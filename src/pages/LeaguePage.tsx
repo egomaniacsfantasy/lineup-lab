@@ -669,6 +669,7 @@ export function LeaguePage() {
                   />
                 ) : null
               }
+              gameOfTheWeek={forks?.mostInfluentialGame ?? null}
               history={lineHistory}
               matchups={slate}
             />

@@ -103,6 +103,38 @@
   outline-offset: -2px;
 }
 
+/* The game of the week ribbon.
+
+   Full bleed across the top edge rather than a pill floating in the padding.
+   A card that already carries nine numbers cannot afford another small
+   rounded object competing with them; a band that touches both edges reads
+   as a property of the whole card instead, which is what it is.
+
+   Amber because ember is the brand accent and this is a selection. It cannot
+   collide with the "your game" marker, which is a three pixel inset rule down
+   the LEFT edge, or with hover and selection, which are border colours. Those
+   three all still show through underneath a ribboned card.
+
+   cursor: help is the only affordance a title attribute gets. Without it the
+   explanation is discoverable purely by accident. */
+.matchup-slate__gotw {
+  /* Cancels the card's own 14px/16px padding so the band meets both edges.
+     Track this against .matchup-slate__row-button: they have to move
+     together, and a mismatch shows as a hairline of surface beside it. */
+  margin: -14px -16px 0;
+  padding: 6px 16px 7px;
+  border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
+  background: linear-gradient(90deg, var(--amber), var(--amber-mid));
+  color: #fff;
+  font-family: var(--font-condensed);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  cursor: help;
+}
+
 /* Column labels and both team rows share one template, so the three markets
    line up down the card the way a book's board does. */
 .matchup-slate__card-cols,
@@ -376,52 +408,25 @@
   }
 }
 
-@media (max-width: 1099px) {
-  .matchup-slate__board-head,
-  .matchup-slate__row-button {
-    grid-template-columns:
-      minmax(0, 1fr)
-      62px
-      minmax(120px, 1fr)
-      62px
-      minmax(0, 1fr);
-    gap: 10px;
-  }
-}
+/* What is NOT here any more: three breakpoints that re-columned
+   .matchup-slate__row-button.
 
-@media (max-width: 899px) {
-  .matchup-slate__header {
-    display: grid;
-  }
+   They were written for the old layout, where a matchup was one wide row and
+   narrowing the window meant giving that row fewer columns. A matchup is a
+   card now, and the card is a stack: it wants ONE column at every width, and
+   it sets its own narrow-window sizes at 720px below. Left in place, these
+   turned every card between 640px and 1099px back into a five-column row and
+   laid the card's markup across it - two team blocks, the column labels and
+   the split bar all fighting for the same track. It was invisible from a
+   maximised desktop window and from a phone, which is exactly the band
+   nobody screenshots.
 
-  .matchup-slate__board-head {
-    display: none;
-  }
-
-  .matchup-slate__row-button {
-    grid-template-columns:
-      minmax(0, 1fr)
-      auto
-      minmax(110px, 1fr)
-      auto
-      minmax(0, 1fr);
-  }
-
-  .matchup-slate__team--right {
-    display: none;
-  }
-
-}
+   The 899px header rule went with them and is inert either way: the header
+   holds a single child now, so flex and grid lay it out identically.
+   .matchup-slate__board-head and .matchup-slate__team--right have no markup
+   left to hide at all. */
 
 @media (max-width: 639px) {
-  .matchup-slate__row-button {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  .matchup-slate__moneyline,
-  .matchup-slate__prob-number,
-
   .matchup-slate__prob-track {
     width: 100%;
   }
@@ -681,6 +686,12 @@
 
   .matchup-slate__row-button {
     padding: 12px 12px 10px;
+  }
+
+  /* Follows the padding above, or it leaves a hairline of card either side. */
+  .matchup-slate__gotw {
+    margin: -12px -12px 0;
+    padding: 5px 12px 6px;
   }
 
   .matchup-slate__card-cols,

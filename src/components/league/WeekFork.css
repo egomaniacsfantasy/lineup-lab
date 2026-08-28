@@ -531,27 +531,9 @@
    league's title + playoff picture the most this week (title-weighted league
    swing, computed server-side). Kept OUT of the strip itself so it never
    disturbs the now-line alignment the bars depend on. */
-.week-fork__wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-}
-
-.week-fork__caption {
-  margin: 0;
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  color: var(--text-muted);
-  letter-spacing: 0.01em;
-}
-
-.week-fork__caption strong {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-/* Faint lift so the named matchup is easy to pick out of the strip; purely a
-   background, so no bar or now-line moves. */
+/* Faint lift so the game of the week is easy to pick out of the strip; purely
+   a background, so no bar or now-line moves. The name of it lives on the
+   ribbon of its own card in the board below. */
 .week-fork__game--key {
   background: rgba(255, 255, 255, 0.04);
   border-radius: var(--radius-sm);

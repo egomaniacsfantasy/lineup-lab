@@ -3,10 +3,10 @@ import { MatchupSlate } from '../components/league/MatchupSlate';
 import type { LeagueWeekMatchup } from '../mocks/league';
 import type { LineHistoryEntry } from '../services/leagueApi';
 
-type BoardRowVariant = 'collision' | 'truncation';
+type BoardRowVariant = 'collision' | 'truncation' | 'game-of-the-week';
 
 function isVariant(value: string | undefined): value is BoardRowVariant {
-  return value === 'collision' || value === 'truncation';
+  return value === 'collision' || value === 'truncation' || value === 'game-of-the-week';
 }
 
 const collisionMatchups: LeagueWeekMatchup[] = [
@@ -94,6 +94,80 @@ const truncationMatchups: LeagueWeekMatchup[] = [
   },
 ];
 
+/**
+ * The game of the week ribbon, and the beat before it exists.
+ *
+ * Three cards: the one the sim crowned, an ordinary one, and one carrying no
+ * matchupId at all. That last card is the reason this fixture has three rows
+ * rather than two - the ribbon is chosen by comparing ids, and an unidentified
+ * card must not match a null answer. Rendered twice, once with the sim's
+ * answer and once without it, because the board draws before the conditioned
+ * run returns and the second state is what everyone sees first.
+ */
+const gameOfTheWeekMatchups: LeagueWeekMatchup[] = [
+  {
+    matchupId: 7101,
+    teamARosterId: 5,
+    teamA: 'Sonic and Knuckles',
+    teamAAvatarUrl: null,
+    teamARecord: '7-5',
+    teamAOdds: -113,
+    teamAWinProb: 53.1,
+    teamAProjection: 121.2,
+    teamASpread: 2.9,
+    teamBRosterId: 6,
+    teamB: "Adam's Astounding Team",
+    teamBAvatarUrl: null,
+    teamBRecord: '7-5',
+    teamBOdds: 113,
+    teamBWinProb: 46.9,
+    teamBProjection: 118.3,
+    teamBSpread: -2.9,
+    totalProjection: 239.5,
+    isUserGame: false,
+  },
+  {
+    matchupId: 7102,
+    teamARosterId: 7,
+    teamA: 'Zeus\u2019s Bolts',
+    teamAAvatarUrl: null,
+    teamARecord: '9-3',
+    teamAOdds: -186,
+    teamAWinProb: 65.0,
+    teamAProjection: 134.9,
+    teamASpread: 9.4,
+    teamAIsUser: true,
+    teamBRosterId: 8,
+    teamB: 'Waiver Wire Warriors',
+    teamBAvatarUrl: null,
+    teamBRecord: '3-9',
+    teamBOdds: 156,
+    teamBWinProb: 35.0,
+    teamBProjection: 125.5,
+    teamBSpread: -9.4,
+    totalProjection: 260.4,
+    isUserGame: true,
+  },
+  {
+    /* No matchupId: the provider has a game here but nothing to key it by. */
+    teamARosterId: 9,
+    teamA: 'The Unidentified',
+    teamAAvatarUrl: null,
+    teamARecord: '6-6',
+    teamAOdds: -104,
+    teamAWinProb: 51.0,
+    teamAProjection: 119.0,
+    teamBRosterId: 10,
+    teamB: 'Nameless Nine',
+    teamBAvatarUrl: null,
+    teamBRecord: '6-6',
+    teamBOdds: 104,
+    teamBWinProb: 49.0,
+    teamBProjection: 118.0,
+    isUserGame: false,
+  },
+];
+
 export function DesignBoardRowPage() {
   const { variant } = useParams<{ variant?: string }>();
 
@@ -101,7 +175,12 @@ export function DesignBoardRowPage() {
     return <Navigate replace to="/design/board-row/collision" />;
   }
 
-  const matchups = variant === 'collision' ? collisionMatchups : truncationMatchups;
+  const matchups =
+    variant === 'collision'
+      ? collisionMatchups
+      : variant === 'truncation'
+        ? truncationMatchups
+        : gameOfTheWeekMatchups;
   const history = variant === 'collision' ? collisionHistory : null;
 
   return (
@@ -127,7 +206,17 @@ export function DesignBoardRowPage() {
       >
         Design board-row stress fixture: {variant}
       </div>
-      <MatchupSlate currentWeek={8} history={history} matchups={matchups} />
+      {variant === 'game-of-the-week' ? (
+        <>
+          <MatchupSlate currentWeek={8} gameOfTheWeek={7101} matchups={matchups} />
+          {/* The same board a moment earlier, while the conditioned run is
+              still going. No ribbon anywhere, including on the card that has
+              no id of its own to be matched by. */}
+          <MatchupSlate currentWeek={8} gameOfTheWeek={null} matchups={matchups} />
+        </>
+      ) : (
+        <MatchupSlate currentWeek={8} history={history} matchups={matchups} />
+      )}
     </div>
   );
 }

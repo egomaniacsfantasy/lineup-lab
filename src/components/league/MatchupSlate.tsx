@@ -16,7 +16,26 @@ interface MatchupSlateProps {
   history?: LineHistoryEntry[] | null;
   /** Rendered directly under the board's own heading. */
   intro?: ReactNode;
+  /**
+   * matchupId of the week's game of the week, or null while the conditioned
+   * sim that picks it is still running. Arrives after the board does, so the
+   * ribbon appears a beat late rather than the board waiting on it.
+   */
+  gameOfTheWeek?: number | null;
 }
+
+/**
+ * Why this game and not another one.
+ *
+ * Stated as the engine computes it (leagueSwing in server/engine/leverage.js):
+ * the total championship and playoff probability that moves across the whole
+ * league between the two results, with the title race carrying most of the
+ * weight. Not "the closest game" and not "the best teams" - both of those are
+ * what people assume a game of the week is, which is exactly why the tooltip
+ * has to say what it actually measures.
+ */
+const GAME_OF_THE_WEEK_WHY =
+  'The result that moves the whole league most: no other game this week shifts as much championship and playoff probability across all teams.';
 
 type RawMovement = {
   at: number;
@@ -172,7 +191,13 @@ function moveLabel(value: number) {
   return `${value >= 0 ? '▲' : '▼'}${Math.abs(value).toFixed(1)}`;
 }
 
-export function MatchupSlate({ matchups, currentWeek, history = null, intro = null }: MatchupSlateProps) {
+export function MatchupSlate({
+  matchups,
+  currentWeek,
+  history = null,
+  intro = null,
+  gameOfTheWeek = null,
+}: MatchupSlateProps) {
   /* Every side's move against this week's opening line, keyed matchup:roster.
      Computed once for the slate rather than re-derived per row. */
   const openMoves = useMemo(() => {
@@ -312,6 +337,11 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
             {rows.map(({ matchup, left, right, favorite, summary, rowKey }) => {
               const selected = rowKey === selectedRow?.rowKey;
               const total = matchup.totalProjection;
+              /* Guarded on both sides: a null gameOfTheWeek must not match the
+                 cards whose own matchupId is missing, or an unidentified game
+                 gets crowned every time the sim has not answered yet. */
+              const isGameOfTheWeek =
+                gameOfTheWeek != null && matchup.matchupId === gameOfTheWeek;
 
               const sideRow = (side: typeof left, overUnder: 'O' | 'U', move: number | null) => (
                 <span className="matchup-slate__side">
@@ -374,6 +404,23 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                   onClick={() => setSelectedRowKey(rowKey)}
                   type="button"
                 >
+                  {/* The ribbon rides the top edge of the card, above the
+                      column labels and the two teams, the way a book tags a
+                      featured game. Negative margins cancel the card's own
+                      padding so it runs corner to corner: a floating pill
+                      inside the padding would read as one more number in a
+                      card that already has nine.
+
+                      Only the ribbon carries the tooltip, not the whole card.
+                      The card is a button that opens the matchup, and a title
+                      on it would fire wherever the pointer rested. */}
+                  {isGameOfTheWeek ? (
+                    <span className="matchup-slate__gotw" title={GAME_OF_THE_WEEK_WHY}>
+                      Game of the week
+                      <span className="visually-hidden">. {GAME_OF_THE_WEEK_WHY}</span>
+                    </span>
+                  ) : null}
+
                   <span className="matchup-slate__card-cols" aria-hidden="true">
                     <span />
                     <span>Spread</span>

@@ -139,8 +139,9 @@ export function WeekFork({
   loading?: boolean;
   /** Games this week, from the schedule, so the skeleton is the right width. */
   expectedGames?: number;
-  /** matchupId whose result swings the league's title+playoff picture most; gets the
-   *  "Most influential" tag. null hides the tag entirely. */
+  /** matchupId of the game of the week: the one whose result swings the whole
+   *  league's championship and playoff odds most. Its column gets a faint
+   *  lift here; the card down in the board carries the actual label. */
   mostInfluentialGame?: number | null;
 }) {
   const tick = useChurnTick(loading && pairs.length === 0 && expectedGames > 0);
@@ -256,30 +257,21 @@ export function WeekFork({
      then walks the week from the game that decides most to the one that
      decides least. */
   const ordered = [...pairs].sort((a, b) => b.importance - a.importance);
-  const influential =
-    mostInfluentialGame != null
-      ? ordered.find((pair) => pair.matchupId === mostInfluentialGame)
-      : undefined;
 
+  /* The game whose result reshapes the league most is NAMED on its own card
+     down in the board, as a ribbon, not written out in a line of prose above
+     the strip. The sentence had to repeat both team names just to say which
+     game it meant, which is what made it read as filler: the board is right
+     there, and a card can say it about itself.
+
+     The faint lift on the column below stays. Same game, marked in the other
+     view of it, and the ribbon a few hundred pixels down is what explains
+     the lift. */
   return (
-    <div className="week-fork__wrap">
-      {/* One quiet line, not a header: names the game whose result reshapes the
-          league's title + playoff picture the most this week. Sits above the strip
-          so it never disturbs the now-line alignment the bars depend on. */}
-      {influential ? (
-        <p
-          className="week-fork__caption"
-          title="Its result swings the league's title and playoff odds more than any other game this week"
-        >
-          <span aria-hidden="true">🔑</span> Most influential game:{' '}
-          <strong>{influential.sides[0].teamName}</strong> vs{' '}
-          <strong>{influential.sides[1].teamName}</strong>
-        </p>
-      ) : null}
-      <section
-        aria-label={`Playoff odds if each team wins or loses${week != null ? `, week ${week}` : ''}`}
-        className="week-fork"
-      >
+    <section
+      aria-label={`Playoff odds if each team wins or loses${week != null ? `, week ${week}` : ''}`}
+      className="week-fork"
+    >
       {/* No numeric scale down the side.
 
           It was there as a ruler, on the reasoning that bars you cannot
@@ -372,6 +364,5 @@ export function WeekFork({
         ))}
       </div>
     </section>
-    </div>
   );
 }
