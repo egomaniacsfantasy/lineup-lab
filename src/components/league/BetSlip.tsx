@@ -33,7 +33,6 @@ interface BetSlipProps {
   legs: ParlayLeg[];
   week: number | null;
   leagueName?: string | null;
-  teamName?: string | null;
   onRemove: (key: string) => void;
   onClear: () => void;
 }
@@ -42,7 +41,6 @@ export function BetSlip({
   legs,
   week,
   leagueName = null,
-  teamName = null,
   onRemove,
   onClear,
 }: BetSlipProps) {
@@ -61,13 +59,12 @@ export function BetSlip({
         {
           eyebrow: week != null ? `Week ${week}` : 'This week',
           leagueName,
-          you: teamName,
           legs,
           price: price == null ? '' : formatAmericanOdds(price),
         },
         options,
       ),
-    [legs, week, leagueName, teamName, price],
+    [legs, week, leagueName, price],
   );
 
   /* The confirmation has to clear itself, and it has to stop doing that if

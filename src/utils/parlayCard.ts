@@ -30,8 +30,6 @@ export interface ParlayCardLine {
   /** e.g. "Week 8" */
   eyebrow: string;
   leagueName?: string | null;
-  /** Whose slip it is. */
-  you?: string | null;
   legs: ParlayLeg[];
   /** Already formatted, e.g. "+900". Formatting belongs to the odds toggle. */
   price: string;
@@ -42,13 +40,18 @@ const PAD = 88;
 /* The plug bar, the same height and colour as every other card's. It is the
    only reason a card that gets forwarded twice brings anyone back. */
 const BAR = 108;
-/* One leg: a panel and the gap under it. */
-const PANEL = 100;
-const GAP = 14;
+/* One leg: a panel and the gap under it.
+
+   Both went up. At 100 and 14 the rows read as a dense block: two lines of
+   type filling a panel with almost no margin, and gaps too narrow to
+   separate one pick from the next. A slip is a short list that someone
+   screenshots, not a table to be scanned, so it can afford the room. */
+const PANEL = 124;
+const GAP = 18;
 const ROW = PANEL + GAP;
 
 /** Where the legs start. Everything above this is fixed-height. */
-const LEGS_TOP = 470;
+const LEGS_TOP = 480;
 
 /** The exact height this slip needs. Exported so a guard can check it. */
 export function parlayCardHeight(legCount: number): number {
@@ -120,22 +123,25 @@ export async function drawParlayCard(
   label([line.leagueName, line.eyebrow].filter(Boolean).join('  ·  '), W - PAD, 116, 'right');
 
   // ── the price, which is the whole card ──────────────────────────────────
-  /* Whose slip, and how long, on one line above the number. The team name
-     used to float on the right of the price, where it read as a fourth leg
-     and, in a slip containing that team, printed the same name twice. */
-  const legWord = legs.length === 1 ? 'PICK' : 'LEGS';
-  const eyebrow = [line.you, `${legs.length} ${legWord}`].filter(Boolean).join('  ·  ');
-  label(eyebrow, PAD, 232, 'left', P.accent);
+  /* How long the slip is, and nothing else.
+
+     The team name was here and is gone: the card is being sent BY that team,
+     to people who know whose it is, and in a slip that contains them it
+     printed the same name twice. The line under the price claiming fair odds
+     is gone too. It was arguing a point nobody had disputed yet, in the one
+     place on the card where an argument competes with the number.
+
+     The eyebrow sits 45px clear of the top of the digits rather than resting
+     on them. At 232 against a baseline of 380 the two were four pixels
+     apart, which is what made the whole head of the card read as crowded. */
+  const legWord = legs.length === 1 ? 'PICK' : 'LEG';
+  label(`${legs.length}-${legWord} PARLAY`, PAD, 224, 'left', P.accent);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = P.ink;
   const priceSize = fitted(line.price, W - PAD * 2, 210);
   ctx.font = `400 ${priceSize}px ${P.display}`;
-  ctx.fillText(line.price, PAD, 380);
-
-  /* The claim under the number. Every book quotes this parlay shorter than
-     we do, and the reason is the only thing separating the two prices. */
-  label('Fair odds, no cut taken', PAD, 428, 'left', P.muted);
+  ctx.fillText(line.price, PAD, 420);
 
   // ── the legs ────────────────────────────────────────────────────────────
   legs.forEach((leg, index) => {
@@ -150,8 +156,8 @@ export async function drawParlayCard(
     roundRect(ctx, PAD, top, W - PAD * 2, PANEL, 20);
     ctx.fill();
 
-    const R = 30;
-    const cx = PAD + 30 + R;
+    const R = 34;
+    const cx = PAD + 34 + R;
     const crest = crests[index];
     if (crest) circleImage(ctx, crest, cx, mid, R);
     else {
@@ -160,36 +166,36 @@ export async function drawParlayCard(
       ctx.fillStyle = 'rgba(232,84,29,0.18)';
       ctx.fill();
       ctx.fillStyle = P.accent;
-      ctx.font = `400 28px ${P.display}`;
+      ctx.font = `400 32px ${P.display}`;
       ctx.textAlign = 'center';
       /* Totals belong to the game rather than to either side, so they get
          the O or the U instead of a crest that would name the wrong team. */
       ctx.fillText(
         leg.market === 'total' ? leg.label.slice(0, 1).toUpperCase() : initialsFor(leg.label),
         cx,
-        mid + 10,
+        mid + 11,
       );
     }
 
     // the price, first, because the text has to be told where to stop
     ctx.textAlign = 'right';
     ctx.fillStyle = P.ink;
-    ctx.font = `400 46px ${P.display}`;
-    const priceX = W - PAD - 30;
+    ctx.font = `400 52px ${P.display}`;
+    const priceX = W - PAD - 36;
     const priceRoom = ctx.measureText(leg.price >= 0 ? `+${leg.price}` : `${leg.price}`).width;
-    ctx.fillText(leg.price >= 0 ? `+${leg.price}` : `${leg.price}`, priceX, mid + 8);
+    ctx.fillText(leg.price >= 0 ? `+${leg.price}` : `${leg.price}`, priceX, mid + 10);
 
-    const textX = cx + R + 26;
-    const room = priceX - priceRoom - 28 - textX;
+    const textX = cx + R + 28;
+    const room = priceX - priceRoom - 32 - textX;
 
     /* Pick and line as one string so they shrink together: "SONIC -2.9"
        split across two sizes reads as two different facts. */
     const pick = leg.line ? `${leg.label} ${leg.line}` : leg.label;
     ctx.textAlign = 'left';
-    const pickSize = fitted(pick, room, 36, 700, P.ui);
+    const pickSize = fitted(pick, room, 40, 700, P.ui);
     ctx.font = `700 ${pickSize}px ${P.ui}`;
     ctx.fillStyle = P.ink;
-    ctx.fillText(pick, textX, mid - 4);
+    ctx.fillText(pick, textX, mid - 8);
 
     /* "Moneyline · vs Adam's Astounding Team", not the whole fixture: the
        pick above already names one side, and two legs from one game would
@@ -197,10 +203,10 @@ export async function drawParlayCard(
        side, so that one keeps the fixture. */
     const context = leg.opponent ? `vs ${leg.opponent}` : leg.matchupLabel;
     const meta = `${MARKET_LABEL[leg.market]} · ${context}`;
-    const metaSize = fitted(meta, room, 22, 500, P.ui);
+    const metaSize = fitted(meta, room, 24, 500, P.ui);
     ctx.font = `500 ${metaSize}px ${P.ui}`;
     ctx.fillStyle = P.faint;
-    ctx.fillText(meta, textX, mid + 30);
+    ctx.fillText(meta, textX, mid + 36);
   });
 
   // ── the plug, pinned to the bottom of whatever height this came to ──────

@@ -462,7 +462,16 @@ async function profile(legs) {
           barEdges.push(differs(at(0, y), plain) && differs(at(W - 1, y), plain));
         }
 
-        return { width: W, height: H, painted, barEdges, expected: mod.parlayCardHeight(legs.length) };
+        return {
+        width: W,
+        height: H,
+        painted,
+        barEdges,
+        expected: mod.parlayCardHeight(legs.length),
+        /* One leg's worth of card, measured rather than hardcoded, so the
+           panel checks below follow the layout when it is retuned. */
+        row: mod.parlayCardHeight(2) - mod.parlayCardHeight(1),
+      };
       },
       { legs, nonce: nextNonce() },
     );
@@ -497,13 +506,13 @@ for (const count of [1, 3, 20]) {
     /* Each leg panel is a filled surface spanning the card, so panels read as
        wide painted bands and the gaps between them read as background. That
        is the count: if a leg is dropped or two overlap, this is not 20. */
-    const panels = bands(card.painted, 470, card.height - 108, 380);
+    const panels = bands(card.painted, 440, card.height - 108, 380);
     assert.equal(panels.length, count, `${panels.length} leg panels were painted, not ${count}`);
 
     for (const panel of panels) {
       assert.ok(
-        panel.height <= 104,
-        `a leg panel is ${panel.height}px tall, so two rows have run together`,
+        panel.height < card.row - 8,
+        `a leg panel is ${panel.height}px of a ${card.row}px row, so two rows have run together`,
       );
     }
 

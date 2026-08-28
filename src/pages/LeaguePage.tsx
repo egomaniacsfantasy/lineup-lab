@@ -699,7 +699,6 @@ export function LeaguePage() {
               legs={slip.legs}
               onClear={slip.clear}
               onRemove={slip.drop}
-              teamName={connection.teamName}
               week={connection.currentWeek}
             />
           ) : null}

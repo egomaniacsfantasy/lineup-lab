@@ -232,7 +232,6 @@ export function DesignBoardRowPage() {
             legs={legs}
             onClear={() => setLegs([])}
             onRemove={(key) => setLegs((current) => removeLeg(current, key))}
-            teamName="Zeus’s Bolts"
             week={8}
           />
         </>
