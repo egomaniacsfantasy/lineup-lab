@@ -656,9 +656,21 @@ export function connectEspn(
        cookie. null when there is nothing to match (a public league, no
        sign-in) or when the match is ambiguous (someone co-owning two teams). */
     yourRosterId: number | null;
-  }>(`/api/espn/connect/${encodeURIComponent(leagueId)}?season=${encodeURIComponent(season)}`, {
-    headers,
-  });
+    /* Only send a season when there is one.
+
+       A league URL copied out of ESPN usually has no seasonId in it, so this
+       sent `?season=` and the server's `??` fallback did not fire on an empty
+       string. The provider then built a URL with an empty season segment and
+       ESPN answered 404, which the user read as "we couldn't reach that
+       league" about a league that was public and reachable. The server refuses
+       a blank season now too; both ends, because either alone leaves the hole
+       open from the other side. */
+  }>(
+    `/api/espn/connect/${encodeURIComponent(leagueId)}${
+      season && season.trim() ? `?season=${encodeURIComponent(season.trim())}` : ''
+    }`,
+    { headers },
+  );
 }
 
 export type EspnLoginResult =

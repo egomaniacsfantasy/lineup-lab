@@ -206,15 +206,6 @@ function boardDisplayName(name: string) {
   return name;
 }
 
-function boardHandle(ownerName: string | undefined, record: string) {
-  if (ownerName) {
-    const owner = ownerName.toUpperCase();
-    const full = `${owner} · ${record}`;
-    if (full.length <= 18) return full;
-    if (owner.length <= 18) return owner;
-  }
-  return record;
-}
 
 function formatPercent(value: number) {
   if (value < 1) return '<1%';
@@ -393,9 +384,11 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                       <span className="matchup-slate__team-name" title={side.name}>
                         {boardDisplayName(side.name)}
                       </span>
-                      <span className="matchup-slate__team-meta">
-                        {boardHandle(side.ownerName, side.record)}
-                      </span>
+                      {/* Record only. The manager's name is the one thing on
+                          a card you already know: you are looking at your own
+                          league. It was competing with the team name directly
+                          above it for the same strip of space. */}
+                      <span className="matchup-slate__team-meta">{side.record}</span>
                     </span>
                     {/* Each side still owns its own movement figure. Stacked
                         rather than facing each other, there is no rail to
@@ -453,7 +446,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                   </span>
 
                   {sideRow(left, matchup.teamASpread, 'O', summary ? summary.move : null)}
-                  <span aria-hidden="true" className="matchup-slate__at">at</span>
+                  <span aria-hidden="true" className="matchup-slate__at">vs</span>
                   {sideRow(right, matchup.teamBSpread, 'U', summary ? -summary.move : null)}
 
                   {/* The split, drawn once across the foot of the card. The

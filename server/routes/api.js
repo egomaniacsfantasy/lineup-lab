@@ -52,6 +52,7 @@ import {
   upsertScoutingEdit,
 } from '../services/scoutingStore.js';
 import { computeRosterNeeds, computeSuperlatives } from '../services/scoutingSignals.js';
+import { seasonParam } from '../season.js';
 
 const DAY = 24 * 60 * 60_000;
 const autoHarvested = new Set();
@@ -105,7 +106,7 @@ function scoringSuffix(scoringFamily) {
 function getProvider(req) {
   if (req.query.provider === 'espn') {
     return createEspnProvider({
-      season: req.query.season ?? String(new Date().getUTCFullYear()),
+      season: seasonParam(req.query.season),
       espnS2: req.get('x-espn-s2') || null,
       swid: req.get('x-espn-swid') || null,
     });
@@ -325,7 +326,7 @@ apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
     const espnS2 = req.get('x-espn-s2') || null;
     const swid = req.get('x-espn-swid') || null;
     const result = await espnConnect({
-      season: req.query.season ?? String(new Date().getUTCFullYear()),
+      season: seasonParam(req.query.season),
       leagueId,
       espnS2,
       swid,
@@ -514,7 +515,7 @@ async function loadLeagueContext(provider, leagueId, userId, weekOverride = null
 export function buildHeadlessProvider(providerKind, season) {
   if (providerKind === 'espn') {
     return createEspnProvider({
-      season: season ?? String(new Date().getUTCFullYear()),
+      season: seasonParam(season),
       espnS2: null,
       swid: null,
     });
