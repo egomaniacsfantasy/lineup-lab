@@ -390,6 +390,91 @@ test('a board with no slip behind it has no buttons in its market cells', async 
   }
 });
 
+/**
+ * The whole card selects, and taking a price does not.
+ *
+ * Both halves shipped wrong. Only the team block selected the matchup, which
+ * is invisible as a rule: a card looks like one object you can press, and
+ * four fifths of this one did nothing. And once the card became clickable,
+ * the market cells sit inside it, so a tap on a price would have selected the
+ * game as well as taking the leg unless it stops the click.
+ */
+test('clicking anywhere on a card selects that matchup', async () => {
+  const page = await openBoard();
+  try {
+    const selected = () =>
+      page.$eval('.matchup-slate__detail-head strong', (node) => node.textContent);
+    const before = await selected();
+
+    /* The separator between the two teams: as dead as dead space gets, and
+       squarely inside the card. */
+    await page.locator('.matchup-slate__row-button').nth(1).locator('.matchup-slate__at').click();
+    await page.waitForTimeout(120);
+    const after = await selected();
+    assert.notEqual(after, before, 'clicking inside a card did not select it');
+
+    /* And it is the ring, not just the rail, that says so. */
+    const ringed = await page.$$eval('.matchup-slate__row-button--selected', (cards) => cards.length);
+    assert.equal(ringed, 1, `${ringed} cards are marked selected`);
+  } finally {
+    await page.close();
+  }
+});
+
+test('taking a price does not drag the selection onto that game', async () => {
+  const page = await openBoard();
+  try {
+    const selected = () =>
+      page.$eval('.matchup-slate__detail-head strong', (node) => node.textContent);
+
+    /* Select the second card, then take a leg on the FIRST one. */
+    await page.locator('.matchup-slate__row-button').nth(1).locator('.matchup-slate__at').click();
+    await page.waitForTimeout(120);
+    const parked = await selected();
+
+    await page
+      .locator('.matchup-slate__row-button')
+      .nth(0)
+      .locator('button.matchup-slate__cell')
+      .first()
+      .click();
+    await page.waitForTimeout(120);
+
+    assert.equal(await selected(), parked, 'taking a price moved the detail rail off the game being read');
+    assert.equal(
+      await page.locator('.matchup-slate__cell--taken').count(),
+      1,
+      'the price did not go on the slip',
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+/**
+ * A selected card has to be obvious at a glance.
+ *
+ * It was a 62% amber border against a hover state that is already 42% amber:
+ * a difference you had to look for, on the one card the whole right-hand rail
+ * is describing.
+ */
+test('the selected card is in a different class from hover, not a shade along it', async () => {
+  const page = await openBoard();
+  try {
+    const style = await page.$eval('.matchup-slate__row-button--selected', (card) => {
+      const computed = getComputedStyle(card);
+      return { border: computed.borderTopColor, shadow: computed.boxShadow };
+    });
+
+    /* Full-strength amber, not a wash of it. */
+    assert.match(style.border, /rgb\(232,\s*84,\s*29\)/, `selected border is ${style.border}`);
+    /* And a ring outside the edge, which is what carries at a glance. */
+    assert.notEqual(style.shadow, 'none', 'the selected card has no ring');
+  } finally {
+    await page.close();
+  }
+});
+
 test('no card nests a button inside a button', async () => {
   const page = await openBoard();
   try {

@@ -176,6 +176,60 @@ const gameOfTheWeekMatchups: LeagueWeekMatchup[] = [
   },
 ];
 
+/* Conditioned branches for the slip scene, so the detail rail's swing panel
+   is designable and testable without a connected league behind it. Shaped
+   exactly as forkPairs returns them. */
+const DESIGN_FORKS = [
+  {
+    matchupId: 7101,
+    importance: 100,
+    sides: [
+      {
+        rosterId: '5',
+        teamName: 'Sonic and Knuckles',
+        avatarUrl: null,
+        isUser: false,
+        nowProb: 63.1,
+        winProb: 78.4,
+        lossProb: 44.2,
+      },
+      {
+        rosterId: '6',
+        teamName: 'Adam\u2019s Astounding Team',
+        avatarUrl: null,
+        isUser: false,
+        nowProb: 55.4,
+        winProb: 71.0,
+        lossProb: 38.6,
+      },
+    ] as const,
+  },
+  {
+    matchupId: 7102,
+    importance: 62,
+    sides: [
+      {
+        rosterId: '7',
+        teamName: 'Zeus\u2019s Bolts',
+        avatarUrl: null,
+        isUser: true,
+        nowProb: 81.2,
+        winProb: 90.5,
+        lossProb: 68.0,
+      },
+      {
+        rosterId: '8',
+        teamName: 'Waiver Wire Warriors',
+        avatarUrl: null,
+        isUser: false,
+        nowProb: 12.4,
+        winProb: 22.9,
+        lossProb: 5.1,
+      },
+    ] as const,
+  },
+] as unknown as import('../components/league/WeekFork').ForkPair[];
+
 export function DesignBoardRowPage() {
   const { variant } = useParams<{ variant?: string }>();
   /* The slip scene drives the real component with real state, so a rendered
@@ -222,6 +276,7 @@ export function DesignBoardRowPage() {
         <>
           <MatchupSlate
             currentWeek={8}
+            forks={DESIGN_FORKS}
             gameOfTheWeek={7101}
             matchups={matchups}
             onToggleLeg={(leg) => setLegs((current) => toggleLeg(current, leg))}

@@ -81,6 +81,7 @@
   cursor: pointer;
   transition:
     border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
     background var(--transition-fast);
 }
 
@@ -89,9 +90,32 @@
   background: var(--bg-surface-soft);
 }
 
+/* Selected, and unmistakably so.
+
+   A 62% amber border against a hover state that is already 42% amber was a
+   difference you had to look for, on the one card whose contents the whole
+   right-hand rail is describing. A full-strength edge, a ring outside it and
+   a lift off the page put it in a different class from hover rather than a
+   shade further along the same one.
+
+   The ring is a box-shadow rather than a thicker border so the card does not
+   change size when it is picked, which would shuffle every card beside it. */
 .matchup-slate__row-button--selected {
-  border-color: rgba(232, 84, 29, 0.62);
-  background: var(--bg-surface-soft);
+  border-color: var(--amber);
+  background: var(--bg-raised);
+  box-shadow:
+    0 0 0 2px rgba(232, 84, 29, 0.32),
+    var(--shadow-glow-amber);
+}
+
+/* The user's own game keeps its left rail underneath, and the ring sits
+   outside it: the two marks answer different questions and both stay
+   readable. */
+.matchup-slate__row-button--user.matchup-slate__row-button--selected {
+  box-shadow:
+    inset 3px 0 0 var(--amber),
+    0 0 0 2px rgba(232, 84, 29, 0.32),
+    var(--shadow-glow-amber);
 }
 
 .matchup-slate__row-button--user {
@@ -791,4 +815,83 @@ button.matchup-slate__cell:focus-visible {
   .matchup-slate__team-name {
     font-size: 13px;
   }
+}
+
+/* What the selected game is worth.
+
+   Four columns, because the question has four parts: who, where they stand,
+   and the two places the result can put them. A row per side, in the order
+   the card above seats them.
+
+   Green and red are the same pair the fork strip uses for the same two
+   branches, which is the only reason they are allowed here: a win branch and
+   a loss branch are the money semantics those colours are reserved for. */
+.matchup-slate__swing {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+}
+
+.matchup-slate__swing-title {
+  color: var(--text-amber);
+  font-family: var(--font-condensed);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.matchup-slate__swing-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 44px 44px;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.matchup-slate__swing-head {
+  color: var(--text-muted);
+  font-family: var(--font-condensed);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.matchup-slate__swing-head--win {
+  color: var(--green);
+}
+
+.matchup-slate__swing-head--loss {
+  color: var(--red);
+}
+
+.matchup-slate__swing-team {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matchup-slate__swing-now,
+.matchup-slate__swing-win,
+.matchup-slate__swing-loss {
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.matchup-slate__swing-now {
+  color: var(--text-primary);
+}
+
+.matchup-slate__swing-win {
+  color: var(--green);
+}
+
+.matchup-slate__swing-loss {
+  color: var(--red);
 }

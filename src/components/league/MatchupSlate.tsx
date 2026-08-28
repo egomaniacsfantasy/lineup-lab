@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { americanOddsValue, formatAmericanOdds } from '../../utils/formatOdds';
 import {
   legKey,
@@ -14,6 +14,7 @@ import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
 import { marketMovement, weekMovement } from '../../utils/openAnchors';
 import { OddsChart, type OddsChartPoint } from '../charts/OddsChart';
+import type { ForkPair } from './WeekFork';
 import { TeamAvatar } from './TeamAvatar';
 import './MatchupSlate.css';
 
@@ -38,6 +39,16 @@ interface MatchupSlateProps {
    */
   slipLegs?: readonly ParlayLeg[];
   onToggleLeg?: (leg: ParlayLeg) => void;
+  /**
+   * The same conditioned branches the fork strip draws, keyed by matchupId.
+   *
+   * The rail used to show a selected game's line movement and nothing else,
+   * which is a chart about the last two days rather than about the game. This
+   * is what the game is actually worth: where each side's playoff odds land
+   * if it wins and if it loses. Already fetched for the strip above the
+   * board, so the rail costs nothing to fill.
+   */
+  forks?: readonly ForkPair[];
 }
 
 /**
@@ -215,6 +226,7 @@ export function MatchupSlate({
   gameOfTheWeek = null,
   slipLegs,
   onToggleLeg,
+  forks,
 }: MatchupSlateProps) {
   /* Every side's move against this week's opening line, keyed matchup:roster.
      Computed once for the slate rather than re-derived per row. */
@@ -313,6 +325,21 @@ export function MatchupSlate({
     return Math.abs(row.summary.move) > Math.abs(current.summary.move) ? row : current;
   }, null);
 
+  /* The branches for the selected game, with the sides put in the order the
+     card shows them rather than the order the sim returned them. A rail whose
+     two rows are the other way round from the card above it is a rail you
+     have to read twice. */
+  const selectedFork = useMemo(() => {
+    const id = selectedRow?.matchup.matchupId;
+    if (id == null || !forks?.length) return null;
+    const pair = forks.find((fork) => fork.matchupId === id);
+    if (!pair) return null;
+    const seated = [selectedRow.left.name, selectedRow.right.name].map((name) =>
+      pair.sides.find((side) => side.teamName === name),
+    );
+    return seated.every(Boolean) ? (seated as ForkPair['sides']) : pair.sides;
+  }, [forks, selectedRow]);
+
   const chartPoints = selectedRow?.detailClosings.map<OddsChartPoint>((point) => ({
     x: point.at,
     y: valueForSide(point, selectedRow.left.side),
@@ -397,7 +424,12 @@ export function MatchupSlate({
                   <button
                     aria-pressed={taken}
                     className={className}
-                    onClick={() => onToggleLeg(leg)}
+                    onClick={(event) => {
+                      /* The card behind this selects the matchup. Taking a
+                         leg is a different intent and must not do both. */
+                      event.stopPropagation();
+                      onToggleLeg(leg);
+                    }}
                     type="button"
                   >
                     {content}
@@ -430,11 +462,10 @@ export function MatchupSlate({
                         longer one big button: a card that is a button cannot
                         contain the three that price it, and nesting them is
                         invalid markup before it is bad interaction. */}
-                    <button
-                      className="matchup-slate__team"
-                      onClick={() => setSelectedRowKey(rowKey)}
-                      type="button"
-                    >
+                    {/* Still a button, with no handler of its own: the click
+                        it raises bubbles to the card, and that is also how a
+                        keyboard reaches the card, which is a div. */}
+                    <button className="matchup-slate__team" type="button">
                       {leagueChartFlags.avatars ? (
                         <TeamAvatar avatarUrl={side.avatarUrl} name={side.name} />
                       ) : null}
@@ -515,6 +546,14 @@ export function MatchupSlate({
                     selected ? 'matchup-slate__row-button--selected' : '',
                   ].filter(Boolean).join(' ')}
                   key={rowKey}
+                  /* The whole card selects the matchup. It used to be only the
+                     team block, which is invisible as a rule: everything about
+                     a card says "this is one object you can press" and then
+                     four fifths of it did nothing. The market cells stop the
+                     click from reaching here, so tapping a price takes a leg
+                     without also moving the detail rail off the game you were
+                     reading. */
+                  onClick={() => setSelectedRowKey(rowKey)}
                   role="group"
                 >
                   {/* The ribbon rides the top edge of the card, above the
@@ -644,6 +683,37 @@ export function MatchupSlate({
                 <div className="matchup-slate__detail-line">
                   <span>Projected points</span>
                   <span>{selectedRow.left.projection?.toFixed(1) ?? 'N/A'} · {selectedRow.right.projection?.toFixed(1) ?? 'N/A'}</span>
+                </div>
+              ) : null}
+
+              {/* What the result is worth, which is the thing a selected game
+                  most obviously wants to say and the rail was not saying.
+                  Three engine numbers per side: where the playoff odds stand,
+                  and where they land either way. Green and red are the same
+                  two colours the fork strip uses for the same two branches. */}
+              {selectedFork ? (
+                <div className="matchup-slate__swing">
+                  <span className="matchup-slate__swing-title">Playoff odds</span>
+                  <div className="matchup-slate__swing-grid">
+                    <span aria-hidden="true" />
+                    <span className="matchup-slate__swing-head">Now</span>
+                    <span className="matchup-slate__swing-head matchup-slate__swing-head--win">
+                      Win
+                    </span>
+                    <span className="matchup-slate__swing-head matchup-slate__swing-head--loss">
+                      Lose
+                    </span>
+                    {selectedFork.map((side) => (
+                      <Fragment key={side.rosterId}>
+                        <span className="matchup-slate__swing-team" title={side.teamName}>
+                          {side.teamName}
+                        </span>
+                        <span className="matchup-slate__swing-now">{formatPercent(side.nowProb)}</span>
+                        <span className="matchup-slate__swing-win">{formatPercent(side.winProb)}</span>
+                        <span className="matchup-slate__swing-loss">{formatPercent(side.lossProb)}</span>
+                      </Fragment>
+                    ))}
+                  </div>
                 </div>
               ) : null}
               {chartPoints.length > 1 ? (

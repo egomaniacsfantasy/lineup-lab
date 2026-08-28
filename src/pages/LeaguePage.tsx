@@ -484,6 +484,25 @@ export function LeaguePage() {
     setSearchParams({ view });
   };
 
+  /* Grouped once and read twice: the fork strip above the board draws these
+     as candles, and the detail rail turns the selected game's pair into what
+     the result is worth. Building them twice would be two passes over the
+     same payload for the same answer. */
+  const forkPairsForWeek = useMemo(
+    () =>
+      bootstrap
+        ? forkPairs(
+            forks?.forks ?? [],
+            (rosterId) => {
+              const team = bootstrap.teams.find((entry) => String(entry.rosterId) === rosterId);
+              return team ? { teamName: team.teamName, avatarUrl: team.avatarUrl } : null;
+            },
+            connectedSeason ? String(connectedSeason.userTeam.rosterId) : null,
+          )
+        : [],
+    [bootstrap, forks, connectedSeason],
+  );
+
   /* Above every early return below. A hook that sits under one runs on some
      renders and not others, which is the "rendered more hooks than during the
      previous render" crash. */
@@ -661,24 +680,14 @@ export function LeaguePage() {
                   <WeekFork
                     expectedGames={slate.length}
                     loading={forks == null}
-                    pairs={forkPairs(
-                      forks?.forks ?? [],
-                      (rosterId) => {
-                        const team = bootstrap.teams.find(
-                          (entry) => String(entry.rosterId) === rosterId,
-                        );
-                        return team
-                          ? { teamName: team.teamName, avatarUrl: team.avatarUrl }
-                          : null;
-                      },
-                      connectedSeason ? String(connectedSeason.userTeam.rosterId) : null,
-                    )}
+                    pairs={forkPairsForWeek}
                     mostInfluentialGame={forks?.mostInfluentialGame ?? null}
                     unavailableMessage={forks && !forks.available ? forks.message : undefined}
                     week={forks?.week ?? bootstrap.week}
                   />
                 ) : null
               }
+              forks={forkPairsForWeek}
               gameOfTheWeek={forks?.mostInfluentialGame ?? null}
               history={lineHistory}
               matchups={slate}
