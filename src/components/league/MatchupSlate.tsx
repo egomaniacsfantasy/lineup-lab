@@ -406,12 +406,19 @@ export function MatchupSlate({
               };
 
               const sideRow = (side: typeof left, overUnder: 'O' | 'U', move: number | null) => {
+                const other = side.side === left.side ? right : left;
                 /* Every leg needs a game to belong to: the slip holds at most
                    one leg per game, and a game with no id cannot hold a slot. */
                 const bettable = onToggleLeg != null && matchup.matchupId != null;
                 const context =
                   bettable && matchup.matchupId != null
-                    ? { matchupId: matchup.matchupId, matchupLabel, selection: side.side }
+                    ? {
+                        matchupId: matchup.matchupId,
+                        matchupLabel,
+                        selection: side.side,
+                        avatarUrl: side.avatarUrl,
+                        opponentName: other.name,
+                      }
                     : null;
                 const spreadText = spreadLabel(side.spread);
                 const totalText =

@@ -695,9 +695,11 @@ export function LeaguePage() {
               connected is a slip about nothing. */}
           {connected ? (
             <BetSlip
+              leagueName={connection.leagueName}
               legs={slip.legs}
               onClear={slip.clear}
               onRemove={slip.drop}
+              teamName={connection.teamName}
               week={connection.currentWeek}
             />
           ) : null}

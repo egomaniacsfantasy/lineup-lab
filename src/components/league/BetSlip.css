@@ -222,6 +222,21 @@
   cursor: pointer;
 }
 
+/* Filled, because it is the one people came for and the one nobody found
+   last time it was flat. */
+.bet-slip__action--card {
+  border-color: transparent;
+  background: var(--amber);
+  color: #fff;
+  font-weight: 700;
+}
+
+.bet-slip__action--card:hover {
+  border-color: transparent;
+  background: var(--amber-mid);
+  color: #fff;
+}
+
 .bet-slip__action:hover {
   border-color: rgba(232, 84, 29, 0.5);
   color: var(--text-primary);

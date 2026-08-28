@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
 import net from 'node:net';
+import path from 'node:path';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
@@ -43,6 +45,33 @@ async function waitForUrl(url, timeoutMs = 30_000) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(`Timed out waiting for ${url}`);
+}
+
+/* Vite serves the module from the page's registry, so a new page is not a new
+   module graph. Without this, editing the card and rerunning the guard
+   measures the previous build. */
+let nonce = 0;
+const nextNonce = () => `${process.pid}-${(nonce += 1)}`;
+
+/** A slip of `count` legs, cycling through all three markets. */
+function slip(count) {
+  return Array.from({ length: count }, (_, index) => {
+    const market = ['moneyline', 'spread', 'total'][index % 3];
+    return {
+      matchupId: index,
+      market,
+      selection: market === 'total' ? 'over' : 'a',
+      probability: 0.5,
+      /* Deliberately long: a real league is full of names like this, and the
+         card has to shrink them rather than run them under the price. */
+      label: market === 'total' ? 'Over' : `Team Number ${index + 1} With A Very Long Name`,
+      line: market === 'moneyline' ? '' : market === 'spread' ? '-4.5' : '231.5',
+      price: index % 2 ? -142 : 118,
+      matchupLabel: `Team ${index + 1} vs Team ${index + 40}`,
+      opponent: market === 'total' ? undefined : `Opponent ${index + 1}`,
+      avatarUrl: null,
+    };
+  });
 }
 
 let vite = null;
@@ -371,4 +400,194 @@ test('no card nests a button inside a button', async () => {
   } finally {
     await page.close();
   }
+});
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The share card: the same slip, as a picture.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Draw the card and measure it row by row.
+ *
+ * Each row is compared against its own leftmost pixel rather than one global
+ * background sample: the card paints a gradient wash behind its top third, so
+ * a single corner sample makes every hero row look painted.
+ */
+async function profile(legs) {
+  const page = await browser.newPage();
+  try {
+    await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+    return await page.evaluate(
+      async ({ legs, nonce }) => {
+        const mod = await import(`/src/utils/parlayCard.ts?guard=${nonce}`);
+        /* No art: the logo and the crests are network-dependent and this is a
+           measurement of layout, not of asset loading. */
+        const canvas = await mod.drawParlayCard(
+          {
+            eyebrow: 'Week 8',
+            leagueName: 'Mount Olympus',
+            you: 'Zeus’s Bolts',
+            legs,
+            price: '+184920',
+          },
+          { withArt: false },
+        );
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        const { data: px } = ctx.getImageData(0, 0, W, H);
+        const at = (x, y) => {
+          const i = (y * W + x) * 4;
+          return [px[i], px[i + 1], px[i + 2]];
+        };
+        const differs = (a, b) =>
+          Math.abs(a[0] - b[0]) > 10 || Math.abs(a[1] - b[1]) > 10 || Math.abs(a[2] - b[2]) > 10;
+
+        const PAD = 88;
+        /* The gutter is never drawn into, so x=2 is this row's background. */
+        const painted = [];
+        for (let y = 0; y < H; y += 1) {
+          const reference = at(2, y);
+          let hits = 0;
+          for (let x = PAD; x < W - PAD; x += 2) {
+            if (differs(at(x, y), reference)) hits += 1;
+          }
+          painted.push(hits);
+        }
+
+        /* Full bleed means the paint reaches the edges, so look at the edges. */
+        const plain = at(2, H - 130);
+        const barEdges = [];
+        for (let y = H - 100; y < H - 4; y += 1) {
+          barEdges.push(differs(at(0, y), plain) && differs(at(W - 1, y), plain));
+        }
+
+        return { width: W, height: H, painted, barEdges, expected: mod.parlayCardHeight(legs.length) };
+      },
+      { legs, nonce: nextNonce() },
+    );
+  } finally {
+    await page.close();
+  }
+}
+
+/** Runs of consecutive rows with at least `floor` painted samples. */
+function bands(painted, from, to, floor) {
+  const found = [];
+  let start = null;
+  for (let y = from; y < to; y += 1) {
+    if (painted[y] >= floor) {
+      if (start == null) start = y;
+    } else if (start != null) {
+      found.push({ top: start, bottom: y, height: y - start });
+      start = null;
+    }
+  }
+  if (start != null) found.push({ top: start, bottom: to, height: to - start });
+  return found;
+}
+
+/* One leg, a normal slip, and a slip nobody should build but somebody will. */
+for (const count of [1, 3, 20]) {
+  test(`a ${count}-leg card is exactly as tall as ${count} legs need`, async () => {
+    const card = await profile(slip(count));
+    assert.equal(card.width, 1080, 'the card is no longer the width of every other card');
+    assert.equal(card.height, card.expected, 'the canvas and parlayCardHeight disagree');
+
+    /* Each leg panel is a filled surface spanning the card, so panels read as
+       wide painted bands and the gaps between them read as background. That
+       is the count: if a leg is dropped or two overlap, this is not 20. */
+    const panels = bands(card.painted, 470, card.height - 108, 380);
+    assert.equal(panels.length, count, `${panels.length} leg panels were painted, not ${count}`);
+
+    for (const panel of panels) {
+      assert.ok(
+        panel.height <= 104,
+        `a leg panel is ${panel.height}px tall, so two rows have run together`,
+      );
+    }
+
+    /* And nothing bleeds OUT of a panel, which is what a name too long for
+       its row does. Measured at the middle of each gap: seven pixels clear of
+       the panels' rounded corners, and pure background unless something has
+       spilled into it. The panel-height check above cannot see this, because
+       text is far too sparse to reach the fill's threshold. */
+    for (let i = 0; i + 1 < panels.length; i += 1) {
+      const middle = Math.round((panels[i].bottom + panels[i + 1].top) / 2);
+      assert.equal(
+        card.painted[middle],
+        0,
+        `a leg is painting into the gap under it at y=${middle}`,
+      );
+    }
+  });
+}
+
+test('the card grows by exactly one row per leg', async () => {
+  const [one, two, twenty] = await Promise.all([
+    profile(slip(1)),
+    profile(slip(2)),
+    profile(slip(20)),
+  ]);
+  const row = two.height - one.height;
+  assert.ok(row > 80, `a leg adds only ${row}px, which is not a row`);
+  assert.equal(
+    twenty.height - one.height,
+    row * 19,
+    'height stops being linear in the number of legs somewhere between 2 and 20',
+  );
+});
+
+test('the plug is full bleed and pinned to the bottom, at any length', async () => {
+  for (const count of [1, 20]) {
+    const card = await profile(slip(count));
+    assert.ok(
+      card.barEdges.every(Boolean),
+      `a ${count}-leg card's plug bar does not reach both edges`,
+    );
+
+    /* And there is no hole above it. The hub card once left a chart-sized gap
+       between its last row and the plug; on a card whose height is computed,
+       that failure mode is a constant that stopped matching. */
+    const lastPaint = card.painted.slice(0, card.height - 108).reduce(
+      (last, hits, y) => (hits > 0 ? y : last),
+      0,
+    );
+    const hole = card.height - 108 - lastPaint;
+    assert.ok(hole < 60, `a ${count}-leg card leaves a ${hole}px hole above the plug`);
+  }
+});
+
+/**
+ * The price is the reason anyone shares this.
+ *
+ * Measured rather than asserted from the font string: what matters is how
+ * tall the number actually paints, against the tallest thing in any leg row.
+ */
+test('the price is set far larger than anything else on the card', async () => {
+  const card = await profile(slip(3));
+
+  const hero = bands(card.painted, 240, 460, 8);
+  const tallest = hero.reduce((max, band) => Math.max(max, band.height), 0);
+  assert.ok(tallest >= 110, `the price paints only ${tallest}px tall`);
+
+  /* A leg's text sits inside a 100px panel, so nothing down there can rival
+     it. Compare against the panel rather than the text to keep the assertion
+     independent of how the row is laid out. */
+  assert.ok(tallest > 100, 'the price is no taller than a whole leg row');
+});
+
+test('no money anywhere on the card', async () => {
+  const source = await fs.readFile(path.resolve('src/utils/parlayCard.ts'), 'utf8');
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+  assert.ok(source.includes('/*'), 'the file has no comments, so this check proves nothing');
+  assert.doesNotMatch(code, /\/\*/, 'comments were not stripped');
+
+  /* Same guard the slip carries. A card is the thing that leaves the app, so
+     it is the last place a stake could appear and the worst place. */
+  for (const pattern of [/\$(?!\{)/, /\bwager\b/i, /\bstake\b/i, /\bpayout\b/i, /\bto win\b/i]) {
+    assert.doesNotMatch(code, pattern, `the card mentions money: ${pattern}`);
+  }
+  /* And no result: this card is made before the games, not after them. */
+  assert.doesNotMatch(code, /\bcashed out\b|\bwon\b|\blost\b|\bfinal\b/i);
 });

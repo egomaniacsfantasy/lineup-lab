@@ -228,9 +228,11 @@ export function DesignBoardRowPage() {
             slipLegs={legs}
           />
           <BetSlip
+            leagueName="Mount Olympus"
             legs={legs}
             onClear={() => setLegs([])}
             onRemove={(key) => setLegs((current) => removeLeg(current, key))}
+            teamName="Zeus’s Bolts"
             week={8}
           />
         </>

@@ -100,6 +100,13 @@ export interface ParlayLeg {
   price: number;
   /** For the slip's own use: the game, in words. */
   matchupLabel: string;
+  /** The crest, for the share card. Absent on totals, which belong to the
+   *  game rather than to either team. */
+  avatarUrl?: string | null;
+  /** The other side. A side leg reads "vs THEM" on the card; naming both
+   *  teams there repeats the pick and, on two legs from one game, prints the
+   *  same long string twice. */
+  opponent?: string;
 }
 
 /** Identifies a selection exactly. Two taps on the same key are a toggle. */
@@ -277,7 +284,9 @@ interface LegContext {
   matchupId: number;
   matchupLabel: string;
   teamName: string;
+  opponentName: string;
   selection: 'a' | 'b';
+  avatarUrl?: string | null;
 }
 
 /** The engine's own price, and the probability that price stands for. */
@@ -296,6 +305,8 @@ export function moneylineLeg(context: LegContext & { price: number }): ParlayLeg
     line: '',
     price: context.price,
     matchupLabel: context.matchupLabel,
+    avatarUrl: context.avatarUrl,
+    opponent: context.opponentName,
   };
 }
 
@@ -313,6 +324,8 @@ export function spreadLeg(
     spreadValue: context.spreadValue,
     price: americanFromProbability(EVEN_MONEY_PROBABILITY),
     matchupLabel: context.matchupLabel,
+    avatarUrl: context.avatarUrl,
+    opponent: context.opponentName,
   };
 }
 

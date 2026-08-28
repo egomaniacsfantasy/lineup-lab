@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
 import {
   MARKET_LABEL,
@@ -8,6 +8,8 @@ import {
   type ParlayLeg,
 } from '../../utils/parlay';
 import { slipAsText } from '../../utils/slipText';
+import { drawParlayCard } from '../../utils/parlayCard';
+import { ShareCardPreview } from '../matchup/ShareCardPreview';
 import './BetSlip.css';
 
 /**
@@ -30,14 +32,43 @@ import './BetSlip.css';
 interface BetSlipProps {
   legs: ParlayLeg[];
   week: number | null;
+  leagueName?: string | null;
+  teamName?: string | null;
   onRemove: (key: string) => void;
   onClear: () => void;
 }
 
-export function BetSlip({ legs, week, onRemove, onClear }: BetSlipProps) {
+export function BetSlip({
+  legs,
+  week,
+  leagueName = null,
+  teamName = null,
+  onRemove,
+  onClear,
+}: BetSlipProps) {
   const [open, setOpen] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* Memoised on what it actually draws. ShareCardPreview redraws whenever
+     this identity changes, and an inline arrow would redraw the card on
+     every keystroke elsewhere on the page. */
+  const price = parlayPrice(legs);
+  const drawCard = useCallback(
+    (options?: { withArt?: boolean }) =>
+      drawParlayCard(
+        {
+          eyebrow: week != null ? `Week ${week}` : 'This week',
+          leagueName,
+          you: teamName,
+          legs,
+          price: price == null ? '' : formatAmericanOdds(price),
+        },
+        options,
+      ),
+    [legs, week, leagueName, teamName, price],
+  );
 
   /* The confirmation has to clear itself, and it has to stop doing that if
      the slip unmounts first, or the timer fires into a dead component. */
@@ -50,7 +81,6 @@ export function BetSlip({ legs, week, onRemove, onClear }: BetSlipProps) {
 
   if (legs.length === 0) return null;
 
-  const price = parlayPrice(legs);
   const legWord = legs.length === 1 ? 'pick' : 'legs';
   /* Same-game legs can be free: covering a spread already entailed winning,
      so adding that moneyline moves nothing. Saying so is the difference
@@ -136,6 +166,15 @@ export function BetSlip({ legs, week, onRemove, onClear }: BetSlipProps) {
               </span>
             </span>
             <span className="bet-slip__actions">
+              {/* The card is the reason anyone shows this to anybody, so it
+                  is the filled control and the other two are outlines. */}
+              <button
+                className="bet-slip__action bet-slip__action--card"
+                onClick={() => setSharing(true)}
+                type="button"
+              >
+                Card
+              </button>
               <button className="bet-slip__action" onClick={copy} type="button">
                 {copied ? 'Copied' : 'Copy'}
               </button>
@@ -145,6 +184,15 @@ export function BetSlip({ legs, week, onRemove, onClear }: BetSlipProps) {
             </span>
           </div>
         </div>
+      ) : null}
+
+      {sharing ? (
+        <ShareCardPreview
+          draw={drawCard}
+          filename={`odds-gods-parlay-${legs.length}-leg.png`}
+          message={slipAsText(legs, week)}
+          onClose={() => setSharing(false)}
+        />
       ) : null}
     </aside>
   );
