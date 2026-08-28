@@ -72,13 +72,11 @@ export function LeagueDealBoard({
     <section className="ldb">
       <div className="ldb__head">
         <div className="ldb__title">
-          {/* Not "best deals in the league".
-
-              That heading claimed a superlative the list cannot support and
-              said nothing about what makes one deal rank above another. These
-              are trades where BOTH teams gain, fairest first, which is the
-              thing that makes them worth a message rather than a fantasy. */}
-          <span className="ldb__label">Deals worth a call</span>
+          {/* Andre's wording. "Best deals in the league" claimed a
+              superlative the list cannot support; "Deals worth a call" was my
+              replacement and was worse. This one says what the list is and
+              stops. */}
+          <span className="ldb__label">Suggested trades</span>
           <span className="ldb__sub">Both sides gain. Fairest first.</span>
         </div>
         {rows && rows.length > 0 ? (
