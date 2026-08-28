@@ -136,6 +136,13 @@
   white-space: nowrap;
 }
 
+/* Quiet, and amber rather than red: a leg that adds nothing is not a mistake,
+   it is a fact about the two picks. */
+.bet-slip__leg-implied {
+  color: var(--text-amber);
+  font-size: 11px;
+}
+
 .bet-slip__leg-price {
   color: var(--text-soft);
   font-family: var(--font-num);

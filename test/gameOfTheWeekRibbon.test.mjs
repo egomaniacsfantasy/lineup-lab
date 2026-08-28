@@ -14,13 +14,10 @@ import { chromium } from 'playwright';
  * to hold is about the card: exactly one card carries it, it is the top edge
  * of that card rather than a pill floating in the padding, and it says what
  * the engine actually measures.
- *
- * Shares the dev server on 4175 with the other rendered board tests rather
- * than starting a fourth Vite.
  */
 
 const cwd = process.cwd();
-const port = 4175;
+const port = 4180;
 const baseUrl = `http://127.0.0.1:${port}`;
 const scene = `${baseUrl}/design/board-row/game-of-the-week`;
 
@@ -112,9 +109,12 @@ test('exactly one card is crowned, and nothing is crowned before the sim answers
 });
 
 /* Both a two-across desktop and a phone. The card changes its padding at
-   720px and the ribbon has to change with it, which is the drift this catches. */
-for (const width of [1320, 375]) {
-  test(`the ribbon is the card's top edge, corner to corner, at ${width}px`, async () => {
+   720px and the tab has to change with it, which is the drift this catches. */
+for (const [width, minHeight, minFont] of [
+  [1320, 30, 14],
+  [375, 27, 13],
+]) {
+  test(`the tab is a corner of the card, sized to its words, at ${width}px`, async () => {
     const page = await openScene(width);
     try {
       const box = await page.$eval('.matchup-slate__rows .matchup-slate__gotw', (ribbon) => {
@@ -123,30 +123,56 @@ for (const width of [1320, 375]) {
         const cb = card.getBoundingClientRect();
         const cols = card.querySelector('.matchup-slate__card-cols').getBoundingClientRect();
         const firstTeam = card.querySelector('.matchup-slate__team-name').getBoundingClientRect();
+        const style = getComputedStyle(ribbon);
         return {
-          border: parseFloat(getComputedStyle(card).borderLeftWidth),
+          border: parseFloat(style.borderLeftWidth) || parseFloat(getComputedStyle(card).borderLeftWidth),
           leftGap: rb.left - cb.left,
-          rightGap: cb.right - rb.right,
           topGap: rb.top - cb.top,
+          share: rb.width / cb.width,
           aboveLabels: rb.bottom <= cols.top,
           aboveTeams: rb.bottom <= firstTeam.top,
           height: rb.height,
+          fontSize: parseFloat(style.fontSize),
+          fontFamily: style.fontFamily,
+          /* Wider content than box means the words are being cut off. */
+          clipped: ribbon.scrollWidth > ribbon.clientWidth + 1,
         };
       });
 
-      /* Full bleed: the only thing between the ribbon and the outside world
-         is the card's own border. A pill inside the padding, or a ribbon that
-         took one column of the card grid instead of all of them, fails here. */
+      const cardBorder = await page.$eval('.matchup-slate__rows .matchup-slate__row-button', (card) =>
+        parseFloat(getComputedStyle(card).borderLeftWidth),
+      );
+
+      /* It meets the card's own top-left corner: nothing between it and the
+         edge but the card's border. A pill floating in the padding fails. */
       assert.ok(
-        Math.abs(box.leftGap - box.border) < 0.5 && Math.abs(box.rightGap - box.border) < 0.5,
-        `the ribbon is inset from the card: ${box.leftGap.toFixed(2)}px and ${box.rightGap.toFixed(2)}px against a ${box.border}px border`,
+        Math.abs(box.leftGap - cardBorder) < 0.5 && Math.abs(box.topGap - cardBorder) < 0.5,
+        `the tab is ${box.leftGap.toFixed(2)}px in and ${box.topGap.toFixed(2)}px down from the corner`,
+      );
+
+      /* And it stops. A band running the full width was the thing being
+         fixed, so leaving a quarter of the card clear is the property. */
+      assert.ok(
+        box.share < 0.75,
+        `the tab covers ${(box.share * 100).toFixed(0)}% of the card, which is a band again`,
+      );
+      /* But it is not a scrap either. */
+      assert.ok(box.share > 0.2, `the tab covers only ${(box.share * 100).toFixed(0)}% of the card`);
+
+      assert.ok(!box.clipped, 'the tab is cutting off its own text');
+      assert.ok(
+        box.height >= minHeight,
+        `the tab is ${box.height.toFixed(1)}px tall, under the ${minHeight}px it needs`,
       );
       assert.ok(
-        Math.abs(box.topGap - box.border) < 0.5,
-        `the ribbon is not riding the top edge: ${box.topGap.toFixed(2)}px down from it`,
+        box.fontSize >= minFont,
+        `the tab is set at ${box.fontSize}px, under the ${minFont}px it needs`,
       );
-      assert.ok(box.aboveLabels && box.aboveTeams, 'the ribbon is not above the column labels and the teams');
-      assert.ok(box.height > 14 && box.height < 40, `the ribbon is ${box.height}px tall`);
+      /* A grotesque, not the condensed display face the rest of the card is
+         set in: a tag has to read as a stamp rather than as a heading. */
+      assert.match(box.fontFamily, /Hanken Grotesk/);
+
+      assert.ok(box.aboveLabels && box.aboveTeams, 'the tab is not above the column labels and the teams');
     } finally {
       await page.close();
     }

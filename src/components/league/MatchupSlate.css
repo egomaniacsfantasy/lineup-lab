@@ -103,35 +103,46 @@
   outline-offset: -2px;
 }
 
-/* The game of the week ribbon.
+/* The game of the week tab.
 
-   Full bleed across the top edge rather than a pill floating in the padding.
-   A card that already carries nine numbers cannot afford another small
-   rounded object competing with them; a band that touches both edges reads
-   as a property of the whole card instead, which is what it is.
+   A tab in the corner, not a band across the whole card. Full bleed was
+   wrong twice over: at 392px it made a stripe of mostly empty orange, and to
+   stay proportionate the type had to be small enough that the loudest object
+   on the board carried the quietest text on it. Cornered, the same words get
+   a third more height and a third more type, and stop at the width they
+   actually need.
 
-   Amber because ember is the brand accent and this is a selection. It cannot
-   collide with the "your game" marker, which is a three pixel inset rule down
-   the LEFT edge, or with hover and selection, which are border colours. Those
-   three all still show through underneath a ribboned card.
+   The shape is a folder tab: square where it meets the card's own corner,
+   rounded where it leaves. justify-self keeps it at its content width inside
+   the card's single-column grid, which is what stops it stretching again.
+
+   Hanken Grotesk, not the Staatliches everything else on the card is set in.
+   Staatliches is a display face with one weight and no true lowercase; it
+   reads as a heading, which is what the column labels above the teams want
+   and the opposite of what a tag wants. A heavy grotesque reads as a stamp
+   on the card rather than a title for it, and it is legible at this size in
+   a way condensed all-caps is not.
 
    cursor: help is the only affordance a title attribute gets. Without it the
    explanation is discoverable purely by accident. */
 .matchup-slate__gotw {
-  /* Cancels the card's own 14px/16px padding so the band meets both edges.
-     Track this against .matchup-slate__row-button: they have to move
-     together, and a mismatch shows as a hairline of surface beside it. */
-  margin: -14px -16px 0;
-  padding: 6px 16px 7px;
-  border-radius: calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;
-  background: linear-gradient(90deg, var(--amber), var(--amber-mid));
+  justify-self: start;
+  /* Cancels the card's own top and left padding so the tab meets both edges.
+     Track these against .matchup-slate__row-button: they move together, and
+     a mismatch shows as a hairline of surface beside it. */
+  margin: -14px 0 0 -16px;
+  padding: 8px 18px 9px 16px;
+  border-radius: calc(var(--radius-lg) - 1px) 0 14px 0;
+  background: linear-gradient(100deg, var(--amber), var(--amber-mid));
   color: #fff;
-  font-family: var(--font-condensed);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  line-height: 1.2;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1.15;
   text-transform: uppercase;
+  /* It sizes to its text, so it must never be asked to wrap it. */
+  white-space: nowrap;
   cursor: help;
 }
 
@@ -738,10 +749,13 @@ button.matchup-slate__cell:focus-visible {
     padding: 12px 12px 10px;
   }
 
-  /* Follows the padding above, or it leaves a hairline of card either side. */
+  /* Follows the padding above, or it leaves a hairline of card beside it.
+     The type comes down by a point, not by four: a phone is where the tab is
+     read at arm's length. */
   .matchup-slate__gotw {
-    margin: -12px -12px 0;
-    padding: 5px 12px 6px;
+    margin: -12px 0 0 -12px;
+    padding: 7px 16px 8px 12px;
+    font-size: 13px;
   }
 
   .matchup-slate__card-cols,

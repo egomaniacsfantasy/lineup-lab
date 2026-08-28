@@ -6,7 +6,9 @@ import test from 'node:test';
 import {
   EVEN_MONEY_PROBABILITY,
   americanFromProbability,
-  conflictingLeg,
+  contradicts,
+  contradictingLegs,
+  impliedLegKeys,
   legKey,
   moneylineLeg,
   parlayPrice,
@@ -31,13 +33,23 @@ const adamMoneyline = moneylineLeg({
   teamName: 'Adam’s Astounding Team',
   price: 113,
 });
+/* Sonic is the favourite: 2.9 of projected margin, so the board posts -2.9. */
 const sonicSpread = spreadLeg({
   ...game(7101, 'Sonic and Knuckles vs Adam’s Astounding Team'),
   selection: 'a',
   teamName: 'Sonic and Knuckles',
   line: '-2.9',
+  spreadValue: 2.9,
+});
+const adamSpread = spreadLeg({
+  ...game(7101, 'Sonic and Knuckles vs Adam’s Astounding Team'),
+  selection: 'b',
+  teamName: 'Adam’s Astounding Team',
+  line: '+2.9',
+  spreadValue: -2.9,
 });
 const sonicOver = totalLeg({ ...game(7101, 'Sonic vs Adam'), selection: 'over', total: 239.5 });
+const sonicUnder = totalLeg({ ...game(7101, 'Sonic vs Adam'), selection: 'under', total: 239.5 });
 const zeusMoneyline = moneylineLeg({
   ...game(7102, 'Zeus’s Bolts vs Waiver Wire Warriors'),
   selection: 'a',
@@ -49,6 +61,7 @@ const zeusSpread = spreadLeg({
   selection: 'a',
   teamName: 'Zeus’s Bolts',
   line: '-9.4',
+  spreadValue: 9.4,
 });
 
 test('a spread and a total are even money, because the line is the middle', () => {
@@ -76,8 +89,8 @@ test('two even-money legs from different games pay +300, not a book’s +260', (
   const four = [
     sonicSpread,
     zeusSpread,
-    spreadLeg({ ...game(7103, 'C vs D'), selection: 'a', teamName: 'C', line: '-1.0' }),
-    spreadLeg({ ...game(7104, 'E vs F'), selection: 'b', teamName: 'F', line: '+1.0' }),
+    spreadLeg({ ...game(7103, 'C vs D'), selection: 'a', teamName: 'C', line: '-1.0', spreadValue: 1 }),
+    spreadLeg({ ...game(7104, 'E vs F'), selection: 'b', teamName: 'F', line: '+1.0', spreadValue: -1 }),
   ];
   assert.equal(parlayProbability(four), 0.0625);
   assert.equal(parlayPrice(four), 1500);
@@ -99,7 +112,13 @@ test('a favourite-heavy parlay is still a favourite', () => {
 
 test('a long parlay stays a finite number instead of running to infinity', () => {
   const legs = Array.from({ length: 40 }, (_, index) =>
-    spreadLeg({ ...game(8000 + index, `game ${index}`), selection: 'a', teamName: `T${index}`, line: '-1.0' }),
+    spreadLeg({
+      ...game(8000 + index, `game ${index}`),
+      selection: 'a',
+      teamName: `T${index}`,
+      line: '-1.0',
+      spreadValue: 1,
+    }),
   );
   const price = parlayPrice(legs);
   assert.ok(Number.isFinite(price), `a 40-leg slip priced ${price}`);
@@ -113,47 +132,120 @@ test('tapping the same selection twice takes it back off', () => {
 });
 
 /**
- * The rule that matters.
+ * The four ways a moneyline and a spread on one game can be combined.
  *
- * Andre named three: no over AND under, no both sides of a moneyline, no both
- * sides of a spread. All three are real, and all three are covered by the
- * broader one - because the pairs he did not name are the dangerous ones. A
- * moneyline and a spread on the SAME game are not just correlated, they are
- * nearly the same bet, and multiplying them misprices by a factor of two.
+ * These are not estimates and they are not multiplied. The two events are
+ * nested intervals of the same margin, so each pair is one of them, or the
+ * gap between them, or nothing. The numbers below are worked out here from
+ * the win probability alone, independently of the implementation.
  */
-for (const [name, first, second] of [
-  ['both sides of a moneyline', sonicMoneyline, adamMoneyline],
-  ['a moneyline and a spread on one game', sonicMoneyline, sonicSpread],
-  ['a spread and a total on one game', sonicSpread, sonicOver],
-  ['a total and a moneyline on one game', sonicOver, sonicMoneyline],
+const WIN_PROB = 113 / 213; // what -113 implies, and Sonic's chance of winning
+
+for (const [name, first, second, expected] of [
+  ['the favourite to win and to cover', sonicMoneyline, sonicSpread, 0.5],
+  ['the favourite to win without covering', sonicMoneyline, adamSpread, WIN_PROB - 0.5],
+  ['the underdog to win and to cover', adamMoneyline, adamSpread, 1 - WIN_PROB],
 ]) {
-  test(`a slip cannot hold ${name}`, () => {
+  test(`${name} is priced exactly, not multiplied`, () => {
     const slip = toggleLeg(toggleLeg([], first), second);
-    assert.equal(slip.length, 1, `${name} both survived onto the slip`);
-    assert.equal(legKey(slip[0]), legKey(second), 'the newer tap did not win');
-    assert.equal(
-      new Set(slip.map((leg) => leg.matchupId)).size,
-      slip.length,
-      'a game appears twice on the slip',
+    assert.equal(slip.length, 2, `${name} did not survive onto the slip`);
+    assert.ok(
+      Math.abs(parlayProbability(slip) - expected) < 1e-9,
+      `${name} priced ${parlayProbability(slip)}, should be ${expected}`,
     );
+    /* The naive answer, which is what this whole table exists to avoid. */
+    const multiplied = first.probability * second.probability;
+    if (Math.abs(multiplied - expected) > 1e-9) {
+      assert.notEqual(parlayProbability(slip), multiplied, `${name} was multiplied after all`);
+    }
   });
 }
 
-test('replacing one game leaves the others alone', () => {
-  const slip = toggleLeg(toggleLeg(toggleLeg([], zeusMoneyline), sonicMoneyline), sonicSpread);
-  assert.deepEqual(
-    slip.map((leg) => legKey(leg)),
-    [legKey(zeusMoneyline), legKey(sonicSpread)],
-  );
+test('the underdog cannot win while the favourite covers', () => {
+  assert.ok(contradicts(adamMoneyline, sonicSpread));
+  const slip = toggleLeg(toggleLeg([], adamMoneyline), sonicSpread);
+  assert.deepEqual(slip.map(legKey), [legKey(sonicSpread)], 'both halves of a contradiction are on the slip');
 });
 
-test('the slip says what a tap would cost before it costs it', () => {
-  const slip = toggleLeg([], sonicMoneyline);
-  assert.equal(conflictingLeg(slip, sonicSpread)?.label, 'Sonic and Knuckles');
-  /* The same selection is a toggle, not a conflict. */
-  assert.equal(conflictingLeg(slip, sonicMoneyline), null);
-  /* A different game is never a conflict. */
-  assert.equal(conflictingLeg(slip, zeusSpread), null);
+/**
+ * The check that this is arithmetic rather than a guess.
+ *
+ * The four moneyline-and-spread pairs partition the outcome space: exactly
+ * one of them happens in every game. So they have to sum to 1, and any table
+ * that does not is wrong somewhere even if each row looks plausible.
+ */
+test('the four moneyline-and-spread pairs partition the game', () => {
+  const pairs = [
+    [sonicMoneyline, sonicSpread],
+    [sonicMoneyline, adamSpread],
+    [adamMoneyline, adamSpread],
+    [adamMoneyline, sonicSpread],
+  ];
+  const total = pairs.reduce((sum, [ml, spread]) => {
+    if (contradicts(ml, spread)) return sum;
+    return sum + parlayProbability([ml, spread]);
+  }, 0);
+  assert.ok(Math.abs(total - 1) < 1e-9, `the four pairs sum to ${total}, not 1`);
+});
+
+/* Same market, opposite sides. A team cannot win and lose; a game cannot go
+   over and under. These are the ones Andre named. */
+for (const [name, first, second] of [
+  ['both sides of a moneyline', sonicMoneyline, adamMoneyline],
+  ['both sides of a spread', sonicSpread, adamSpread],
+  ['over and under', sonicOver, sonicUnder],
+]) {
+  test(`a slip cannot hold ${name}`, () => {
+    assert.ok(contradicts(first, second), `${name} is not being treated as a contradiction`);
+    const slip = toggleLeg(toggleLeg([], first), second);
+    assert.equal(slip.length, 1, `${name} both survived onto the slip`);
+    assert.equal(legKey(slip[0]), legKey(second), 'the newer tap did not win');
+  });
+}
+
+test('a total rides alongside a side on the same game, and multiplies in', () => {
+  const slip = toggleLeg(toggleLeg(toggleLeg([], sonicMoneyline), sonicSpread), sonicOver);
+  assert.equal(slip.length, 3, 'three legs on one game is allowed and did not stick');
+  /* The sides resolve to 0.5 between them, and the total halves it again: a
+     combined score and a margin are near enough to independent. */
+  assert.ok(Math.abs(parlayProbability(slip) - 0.25) < 1e-9);
+});
+
+test('a leg the rest of the slip already guarantees is called out', () => {
+  /* Covering -2.9 entails winning, so the moneyline is free. */
+  const covered = impliedLegKeys([sonicMoneyline, sonicSpread]);
+  assert.deepEqual([...covered], [legKey(sonicMoneyline)]);
+
+  /* Winning as the underdog entails covering, so there the SPREAD is free. */
+  assert.deepEqual([...impliedLegKeys([adamMoneyline, adamSpread])], [legKey(adamSpread)]);
+
+  /* Legs from different games never guarantee each other. */
+  assert.equal(impliedLegKeys([sonicMoneyline, zeusSpread]).size, 0);
+  /* Nothing is implied by nothing. */
+  assert.equal(impliedLegKeys([sonicMoneyline]).size, 0);
+});
+
+test('a contradiction knocks off only what it contradicts', () => {
+  const slip = toggleLeg(
+    toggleLeg(toggleLeg(toggleLeg([], zeusMoneyline), sonicMoneyline), sonicOver),
+    adamMoneyline,
+  );
+  /* Adam's moneyline contradicts Sonic's and nothing else: the total on the
+     same game and the leg from the other game both stay. */
+  assert.deepEqual(slip.map(legKey), [
+    legKey(zeusMoneyline),
+    legKey(sonicOver),
+    legKey(adamMoneyline),
+  ]);
+});
+
+test('the slip says what a tap would knock off before it knocks it off', () => {
+  const slip = toggleLeg(toggleLeg([], adamMoneyline), zeusSpread);
+  assert.deepEqual(contradictingLegs(slip, sonicMoneyline).map(legKey), [legKey(adamMoneyline)]);
+  /* Compatible on the same game, so nothing comes off. */
+  assert.deepEqual(contradictingLegs(slip, adamSpread), []);
+  /* A different game is never a contradiction. */
+  assert.deepEqual(contradictingLegs(slip, sonicOver), []);
 });
 
 test('a leg can be taken off by key', () => {

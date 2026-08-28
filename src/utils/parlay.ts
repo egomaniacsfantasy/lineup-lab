@@ -2,7 +2,7 @@
  * The bet slip: what can go on it, what cannot, and what it is worth.
  *
  * No money anywhere in this file, and none anywhere in the surface built on
- * it. There is no stake, no payout and no balance - a parlay here is a claim
+ * it. There is no wager, no payout and no balance - a parlay here is a claim
  * about a week that two people can settle between themselves. What we supply
  * is the price that claim deserves.
  *
@@ -10,44 +10,42 @@
  * THE PRICE IS FAIR, WHICH IS NOT THE PRICE A BOOK WOULD POST
  *
  * A book multiplies its own juiced legs, so three coin flips pay +600 instead
- * of the +700 the outcome is actually worth. We multiply the engine's true
- * probabilities and quote the result straight. That is the whole point of the
- * product: the number is what the thing is worth, not what a book could get
- * away with charging for it.
+ * of the +700 the outcome is actually worth. We quote what the outcome is
+ * worth. That is the whole point of the product.
  *
  * ────────────────────────────────────────────────────────────────────────
- * WHY ONE LEG PER GAME
+ * SAME-GAME LEGS ARE ALLOWED, AND THEY ARE NOT MULTIPLIED
  *
- * Multiplying probabilities is only correct for INDEPENDENT events, and two
- * markets on the same game are nowhere near independent. Take a game priced
- * at -113 with the favourite laying 2.9:
+ * Two markets on one game are not independent, so a slip that multiplied them
+ * would quote nonsense. A first version of this file dodged that by allowing
+ * only one leg per game. It does not have to: for the pair that actually
+ * misprices - a moneyline and a spread on the same game - the joint
+ * probability is not a modelling question at all. It is set logic on one
+ * number the engine already produced.
  *
- *   moneyline      53.1%
- *   spread -2.9    50.0%
- *   multiplied     26.6%   ->   +276
- *   actually       50.0%   ->   +100
+ * Write M for the favourite's margin and s for the posted line, so the
+ * moneyline is M > 0, laying the points is M > s, and taking them is M < s.
+ * P(M > s) = 0.5 because s IS the engine's central estimate of M. Then all
+ * four combinations resolve exactly, with nothing estimated:
  *
- * A team that covers -2.9 has necessarily won, so the parlay is exactly the
- * spread leg. Quoting +276 for it would be the single worst number in the
- * product: not a rounding error, but a price that is wrong by a factor of two
- * in the customer's favour, on a bet they can find by accident in two taps.
- * Totals correlate with sides the same way, less sharply.
+ *   favourite ML + favourite spread   covering entails winning       0.5
+ *   favourite ML + underdog spread    wins but does not cover        P(win) - 0.5
+ *   underdog  ML + underdog spread    winning entails covering       P(win)
+ *   underdog  ML + favourite spread   cannot both happen             0
  *
- * So a slip takes at most one leg from any one game, and adding a second
- * REPLACES the first rather than refusing it. That is a real sportsbook rule,
- * not a workaround - a book that has not built a same-game model does exactly
- * this, and one that has prices those parlays from a joint distribution
- * rather than by multiplying.
+ * They sum to 1, which is the check that this is arithmetic and not a guess.
+ * The last row is a genuine contradiction and is refused. The second is the
+ * middle - the favourite wins by less than the line - and on a -113 game that
+ * is a real 3.1% longshot rather than the 26.6% a naive multiply would claim.
  *
- * Across DIFFERENT games in a week, independence is close enough to true to
- * quote on: two fantasy matchups share no roster, and what couples them at
- * all (two managers starting opposite sides of one NFL game, a defence facing
- * someone's quarterback) is second-order against a full lineup.
+ * Totals are treated as independent of sides. That one IS an approximation,
+ * and it is a good one: with M = A - B and T = A + B, Cov(M, T) = Var(A) -
+ * Var(B), which is about zero for two full fantasy lineups. It is the only
+ * approximation in this file and it is the mild one.
  *
- * Same-game parlays are worth building, and the way to build them is NOT to
- * add a correlation fudge here. The sim already produces the joint outcome;
- * it can score a whole leg-set directly and return the exact probability,
- * correlation and all. See docs/parlay-engine-memo.md.
+ * Exact same-game pricing for every combination, including whatever markets
+ * get added later, wants the sim rather than this table. See
+ * docs/parlay-engine-memo.md.
  *
  * ────────────────────────────────────────────────────────────────────────
  * WHERE THE NUMBERS COME FROM
@@ -93,6 +91,11 @@ export interface ParlayLeg {
   label: string;
   /** The number taken with it: "-2.9", "239.5", or empty for a moneyline. */
   line: string;
+  /**
+   * Spread legs only: this side's posted margin, signed, favourite positive.
+   * The same-game table needs to know which side is laying the points, and
+   * the display string has already had its sign flipped for the board. */
+  spreadValue?: number;
   /** This leg's own American price. */
   price: number;
   /** For the slip's own use: the game, in words. */
@@ -105,26 +108,89 @@ export function legKey(leg: Pick<ParlayLeg, 'matchupId' | 'market' | 'selection'
 }
 
 /**
+ * The joint probability of a moneyline and a spread on the SAME game.
+ *
+ * Derived, not estimated. See the table at the top of this file: the two
+ * events are nested intervals of one margin, so their intersection is one of
+ * the two, or the gap between them, or empty.
+ *
+ * Returns 0 for the one combination that cannot happen, which is what makes
+ * this the contradiction test as well as the pricing rule.
+ */
+function sideJoint(moneyline: ParlayLeg, spread: ParlayLeg): number {
+  const posted = spread.spreadValue ?? 0;
+  /* The posted line from the MONEYLINE side's point of view: positive when
+     the team you took to win is also the team laying the points. */
+  const layingPoints = moneyline.selection === spread.selection ? posted : -posted;
+
+  if (layingPoints >= 0) {
+    return moneyline.selection === spread.selection
+      ? /* Covering entails winning, so the pair is just the spread. */
+        spread.probability
+      : /* Wins without covering: the gap between the two lines, and never
+           negative, since the win probability and the posted margin come from
+           two passes of the sim and can disagree in the last decimal. */
+        Math.max(0, moneyline.probability - spread.probability);
+  }
+
+  return moneyline.selection === spread.selection
+    ? /* An underdog that wins has covered, so the pair is just the win. */
+      moneyline.probability
+    : /* The underdog wins AND the favourite covers. */
+      0;
+}
+
+/** The moneyline and spread legs of one game, if both were taken. */
+function sidePair(legs: readonly ParlayLeg[]): [ParlayLeg, ParlayLeg] | null {
+  const moneyline = legs.find((leg) => leg.market === 'moneyline');
+  const spread = legs.find((leg) => leg.market === 'spread');
+  return moneyline && spread ? [moneyline, spread] : null;
+}
+
+/**
+ * Can these two legs both come in?
+ *
+ * Two kinds of no. Two selections in the same market on one game are the
+ * obvious one: a team cannot win and lose, a game cannot go over and under.
+ * The other is the underdog moneyline against the favourite's spread, which
+ * looks like two different bets and is in fact a bet against itself.
+ *
+ * Everything else on one game is allowed and priced by the table above,
+ * including the pairs that add nothing.
+ */
+export function contradicts(one: ParlayLeg, other: ParlayLeg): boolean {
+  if (one.matchupId !== other.matchupId) return false;
+  if (one.market === other.market) return one.selection !== other.selection;
+
+  const pair = sidePair([one, other]);
+  return pair != null && sideJoint(pair[0], pair[1]) <= 0;
+}
+
+/** Everything on the slip that a new selection would knock off. */
+export function contradictingLegs(
+  legs: readonly ParlayLeg[],
+  leg: ParlayLeg,
+): ParlayLeg[] {
+  return legs.filter((existing) => contradicts(existing, leg));
+}
+
+/**
  * What tapping a cell does to the slip.
  *
- * Three cases, and the third is the one that matters:
- *   - the same cell again      -> take it off (a toggle, as a book does)
- *   - a cell on a fresh game   -> add it
- *   - any cell on a game that  -> REPLACE that game's leg
- *     is already on the slip
+ *   - the same cell again        -> take it off, as a book toggles
+ *   - anything it contradicts    -> that comes off, this goes on
+ *   - anything else              -> added, same game or not
  *
- * The replace case covers every conflict rule at once: both sides of a
- * moneyline, both sides of a spread, over and under, and the correlated
- * cross-market pairs that are the actual danger. Refusing the tap with an
- * error would be worse UX and no safer.
+ * Replacing rather than refusing: tapping the other side of a market is how
+ * people change their mind, and an error message there would be answering a
+ * question nobody asked.
  */
 export function toggleLeg(legs: readonly ParlayLeg[], leg: ParlayLeg): ParlayLeg[] {
   const key = legKey(leg);
   if (legs.some((existing) => legKey(existing) === key)) {
     return legs.filter((existing) => legKey(existing) !== key);
   }
-  const withoutGame = legs.filter((existing) => existing.matchupId !== leg.matchupId);
-  return [...withoutGame, leg];
+  return [...legs.filter((existing) => !contradicts(existing, leg)), leg];
 }
 
 export function removeLeg(legs: readonly ParlayLeg[], key: string): ParlayLeg[] {
@@ -132,30 +198,40 @@ export function removeLeg(legs: readonly ParlayLeg[], key: string): ParlayLeg[] 
 }
 
 /**
- * The leg a tap would replace, if any.
+ * One game's legs, priced together.
  *
- * The UI needs this to say so before the tap rather than after it, so a slip
- * never silently loses a selection the user still wanted.
+ * Sides resolve exactly against each other; a total multiplies in, because a
+ * combined score and a margin are near enough to independent. See the header.
  */
-export function conflictingLeg(
-  legs: readonly ParlayLeg[],
-  leg: Pick<ParlayLeg, 'matchupId' | 'market' | 'selection'>,
-): ParlayLeg | null {
-  const key = legKey(leg);
-  return (
-    legs.find((existing) => existing.matchupId === leg.matchupId && legKey(existing) !== key) ?? null
-  );
+function gameProbability(legs: readonly ParlayLeg[]): number {
+  const total = legs.find((leg) => leg.market === 'total');
+  const totalFactor = total ? total.probability : 1;
+  const pair = sidePair(legs);
+  if (pair) return sideJoint(pair[0], pair[1]) * totalFactor;
+
+  const side = legs.find((leg) => leg.market !== 'total');
+  return (side ? side.probability : 1) * totalFactor;
 }
 
 /**
  * The probability every leg hits, 0..1.
  *
- * A plain product, which is exactly and only valid because legs come from
- * different games. See the note at the top of this file.
+ * Grouped by game first, because legs on one game are related and legs on
+ * different games are not. See the note at the top of this file.
  */
 export function parlayProbability(legs: readonly ParlayLeg[]): number | null {
   if (legs.length === 0) return null;
-  return legs.reduce((product, leg) => product * leg.probability, 1);
+
+  const byGame = new Map<number, ParlayLeg[]>();
+  legs.forEach((leg) => {
+    byGame.set(leg.matchupId, [...(byGame.get(leg.matchupId) ?? []), leg]);
+  });
+
+  /* Multiplying ACROSS games, never within one. Different fantasy matchups
+     share no roster, and what couples them at all (two managers on opposite
+     sides of one NFL game, a defence facing someone's quarterback) is
+     second-order against full lineups. */
+  return [...byGame.values()].reduce((product, game) => product * gameProbability(game), 1);
 }
 
 /**
@@ -224,7 +300,9 @@ export function moneylineLeg(context: LegContext & { price: number }): ParlayLeg
 }
 
 /** A side of the spread. Even money: the line is the engine's own middle. */
-export function spreadLeg(context: LegContext & { line: string }): ParlayLeg {
+export function spreadLeg(
+  context: LegContext & { line: string; spreadValue: number },
+): ParlayLeg {
   return {
     matchupId: context.matchupId,
     market: 'spread',
@@ -232,6 +310,7 @@ export function spreadLeg(context: LegContext & { line: string }): ParlayLeg {
     probability: EVEN_MONEY_PROBABILITY,
     label: context.teamName,
     line: context.line,
+    spreadValue: context.spreadValue,
     price: americanFromProbability(EVEN_MONEY_PROBABILITY),
     matchupLabel: context.matchupLabel,
   };
@@ -254,4 +333,28 @@ export function totalLeg(context: {
     price: americanFromProbability(EVEN_MONEY_PROBABILITY),
     matchupLabel: context.matchupLabel,
   };
+}
+
+/**
+ * Legs that are already guaranteed by the rest of the slip.
+ *
+ * Taking a favourite's spread and then its moneyline is allowed, and it
+ * should be: it is a coherent pair of picks. But the second one changes
+ * nothing, because covering the spread already entailed winning, and a slip
+ * that grew by a leg while the price stood still reads as broken.
+ *
+ * Worked out by removal rather than by another table, so it stays true for
+ * whatever combinations exist later.
+ */
+export function impliedLegKeys(legs: readonly ParlayLeg[]): Set<string> {
+  const whole = parlayProbability(legs);
+  const implied = new Set<string>();
+  if (whole == null || legs.length < 2) return implied;
+
+  legs.forEach((leg) => {
+    const key = legKey(leg);
+    const without = parlayProbability(legs.filter((other) => legKey(other) !== key));
+    if (without != null && Math.abs(without - whole) < 1e-9) implied.add(key);
+  });
+  return implied;
 }

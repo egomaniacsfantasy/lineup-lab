@@ -16,7 +16,7 @@ import { chromium } from 'playwright';
  */
 
 const cwd = process.cwd();
-const port = 4175;
+const port = 4178;
 const baseUrl = `http://127.0.0.1:${port}`;
 const scene = `${baseUrl}/design/board-row/slip`;
 
@@ -135,7 +135,7 @@ test('a tap lights the cell and puts the leg on the slip', async () => {
   }
 });
 
-test('the price on the slip is the price the cells add up to', async () => {
+test('legs from different games are multiplied, and the slip shows it', async () => {
   const page = await openBoard();
   try {
     await tap(page, '-186');
@@ -157,34 +157,104 @@ test('the price on the slip is the price the cells add up to', async () => {
 });
 
 /**
- * The rule that is not obvious.
+ * Same game, allowed, and priced by the table rather than multiplied.
  *
- * Both sides of one market are the conflicts anyone would think of. The one
- * that misprices badly is a moneyline and a spread on the SAME game, which
- * are close to the same bet: multiplying them would quote roughly double what
- * the parlay is worth. Every same-game pair is checked, in both directions.
+ * The dangerous pair is a moneyline and a spread on one game: they are nested
+ * intervals of the same margin, so multiplying them would quote roughly
+ * double what the pair is worth. Each row below states the answer worked out
+ * from the moneyline alone, independently of the code under test.
  */
+const SONIC_WIN = 113 / 213; // what -113 implies
+
+for (const [name, first, second, expected] of [
+  ['the favourite to win and cover', '-113', '-2.9', 0.5],
+  ['the favourite to win without covering', '-113', '+2.9', SONIC_WIN - 0.5],
+  ['the underdog to win and cover', '+113', '+2.9', 1 - SONIC_WIN],
+]) {
+  test(`${name} sits on one slip, priced exactly`, async () => {
+    const page = await openBoard();
+    try {
+      await tap(page, first);
+      await tap(page, second);
+      const slip = await readSlip(page);
+      assert.equal(slip.legs.length, 2, `${name}: the second leg did not stick`);
+      assert.equal(slip.lit, 2, `${name}: both cells are not lit`);
+
+      const priced =
+        expected >= 0.5
+          ? Math.round((-100 * expected) / (1 - expected))
+          : Math.round((100 * (1 - expected)) / expected);
+      assert.equal(
+        slip.total,
+        priced === -100 ? 100 : priced,
+        `${name} quoted ${slip.total}, should be ${priced}`,
+      );
+
+      /* And specifically NOT the naive product of the two cell prices. */
+      const naive = fairPrice(slip.legs.map((leg) => leg.price));
+      if (naive !== slip.total) {
+        assert.notEqual(slip.total, naive, `${name} was multiplied after all`);
+      }
+    } finally {
+      await page.close();
+    }
+  });
+}
+
+test('the favourite to win and cover pays nothing extra, and says so', async () => {
+  const page = await openBoard();
+  try {
+    await tap(page, '-2.9');
+    const alone = await readSlip(page);
+    await tap(page, '-113');
+    const both = await readSlip(page);
+
+    /* Covering -2.9 entails winning, so the moneyline is free. A slip that
+       grew a leg while the price stood still has to explain itself. */
+    assert.equal(both.total, alone.total, 'adding a leg that changes nothing changed the price');
+    const implied = await page.locator('.bet-slip__leg-implied').count();
+    assert.equal(implied, 1, 'the leg that adds nothing is not called out');
+  } finally {
+    await page.close();
+  }
+});
+
+/* The contradictions: same market opposite sides, plus the one pair across
+   markets that cannot both happen. */
 for (const [first, second] of [
-  ['-113', '-2.9'],
-  ['-2.9', 'O 239.5'],
-  ['O 239.5', '-113'],
   ['-113', '+113'],
   ['-2.9', '+2.9'],
   ['O 239.5', 'U 239.5'],
+  ['+113', '-2.9'],
 ]) {
-  test(`tapping ${second} after ${first} replaces it rather than parlaying one game with itself`, async () => {
+  test(`${second} contradicts ${first}, so it replaces it`, async () => {
     const page = await openBoard();
     try {
       await tap(page, first);
       await tap(page, second);
       const slip = await readSlip(page);
       assert.equal(slip.legs.length, 1, `${first} and ${second} are both on the slip`);
-      assert.equal(slip.lit, 1, 'two cells on one game are lit at once');
+      assert.equal(slip.lit, 1, 'two contradictory cells are lit at once');
     } finally {
       await page.close();
     }
   });
 }
+
+test('a total sits alongside a side on the same game', async () => {
+  const page = await openBoard();
+  try {
+    await tap(page, '-113');
+    await tap(page, '-2.9');
+    await tap(page, 'O 239.5');
+    const slip = await readSlip(page);
+    assert.equal(slip.legs.length, 3, 'three legs on one game did not stick');
+    /* The two sides resolve to 0.5 between them; the total halves it again. */
+    assert.equal(slip.total, 300);
+  } finally {
+    await page.close();
+  }
+});
 
 test('a leg from another game is added, not swapped in', async () => {
   const page = await openBoard();

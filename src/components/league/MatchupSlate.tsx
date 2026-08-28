@@ -459,7 +459,12 @@ export function MatchupSlate({
                     {cell(
                       spreadText,
                       context && typeof side.spread === 'number'
-                        ? spreadLeg({ ...context, teamName: side.name, line: spreadText })
+                        ? spreadLeg({
+                            ...context,
+                            teamName: side.name,
+                            line: spreadText,
+                            spreadValue: side.spread,
+                          })
                         : null,
                     )}
                     {cell(

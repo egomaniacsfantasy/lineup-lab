@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
-import { MARKET_LABEL, legKey, parlayPrice, type ParlayLeg } from '../../utils/parlay';
+import {
+  MARKET_LABEL,
+  impliedLegKeys,
+  legKey,
+  parlayPrice,
+  type ParlayLeg,
+} from '../../utils/parlay';
 import { slipAsText } from '../../utils/slipText';
 import './BetSlip.css';
 
@@ -46,6 +52,10 @@ export function BetSlip({ legs, week, onRemove, onClear }: BetSlipProps) {
 
   const price = parlayPrice(legs);
   const legWord = legs.length === 1 ? 'pick' : 'legs';
+  /* Same-game legs can be free: covering a spread already entailed winning,
+     so adding that moneyline moves nothing. Saying so is the difference
+     between a slip that looks broken and one that taught you something. */
+  const implied = impliedLegKeys(legs);
 
   const copy = async () => {
     try {
@@ -95,6 +105,11 @@ export function BetSlip({ legs, week, onRemove, onClear }: BetSlipProps) {
                     <span className="bet-slip__leg-meta">
                       {MARKET_LABEL[leg.market]} · {leg.matchupLabel}
                     </span>
+                    {implied.has(key) ? (
+                      <span className="bet-slip__leg-implied">
+                        Already guaranteed by another pick, so it adds nothing
+                      </span>
+                    ) : null}
                   </span>
                   <span className="bet-slip__leg-price">{formatAmericanOdds(leg.price)}</span>
                   <button

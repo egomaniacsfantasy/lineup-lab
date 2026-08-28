@@ -7,9 +7,9 @@
 ## What shipped
 
 Users can build a parlay from this week's board: moneyline, spread or total
-on any game. We quote it at fair odds — the product of the legs' true
-probabilities, converted to American, no juice. No money is involved anywhere:
-there is no stake field, no payout and no balance, and a test enforces that.
+on any game, including several legs from the same game. We quote it at fair
+odds: no juice, and no independence assumed where it does not hold. No money
+is involved anywhere, and a test enforces that.
 
 Leg probabilities come from the engine and nowhere else:
 
@@ -23,34 +23,38 @@ Spread and total legs are even money by construction rather than by
 assumption. If the engine ever posts a line away from its own central
 estimate, that stops being true and those legs need real probabilities.
 
-## The constraint the frontend imposes, and why
+## Same-game legs, and how they are priced without you
 
-**A slip takes at most one leg per game.** Adding a second leg from the same
-game replaces the first.
+Multiple legs on one game are allowed. They are not multiplied.
 
-Multiplying probabilities is valid only for independent events, and two
-markets on one game are strongly dependent. Concretely, on a game priced -113
-with the favourite laying 2.9:
+For a moneyline and a spread on the same game the joint probability is not a
+modelling question: the two events are nested intervals of one margin. With M
+the favourite's margin and s the posted line, the moneyline is `M > 0`, laying
+the points is `M > s`, taking them is `M < s`, and `P(M > s) = 0.5` because s
+is your central estimate of M. So:
 
-```
-moneyline       53.1%
-spread -2.9     50.0%
-product         26.6%  ->  +276
-truth           50.0%  ->  +100
-```
+| pair | reasoning | probability |
+| --- | --- | --- |
+| favourite ML + favourite spread | covering entails winning | 0.5 |
+| favourite ML + underdog spread | wins without covering | P(win) − 0.5 |
+| underdog ML + underdog spread | winning entails covering | P(win) |
+| underdog ML + favourite spread | cannot both happen | 0 (refused) |
 
-Covering -2.9 entails winning, so the parlay *is* the spread leg. Quoting
-+276 would be wrong by a factor of two, in the customer's favour, on a bet
-reachable in two taps. Totals correlate with sides the same way, less sharply.
+They sum to 1, which is the check that this is arithmetic rather than a guess,
+and a test asserts it. On a -113 game the naive product would quote the
+favourite's ML-and-spread pair at +276 when it is worth +100.
 
-Across different games the independence assumption holds well enough to quote
-on — two fantasy matchups share no roster, and the couplings that do exist
-(two managers on opposite sides of one NFL game, a defence facing someone's
-quarterback) are second-order against full lineups.
+The one approximation is totals against sides: they are multiplied. With
+M = A − B and T = A + B, `Cov(M, T) = Var(A) − Var(B)`, which is about zero
+for two full fantasy lineups. It is the only estimate in the file.
+
+Across different games everything is multiplied. Two fantasy matchups share no
+roster, and what couples them (two managers on opposite sides of one NFL game,
+a defence facing someone's quarterback) is second-order.
 
 ## What I'd like from the engine
 
-One endpoint, and then the frontend constraint can come off entirely.
+One endpoint, and the analytic table below can come out entirely.
 
 ```
 POST /api/league/:leagueId/parlay
@@ -92,8 +96,12 @@ Two things worth deciding when you build it:
 
 ## Until then
 
-`src/utils/parlay.ts` holds the whole model, states the independence
-assumption in the file header, and enforces one leg per game. Nothing in it
-derives a probability of its own. When the endpoint exists, `parlayPrice`
-becomes a fallback for when it is unreachable, and `toggleLeg`'s
-replace-by-game rule is the thing to delete.
+`src/utils/parlay.ts` holds the whole model and states every assumption in its
+header. Nothing in it derives a probability of its own: the same-game table is
+set logic on your win probability, and the only estimate is treating a total
+as independent of a margin.
+
+What the endpoint would buy: exact pricing for every combination rather than
+the three pairs that happen to resolve analytically, correct handling of any
+market added later, and pushes. When it exists, `parlayPrice` becomes the
+fallback for when it is unreachable, and `sideJoint` is the thing to delete.
