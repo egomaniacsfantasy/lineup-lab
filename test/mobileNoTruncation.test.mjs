@@ -227,3 +227,198 @@ for (const scene of ['matchup', 'board', 'market', 'league', 'connect']) {
     }
   });
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The gate: on a phone the app is not shown at all.
+
+   Here rather than in a file of its own because every rendered test in this
+   repo runs its own Vite, and a ninth one pushes this machine far enough that
+   an unrelated test times out waiting thirty seconds for its server. Same
+   subject as the rest of this file, which is what a phone gets.
+
+   This gate replaces the entire application, so the ways it can be wrong are
+   expensive in both directions: catch a tablet or a laptop and the product is
+   gone for someone who could have used it; miss a phone and the thing it
+   exists to prevent happens anyway. The exemptions matter as much as the
+   rule, and the design routes most of all: they are how the tests above look
+   at a phone-width layout, so a gate that caught them would take about twenty
+   tests with it.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** A fresh context every time: the override persists, so it must not leak. */
+async function visit(path, { width, height, reducedMotion, hasTouch = false } = {}) {
+  const context = await browser.newContext({
+    viewport: { width, height },
+    hasTouch,
+    ...(reducedMotion ? { reducedMotion } : {}),
+  });
+  const page = await context.newPage();
+  await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(400);
+  return { page, context };
+}
+
+async function gated(path, options) {
+  const { page, context } = await visit(path, options);
+  try {
+    return await page.evaluate(() => ({
+      gate: document.querySelectorAll('.mobile-gate').length,
+      shell: document.querySelectorAll('.app-shell').length,
+      /* The sign-up form. A phone that is shown this has been asked to make
+         an account before being told it cannot use what it just made. */
+      signup: document.querySelectorAll('input[type="password"]').length,
+    }));
+  } finally {
+    await context.close();
+  }
+}
+
+test('a phone gets the gate and nothing else', async () => {
+  const seen = await gated('/league', { width: 375, height: 812 });
+  assert.equal(seen.gate, 1, 'a 375px viewport was not gated');
+  assert.equal(seen.shell, 0, 'the app shell rendered behind the gate');
+  assert.equal(seen.signup, 0, 'a phone was shown a sign-up form');
+});
+
+test('a phone is turned away at the door, before it is asked to sign up', async () => {
+  /* The gate sits above the auth split. Below it, a signed-out phone was
+     shown the whole sign-up flow and told at the END of it to find a laptop. */
+  for (const path of ['/', '/signin', '/connect', '/matchup']) {
+    const seen = await gated(path, { width: 375, height: 812 });
+    assert.equal(seen.gate, 1, `${path} was not gated on a phone`);
+    assert.equal(seen.signup, 0, `${path} showed a phone a sign-up form`);
+  }
+});
+
+test('a phone on its side is still a phone', async () => {
+  /* 844 wide clears the width test comfortably and leaves 390px of height,
+     which is worse than portrait rather than better. A coarse pointer is what
+     separates it from a desktop window someone has dragged short. */
+  const seen = await gated('/league', { width: 844, height: 390, hasTouch: true });
+  assert.equal(seen.gate, 1, 'a landscape phone was let through');
+});
+
+test('a tablet and a laptop are not phones', async () => {
+  /* "Use a laptop or tablet" is only honest advice if a tablet works. */
+  for (const [width, height, what] of [
+    [768, 1024, 'a portrait tablet'],
+    [1024, 768, 'a landscape tablet'],
+    [1440, 900, 'a laptop'],
+  ]) {
+    const seen = await gated('/league', { width, height });
+    assert.equal(seen.gate, 0, `${what} (${width}x${height}) was gated`);
+    assert.ok(seen.shell > 0 || seen.signup > 0, `${what} rendered neither the app nor a sign-in`);
+  }
+});
+
+test('a short desktop window is not a phone', async () => {
+  /* The landscape rule keys on a coarse pointer for exactly this reason: a
+     window dragged flat is still a mouse and a keyboard. */
+  const seen = await gated('/league', { width: 1280, height: 420 });
+  assert.equal(seen.gate, 0, 'a short desktop window was gated');
+});
+
+test('the design routes are never gated, at any width', async () => {
+  /* Every other rendered test in this suite looks at a phone-width layout
+     through these. Gating them takes about twenty tests with it. */
+  for (const path of ['/design/board', '/design/matchup', '/design/board-row/slip']) {
+    const seen = await gated(path, { width: 375, height: 812 });
+    assert.equal(seen.gate, 0, `${path} was gated at 375px`);
+  }
+});
+
+test('?desktop=1 lets you look anyway, and sticks, and can be turned off', async () => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await context.newPage();
+  try {
+    const count = () => page.evaluate(() => document.querySelectorAll('.mobile-gate').length);
+
+    await page.goto(`${baseUrl}/league?desktop=1`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(400);
+    assert.equal(await count(), 0, '?desktop=1 did not let the phone through');
+
+    /* Sticky, or it would have to be re-typed on every link followed. */
+    await page.goto(`${baseUrl}/league`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(400);
+    assert.equal(await count(), 0, 'the override did not survive the next page');
+
+    /* And a way back out. A sticky override with no off switch is one nobody
+       can undo without clearing site data. */
+    await page.goto(`${baseUrl}/league?desktop=0`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(400);
+    assert.equal(await count(), 1, '?desktop=0 did not turn the override off');
+  } finally {
+    await context.close();
+  }
+});
+
+test('the gate fills the screen and never scrolls', async () => {
+  const { page, context } = await visit('/league', { width: 375, height: 812 });
+  try {
+    const box = await page.evaluate(() => {
+      const gate = document.querySelector('.mobile-gate');
+      const rect = gate.getBoundingClientRect();
+      return {
+        coversWidth: rect.width >= innerWidth,
+        coversHeight: rect.height >= innerHeight - 1,
+        scrollX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        scrollY: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+        /* Both lines of the headline, and neither of them alone. */
+        headlineLines: Math.round(
+          document.querySelector('.mobile-gate__headline').getBoundingClientRect().height /
+            (parseFloat(getComputedStyle(document.querySelector('.mobile-gate__headline')).fontSize) *
+              1.05),
+        ),
+      };
+    });
+    assert.ok(box.coversWidth && box.coversHeight, 'the gate does not fill the screen');
+    /* A gate you can scroll past is a banner, and there is nothing behind it
+       to scroll to anyway. */
+    assert.equal(box.scrollX, 0, 'the gate scrolls sideways');
+    assert.equal(box.scrollY, 0, 'the gate scrolls');
+    assert.ok(box.headlineLines <= 2, `the headline runs to ${box.headlineLines} lines`);
+  } finally {
+    await context.close();
+  }
+});
+
+test('the drift runs, and stops for anyone who asked for less motion', async () => {
+  /* Two things this cannot be measured with, both found the hard way.
+     Sampling getComputedStyle().transform proves nothing: a 26s ease-in-out
+     spends whole seconds either side of its turnaround barely moving, so five
+     snapshots come back identical from an animation running perfectly well.
+     And getAnimations() proves nothing under reduced motion either, because
+     Chromium suppresses animations itself when the media feature is emulated,
+     so it returns zero whether or not our own rule exists.
+     The computed animation-name is the cascade's actual answer, and it is
+     'none' only if this stylesheet made it so. */
+  const glow = async (reducedMotion) => {
+    const { page, context } = await visit('/league', { width: 375, height: 812, reducedMotion });
+    try {
+      return await page.evaluate(async () => {
+        const node = document.querySelector('.mobile-gate__glow');
+        const before = node.getAnimations()[0]?.currentTime ?? null;
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        return {
+          animationName: getComputedStyle(node).animationName,
+          attached: node.getAnimations().length,
+          advanced: before != null && (node.getAnimations()[0]?.currentTime ?? 0) > before,
+        };
+      });
+    } finally {
+      await context.close();
+    }
+  };
+
+  const normal = await glow(null);
+  assert.equal(normal.animationName, 'mobile-gate-drift', 'the background carries no animation');
+  assert.equal(normal.attached, 1);
+  assert.ok(normal.advanced, 'the animation is attached but not advancing');
+
+  const reduced = await glow('reduce');
+  assert.equal(
+    reduced.animationName,
+    'none',
+    'reduced motion still resolves to an animation, so the stylesheet is not the thing stopping it',
+  );
+});

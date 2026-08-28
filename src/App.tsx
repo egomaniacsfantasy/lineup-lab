@@ -1,5 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
+import { MobileGate } from './components/layout/MobileGate';
+import { useIsPhone } from './hooks/useIsPhone';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SeasonModeProvider } from './contexts/SeasonModeContext';
 import {
@@ -123,6 +125,18 @@ function AuthGate() {
 }
 
 export default function App() {
+  /* Above the auth gate, not below it.
+
+     Inside the shell this only covered signed-in routes, which meant a phone
+     visitor was shown a sign-up form, made an account, and was told at the
+     end of it to go and find a laptop. Turning someone away is only polite
+     if you do it at the door.
+
+     It also means none of the providers underneath ever mount on a phone:
+     no session fetch, no league bootstrap, no ambient canvas. */
+  const phone = useIsPhone();
+  if (phone) return <MobileGate />;
+
   return (
     <AuthProvider>
       <AuthGate />

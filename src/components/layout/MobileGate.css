@@ -1,0 +1,136 @@
+/* The phone rejection screen.
+
+   It replaces the shell rather than sitting on top of it, so there is no
+   header, no tab bar and nothing behind it to scroll to. A gate you can
+   scroll past is a banner, and this is not a banner. */
+
+.mobile-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  /* Not 100vh: in a mobile browser that includes the strip under the address
+     bar, so the address line at the bottom would sit off the screen until you
+     scrolled, on a screen with nothing to scroll. */
+  min-height: 100dvh;
+  padding: max(var(--space-xl), env(safe-area-inset-top))
+    var(--space-lg)
+    max(var(--space-xl), env(safe-area-inset-bottom));
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* Two soft amber masses, drifting. Blurred radial gradients rather than an
+   animated background-position: a gradient animation repaints the whole
+   surface every frame, and a transform on a blurred layer is composited. On
+   a phone that is the difference between a smooth drift and a slideshow. */
+.mobile-gate__glow {
+  position: absolute;
+  top: -30%;
+  left: -35%;
+  width: 90vmax;
+  height: 90vmax;
+  background: radial-gradient(
+    circle at center,
+    rgba(232, 84, 29, 0.5),
+    rgba(232, 84, 29, 0.12) 45%,
+    transparent 70%
+  );
+  filter: blur(28px);
+  animation: mobile-gate-drift 26s ease-in-out infinite alternate;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.mobile-gate__glow--second {
+  top: auto;
+  right: -40%;
+  bottom: -35%;
+  left: auto;
+  background: radial-gradient(
+    circle at center,
+    rgba(240, 102, 46, 0.4),
+    rgba(201, 162, 39, 0.1) 50%,
+    transparent 72%
+  );
+  animation-duration: 34s;
+  animation-direction: alternate-reverse;
+}
+
+@keyframes mobile-gate-drift {
+  from {
+    transform: translate3d(-6%, -4%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(8%, 7%, 0) scale(1.18);
+  }
+}
+
+/* Still, for anyone who has asked for less motion. The gradients stay,
+   because a slow wash is the design and only the movement is the problem. */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-gate__glow {
+    animation: none;
+  }
+}
+
+.mobile-gate__inner {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-sm);
+  max-width: 30rem;
+  text-align: center;
+}
+
+.mobile-gate__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--space-md);
+}
+
+.mobile-gate__mark {
+  width: 44px;
+  height: 44px;
+}
+
+.mobile-gate__wordmark {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 30px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+.mobile-gate__headline {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  /* Fills a phone without ever wrapping to three lines on the narrowest one. */
+  font-size: clamp(34px, 10vw, 46px);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  /* Or the narrowest phone breaks it after "FOR" and leaves "NOW." on a line
+     by itself, which reads as a mistake rather than a line break. */
+  text-wrap: balance;
+}
+
+.mobile-gate__copy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1.5;
+  text-wrap: balance;
+}
+
+.mobile-gate__address {
+  margin-top: var(--space-lg);
+  color: var(--text-amber);
+  font-family: var(--font-display);
+  font-size: 17px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}

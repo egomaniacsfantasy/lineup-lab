@@ -3,7 +3,6 @@
  * pick a provider, type a username, and the whole league is priced.
  * The demo stays reachable, one click below.
  */
-import { MobileNotice } from '../components/layout/MobileNotice';
 import { consumeEspnIdentityRecheck } from '../contexts/LeagueConnectionContext';
 import { ProviderMark } from '../components/league/ProviderMark';
 import { useState } from 'react';
@@ -83,7 +82,6 @@ export function ConnectPage() {
         </aside>
       ) : null}
 
-      <MobileNotice />
 
       <div className="connect-page__providers">
         <button
