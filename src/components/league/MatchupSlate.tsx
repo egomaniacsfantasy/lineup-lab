@@ -358,21 +358,81 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
 
       <div className="matchup-slate__layout">
         <div className="matchup-slate__board-shell">
-          <div className="matchup-slate__board-head" role="presentation">
-            {/* No Win% columns. A price and a win probability are the same
-                fact in two units, and the header carries a global toggle that
-                turns one into the other, so printing both put two scales on
-                one row and made the toggle look like it did nothing. The bar
-                keeps the visual read without repeating the number. */}
-            <span>Matchup</span>
-            <span>Price</span>
-            <span>Spread &amp; total</span>
-            <span>Price</span>
-          </div>
+          {/* The week as a board of cards, one per matchup.
+
+              It was a table: five columns, one row per game, the two teams
+              pushed to opposite ends of a very wide row with their numbers
+              scattered between them. A sportsbook does not lay a game out
+              that way, and the reason is structural: a matchup is a unit.
+              Two teams stacked, and a small grid of numbers that reads down
+              as well as across, so you can compare the two sides of ONE game
+              without traversing a screen to do it.
+
+              Same three markets a book posts, in the same order: the spread,
+              the total, and the price. Each cell carries one number, because
+              those are the numbers the engine actually produces; a book puts
+              juice under its spread and total, and inventing that here would
+              be drawing a market that does not exist. */}
           <div className="matchup-slate__rows">
             {rows.map(({ matchup, left, right, favorite, summary, rowKey }) => {
               const selected = rowKey === selectedRow?.rowKey;
-              const leftFavored = favorite.side === left.side;
+              const total = matchup.totalProjection;
+
+              const sideRow = (
+                side: typeof left,
+                spread: number | undefined,
+                overUnder: 'O' | 'U',
+                move: number | null,
+              ) => (
+                <span className="matchup-slate__side">
+                  <span className="matchup-slate__team">
+                    {leagueChartFlags.avatars ? (
+                      <TeamAvatar avatarUrl={side.avatarUrl} name={side.name} />
+                    ) : null}
+                    <span className="matchup-slate__team-copy">
+                      <span className="matchup-slate__team-name" title={side.name}>
+                        {boardDisplayName(side.name)}
+                      </span>
+                      <span className="matchup-slate__team-meta">
+                        {boardHandle(side.ownerName, side.record)}
+                      </span>
+                    </span>
+                    {/* Each side still owns its own movement figure. Stacked
+                        rather than facing each other, there is no rail to
+                        push it into and no ambiguity about whose it is. */}
+                    {move != null ? (
+                      <span className="matchup-slate__team-move">{moveLabel(move)}</span>
+                    ) : null}
+                  </span>
+
+                  {/* PK for a pick'em, which is what a book prints, and an
+                      empty cell when the line does not exist. A dash in the
+                      slot where a number goes reads as a number we are
+                      withholding rather than one that was never posted. */}
+                  <span className="matchup-slate__cell">
+                    {typeof spread !== 'number'
+                      ? ''
+                      : spread === 0
+                        ? 'PK'
+                        : `${spread > 0 ? '-' : '+'}${Math.abs(spread).toFixed(1)}`}
+                  </span>
+                  <span className="matchup-slate__cell">
+                    {typeof total === 'number' ? `${overUnder} ${total.toFixed(1)}` : ''}
+                  </span>
+                  <span
+                    className={[
+                      'matchup-slate__cell',
+                      'matchup-slate__cell--price',
+                      side.side === favorite.side ? 'matchup-slate__cell--favorite' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {formatAmericanOdds(side.odds)}
+                  </span>
+                </span>
+              );
+
               return (
                 <button
                   aria-pressed={selected}
@@ -385,74 +445,26 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                   onClick={() => setSelectedRowKey(rowKey)}
                   type="button"
                 >
-                  <span className="matchup-slate__team matchup-slate__team--left">
-                    {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={left.avatarUrl} name={left.name} /> : null}
-                    <span className="matchup-slate__team-copy">
-                      <span className="matchup-slate__team-meta">{boardHandle(left.ownerName, left.record)}</span>
-                      <span className="matchup-slate__team-name" title={left.name}>{boardDisplayName(left.name)}</span>
-                    </span>
-                    {/* Each side carries its own move, on the inside edge of
-                        its lockup. A single figure in a rail off the end of
-                        the row left both team blocks short of the edges they
-                        should sit against, and never said which of the two
-                        teams it was describing. */}
-                    {summary ? (
-                      <span className="matchup-slate__team-move">{moveLabel(summary.move)}</span>
-                    ) : null}
+                  <span className="matchup-slate__card-cols" aria-hidden="true">
+                    <span />
+                    <span>Spread</span>
+                    <span>Total</span>
+                    <span>Price</span>
                   </span>
 
-                  <span className={['matchup-slate__moneyline', leftFavored ? 'matchup-slate__moneyline--favorite' : '', summary ? 'matchup-slate__moneyline--moving' : ''].filter(Boolean).join(' ')}>
-                    {formatAmericanOdds(left.odds)}
-                  </span>
+                  {sideRow(left, matchup.teamASpread, 'O', summary ? summary.move : null)}
+                  <span aria-hidden="true" className="matchup-slate__at">at</span>
+                  {sideRow(right, matchup.teamBSpread, 'U', summary ? -summary.move : null)}
 
-                  <span className="matchup-slate__line-cell">
-                    <span className="matchup-slate__prob-track" aria-hidden="true">
-                      <span className="matchup-slate__prob-fill" style={{ width: `${left.winProb}%` }} />
-                    </span>
-                    {/* The number a book would actually post. It was priced and
-                        then dropped by the adapter, so the middle of every row
-                        was a bar floating in empty space. */}
-                    <span className="matchup-slate__line-meta">
-                      {(() => {
-                        const favSpread = leftFavored ? matchup.teamASpread : matchup.teamBSpread;
-                        const initials = favorite.name
-                          .split(/\s+/)
-                          .map((word) => word[0])
-                          .join('')
-                          .slice(0, 3)
-                          .toUpperCase();
-                        const parts: string[] = [];
-                        if (typeof favSpread === 'number' && favSpread !== 0) {
-                          parts.push(`${initials} ${favSpread > 0 ? '-' : '+'}${Math.abs(favSpread).toFixed(1)}`);
-                        }
-                        if (typeof matchup.totalProjection === 'number') {
-                          parts.push(`O/U ${matchup.totalProjection.toFixed(1)}`);
-                        }
-                        return parts.join(' · ');
-                      })()}
-                    </span>
+                  {/* The split, drawn once across the foot of the card. The
+                      moneylines above already carry the numbers, so this is
+                      shape rather than a second reading of them. */}
+                  <span aria-hidden="true" className="matchup-slate__prob-track">
+                    <span
+                      className="matchup-slate__prob-fill"
+                      style={{ width: `${left.winProb}%` }}
+                    />
                   </span>
-
-                  <span className={['matchup-slate__moneyline matchup-slate__moneyline--right', !leftFavored ? 'matchup-slate__moneyline--favorite' : '', summary ? 'matchup-slate__moneyline--moving' : ''].filter(Boolean).join(' ')}>
-                    {formatAmericanOdds(right.odds)}
-                  </span>
-
-                  <span className="matchup-slate__team matchup-slate__team--right">
-                    {/* The mirror of the left side's figure. The two sides of a
-                        matchup sum to a hundred, so this is the same movement
-                        signed the other way — printed because a team's own
-                        number belongs beside that team, not inferred from its
-                        opponent's. */}
-                    {summary ? (
-                      <span className="matchup-slate__team-move">{moveLabel(-summary.move)}</span>
-                    ) : null}
-                    <span className="matchup-slate__team-copy">
-                      <span className="matchup-slate__team-meta">{boardHandle(right.ownerName, right.record)}</span>
-                      <span className="matchup-slate__team-name" title={right.name}>{boardDisplayName(right.name)}</span>
-                    </span>
-                    {leagueChartFlags.avatars ? <TeamAvatar avatarUrl={right.avatarUrl} name={right.name} /> : null}
-                  </span>
-
                 </button>
               );
             })}

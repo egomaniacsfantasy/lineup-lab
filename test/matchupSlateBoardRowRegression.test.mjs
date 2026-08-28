@@ -62,119 +62,94 @@ test.after(async () => {
 });
 
 /**
- * Each team's movement figure sits on the INSIDE of its own lockup.
+ * A card's three markets line up across both sides.
  *
- * It used to be one figure in a rail column off the end of the row, which
- * cost twice: both team lockups stopped short of the edges they should sit
- * against, and the figure never said which of the two teams it described.
+ * The board used to be one wide row per game with the two teams pushed to
+ * opposite ends, and the invariant then was about a movement rail and which
+ * edge each crest sat against. Stacked into a card those questions dissolve:
+ * the crest is always leftmost and each side owns its own figure because
+ * there is no shared rail to put one in.
  *
- * So the invariants are positional, not just "it rendered": the chip is
- * between the name and the middle of the row on both sides, and the crest is
- * the outermost thing in the row on both sides.
+ * What matters now is the thing that makes a book's board readable at all.
+ * The spread, the total and the price have to occupy the same columns on both
+ * sides and under the labels above them. Lose that and the card is two rows
+ * of loose numbers that happen to be near each other.
  */
-test('the movement figure sits inside each lockup, and the crests stay on the edges', async () => {
+test('the markets line up across both sides of a card', async () => {
   for (const width of [1512, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, colorScheme: 'dark' });
     try {
       await page.goto(`${baseUrl}/design/board-row/collision`, { waitUntil: 'domcontentloaded' });
       await page.locator('.matchup-slate__row-button').first().waitFor({ state: 'visible' });
       const layout = await page.evaluate(() => {
-        const rect = (element) => {
-          if (!element) return null;
-          const { top, right, bottom, left, width: w, height } = element.getBoundingClientRect();
-          return { top, right, bottom, left, width: w, height };
-        };
-        const row = document.querySelector('.matchup-slate__row-button');
-        const leftBlock = document.querySelector('.matchup-slate__team:not(.matchup-slate__team--right)');
-        const rightBlock = document.querySelector('.matchup-slate__team--right');
-        const rightMeta = document.querySelector('.matchup-slate__team--right .matchup-slate__team-meta');
+        const card = document.querySelector('.matchup-slate__row-button');
+        const sides = [...card.querySelectorAll('.matchup-slate__side')];
+        const centres = (root) =>
+          [...root.querySelectorAll('.matchup-slate__cell')].map((cell) => {
+            const rect = cell.getBoundingClientRect();
+            return Math.round(rect.left + rect.width / 2);
+          });
+        const labels = [...card.querySelectorAll('.matchup-slate__card-cols > *')]
+          .slice(1)
+          .map((label) => {
+            const rect = label.getBoundingClientRect();
+            return Math.round(rect.left + rect.width / 2);
+          });
         return {
-          row: rect(row),
-          tag: rect(document.querySelector('.matchup-slate__tag')),
+          sides: sides.length,
           rail: document.querySelector('.matchup-slate__rail') != null,
-          leftAvatar: rect(leftBlock?.querySelector('.team-avatar')),
-          leftName: rect(leftBlock?.querySelector('.matchup-slate__team-name')),
-          leftMove: rect(leftBlock?.querySelector('.matchup-slate__team-move')),
-          rightAvatar: rect(rightBlock?.querySelector('.team-avatar')),
-          rightName: rect(rightBlock?.querySelector('.matchup-slate__team-name')),
-          rightMove: rect(rightBlock?.querySelector('.matchup-slate__team-move')),
-          rightMeta: rightMeta
-            ? {
-                clientWidth: rightMeta.clientWidth,
-                scrollWidth: rightMeta.scrollWidth,
-                text: rightMeta.textContent,
-              }
-            : null,
+          top: centres(sides[0]),
+          bottom: centres(sides[1]),
+          labels,
+          moves: card.querySelectorAll('.matchup-slate__team-move').length,
+          crestFirst: sides.every((side) => {
+            const crest = side.querySelector('.team-avatar');
+            const name = side.querySelector('.matchup-slate__team-name');
+            if (!crest || !name) return false;
+            return crest.getBoundingClientRect().left <= name.getBoundingClientRect().left;
+          }),
         };
       });
 
       assert.equal(layout.rail, false, `the movement rail is back at ${width}px`);
-      assert.equal(layout.tag, null, `unexpected YOUR GAME pill still rendered at ${width}px`);
+      assert.equal(layout.sides, 2, `a card did not render two sides at ${width}px`);
+      assert.equal(layout.top.length, 3, `expected three markets per side at ${width}px`);
 
-      for (const key of ['leftAvatar', 'leftName', 'leftMove', 'rightAvatar', 'rightName', 'rightMove']) {
-        assert.ok(layout[key], `missing ${key} at ${width}px`);
-      }
-
-      /* Each side gets its own figure, so neither is inferred from the other. */
-      assert.equal(
-        overlaps(layout.leftMove, layout.leftName),
-        false,
-        `left movement chip overlaps its team name at ${width}px`,
+      /* Both sides, and the labels above them, in the same three columns. */
+      assert.deepEqual(
+        layout.bottom,
+        layout.top,
+        `the two sides of a card disagree on where the markets sit at ${width}px`,
       );
-      assert.equal(
-        overlaps(layout.rightMove, layout.rightName),
-        false,
-        `right movement chip overlaps its team name at ${width}px`,
+      assert.deepEqual(
+        layout.labels,
+        layout.top,
+        `the column labels do not sit over their own markets at ${width}px`,
       );
 
-      /* Inside: the chip is between its own name and the middle of the row. */
-      assert.ok(
-        layout.leftMove.left >= layout.leftName.right - 1,
-        `left movement chip is outside its name rather than inside at ${width}px`,
-      );
-      assert.ok(
-        layout.rightMove.right <= layout.rightName.left + 1,
-        `right movement chip is outside its name rather than inside at ${width}px`,
-      );
-
-      /* Outside: the crest is the outermost thing on its side of the row.
-         Nothing may sit beyond it, which is what the rail used to do. */
-      assert.ok(
-        layout.leftAvatar.left <= layout.leftName.left,
-        `left crest is not the outermost element at ${width}px`,
-      );
-      assert.ok(
-        layout.rightAvatar.right >= layout.rightMove.right &&
-          layout.rightAvatar.right >= layout.rightName.right,
-        `right crest is not the outermost element at ${width}px`,
-      );
-
-      assert.equal(
-        overlaps(layout.rightAvatar, layout.rightName),
-        false,
-        `avatar overlaps right team name at ${width}px`,
-      );
-      assert.ok(
-        layout.rightMeta.scrollWidth <= layout.rightMeta.clientWidth,
-        `right handle line clips before the grid runs out of space at ${width}px`,
-      );
+      assert.ok(layout.crestFirst, `a crest is not the leftmost thing on its side at ${width}px`);
     } finally {
       await page.close();
     }
   }
 });
 
-test('left and right lockups share width and the right-side stress name fits before ellipsis', async () => {
+test('both team blocks share a width and a long name is not clipped early', async () => {
   for (const width of [1512, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 900 }, colorScheme: 'dark' });
     try {
       await page.goto(`${baseUrl}/design/board-row/truncation`, { waitUntil: 'domcontentloaded' });
       await page.locator('.matchup-slate__row-button').first().waitFor({ state: 'visible' });
       const layout = await page.evaluate(() => {
-        const leftLockup = document.querySelector('.matchup-slate__team--left');
-        const rightLockup = document.querySelector('.matchup-slate__team--right');
-        const leftName = document.querySelector('.matchup-slate__team--left .matchup-slate__team-name');
-        const rightName = document.querySelector('.matchup-slate__team--right .matchup-slate__team-name');
+        /* Stacked, so there is no left and right any more: the two sides of
+           one card, top and bottom. */
+        const card = document.querySelector('.matchup-slate__row-button');
+        const blocks = [...card.querySelectorAll('.matchup-slate__team')];
+        const leftLockup = blocks[0] ?? null;
+        const rightLockup = blocks[1] ?? null;
+        const names = [...card.querySelectorAll('.matchup-slate__team-name')];
+        const leftName = names[0] ?? null;
+        const rightName = names[1] ?? null;
         const rect = (element) => {
           if (!element) return null;
           const { top, right, bottom, left, width, height } = element.getBoundingClientRect();
@@ -183,17 +158,20 @@ test('left and right lockups share width and the right-side stress name fits bef
         return {
           leftLockup: rect(leftLockup),
           rightLockup: rect(rightLockup),
+          /* Height, not width: the name wraps to two lines in a card, so the
+             question is whether all of it is showing, not whether it fits on
+             one line. */
           leftName: leftName
             ? {
-                clientWidth: leftName.clientWidth,
-                scrollWidth: leftName.scrollWidth,
+                clientHeight: leftName.clientHeight,
+                scrollHeight: leftName.scrollHeight,
                 title: leftName.getAttribute('title'),
               }
             : null,
           rightName: rightName
             ? {
-                clientWidth: rightName.clientWidth,
-                scrollWidth: rightName.scrollWidth,
+                clientHeight: rightName.clientHeight,
+                scrollHeight: rightName.scrollHeight,
                 title: rightName.getAttribute('title'),
               }
             : null,
@@ -206,10 +184,14 @@ test('left and right lockups share width and the right-side stress name fits bef
         Math.abs(layout.leftLockup.width - layout.rightLockup.width) <= 1,
         `lockup widths diverged at ${width}px: ${layout.leftLockup.width} vs ${layout.rightLockup.width}`,
       );
-      assert.ok(
-        layout.rightName.scrollWidth <= layout.rightName.clientWidth,
-        `right team name ellipsized with space still available at ${width}px`,
-      );
+      for (const [label, name] of [['top', layout.leftName], ['bottom', layout.rightName]]) {
+        assert.ok(
+          name.scrollHeight <= name.clientHeight + 1,
+          `${label} team name is clipped at ${width}px`,
+        );
+        /* And the full name stays reachable however it is drawn. */
+        assert.ok(name.title, `${label} team name lost its title attribute at ${width}px`);
+      }
       assert.equal(layout.rightName.title, "FantasyGodCasta's Team");
       assert.equal(layout.leftName.title, "lukewilliams340's Team");
     } finally {

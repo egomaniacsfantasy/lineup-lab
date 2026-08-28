@@ -15,14 +15,22 @@
 .matchup-slate__team-meta,
 .matchup-slate__moneyline,
 .matchup-slate__prob-number,
-.matchup-slate__board-head,
-.matchup-slate__team-move,
-.matchup-slate__glance-title,
-.matchup-slate__glance-row,
-.matchup-slate__detail-kicker,
-.matchup-slate__detail-line,
-.matchup-slate__movement-note {
-  font-family: var(--font-mono);
+/* Restored with the card rebuild: these are page-level rules that happened to
+   sit between the two markers the row styles were swapped between, and they
+   have nothing to do with how a row is drawn. Deleting the layout rule
+   collapsed the aside underneath the board. */
+.matchup-slate__layout {
+  display: grid;
+  gap: 16px;
+}
+
+.matchup-slate__board-shell {
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 22%),
+    color-mix(in srgb, var(--bg-inset) 84%, transparent);
 }
 
 .matchup-slate__kicker {
@@ -43,87 +51,51 @@
   line-height: 1.05;
 }
 
-.matchup-slate__layout {
-  display: grid;
-  gap: 16px;
+.matchup-slate__movement-note {
+  font-family: var(--font-mono);
 }
 
-.matchup-slate__board-shell {
-  overflow: hidden;
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 22%),
-    color-mix(in srgb, var(--bg-inset) 84%, transparent);
-}
+/* The week as a board of cards, two or three across, rather than one very
+   wide row per game.
 
-.matchup-slate__board-head,
-.matchup-slate__row-button {
-  display: grid;
-  /* Two 46px columns went with the Win% cells: a price and a win probability
-     are the same fact in two units, and the header toggle already converts
-     between them. */
-  /* No rail column. The movement figure moved inside each team's own lockup,
-     which is what lets both lockups sit flush against the edges of the row
-     instead of stopping short of a reserved column at the end. */
-  grid-template-columns:
-    minmax(0, 1fr)
-    64px
-    var(--matchup-slate-bar-width)
-    64px
-    minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.matchup-slate__board-head {
-  min-height: 42px;
-  padding: 0 18px;
-  color: rgba(244, 245, 242, 0.48);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-/* Positional alignment, re-indexed after the two Win% columns went, and each
-   header follows the cell beneath it rather than a rule of its own. The two
-   price columns mirror outward from the bar: the left one is right-aligned,
-   the right one left-aligned, so their headers do the same. Pointing these at
-   the old positions silently aligned the wrong headers, which reads as a
-   spacing bug rather than as an index that moved. */
-.matchup-slate__board-head span:nth-child(2) {
-  text-align: right;
-}
-
-.matchup-slate__board-head span:nth-child(4) {
-  text-align: left;
-}
-
-.matchup-slate__board-head span:nth-child(6) {
-  text-align: right;
-}
-
+   A sportsbook stacks the two teams and puts a small grid of numbers beside
+   them, and the reason is structural: a matchup is a unit. Laid out as a wide
+   row the two sides sat at opposite ends of the screen with their numbers
+   scattered between, so comparing the two halves of ONE game meant crossing
+   the whole board to do it. */
 .matchup-slate__rows {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(392px, 1fr));
+  gap: 12px;
 }
-
 
 .matchup-slate__row-button {
-  width: 100%;
-  min-height: 76px;
-  padding: 12px 18px;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
   color: inherit;
   text-align: left;
-  transition: background-color var(--transition-fast);
-}
-
-.matchup-slate__row-button + .matchup-slate__row-button {
-  border-top: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .matchup-slate__row-button:hover {
-  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(232, 84, 29, 0.42);
+  background: var(--bg-surface-soft);
+}
+
+.matchup-slate__row-button--selected {
+  border-color: rgba(232, 84, 29, 0.62);
+  background: var(--bg-surface-soft);
+}
+
+.matchup-slate__row-button--user {
+  box-shadow: inset 3px 0 0 var(--amber);
 }
 
 .matchup-slate__row-button:focus-visible {
@@ -131,128 +103,150 @@
   outline-offset: -2px;
 }
 
-.matchup-slate__row-button--selected {
-  background: color-mix(in srgb, rgba(232, 84, 29, 0.08) 100%, transparent);
+/* Column labels and both team rows share one template, so the three markets
+   line up down the card the way a book's board does. */
+.matchup-slate__card-cols,
+.matchup-slate__side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 60px 76px 68px;
+  align-items: center;
+  gap: 8px;
 }
 
-.matchup-slate__row-button--user {
-  box-shadow: inset 3px 0 0 var(--amber);
+.matchup-slate__card-cols {
+  color: var(--text-muted);
+  font-family: var(--font-condensed);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
-/* Flex, not a fixed column template. The move figure is only there when the
-   line has actually moved, and under a three-column grid an absent one left
-   the right-hand lockup's name in the avatar's column and its avatar in the
-   name's — the layout silently reshuffled on the rows with nothing to say. */
+.matchup-slate__card-cols > :not(:first-child) {
+  text-align: center;
+}
+
 .matchup-slate__team {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
 }
 
 .matchup-slate__team > .team-avatar {
   flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
 }
 
 .matchup-slate__team-copy {
   display: grid;
   flex: 1 1 auto;
-  gap: 3px;
+  gap: 1px;
   min-width: 0;
 }
 
-.matchup-slate__team--right .matchup-slate__team-copy {
-  text-align: right;
-}
+/* Two lines rather than an ellipsis.
 
-.matchup-slate__team-meta {
-  color: rgba(244, 245, 242, 0.46);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+   A card's team column is about a hundred and eighty pixels, where the old
+   full-width row gave a name most of a screen. Held to one line, a real
+   league's names get cut after two words, and a board where you cannot read
+   who is playing is not a board. */
 .matchup-slate__team-name {
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 0.96;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  letter-spacing: 0.01em;
-}
-
-.matchup-slate__team .team-avatar {
-  width: 28px;
-  height: 28px;
-}
-
-.matchup-slate__moneyline {
-  color: rgba(244, 245, 242, 0.6);
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.matchup-slate__moneyline--right {
-  text-align: left;
-}
-
-.matchup-slate__moneyline--favorite {
   color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
-.matchup-slate__moneyline--moving {
-  animation: matchup-slate-price-glow 30s ease-out forwards;
-}
-
-.matchup-slate__prob-number {
-  color: rgba(244, 245, 242, 0.72);
+.matchup-slate__team-meta {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
   font-size: 11px;
-  font-weight: 800;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.matchup-slate__prob-number--left {
-  text-align: right;
+.matchup-slate__team-move {
+  flex: 0 0 auto;
+  color: rgba(244, 245, 242, 0.62);
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* The three markets. Boxed like a book's, one number each: the engine posts a
+   spread, a total and a price, and nothing else. A book puts juice under the
+   first two, and drawing that here would be inventing a market. */
+.matchup-slate__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 4px 6px;
+  border-radius: 9px;
+  background: var(--bg-inset);
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.matchup-slate__cell--price {
+  color: var(--text-primary);
+  font-family: var(--font-price);
+  font-size: 17px;
+  font-weight: var(--font-price-weight);
+}
+
+.matchup-slate__cell--favorite {
+  color: var(--text-amber);
+}
+
+/* The "at" rule between the two sides, sitting in the team column only so it
+   does not cut through the price grid. */
+.matchup-slate__at {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-3);
+  font-family: var(--font-condensed);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.matchup-slate__at::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border-subtle);
 }
 
 .matchup-slate__prob-track {
   position: relative;
-  width: var(--matchup-slate-bar-width);
-  height: 10px;
-  overflow: hidden;
-  border-radius: var(--radius-pill);
+  display: block;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 999px;
   background: rgba(244, 245, 242, 0.08);
+  overflow: hidden;
 }
 
 .matchup-slate__prob-fill {
   display: block;
   height: 100%;
-  border-radius: inherit;
+  border-radius: 999px;
   background: linear-gradient(90deg, var(--amber), var(--amber-bright));
-  box-shadow: 0 0 14px rgba(232, 84, 29, 0.34);
-}
-
-
-/* Sits on the inner edge of its own team block, so the crest and the name
-   stay against the outer edge of the row. */
-.matchup-slate__team-move {
-  flex: 0 0 auto;
-  color: rgba(244, 245, 242, 0.62);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
 }
 
 .matchup-slate__aside {
@@ -673,4 +667,44 @@
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* A card is 392px at its narrowest, which is wider than a phone. Left alone
+   the grid held that minimum and the price column ran off the side of the
+   screen — clipped rather than scrolled, so the no-horizontal-scroll guard
+   had nothing to report. One card per row below that, with the three markets
+   narrowed to what a 375px screen can actually hold. */
+@media (max-width: 720px) {
+  .matchup-slate__rows {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .matchup-slate__row-button {
+    padding: 12px 12px 10px;
+  }
+
+  .matchup-slate__card-cols,
+  .matchup-slate__side {
+    grid-template-columns: minmax(0, 1fr) 48px 62px 56px;
+    gap: 6px;
+  }
+
+  .matchup-slate__cell {
+    min-height: 36px;
+    padding: 4px;
+    font-size: 12px;
+  }
+
+  .matchup-slate__cell--price {
+    font-size: 15px;
+  }
+
+  .matchup-slate__team > .team-avatar {
+    width: 26px;
+    height: 26px;
+  }
+
+  .matchup-slate__team-name {
+    font-size: 13px;
+  }
 }
