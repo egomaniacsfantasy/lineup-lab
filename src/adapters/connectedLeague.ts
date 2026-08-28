@@ -264,9 +264,11 @@ export function toWeekMatchups(
       teamBWinProb: pricedB?.winProbability,
       teamBProjection: pricedB?.projection,
       totalProjection: pricedA?.total ?? line.yours.total,
-      /* The favourite's spread, always negative, so the board can quote the
-         number a book would post. It was priced and then dropped on the floor
-         here, which is why the middle of every board row was empty. */
+      /* Each side's projected margin over the other, positive for the
+         favourite. The board flips the sign to post it as a line, which is
+         spreadLabel's job in boardSides. It was priced and then dropped on
+         the floor here, which is why the middle of every board row was
+         empty. */
       teamASpread: pricedA?.spread,
       teamBSpread: pricedB?.spread,
       teamBIsUser: teamB.isUser,

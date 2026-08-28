@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatAmericanOdds } from '../../utils/formatOdds';
+import { spreadLabel, teamsFor, type BoardTeam } from '../../utils/boardSides';
 import { isMaterialMove } from '../../utils/leagueMovement';
 import type { LeagueWeekMatchup } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
@@ -23,20 +24,6 @@ type RawMovement = {
   b: number;
   trigger: string;
 };
-
-type BoardTeam = {
-  side: 'a' | 'b';
-  rosterId?: number;
-  name: string;
-  ownerName?: string;
-  record: string;
-  odds: number;
-  winProb: number;
-  projection?: number;
-  avatarUrl?: string | null;
-  isUser?: boolean;
-};
-
 
 /**
  * One fact about the week, with both teams named and both crests shown.
@@ -93,14 +80,6 @@ function GlanceCard({
       </span>
     </div>
   );
-}
-
-function impliedProbability(odds: number) {
-  if (odds < 0) {
-    return (Math.abs(odds) / (Math.abs(odds) + 100)) * 100;
-  }
-
-  return (100 / (odds + 100)) * 100;
 }
 
 function historyFor(matchup: LeagueWeekMatchup, history: LineHistoryEntry[] | null | undefined) {
@@ -165,41 +144,6 @@ function movementSummary(
   const move = moves.get(`${matchupId}:${rosterId}`);
   if (move == null || !isMaterialMove(move)) return null;
   return { point: latest, move };
-}
-
-function teamsFor(matchup: LeagueWeekMatchup) {
-  const teamA: BoardTeam = {
-    side: 'a',
-    rosterId: matchup.teamARosterId,
-    name: matchup.teamA,
-    ownerName: matchup.teamAOwnerName,
-    record: matchup.teamARecord,
-    odds: matchup.teamAOdds,
-    winProb: matchup.teamAWinProb ?? impliedProbability(matchup.teamAOdds),
-    projection: matchup.teamAProjection,
-    avatarUrl: matchup.teamAAvatarUrl,
-    isUser: matchup.teamAIsUser,
-  };
-  const teamB: BoardTeam = {
-    side: 'b',
-    rosterId: matchup.teamBRosterId,
-    name: matchup.teamB,
-    ownerName: matchup.teamBOwnerName,
-    record: matchup.teamBRecord,
-    odds: matchup.teamBOdds,
-    winProb: matchup.teamBWinProb ?? impliedProbability(matchup.teamBOdds),
-    projection: matchup.teamBProjection,
-    avatarUrl: matchup.teamBAvatarUrl,
-    isUser: matchup.teamBIsUser,
-  };
-
-  if (matchup.isUserGame) {
-    return teamA.isUser || (!teamA.isUser && !teamB.isUser)
-      ? { left: teamA, right: teamB }
-      : { left: teamB, right: teamA };
-  }
-
-  return teamA.winProb >= teamB.winProb ? { left: teamA, right: teamB } : { left: teamB, right: teamA };
 }
 
 function boardDisplayName(name: string) {
@@ -369,12 +313,7 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
               const selected = rowKey === selectedRow?.rowKey;
               const total = matchup.totalProjection;
 
-              const sideRow = (
-                side: typeof left,
-                spread: number | undefined,
-                overUnder: 'O' | 'U',
-                move: number | null,
-              ) => (
+              const sideRow = (side: typeof left, overUnder: 'O' | 'U', move: number | null) => (
                 <span className="matchup-slate__side">
                   <span className="matchup-slate__team">
                     {leagueChartFlags.avatars ? (
@@ -398,17 +337,14 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                     ) : null}
                   </span>
 
-                  {/* PK for a pick'em, which is what a book prints, and an
-                      empty cell when the line does not exist. A dash in the
-                      slot where a number goes reads as a number we are
-                      withholding rather than one that was never posted. */}
-                  <span className="matchup-slate__cell">
-                    {typeof spread !== 'number'
-                      ? ''
-                      : spread === 0
-                        ? 'PK'
-                        : `${spread > 0 ? '-' : '+'}${Math.abs(spread).toFixed(1)}`}
-                  </span>
+                  {/* The engine prices a margin, a book posts a line, and the
+                      two run opposite ways: the side projected to win by 2.9
+                      lays 2.9, so the sign flips here. PK for a pick'em, which
+                      is what a book prints, and an empty cell when the line
+                      does not exist. A dash in the slot where a number goes
+                      reads as a number we are withholding rather than one
+                      that was never posted. */}
+                  <span className="matchup-slate__cell">{spreadLabel(side.spread)}</span>
                   <span className="matchup-slate__cell">
                     {typeof total === 'number' ? `${overUnder} ${total.toFixed(1)}` : ''}
                   </span>
@@ -445,9 +381,9 @@ export function MatchupSlate({ matchups, currentWeek, history = null, intro = nu
                     <span>Price</span>
                   </span>
 
-                  {sideRow(left, matchup.teamASpread, 'O', summary ? summary.move : null)}
+                  {sideRow(left, 'O', summary ? summary.move : null)}
                   <span aria-hidden="true" className="matchup-slate__at">vs</span>
-                  {sideRow(right, matchup.teamBSpread, 'U', summary ? -summary.move : null)}
+                  {sideRow(right, 'U', summary ? -summary.move : null)}
 
                   {/* The split, drawn once across the foot of the card. The
                       moneylines above already carry the numbers, so this is
