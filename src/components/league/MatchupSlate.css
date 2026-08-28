@@ -109,19 +109,28 @@
    wrong twice over: at 392px it made a stripe of mostly empty orange, and to
    stay proportionate the type had to be small enough that the loudest object
    on the board carried the quietest text on it. Cornered, the same words get
-   a third more height and a third more type, and stop at the width they
-   actually need.
+   a third more height and stop at the width they actually need.
 
    The shape is a folder tab: square where it meets the card's own corner,
    rounded where it leaves. justify-self keeps it at its content width inside
    the card's single-column grid, which is what stops it stretching again.
 
-   Hanken Grotesk, not the Staatliches everything else on the card is set in.
-   Staatliches is a display face with one weight and no true lowercase; it
-   reads as a heading, which is what the column labels above the teams want
-   and the opposite of what a tag wants. A heavy grotesque reads as a stamp
-   on the card rather than a title for it, and it is legible at this size in
-   a way condensed all-caps is not.
+   Staatliches, the same face the share card's footer bar is set in, so the
+   two loudest amber objects in the product speak with one voice. It is a
+   condensed display face, so it needs more size than a grotesque to read at
+   the same weight: 19px here against the 14 it replaced.
+
+   Vertical centring is done by hand, and the padding is deliberately
+   asymmetric. Staatliches reserves six pixels of descender at this size and
+   an all-caps line uses none of it, so anything that centres the LINE BOX -
+   align-items, equal padding, a line-height - leaves the visible letters
+   sitting low in the band by half that. Solving for the ink instead:
+
+     ink top    = padTop + 2.07
+     ink bottom = padBottom + 3.31    (from the bottom of the tab)
+
+   which balances at padBottom = padTop - 1.24, hence 10 and 9. The guard
+   measures the two gaps rather than trusting these numbers.
 
    cursor: help is the only affordance a title attribute gets. Without it the
    explanation is discoverable purely by accident. */
@@ -131,15 +140,15 @@
      Track these against .matchup-slate__row-button: they move together, and
      a mismatch shows as a hairline of surface beside it. */
   margin: -14px 0 0 -16px;
-  padding: 8px 18px 9px 16px;
+  padding: 10px 20px 9px 16px;
   border-radius: calc(var(--radius-lg) - 1px) 0 14px 0;
   background: linear-gradient(100deg, var(--amber), var(--amber-mid));
   color: #fff;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  line-height: 1.15;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  line-height: 1;
   text-transform: uppercase;
   /* It sizes to its text, so it must never be asked to wrap it. */
   white-space: nowrap;
@@ -754,8 +763,8 @@ button.matchup-slate__cell:focus-visible {
      read at arm's length. */
   .matchup-slate__gotw {
     margin: -12px 0 0 -12px;
-    padding: 7px 16px 8px 12px;
-    font-size: 13px;
+    padding: 9px 18px 8px 12px;
+    font-size: 17px;
   }
 
   .matchup-slate__card-cols,

@@ -111,12 +111,13 @@ test('exactly one card is crowned, and nothing is crowned before the sim answers
 /* Both a two-across desktop and a phone. The card changes its padding at
    720px and the tab has to change with it, which is the drift this catches. */
 for (const [width, minHeight, minFont] of [
-  [1320, 30, 14],
-  [375, 27, 13],
+  [1320, 34, 18],
+  [375, 30, 16],
 ]) {
   test(`the tab is a corner of the card, sized to its words, at ${width}px`, async () => {
     const page = await openScene(width);
     try {
+      await page.evaluate(() => document.fonts.ready);
       const box = await page.$eval('.matchup-slate__rows .matchup-slate__gotw', (ribbon) => {
         const card = ribbon.closest('.matchup-slate__row-button');
         const rb = ribbon.getBoundingClientRect();
@@ -124,7 +125,25 @@ for (const [width, minHeight, minFont] of [
         const cols = card.querySelector('.matchup-slate__card-cols').getBoundingClientRect();
         const firstTeam = card.querySelector('.matchup-slate__team-name').getBoundingClientRect();
         const style = getComputedStyle(ribbon);
+
+        /* Where the LETTERS actually sit, not where the line box does.
+           Rebuilding the browser's own vertical layout: half-leading puts the
+           baseline at (lineHeight - emBox) / 2 + ascent below the content top,
+           and the ink hangs off that baseline by the measured cap height. */
+        const pen = document.createElement('canvas').getContext('2d');
+        pen.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        const m = pen.measureText(ribbon.firstChild.textContent.trim().toUpperCase());
+        const emBox = m.fontBoundingBoxAscent + m.fontBoundingBoxDescent;
+        const baseline =
+          parseFloat(style.paddingTop) +
+          (parseFloat(style.lineHeight) - emBox) / 2 +
+          m.fontBoundingBoxAscent;
+        const inkAbove = baseline - m.actualBoundingBoxAscent;
+        const inkBelow = rb.height - (baseline + m.actualBoundingBoxDescent);
+
         return {
+          inkAbove,
+          inkBelow,
           border: parseFloat(style.borderLeftWidth) || parseFloat(getComputedStyle(card).borderLeftWidth),
           leftGap: rb.left - cb.left,
           topGap: rb.top - cb.top,
@@ -168,9 +187,18 @@ for (const [width, minHeight, minFont] of [
         box.fontSize >= minFont,
         `the tab is set at ${box.fontSize}px, under the ${minFont}px it needs`,
       );
-      /* A grotesque, not the condensed display face the rest of the card is
-         set in: a tag has to read as a stamp rather than as a heading. */
-      assert.match(box.fontFamily, /Hanken Grotesk/);
+      /* The face the share card's plug bar is set in, so the two loudest
+         amber objects in the product speak with one voice. */
+      assert.match(box.fontFamily, /Staatliches/);
+
+      /* Optically centred, which is not what centring the line box gives you.
+         Staatliches reserves a descender an all-caps line never uses, so any
+         browser-driven centring leaves the letters low in the band by half of
+         it. Half a pixel of tolerance: below that is rounding. */
+      assert.ok(
+        Math.abs(box.inkAbove - box.inkBelow) <= 1,
+        `the letters sit ${box.inkAbove.toFixed(2)}px from the top and ${box.inkBelow.toFixed(2)}px from the bottom`,
+      );
 
       assert.ok(box.aboveLabels && box.aboveTeams, 'the tab is not above the column labels and the teams');
     } finally {
