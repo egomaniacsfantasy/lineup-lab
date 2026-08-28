@@ -58,6 +58,11 @@ import { shareFilename, tradeShareMessage } from '../utils/shareMessage';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 import { LeagueDealBoard, type LeagueDealRow } from '../components/trade/LeagueDealBoard';
 import { acceptableDeals } from '../utils/dealBoardPolicy';
+import { tradePage } from '../utils/tradeRotation';
+
+/* The board shows a handful at a time and refresh pages through the rest.
+   Fifteen at once buried the good ones and gave the button nothing to do. */
+const DEALS_PER_PAGE = 5;
 
 type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
@@ -222,6 +227,12 @@ function TradeDealsView() {
      belonging to a manager nobody had picked. */
   const [leagueDeals, setLeagueDeals] = useState<TradeSuggestion[] | null>(null);
 
+  /* Which page of the pool the board is showing, and whether a fresh scan is
+     in flight. Refresh advances the page first and only goes back to the
+     engine when the pool has nothing else to show. */
+  const [dealPageIndex, setDealPageIndex] = useState(0);
+  const [dealsRefreshing, setDealsRefreshing] = useState(false);
+
   useEffect(() => {
     if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
     const key = `og.leagueDeals.${stored.leagueId}:${stored.userId}`;
@@ -358,8 +369,12 @@ function TradeDealsView() {
       bootstrap.league.rosterPositions,
     );
 
-    return sortByTradeFairness(kept)
-      .slice(0, 15)
+    /* A page at a time rather than the top fifteen at once. Refresh shows the
+       next page, so pressing it never leaves a trade you have just rejected
+       sitting on the screen. */
+    const ordered = sortByTradeFairness(kept);
+    return tradePage(ordered, dealPageIndex, DEALS_PER_PAGE)
+      .visible
       .map((suggestion) => {
         const accept = acceptanceProbability(suggestion.partnerDelta, 5, 5);
         return {
@@ -379,7 +394,56 @@ function TradeDealsView() {
         acceptance: formatAcceptancePercent(accept),
         };
       });
-  }, [bootstrap, leagueDeals, stored?.leagueId]);
+  }, [bootstrap, dealPageIndex, leagueDeals, stored?.leagueId]);
+
+  /**
+   * Refresh: show a different set of suggested trades.
+   *
+   * Rotates within the pool first, because that is instant and it is what
+   * "show me something else" means when there is something else to show. Only
+   * when the pool is out of pages does it go back to the engine for a fresh
+   * scan, which is slow enough that doing it on every press would make the
+   * button feel broken.
+   */
+  const refreshLeagueDeals = () => {
+    if (!stored?.leagueId || !stored.userId || !bootstrap || dealsRefreshing) return;
+
+    const filtered = acceptableDeals(
+      leagueDeals ?? [],
+      (playerId) => bootstrap.players[playerId]?.position ?? null,
+      bootstrap.league.rosterPositions,
+    ).kept;
+    const paged = tradePage(filtered, dealPageIndex, DEALS_PER_PAGE);
+
+    if (!paged.exhausted) {
+      setDealPageIndex((current) => current + 1);
+      return;
+    }
+
+    setDealsRefreshing(true);
+    void fetchTradeSuggestions(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId: null,
+    })
+      .then((response) => {
+        const found = response.available ? response.suggestions ?? [] : [];
+        setLeagueDeals(found);
+        setDealPageIndex(0);
+        try {
+          window.sessionStorage.setItem(
+            `og.leagueDeals.${stored.leagueId}:${stored.userId}`,
+            JSON.stringify({ at: Date.now(), data: found }),
+          );
+        } catch {
+          // storage unavailable; the scan simply runs again next time
+        }
+      })
+      .catch(() => {
+        /* Leave what is on screen. A failed refresh that blanks the board is
+           worse than a refresh that changed nothing. */
+      })
+      .finally(() => setDealsRefreshing(false));
+  };
 
   const leagueDealByKey = useMemo(() => {
     const map = new Map<string, TradeSuggestion>();
@@ -1019,6 +1083,8 @@ function TradeDealsView() {
       >
         <LeagueDealBoard
           loading={leagueDeals === null}
+          onRefresh={refreshLeagueDeals}
+          refreshing={dealsRefreshing}
           onOpen={(key) => {
             const found = leagueDealByKey.get(key);
             if (found) loadSuggestedTrade(found);

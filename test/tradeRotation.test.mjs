@@ -103,3 +103,51 @@ test('the card is a filled control on the season bar, not a caption', async () =
   const rule = css.slice(css.indexOf('.matchup-page__share {'));
   assert.match(rule.slice(0, 400), /background: var\(--amber\)/, 'the card button is unfilled again');
 });
+
+test('suggested trades can be refreshed on the Hub and on the Trades tab', async () => {
+  /**
+   * Asked for twice.
+   *
+   * The first attempt put a refresh on the market-movers rail, which sits
+   * beside the suggested-trades widget on the Hub and is a different list —
+   * so the module actually named "suggested trades" still had no refresh and
+   * no heading, and the Trades tab's board had none either.
+   *
+   * Both rotate within the pool the scan already returned before going back
+   * to the engine, because a re-scan takes seconds and a button that always
+   * paid that cost would feel broken.
+   */
+  for (const file of [
+    'src/components/matchup/HubDeals.tsx',
+    'src/components/trade/LeagueDealBoard.tsx',
+  ]) {
+    const source = await fs.readFile(path.resolve(file), 'utf8');
+    assert.match(source, /Suggested trades/, `${file} lost the heading`);
+    assert.match(
+      source,
+      /aria-label="Show different suggested trades"/,
+      `${file} has no refresh control`,
+    );
+  }
+
+  /* The Hub rotates in place; the board's page index lives on the page that
+     owns the pool. Both must page rather than always re-scan. */
+  const hub = await fs.readFile(path.resolve('src/components/matchup/HubDeals.tsx'), 'utf8');
+  assert.match(hub, /tradePage\(deals, page, SHOWN\)/, 'the Hub re-scans instead of paging');
+  assert.match(hub, /if \(!shown\.exhausted\)/, 'the Hub never rotates within its pool');
+
+  const trades = await fs.readFile(path.resolve('src/pages/TradePage.tsx'), 'utf8');
+  assert.match(trades, /tradePage\(ordered, dealPageIndex, DEALS_PER_PAGE\)/);
+  assert.match(trades, /if \(!paged\.exhausted\)/, 'the board never rotates within its pool');
+});
+
+test('the Hub keeps the whole pool, not just the two it shows', async () => {
+  /* Slicing to SHOWN at fetch time left refresh with nothing to rotate
+     through, which would quietly turn every press into a full re-scan. */
+  const hub = await fs.readFile(path.resolve('src/components/matchup/HubDeals.tsx'), 'utf8');
+  assert.doesNotMatch(
+    hub,
+    /sortByTradeFairness\(kept\)\.slice\(0, SHOWN\)/,
+    'the Hub throws the rest of the pool away at fetch time',
+  );
+});

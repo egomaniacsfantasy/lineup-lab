@@ -23,65 +23,69 @@ const SCAN_LINES = [
 ];
 
 /**
- * The best deals anywhere in the league.
+ * The trades the book would make, one card each.
  *
- * This used to share a panel and a request with the manager picker, which put
- * a scan of every roster underneath a heading that said "tap a manager", and
- * then reported no deals because the results belonged to no manager in
- * particular. They are two questions. This one asks who in the league would
- * improve your team; the picker below asks what a specific manager would do.
+ * This was a table: a column-header row, four sizes of grey micro-copy, a
+ * position-and-team line under every name, and two right-aligned numeric
+ * columns. Every part of it was legible and the whole thing read like a
+ * spreadsheet — which is the wrong register for the one surface in the app
+ * whose job is to make you want to send someone a message.
+ *
+ * So: cards, three zones each. Who it is with, the players at a size where
+ * the face does the identifying, and what it does for you. Labels are words
+ * next to the thing they label rather than headings over a column, which is
+ * what lets the header row go.
  */
 export function LeagueDealBoard({
   rows,
   loading,
   scanLine,
+  refreshing = false,
   onOpen,
   onShare,
+  onRefresh,
 }: {
   rows: LeagueDealRow[] | null;
   loading: boolean;
   scanLine: number;
+  refreshing?: boolean;
   onOpen: (key: string) => void;
   onShare: (key: string) => void;
+  onRefresh?: (() => void) | null;
 }) {
-  /* Faces big enough to recognise, and full names.
-
-     They were 28px headshots under "C. Lamb", which is the abbreviation you
-     use when there is no room — and this row is most of a screen wide. */
   const side = (players: Player[], tone: 'send' | 'get') => (
     <span className={`ldb__side ldb__side--${tone}`}>
-      {players.slice(0, 3).map((player) => (
+      <span className="ldb__side-label">{tone === 'send' ? 'You send' : 'You get'}</span>
+      {players.map((player) => (
         <span className="ldb__player" key={player.id}>
           <PlayerHeadshot className="ldb__face" player={player} />
-          <span className="ldb__player-copy">
-            <span className="ldb__player-name">{player.name}</span>
-            <span className="ldb__player-meta">
-              {player.position}
-              {player.team ? ` · ${player.team}` : ''}
-            </span>
-          </span>
+          <span className="ldb__player-name">{player.name}</span>
         </span>
       ))}
-      {players.length > 3 ? (
-        <span className="ldb__player-more">+{players.length - 3} more</span>
-      ) : null}
     </span>
   );
 
   return (
     <section className="ldb">
       <div className="ldb__head">
-        <div className="ldb__title">
-          {/* Andre's wording. "Best deals in the league" claimed a
-              superlative the list cannot support; "Deals worth a call" was my
-              replacement and was worse. This one says what the list is and
-              stops. */}
-          <span className="ldb__label">Suggested trades</span>
-          <span className="ldb__sub">Both sides gain. Fairest first.</span>
+        <span className="ldb__label">Suggested trades</span>
+        <div className="ldb__head-actions">
+          {rows && rows.length > 0 ? <span className="ldb__count">{rows.length}</span> : null}
+          {onRefresh ? (
+            <button
+              aria-label="Show different suggested trades"
+              className="ldb__refresh"
+              disabled={loading || refreshing}
+              onClick={onRefresh}
+              type="button"
+            >
+              <span aria-hidden="true" className={refreshing ? 'ldb__refresh-spin' : ''}>
+                ↻
+              </span>
+              {refreshing ? 'Refreshing' : 'Refresh'}
+            </button>
+          ) : null}
         </div>
-        {rows && rows.length > 0 ? (
-          <span className="ldb__count">{rows.length}</span>
-        ) : null}
       </div>
 
       {loading ? (
@@ -97,7 +101,6 @@ export function LeagueDealBoard({
                 <span className="ldb__ghost-face" />
                 <span className="ldb__ghost-face" />
               </span>
-              <span className="ldb__ghost-meta" />
             </span>
           ))}
           <p className="ldb__pending">
@@ -107,43 +110,38 @@ export function LeagueDealBoard({
         </>
       ) : rows && rows.length > 0 ? (
         <div className="ldb__rows">
-          {/* Labelled once, at the top.
-
-              The two figures on each row were a green percentage and a grey
-              percentage sitting side by side with nothing saying which was
-              which — one is what the trade does to your title odds, the other
-              is how likely they are to accept, and they are not the same kind
-              of number at all. */}
-          <div className="ldb__columns" role="presentation">
-            <span>You send</span>
-            <span />
-            <span>You get</span>
-            <span>Your title</span>
-            <span>They accept</span>
-            <span />
-          </div>
           {rows.map((row) => (
             <div className="ldb__row" key={row.key}>
               <button
-                aria-label={`Open the deal with ${row.partnerName}`}
+                aria-label={`Open the trade with ${row.partnerName}`}
                 className="ldb__open"
                 onClick={() => onOpen(row.key)}
                 type="button"
               >
-                <span className="ldb__partner">{row.partnerName}</span>
-                {side(row.send, 'send')}
-                {/* One direction, not two. The old glyph was a two-headed
-                    arrow, which is exactly as much as the row said about
-                    which side you were giving up. */}
-                <span aria-hidden="true" className="ldb__arrow">→</span>
-                {side(row.get, 'get')}
-                <span className={`ldb__delta ldb__delta--${row.up ? 'up' : 'down'}`}>
-                  {row.delta}
+                <span className="ldb__with">
+                  <span className="ldb__with-label">With</span>
+                  <span className="ldb__with-name">{row.partnerName}</span>
+                  {row.acceptance ? (
+                    <span className="ldb__accept">{row.acceptance} likely</span>
+                  ) : null}
                 </span>
-                <span className="ldb__accept">{row.acceptance ?? '—'}</span>
+
+                <span className="ldb__swap">
+                  {side(row.send, 'send')}
+                  <span aria-hidden="true" className="ldb__arrow">→</span>
+                  {side(row.get, 'get')}
+                </span>
+
+                <span className="ldb__verdict">
+                  <span className="ldb__verdict-label">Your title odds</span>
+                  <span className={`ldb__delta ldb__delta--${row.up ? 'up' : 'down'}`}>
+                    {row.delta}
+                  </span>
+                </span>
               </button>
+
               <button
-                aria-label={`Share the deal with ${row.partnerName}`}
+                aria-label={`Share the trade with ${row.partnerName}`}
                 className="ldb__share"
                 onClick={() => onShare(row.key)}
                 title="Share this trade"

@@ -33,6 +33,24 @@ async function waitForUrl(url, timeoutMs = 30_000) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
+/**
+ * How much of the wrong colour is noise rather than a wrong fill.
+ *
+ * The correct fill measures around 44,000 pixels. A genuinely wrong one would
+ * measure about the same in the other colour, so anything near a real defect
+ * is three orders of magnitude above this. What sits below it is edge
+ * anti-aliasing: the sample is an element screenshot, the area is translucent,
+ * and the app's accent is a strongly red-dominant amber, so a subpixel shift
+ * in layout can tip a handful of boundary pixels over the red test.
+ *
+ * This was an exact zero, which held until the suite got busy enough to shift
+ * that layout: three stray pixels out of 43,933 failed the run while the
+ * structural assertion above it — that the negative path is not rendered at
+ * all — passed. A threshold that cannot survive anti-aliasing is measuring
+ * the renderer, not the code.
+ */
+const WRONG_COLOUR_TOLERANCE = 0.005;
+
 async function sampleFillPixels(page, selector) {
   const image = await page.locator(selector).screenshot({ type: 'png' });
   return page.evaluate(async (bytes) => {
@@ -105,8 +123,11 @@ test('all-negative pace fixture renders no green fill pixels', async () => {
     assert.equal(counts.positive, 0, 'all-negative fixture should not render a positive fill path');
     assert.ok(counts.negative > 0, 'all-negative fixture should render a negative fill path');
     const pixels = await sampleFillPixels(page, '.design-chart-page__chart--fill-test .odds-chart__area--delta-negative');
-    assert.equal(pixels.greenPixels, 0, `expected no green fill pixels, found ${pixels.greenPixels}`);
     assert.ok(pixels.redPixels > 0, 'expected red fill pixels for all-negative pace fixture');
+    assert.ok(
+      pixels.greenPixels <= pixels.redPixels * WRONG_COLOUR_TOLERANCE,
+      `all-negative fixture drew ${pixels.greenPixels} green pixels against ${pixels.redPixels} red`,
+    );
   } finally {
     await page.close();
   }
@@ -124,8 +145,11 @@ test('all-positive pace fixture renders no red fill pixels', async () => {
     assert.equal(counts.negative, 0, 'all-positive fixture should not render a negative fill path');
     assert.ok(counts.positive > 0, 'all-positive fixture should render a positive fill path');
     const pixels = await sampleFillPixels(page, '.design-chart-page__chart--fill-test .odds-chart__area--delta-positive');
-    assert.equal(pixels.redPixels, 0, `expected no red fill pixels, found ${pixels.redPixels}`);
     assert.ok(pixels.greenPixels > 0, 'expected green fill pixels for all-positive pace fixture');
+    assert.ok(
+      pixels.redPixels <= pixels.greenPixels * WRONG_COLOUR_TOLERANCE,
+      `all-positive fixture drew ${pixels.redPixels} red pixels against ${pixels.greenPixels} green`,
+    );
   } finally {
     await page.close();
   }

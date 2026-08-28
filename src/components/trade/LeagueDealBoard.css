@@ -13,45 +13,78 @@
 
 .ldb__head {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
 }
 
-.ldb__title {
-  display: grid;
-  gap: 2px;
-}
-
-.ldb__sub {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
+/* A real heading, not a 9.5px disclaimer over the content it names. */
 .ldb__label {
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.11em;
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 17px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
+.ldb__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
 .ldb__count {
-  padding: 1px 6px;
+  padding: 2px 9px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  background: color-mix(in srgb, var(--amber) 20%, transparent);
   color: var(--text-amber);
   font-family: var(--font-num);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12px;
+}
+
+.ldb__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.ldb__refresh:hover:not(:disabled),
+.ldb__refresh:focus-visible {
+  border-color: rgba(232, 84, 29, 0.5);
+  color: var(--text-amber);
+}
+
+.ldb__refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ldb__refresh-spin {
+  display: inline-block;
+  animation: ldb-spin 900ms linear infinite;
+}
+
+@keyframes ldb-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ldb__refresh-spin { animation: none; }
 }
 
 .ldb__rows {
   display: grid;
-  gap: 6px;
+  gap: 10px;
 }
 
 .ldb__row {
@@ -59,50 +92,23 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  gap: 6px;
 }
 
-/* The whole row opens the deal. A wide surface beats a small target when the
-   row is already a single idea.
+/* A card, not a table row.
 
-   Six columns, and the same six are labelled once at the top of the list. The
-   two numbers on the right used to be a green percentage beside a grey one
-   with nothing saying which was which: one is what the trade does to your
-   title odds and the other is how likely the other manager is to say yes, and
-   they are not the same kind of number. */
-.ldb__columns,
+   Three zones stacked: who it is with, the trade itself at a size where the
+   face does the identifying, and what it does for you. The labels sit next to
+   the thing they label rather than as headings over a column, which is what
+   lets the header row go. */
 .ldb__open {
   display: grid;
-  grid-template-columns:
-    minmax(0, 1fr)
-    18px
-    minmax(0, 1fr)
-    72px
-    76px;
-  align-items: center;
-  gap: 14px;
-}
-
-.ldb__columns {
-  padding: 0 12px 2px;
-  color: var(--text-muted);
-  font-family: var(--font-condensed);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.ldb__columns > :nth-child(4),
-.ldb__columns > :nth-child(5) {
-  text-align: right;
-}
-
-.ldb__open {
-  position: relative;
+  gap: 12px;
   width: 100%;
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
-  border-radius: 13px;
-  background: color-mix(in srgb, var(--bg-inset) 45%, transparent);
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-inset) 55%, transparent);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -111,19 +117,46 @@
 
 .ldb__open:hover {
   border-color: rgba(232, 84, 29, 0.45);
-  background: color-mix(in srgb, var(--bg-inset) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-inset) 80%, transparent);
 }
 
-/* Who the deal is with, above the row it belongs to. It used to be stacked on
-   top of the two numbers on the right, which put the manager's name in the
-   column of figures. */
-.ldb__partner {
-  grid-column: 1 / -1;
-  margin-bottom: 8px;
-  color: var(--text-muted);
+.ldb__with {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ldb__with-label {
+  color: var(--ink-3);
   font-family: var(--font-ui);
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  font-size: 12px;
+}
+
+.ldb__with-name {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ldb__accept {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(244, 245, 242, 0.06);
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* The trade. Both sides get the same room so a two-for-one does not make one
+   manager's player look like the more important one. */
+.ldb__swap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
 }
 
 .ldb__side {
@@ -132,76 +165,87 @@
   min-width: 0;
 }
 
+.ldb__side-label {
+  color: var(--text-muted);
+  font-family: var(--font-condensed);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ldb__side--get .ldb__side-label {
+  color: var(--text-amber);
+}
+
 .ldb__player {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 11px;
   min-width: 0;
 }
 
 .ldb__face {
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
-}
-
-.ldb__player-copy {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
+  width: 46px;
+  height: 46px;
 }
 
 .ldb__player-name {
   overflow: hidden;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ldb__player-meta {
-  color: var(--ink-3);
-  font-family: var(--font-num);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-}
-
-.ldb__player-more {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-/* The side you give up reads quieter than the side you receive, so the
-   direction of the trade is legible before the arrow is. */
+/* The side you give up reads a shade quieter, so the direction of the trade
+   is legible before the arrow is. */
 .ldb__side--send .ldb__player-name {
   color: var(--text-soft);
 }
 
 .ldb__arrow {
-  justify-self: center;
-  color: color-mix(in srgb, var(--amber) 80%, transparent);
-  font-size: 17px;
+  color: var(--amber);
+  font-size: 22px;
 }
 
-.ldb__delta,
-.ldb__accept {
-  justify-self: end;
-  font-family: var(--font-price);
-  font-variant-numeric: tabular-nums;
+.ldb__verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-top: 11px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+}
+
+.ldb__verdict-label {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
 }
 
 .ldb__delta {
-  font-size: 19px;
+  margin-left: auto;
+  font-family: var(--font-price);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .ldb__delta--up { color: var(--green); }
 .ldb__delta--down { color: var(--red); }
 
-.ldb__accept {
-  color: var(--text-soft);
-  font-size: 15px;
+@media (max-width: 640px) {
+  .ldb__swap {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .ldb__arrow {
+    justify-self: start;
+  }
 }
 
 .ldb__share {

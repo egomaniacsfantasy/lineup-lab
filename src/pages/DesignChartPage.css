@@ -29,10 +29,13 @@
   background: #000;
 }
 
-.design-chart-page__chart--fill-test .odds-chart__area--delta-positive {
-  fill: rgba(0, 220, 120, 1) !important;
-}
+/* The fixture no longer repaints the fills it is used to test.
 
-.design-chart-page__chart--fill-test .odds-chart__area--delta-negative {
-  fill: rgba(220, 68, 68, 1) !important;
-}
+   These two rules forced the area colours with !important, which meant the
+   pixel-sampling test downstream measured a colour this stylesheet had
+   painted rather than the one the component chose. Swapping the component's
+   positive fill to red left the test passing: it was only ever checking that
+   the right CLASS was applied, which the DOM assertions beside it already do.
+
+   The plot keeps its black background above, because that part is real test
+   scaffolding: it makes the composite of a translucent fill deterministic. */

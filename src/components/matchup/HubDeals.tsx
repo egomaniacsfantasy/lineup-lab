@@ -4,6 +4,7 @@ import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { fetchTradeSuggestions, type TradeSuggestion } from '../../services/leagueApi';
 import { sortByTradeFairness } from '../../utils/tradeSuggestionDisplay';
 import { acceptableDeals } from '../../utils/dealBoardPolicy';
+import { tradePage } from '../../utils/tradeRotation';
 import { signedPct } from '../../utils/tradeVerdict';
 import { toPlayer } from '../../adapters/connectedLeague';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
@@ -68,6 +69,8 @@ export function HubDeals() {
     cacheKey ? readCache(cacheKey)?.deals ?? null : null,
   );
   const [scanLine, setScanLine] = useState(0);
+  const [page, setPage] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   /* Only while there is nothing to show. Once the deals land the copy is
      irrelevant and a timer left running is just a re-render every few
@@ -108,7 +111,10 @@ export function HubDeals() {
           (playerId) => bootstrap.players[playerId]?.position ?? null,
           bootstrap.league.rosterPositions,
         );
-        const ranked = sortByTradeFairness(kept).slice(0, SHOWN);
+        /* The whole filtered pool, not the top two. Slicing here left refresh
+           with nothing to rotate through and made it a synonym for "run the
+           scan again", which takes seconds. */
+        const ranked = sortByTradeFairness(kept);
         setDeals(ranked);
         writeCache(cacheKey, ranked);
       })
@@ -159,9 +165,64 @@ export function HubDeals() {
   const side = (assets: { id: string; name: string }[]) =>
     assets.map((asset) => toPlayer(asset.id, bootstrap.players));
 
+  const shown = tradePage(deals, page, SHOWN);
+
+  /**
+   * Refresh: two different suggested trades.
+   *
+   * Rotates within the pool the scan already returned, which is instant, and
+   * only re-scans when the pool has no other page to show. The widget had no
+   * refresh at all — the one added earlier went onto the market-movers rail
+   * beside it, which is a different list.
+   */
+  const refresh = () => {
+    if (refreshing || !stored?.leagueId || !stored.userId) return;
+    if (!shown.exhausted) {
+      setPage((current) => current + 1);
+      return;
+    }
+    setRefreshing(true);
+    void fetchTradeSuggestions(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId: null,
+    })
+      .then((response) => {
+        if (!response.available) return;
+        const { kept } = acceptableDeals(
+          response.suggestions ?? [],
+          (playerId) => bootstrap.players[playerId]?.position ?? null,
+          bootstrap.league.rosterPositions,
+        );
+        const ranked = sortByTradeFairness(kept);
+        setDeals(ranked);
+        setPage(0);
+        writeCache(cacheKey, ranked);
+      })
+      .catch(() => {
+        /* Leave what is on screen: a failed refresh that empties the widget is
+           worse than one that changed nothing. */
+      })
+      .finally(() => setRefreshing(false));
+  };
+
   return (
     <section className="matchup-page__module hub-deals">
-      {deals.map((deal) => {
+      <div className="hub-deals__head">
+        <span className="hub-deals__label">Suggested trades</span>
+        <button
+          aria-label="Show different suggested trades"
+          className="hub-deals__refresh"
+          disabled={refreshing}
+          onClick={refresh}
+          type="button"
+        >
+          <span aria-hidden="true" className={refreshing ? 'hub-deals__refresh-spin' : ''}>
+            ↻
+          </span>
+          {refreshing ? 'Refreshing' : 'Refresh'}
+        </button>
+      </div>
+      {shown.visible.map((deal) => {
         const give = side(deal.give);
         const get = side(deal.get);
         return (

@@ -214,3 +214,61 @@
   display: block;
   min-height: 15px;
 }
+
+/* The widget had no heading and no refresh: it was two rows that appeared and
+   then never changed. */
+.hub-deals__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.hub-deals__label {
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hub-deals__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 5px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.hub-deals__refresh:hover:not(:disabled),
+.hub-deals__refresh:focus-visible {
+  border-color: rgba(232, 84, 29, 0.5);
+  color: var(--text-amber);
+}
+
+.hub-deals__refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hub-deals__refresh-spin {
+  display: inline-block;
+  animation: hub-deals-spin 900ms linear infinite;
+}
+
+@keyframes hub-deals-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-deals__refresh-spin { animation: none; }
+}
