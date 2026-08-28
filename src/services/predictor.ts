@@ -137,6 +137,9 @@ export interface WeekForksResult {
   available: boolean;
   week: number | null;
   forks: WeekFork[];
+  /** matchupId of the game whose result moves the league's title+playoff picture most
+   *  (title-weighted league swing). null when the week has no decidable games. */
+  mostInfluentialGame?: number | null;
   message?: string;
 }
 
@@ -212,7 +215,7 @@ export async function fetchWeekForks(
     const fixture = (await maybeHandleDesignFixtureRequest(url)) as
       | { week: number; forks: WeekFork[] }
       | null;
-    if (fixture) return { available: true, week: fixture.week, forks: fixture.forks ?? [] };
+    if (fixture) return { available: true, week: fixture.week, forks: fixture.forks ?? [], mostInfluentialGame: null };
 
     const response = await fetch(url, init);
 
@@ -227,8 +230,17 @@ export async function fetchWeekForks(
         message: `The simulation answered ${response.status}.`,
       };
     }
-    const body = (await response.json()) as { week: number; forks: WeekFork[] };
-    return { available: true, week: body.week, forks: body.forks ?? [] };
+    const body = (await response.json()) as {
+      week: number;
+      forks: WeekFork[];
+      mostInfluentialGame?: number | null;
+    };
+    return {
+      available: true,
+      week: body.week,
+      forks: body.forks ?? [],
+      mostInfluentialGame: body.mostInfluentialGame ?? null,
+    };
   } catch {
     return {
       available: false,

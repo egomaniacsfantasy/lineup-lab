@@ -138,6 +138,34 @@ export function bookDistance(a, b) {
 }
 
 /**
+ * League swing for the "Most Influential Game" — the total playoff + title probability
+ * that moves across the ENTIRE league (every team, including the two playing) between
+ * the two forced outcomes, TITLE-WEIGHTED.
+ *
+ * Title races are the drama that matters most, but a title delta is numerically much
+ * smaller than a playoff delta (title probs sum to 1 league-wide, playoff to ~#spots),
+ * so title carries 0.75 and playoff 0.25. On the RAW magnitudes this gives a natural
+ * season arc: early on, title odds are flat so the score is playoff-driven; down the
+ * stretch, title races swing hard and take over — which is exactly right.
+ *
+ * Both branches share the league seed (CRN), so each |delta| is the game's true causal
+ * effect, not Monte-Carlo noise. The game with the largest score reshapes the league
+ * most. (bookDistance stays equal-weighted; it drives the playoff-swing fork ordering.)
+ */
+export function leagueSwing(a, b, { titleWeight = 0.75, playoffWeight = 0.25 } = {}) {
+  const byRoster = new Map(b.map((row) => [row.rosterId, row]));
+  let playoff = 0;
+  let title = 0;
+  for (const row of a) {
+    const other = byRoster.get(row.rosterId);
+    if (!other) continue;
+    playoff += Math.abs((row.playoffProb ?? 0) - (other.playoffProb ?? 0));
+    title += Math.abs((row.titleProb ?? 0) - (other.titleProb ?? 0));
+  }
+  return playoffWeight * playoff + titleWeight * title;
+}
+
+/**
  * Leverage for every matchup in a week, on a 0-100 scale.
  *
  * The scale is relative to the biggest swing in that same week, so the top game
@@ -402,6 +430,9 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
     raw.push({
       matchupId,
       distance: bookDistance(aWins, bWins),
+      // Title-weighted league-wide swing → the Most Influential Game (separate from the
+      // equal-weighted `distance` that orders the playoff-swing forks below).
+      swing: leagueSwing(aWins, bWins),
       sides: [
         { rosterId: ka, nowProb: nowByRoster.get(ka) ?? 0, winProb: aWinsBy.get(ka) ?? 0, lossProb: bWinsBy.get(ka) ?? 0 },
         { rosterId: kb, nowProb: nowByRoster.get(kb) ?? 0, winProb: bWinsBy.get(kb) ?? 0, lossProb: aWinsBy.get(kb) ?? 0 },
@@ -418,7 +449,22 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
     }))
     .sort((left, right) => right.importance - left.importance);
 
-  return { available: true, week: targetWeek, forks, gameOfTheWeek: forks.length ? forks[0].matchupId : null };
+  // The Most Influential Game: the matchup whose result moves the league's title +
+  // playoff picture the most (title-weighted). Independent of the fork ordering above,
+  // which stays a pure playoff-swing read.
+  const mostInfluentialGame = raw.length
+    ? raw.reduce((best, row) => (row.swing > best.swing ? row : best)).matchupId
+    : null;
+
+  // gameOfTheWeek retained for back-compat (top playoff-swing fork); the labeled card
+  // uses mostInfluentialGame.
+  return {
+    available: true,
+    week: targetWeek,
+    forks,
+    gameOfTheWeek: forks.length ? forks[0].matchupId : null,
+    mostInfluentialGame,
+  };
 }
 
 /**

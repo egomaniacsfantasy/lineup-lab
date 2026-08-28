@@ -20,7 +20,7 @@ import { cached } from '../cache.js';
 import { closedFormWinProb, buildLiveTeamDistribution } from './liveWinProb.js';
 
 export const SEASON_SIMS = 10_000; // player-level season Monte Carlo — Futures and movers
-const MATCHUP_SIMS = 5_000; // seeded player-level sims for the headline matchup win%
+const MATCHUP_SIMS = 10_000; // seeded player-level sims for the headline matchup win%
 // EVERY trade evaluation — the finder (best deals / per-manager / hub), the
 // Build-a-Trade analyzer, and the counter-offer search — runs at THIS sim count.
 // Same seed + same sim count + same drop logic => a given trade prices IDENTICALLY

@@ -525,3 +525,34 @@
   .week-fork__ghost-leg--up { height: 26%; }
   .week-fork__ghost-leg--down { height: 24%; }
 }
+
+/* --- Most Influential Game -------------------------------------------------
+   A quiet caption above the strip names the game whose result swings the
+   league's title + playoff picture the most this week (title-weighted league
+   swing, computed server-side). Kept OUT of the strip itself so it never
+   disturbs the now-line alignment the bars depend on. */
+.week-fork__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.week-fork__caption {
+  margin: 0;
+  font-family: var(--font-condensed);
+  font-size: var(--type-caption);
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.week-fork__caption strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Faint lift so the named matchup is easy to pick out of the strip; purely a
+   background, so no bar or now-line moves. */
+.week-fork__game--key {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+}

@@ -663,6 +663,7 @@ export function LeaguePage() {
                       },
                       connectedSeason ? String(connectedSeason.userTeam.rosterId) : null,
                     )}
+                    mostInfluentialGame={forks?.mostInfluentialGame ?? null}
                     unavailableMessage={forks && !forks.available ? forks.message : undefined}
                     week={forks?.week ?? bootstrap.week}
                   />

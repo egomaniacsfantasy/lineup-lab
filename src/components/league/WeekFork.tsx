@@ -130,6 +130,7 @@ export function WeekFork({
   unavailableMessage,
   loading = false,
   expectedGames = 0,
+  mostInfluentialGame = null,
 }: {
   pairs: ForkPair[];
   week: number | null;
@@ -138,6 +139,9 @@ export function WeekFork({
   loading?: boolean;
   /** Games this week, from the schedule, so the skeleton is the right width. */
   expectedGames?: number;
+  /** matchupId whose result swings the league's title+playoff picture most; gets the
+   *  "Most influential" tag. null hides the tag entirely. */
+  mostInfluentialGame?: number | null;
 }) {
   const tick = useChurnTick(loading && pairs.length === 0 && expectedGames > 0);
 
@@ -252,12 +256,30 @@ export function WeekFork({
      then walks the week from the game that decides most to the one that
      decides least. */
   const ordered = [...pairs].sort((a, b) => b.importance - a.importance);
+  const influential =
+    mostInfluentialGame != null
+      ? ordered.find((pair) => pair.matchupId === mostInfluentialGame)
+      : undefined;
 
   return (
-    <section
-      aria-label={`Playoff odds if each team wins or loses${week != null ? `, week ${week}` : ''}`}
-      className="week-fork"
-    >
+    <div className="week-fork__wrap">
+      {/* One quiet line, not a header: names the game whose result reshapes the
+          league's title + playoff picture the most this week. Sits above the strip
+          so it never disturbs the now-line alignment the bars depend on. */}
+      {influential ? (
+        <p
+          className="week-fork__caption"
+          title="Its result swings the league's title and playoff odds more than any other game this week"
+        >
+          <span aria-hidden="true">🔑</span> Most influential game:{' '}
+          <strong>{influential.sides[0].teamName}</strong> vs{' '}
+          <strong>{influential.sides[1].teamName}</strong>
+        </p>
+      ) : null}
+      <section
+        aria-label={`Playoff odds if each team wins or loses${week != null ? `, week ${week}` : ''}`}
+        className="week-fork"
+      >
       {/* No numeric scale down the side.
 
           It was there as a ruler, on the reasoning that bars you cannot
@@ -273,6 +295,7 @@ export function WeekFork({
             className={[
               'week-fork__game',
               pair.sides.some((side) => side.isUser) ? 'week-fork__game--you' : '',
+              pair.matchupId === mostInfluentialGame ? 'week-fork__game--key' : '',
             ]
               .filter(Boolean)
               .join(' ')}
@@ -349,5 +372,6 @@ export function WeekFork({
         ))}
       </div>
     </section>
+    </div>
   );
 }
