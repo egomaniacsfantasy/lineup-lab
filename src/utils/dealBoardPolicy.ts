@@ -13,6 +13,9 @@
  * just not one this heading can honestly carry.
  */
 
+import { MIN_SUGGESTABLE_ACCEPTANCE } from './acceptanceLingo.ts';
+import { acceptanceProbability } from './tradeAcceptance.ts';
+
 export interface DealShape {
   give: readonly { id: string }[];
   get: readonly { id: string }[];
@@ -24,7 +27,8 @@ export interface DealShape {
 export type DealRejection =
   | { reason: 'qb-for-skill'; detail: string }
   | { reason: 'lopsided'; detail: string }
-  | { reason: 'costs-you'; detail: string };
+  | { reason: 'costs-you'; detail: string }
+  | { reason: 'nobody-would-accept'; detail: string };
 
 /**
  * Below this much combined championship movement, nobody is being fleeced and
@@ -43,6 +47,13 @@ const MATERIAL_TOTAL_PP = 0.5;
  * 0.75 means one side is taking three times what the other does.
  */
 const MAX_ONE_SIDED_SHARE = 0.75;
+
+/* The floor lives in acceptanceLingo, which owns what acceptance means. The
+   board was already computing this number and printing it beside every trade
+   and simply never acted on it: a row reading "3% to accept" sat under a
+   heading offering it as a suggestion. 3 is not merely low — acceptance is
+   clamped to [3, 97], so it is the model saying "as close to never as I can
+   express". */
 
 const SUPERFLEX_SLOTS = new Set(['SUPER_FLEX', 'SUPERFLEX', 'QB/RB/WR/TE', 'Q/W/R/T']);
 
@@ -101,6 +112,19 @@ export function dealRejection(
     return {
       reason: 'costs-you',
       detail: `your title odds move ${yourMove.toFixed(1)} points`,
+    };
+  }
+
+  /* A trade the other manager would never take.
+
+     Read at neutral friendliness and relationship, which is the same read the
+     board prints beside the row. A suggestion nobody accepts is not a
+     suggestion; it is a daydream with a price on it. */
+  const accepts = acceptanceProbability(deal.partnerDelta ?? 0, 5, 5);
+  if (accepts < MIN_SUGGESTABLE_ACCEPTANCE) {
+    return {
+      reason: 'nobody-would-accept',
+      detail: `${accepts}% chance they accept`,
     };
   }
 

@@ -197,3 +197,57 @@ test('a deal that lowers your title odds is not one you would call about', () =>
     'costs-you',
   );
 });
+
+test('a trade nobody would accept is never suggested', () => {
+  /**
+   * Andre, on seeing two of these on the live board: "3% LIKELY BRO".
+   *
+   * The board was already computing this number and printing it next to the
+   * trade. It just never acted on it — so a row reading "3% to accept" sat
+   * under a heading offering it as a suggestion.
+   *
+   * 3 is not merely low. acceptanceProbability clamps to [3, 97], so 3 is the
+   * floor: the model saying "as close to never as I can express".
+   */
+  const nobodyWants = {
+    give: [{ id: 'stafford' }, { id: 'kelce' }],
+    get: [{ id: 'mccaffrey' }, { id: 'jefferson' }],
+    youDelta: 3.5,
+    /* A partner who loses ground says no; the read comes out at the clamp. */
+    partnerDelta: -4.0,
+  };
+
+  const rejection = dealRejection(nobodyWants, positionOf, ONE_QB);
+  assert.ok(rejection, 'a trade at the acceptance floor was suggested anyway');
+  assert.equal(rejection.reason, 'nobody-would-accept');
+  assert.match(rejection.detail, /% chance they accept/);
+});
+
+test('the acceptance floor is derived from the bands, not a loose number', async () => {
+  /* The threshold and the words printed beside it come from one table, so
+     they cannot drift into disagreeing about what counts as a bad read. The
+     floor is the bottom of the first band above the bad ones. */
+  const { ACCEPTANCE_LINGO_BANDS, MIN_SUGGESTABLE_ACCEPTANCE } = await import(
+    '../src/utils/acceptanceLingo.ts'
+  );
+
+  const worstBands = ACCEPTANCE_LINGO_BANDS.filter((band) => band.tone === 'bad');
+  assert.ok(worstBands.length > 0, 'no band is marked as a bad read any more');
+  assert.equal(MIN_SUGGESTABLE_ACCEPTANCE, worstBands[worstBands.length - 1].min);
+
+  /* And the policy uses it rather than a number of its own. */
+  const source = await fs.readFile(path.resolve('src/utils/dealBoardPolicy.ts'), 'utf8');
+  assert.match(source, /accepts < MIN_SUGGESTABLE_ACCEPTANCE/);
+});
+
+test('a trade both managers want still gets through', () => {
+  /* The floor must not empty the board. A partner who gains is a partner who
+     answers. */
+  const mutual = {
+    give: [{ id: 'jefferson' }],
+    get: [{ id: 'kelce' }],
+    youDelta: 0.9,
+    partnerDelta: 1.4,
+  };
+  assert.equal(dealRejection(mutual, positionOf, ONE_QB), null);
+});

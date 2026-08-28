@@ -121,8 +121,11 @@ export function LeagueDealBoard({
                 <span className="ldb__with">
                   <span className="ldb__with-label">With</span>
                   <span className="ldb__with-name">{row.partnerName}</span>
+                  {/* "3% likely" reads as a verdict on the trade; "3% to
+                      accept" names the thing being measured, which is the
+                      other manager. */}
                   {row.acceptance ? (
-                    <span className="ldb__accept">{row.acceptance} likely</span>
+                    <span className="ldb__accept">{row.acceptance} to accept</span>
                   ) : null}
                 </span>
 

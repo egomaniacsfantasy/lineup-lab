@@ -17,6 +17,20 @@ export const ACCEPTANCE_LINGO_BANDS = [
   { min: 85, max: 100, label: 'Near lock', tone: 'good' },
 ] as const satisfies readonly AcceptanceLingoBand[];
 
+/**
+ * The lowest acceptance a trade can have and still be worth suggesting.
+ *
+ * Defined here because this module owns what acceptance means. The two bands
+ * below this one are the ones a manager laughs at, and a list of those is not
+ * a list of suggestions — see dealBoardPolicy, which is the only caller.
+ *
+ * Derived from the bands rather than typed as a bare 30, so the threshold and
+ * the word printed beside it cannot drift apart: it is the floor of the first
+ * band above the two worst.
+ */
+export const MIN_SUGGESTABLE_ACCEPTANCE =
+  ACCEPTANCE_LINGO_BANDS.filter((band) => band.tone === 'bad').at(-1)?.min ?? 30;
+
 function clampAcceptanceProbability(probability: number) {
   return Math.max(0, Math.min(100, probability));
 }
