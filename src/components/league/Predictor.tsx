@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatProbOrOdds } from '../../utils/formatOdds';
 import { TeamAvatar } from './TeamAvatar';
+import { SimulationLoader } from '../ui/SimulationLoader';
 import {
   fetchConditionedBoard,
   pickSetHash,
@@ -98,6 +99,15 @@ function roundLabel(round: number, totalRounds: number) {
  * until the endpoint answers it says so plainly and shows the unconditioned
  * board, which is a true thing rather than a placeholder.
  */
+/**
+ * How long a conditioned run may take before it is called hung.
+ *
+ * The server runs four thousand simulations of every remaining game on every
+ * pick, so a full week-one board is genuinely slow. This is set well past
+ * slow and well short of forever.
+ */
+const CONDITIONED_TIMEOUT_MS = 45_000;
+
 export function Predictor({
   leagueId,
   userId,
@@ -146,6 +156,16 @@ export function Predictor({
     abortRef.current = controller;
     setPending(true);
 
+    /* A run that never answers used to leave this waiting for ever: pending
+       stayed true, the panel stayed busy, and nothing ever said why. The
+       whole remaining season is simulated on every pick, so slow is normal
+       and hung is not, and only a clock can tell the two apart. */
+    let timedOut = false;
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, CONDITIONED_TIMEOUT_MS);
+
     let cancelled = false;
     fetchConditionedBoard(leagueId, userId, picks, controller.signal, { bracketPicks })
       .then((result) => {
@@ -163,13 +183,25 @@ export function Predictor({
         setBracket(result.bracket ?? null);
         setNotice(null);
       })
-      .catch(() => undefined)
+      .catch(() => {
+        /* Superseded runs abort too, and those are not failures: the cleanup
+           below sets cancelled before aborting, so only a timeout reaches
+           here with cancelled still false. */
+        if (cancelled) return;
+        if (timedOut) {
+          setBoard(null);
+          setBracket(null);
+          setNotice('That run took too long to come back. Try calling fewer games, or reset.');
+        }
+      })
       .finally(() => {
+        window.clearTimeout(timer);
         if (!cancelled) setPending(false);
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
       controller.abort();
     };
   }, [leagueId, userId, picks, bracketPicks, hash]);
@@ -276,6 +308,11 @@ export function Predictor({
      before any games are called (everyone 0-0, PF 0) — championship odds. Uses
      the conditioned values when a scenario is live so calling games reorders the
      board the way real results would. */
+  /* One state for the whole panel. While a run is in flight the board cannot
+     answer the question that was just asked, so it says so rather than
+     showing a table with its two most important columns missing. */
+  const busy = pending && picks.length > 0;
+
   const sortedRows = useMemo(() => {
     const recScore = (r: { wins?: number; ties?: number } | null | undefined) =>
       (r?.wins ?? 0) + 0.5 * (r?.ties ?? 0);
@@ -538,13 +575,43 @@ export function Predictor({
             <span className="predictor__num">Playoffs</span>
             <span className="predictor__num">Title</span>
           </div>
-          {sortedRows.map((row) => {
+
+          {/* Busy, and unmistakably unavailable.
+
+              This used to blank the playoff and title cells and leave the
+              rest of the table live, which put a board that looks ready to
+              read next to two columns of shimmer. The two columns are the
+              only reason anyone is looking at this panel, so a table missing
+              them is not a table that is nearly ready, it is one that cannot
+              answer yet and should say so.
+
+              The run is a full simulation of every remaining game, so on a
+              twelve-team league in week one this is seconds rather than a
+              flicker. That is exactly the case that has to look deliberate.
+
+              The height is held to the table it replaces so the column does
+              not collapse and snap back on every pick. */}
+          {busy ? (
+            <div
+              className="predictor__busy"
+              style={{ minHeight: `${sortedRows.length * 46}px` }}
+            >
+              <SimulationLoader
+                label="Simulating"
+                messages={[
+                  'Replaying the rest of the season...',
+                  'Forcing the games you called...',
+                  'Reseeding the bracket...',
+                  'Moving the board...',
+                ]}
+                size="compact"
+                variant="scan"
+              />
+            </div>
+          ) : null}
+
+          {(busy ? [] : sortedRows).map((row) => {
             const next = conditioned?.get(row.rosterId) ?? null;
-            /* Suspended, not stale. While a run is in flight the numbers it
-               will replace are held rather than shown, because an old price
-               beside a fresh pick reads as the answer to the question just
-               asked. */
-            const suspended = pending && picks.length > 0;
             const playoffDelta = next ? next.playoffProb - row.playoffProb : null;
             /* Record + PF are deterministic (base + forced picks), so they show
                through a reprice rather than blanking like the simulated columns. */
@@ -566,31 +633,21 @@ export function Predictor({
                   {pf != null ? pf.toFixed(1) : '—'}
                 </span>
                 <span className="predictor__num predictor__row-playoff">
-                  {suspended ? (
-                    <span className="predictor__suspended" aria-label="repricing" />
-                  ) : (
-                    <>
-                      {/* Through the same formatter as the title column, so
-                          the two follow the header toggle together. A raw "%"
-                          beside a formatted price put two scales in one row
-                          and made the toggle look broken. */}
-                      {formatProbOrOdds(next?.playoffProb ?? row.playoffProb)}
-                      {playoffDelta != null && Math.abs(playoffDelta) >= 0.5 ? (
-                        <span
-                          className={`predictor__delta predictor__delta--${playoffDelta > 0 ? 'up' : 'down'}`}
-                        >
-                          {playoffDelta > 0 ? '+' : '−'}{Math.abs(playoffDelta).toFixed(0)}
-                        </span>
-                      ) : null}
-                    </>
-                  )}
+                  {/* Through the same formatter as the title column, so the
+                      two follow the header toggle together. A raw "%" beside
+                      a formatted price put two scales in one row and made the
+                      toggle look broken. */}
+                  {formatProbOrOdds(next?.playoffProb ?? row.playoffProb)}
+                  {playoffDelta != null && Math.abs(playoffDelta) >= 0.5 ? (
+                    <span
+                      className={`predictor__delta predictor__delta--${playoffDelta > 0 ? 'up' : 'down'}`}
+                    >
+                      {playoffDelta > 0 ? '+' : '−'}{Math.abs(playoffDelta).toFixed(0)}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="predictor__num predictor__row-title">
-                  {suspended ? (
-                    <span className="predictor__suspended" aria-label="repricing" />
-                  ) : (
-                    formatProbOrOdds(next?.titleProb ?? row.titleProb)
-                  )}
+                  {formatProbOrOdds(next?.titleProb ?? row.titleProb)}
                 </span>
               </div>
             );

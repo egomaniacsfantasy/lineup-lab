@@ -177,6 +177,14 @@ export async function fetchConditionedBoard(
       body: JSON.stringify({ userId, picks, bracketPicks, fast }),
       signal,
     });
+    /* Design leagues answer locally, the same way the forks call does.
+       Without this the Predictor was the one surface a fixture league could
+       not render: every pick went to the real API, which has no such league,
+       and came back 500. The state the whole feature exists to produce could
+       not be looked at outside a live league. */
+    const fixture = (await maybeHandleDesignFixtureRequest(url, init)) as ConditionedBoard | null;
+    if (fixture) return fixture;
+
     const response = await fetch(url, init);
 
     if (response.status === 404 || response.status === 501) return NOT_IMPLEMENTED;

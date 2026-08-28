@@ -330,34 +330,6 @@
 .predictor__delta--up { color: var(--green); }
 .predictor__delta--down { color: var(--red); }
 
-/* Suspended, not stale. A price the run is about to replace is withheld while
-   it computes: an old number beside a fresh pick reads as the answer to the
-   question just asked, which is worse than a blank because a blank cannot be
-   misread. */
-.predictor__suspended {
-  display: inline-block;
-  width: 34px;
-  height: 9px;
-  border-radius: 2px;
-  background: linear-gradient(
-    90deg,
-    var(--bg-inset),
-    color-mix(in srgb, var(--text-dim) 28%, var(--bg-inset)),
-    var(--bg-inset)
-  );
-  background-size: 200% 100%;
-  animation: predictor-suspend 1.1s ease-in-out infinite;
-}
-
-@keyframes predictor-suspend {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .predictor__suspended { animation: none; }
-}
-
 /* Week navigation. Previous / week / next, then the two resets. Modelled on
    the bar Playoff Predictors puts above its board, which is the one thing
    about that site worth copying: it turns an endless list into a sequence of
@@ -568,4 +540,16 @@
   color: var(--amber-bright, #f5c542);
   font-weight: 700;
   text-align: center;
+}
+
+/* The panel while it cannot answer.
+
+   It replaces the rows rather than sitting over them: a dimmed table is still
+   a table, and the point is that there is nothing here to read yet. The
+   minimum height is the table's, set inline from the row count, so the column
+   does not collapse and snap back on every pick. */
+.predictor__busy {
+  display: grid;
+  place-items: center;
+  padding: var(--space-xl) var(--space-md);
 }

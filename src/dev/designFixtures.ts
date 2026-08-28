@@ -1188,6 +1188,21 @@ function designFailTrade() {
   return failTradeMode;
 }
 
+/* How long the fixture makes a conditioned run take. Long enough that the
+   busy state is a state rather than a flicker, and ?slowPredictor stretches
+   it further for anyone looking at that state on purpose. */
+const DESIGN_PREDICTOR_MS =
+  typeof window !== 'undefined' && window.location.search.includes('slowPredictor') ? 8_000 : 900;
+
+/* The client hashes a pick set to throw away runs whose picks are no longer
+   on screen. The fixture has to agree with it or every answer is discarded. */
+function predictorHash(picks: { week?: number; matchupId?: number; winnerRosterId?: string }[]) {
+  return picks
+    .map((pick) => `${pick.week}:${pick.matchupId}:${pick.winnerRosterId}`)
+    .sort()
+    .join('|');
+}
+
 export async function maybeHandleDesignFixtureRequest(path: string, init?: RequestInit) {
   if (!import.meta.env.DEV || typeof window === 'undefined') return null;
 
@@ -1228,6 +1243,51 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
     }
     return DESIGN_FORKS;
   }
+  /* The Predictor's conditioned board.
+
+     Without this the design league answered 500 on every pick, which meant
+     the one state the Predictor exists to produce could not be looked at or
+     asserted against outside a live league. That is why its busy state went
+     unnoticed for so long: nobody could reach the moment it appears.
+
+     The numbers are NOT a simulation. Each called game nudges its winner up
+     and its loser down from the futures baseline, which is enough to design a
+     board that moves and nothing like enough to price one. It never leaves
+     dev, and the delay is here because the real run is slow and the waiting
+     is the part being designed. */
+  if (endpoint === 'predictor' && method === 'POST') {
+    const body =
+      typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+    const picks = Array.isArray(body.picks) ? (body.picks as { winnerRosterId?: string }[]) : [];
+    const winners = new Set(picks.map((pick) => String(pick.winnerRosterId)));
+
+    await new Promise((resolve) => setTimeout(resolve, DESIGN_PREDICTOR_MS));
+
+    const clamp = (value: number) => Math.max(0.1, Math.min(99.9, value));
+    return {
+      available: true,
+      pickSetHash: String(body.picks ? predictorHash(picks) : ''),
+      picked: picks.length,
+      simulated: 0,
+      sims: 4000,
+      bracket: null,
+      rows: (bundle.pricing.futures ?? []).map((team) => {
+        const called = winners.has(String(team.rosterId));
+        const nudge = picks.length === 0 ? 0 : called ? 6.5 : -2.5;
+        return {
+          rosterId: String(team.rosterId),
+          playoffProb: clamp(team.playoffProb + nudge),
+          titleProb: clamp(team.titleProb + nudge / 2),
+          avgSeed: team.avgSeed,
+          playoffOdds: team.playoffOdds,
+          titleOdds: team.championOdds,
+          record: team.record,
+          pointsFor: null,
+        };
+      }),
+    };
+  }
+
   if (endpoint === 'trade-suggestions' && method === 'POST') {
     return bundle.suggestions;
   }

@@ -276,3 +276,80 @@ test('every chip sits under its own bar', async () => {
     `crest drifted from its bar by ${Math.max(...drift).toFixed(1)}px`,
   );
 });
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The Predictor's waiting state, on the same page and the same dev server.
+
+   Andre found this in a real league: RECORD and PF were live while PLAYOFFS
+   and TITLE shimmered, so the board looked ready and the two columns anyone
+   is actually there for were missing. His words were that he would rather a
+   spinning wheel than a surface that looks usable and is not.
+
+   It went unnoticed for so long because it could not be reached: the
+   conditioned fetch did not consult the design fixtures, so every pick in a
+   fixture league answered 500 and the waiting state never appeared at all.
+   ────────────────────────────────────────────────────────────────────────── */
+
+async function callFirstGame(page) {
+  await page.goto(`${baseUrl}/design/league?view=predictor&slowPredictor=1`, {
+    waitUntil: 'networkidle',
+  });
+  await page.waitForSelector('button.predictor__side');
+  await page.locator('button.predictor__side').first().click();
+  return page;
+}
+
+test('a pick puts the whole board into one waiting state, not a half-filled table', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await callFirstGame(page);
+    await page.waitForSelector('.predictor__busy');
+
+    const waiting = await page.evaluate(() => ({
+      busy: document.querySelectorAll('.predictor__busy').length,
+      /* The rows go entirely. A table with its two simulated columns blanked
+         and everything else live is the thing being fixed. */
+      rows: document.querySelectorAll('.predictor__row').length,
+      height: document.querySelector('.predictor__busy').getBoundingClientRect().height,
+      /* And it says what it is doing. */
+      says: document.querySelector('.predictor__busy').textContent.trim().length > 0,
+    }));
+
+    assert.equal(waiting.busy, 1, 'a pick did not put the board into a waiting state');
+    assert.equal(waiting.rows, 0, 'the board is still showing rows it cannot fill');
+    assert.ok(waiting.says, 'the waiting state says nothing about what it is waiting for');
+    /* Held to the height of the table it replaces, or the column collapses
+       and snaps back on every single pick. */
+    assert.ok(waiting.height > 180, `the waiting panel is only ${waiting.height}px tall`);
+  } finally {
+    await page.close();
+  }
+});
+
+test('the wait ends in a board that has moved, and says by how much', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await callFirstGame(page);
+    await page.waitForSelector('.predictor__row', { timeout: 20_000 });
+
+    const settled = await page.evaluate(() => ({
+      busy: document.querySelectorAll('.predictor__busy').length,
+      rows: document.querySelectorAll('.predictor__row').length,
+      /* The payoff. Calling a game is supposed to move the board, and a board
+         that comes back identical has not answered anything. */
+      deltas: [...document.querySelectorAll('.predictor__delta')].map((node) => node.textContent),
+    }));
+
+    assert.equal(settled.busy, 0, 'the board is still waiting after it answered');
+    assert.ok(settled.rows > 0, 'the board came back empty');
+    assert.ok(settled.deltas.length > 0, 'nothing on the board moved when a game was called');
+    /* Signed, so it reads as a movement rather than a second number. */
+    assert.ok(
+      settled.deltas.every((delta) => /^[+\u2212-]/.test(delta)),
+      `a delta is unsigned: ${settled.deltas.join(', ')}`,
+    );
+  } finally {
+    await page.close();
+  }
+});
+
