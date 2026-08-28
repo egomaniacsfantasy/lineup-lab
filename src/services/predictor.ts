@@ -9,13 +9,16 @@ import { withContext } from './leagueApi.ts';
  * results and render whatever book comes back. That boundary is the reason
  * this file exists as its own module rather than living inside the component.
  *
- * The three endpoints below are not implemented server-side yet. They are
- * specified here so the interface is fixed before either half is written, and
- * so the UI can be built, reviewed and corrected against real interaction
- * without waiting on the engine. Until they answer, every caller receives
- * `{ available: false }` and the UI says so rather than inventing numbers.
+ * The conditioned board and the week forks are both live: see
+ * `POST /league/:leagueId/predictor` and `GET /league/:leagueId/forks` in
+ * server/routes/api.js, which run predictSeason and weekForks against the
+ * real sim. This file kept a note saying they were unbuilt long after they
+ * were, which is worse than no note: it was cited as a reason not to tell
+ * people the Predictor exists.
  *
- * See docs/predictor-engine-memo.md for the server-side note.
+ * The unavailable branches below stay. An endpoint that is built can still be
+ * unreachable, and every caller has to survive that without inventing
+ * numbers.
  */
 
 /** One forced result. The pick-set is a list of these. */

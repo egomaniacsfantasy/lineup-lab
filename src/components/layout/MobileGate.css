@@ -79,7 +79,7 @@
   position: relative;
   display: grid;
   justify-items: center;
-  gap: var(--space-sm);
+  gap: var(--space-xs);
   max-width: 30rem;
   text-align: center;
 }
@@ -109,7 +109,7 @@
   color: var(--text-primary);
   font-family: var(--font-display);
   /* Fills a phone without ever wrapping to three lines on the narrowest one. */
-  font-size: clamp(34px, 10vw, 46px);
+  font-size: clamp(30px, 8.5vw, 42px);
   font-weight: 400;
   letter-spacing: 0.02em;
   line-height: 1.05;
@@ -121,13 +121,62 @@
 .mobile-gate__copy {
   margin: 0;
   color: var(--text-muted);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.45;
   text-wrap: balance;
 }
 
+/* The four reasons. Left-aligned inside a centred column: a ragged-centre
+   list of four sentences is a poster, and this one has to be read. */
+.mobile-gate__props {
+  display: grid;
+  gap: 9px;
+  margin: var(--space-sm) 0 var(--space-xs);
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.mobile-gate__props li {
+  position: relative;
+  padding-left: 20px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+/* A small amber tick rather than a bullet: these are things you get, not
+   things in a list. */
+.mobile-gate__props li::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--amber);
+}
+
+.mobile-gate__free {
+  margin: 0 0 var(--space-sm);
+  color: var(--text-amber);
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mobile-gate__cta {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.02em;
+}
+
 .mobile-gate__address {
-  margin-top: var(--space-lg);
+  margin-top: var(--space-md);
   color: var(--text-amber);
   font-family: var(--font-display);
   font-size: 17px;

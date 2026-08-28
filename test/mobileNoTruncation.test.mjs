@@ -352,31 +352,90 @@ test('?desktop=1 lets you look anyway, and sticks, and can be turned off', async
   }
 });
 
-test('the gate fills the screen and never scrolls', async () => {
+/* 667 is an iPhone SE, the shortest phone anyone still uses and the one the
+   pitch has to fit on. 812 is the common case. */
+for (const [width, height, what] of [
+  [375, 667, 'an iPhone SE'],
+  [375, 812, 'a modern phone'],
+]) {
+  test(`the pitch fits ${what} without scrolling`, async () => {
+    const { page, context } = await visit('/league', { width, height });
+    try {
+      const box = await page.evaluate(() => {
+        const gate = document.querySelector('.mobile-gate');
+        const rect = gate.getBoundingClientRect();
+        const headline = document.querySelector('.mobile-gate__headline');
+        return {
+          coversWidth: rect.width >= innerWidth,
+          coversHeight: rect.height >= innerHeight - 1,
+          scrollX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          scrollY: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+          /* Every line of the pitch, still inside the screen. A gate that
+             runs its last reason off the bottom has spent the visit and not
+             made the case. */
+          contentBottom: document.querySelector('.mobile-gate__address').getBoundingClientRect().bottom,
+          viewport: innerHeight,
+          headlineLines: Math.round(
+            headline.getBoundingClientRect().height /
+              (parseFloat(getComputedStyle(headline).fontSize) * 1.05),
+          ),
+        };
+      });
+
+      assert.ok(box.coversWidth && box.coversHeight, 'the gate does not fill the screen');
+      /* A gate you can scroll past is a banner, and there is nothing behind
+         it to scroll to anyway. */
+      assert.equal(box.scrollX, 0, 'the gate scrolls sideways');
+      assert.equal(box.scrollY, 0, 'the gate scrolls');
+      assert.ok(
+        box.contentBottom <= box.viewport,
+        `the pitch runs ${(box.contentBottom - box.viewport).toFixed(0)}px off the bottom`,
+      );
+      assert.ok(box.headlineLines <= 2, `the headline runs to ${box.headlineLines} lines`);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+/**
+ * The pitch, and only claims the product can honour.
+ *
+ * This screen is the first and often the only one an advert sends someone to,
+ * so it sells rather than apologises. Every reason on it has to be a surface
+ * that exists: the Predictor was left off a draft of this list on the word of
+ * a comment in src/services/predictor.ts saying its endpoints were unbuilt,
+ * which they have not been for some time. The route is right there in
+ * server/routes/api.js. Claims get checked against routes, not against prose.
+ */
+test('the gate makes the case, and every claim on it has a surface behind it', async () => {
   const { page, context } = await visit('/league', { width: 375, height: 812 });
   try {
-    const box = await page.evaluate(() => {
-      const gate = document.querySelector('.mobile-gate');
-      const rect = gate.getBoundingClientRect();
-      return {
-        coversWidth: rect.width >= innerWidth,
-        coversHeight: rect.height >= innerHeight - 1,
-        scrollX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        scrollY: document.documentElement.scrollHeight - document.documentElement.clientHeight,
-        /* Both lines of the headline, and neither of them alone. */
-        headlineLines: Math.round(
-          document.querySelector('.mobile-gate__headline').getBoundingClientRect().height /
-            (parseFloat(getComputedStyle(document.querySelector('.mobile-gate__headline')).fontSize) *
-              1.05),
-        ),
-      };
-    });
-    assert.ok(box.coversWidth && box.coversHeight, 'the gate does not fill the screen');
-    /* A gate you can scroll past is a banner, and there is nothing behind it
-       to scroll to anyway. */
-    assert.equal(box.scrollX, 0, 'the gate scrolls sideways');
-    assert.equal(box.scrollY, 0, 'the gate scrolls');
-    assert.ok(box.headlineLines <= 2, `the headline runs to ${box.headlineLines} lines`);
+    const pitch = await page.evaluate(() => ({
+      props: [...document.querySelectorAll('.mobile-gate__props li')].map((li) => li.textContent),
+      free: document.querySelector('.mobile-gate__free')?.textContent ?? '',
+      cta: document.querySelector('.mobile-gate__cta')?.textContent ?? '',
+      body: document.querySelector('.mobile-gate').textContent,
+    }));
+
+    assert.ok(pitch.props.length >= 4, `only ${pitch.props.length} reasons to walk to a laptop`);
+
+    /* The five surfaces, by the words someone would recognise them by. */
+    for (const claim of [/moneyline/i, /championship odds/i, /trade/i, /bracket|season/i, /parlay/i]) {
+      assert.ok(
+        pitch.props.some((prop) => claim.test(prop)),
+        `nothing on the gate mentions ${claim}`,
+      );
+    }
+
+    /* Free, and specifically the same "during the beta" the sign-up form
+       says. A flat "free" here would contradict the next screen. */
+    assert.match(pitch.free, /free/i);
+    assert.match(pitch.free, /beta/i);
+
+    assert.match(pitch.cta, /laptop/i);
+    /* And it still says where to go, which is the thing it originally did. */
+    assert.match(pitch.body, /laptop or tablet/i);
   } finally {
     await context.close();
   }
