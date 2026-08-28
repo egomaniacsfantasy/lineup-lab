@@ -2546,7 +2546,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     simmed += 1;
     if (simmed % 4 === 0) await yieldToLoop();
     if (Date.now() - t0 > 14_000) break;   // stop scanning; leave the rest of the budget for Pass 2's full-sims
-    if (youDelta <= 0) continue;   // your title must rise; no other threshold
+    // All-managers "best deals": your title must rise (a real deal FOR you). But when
+    // a SPECIFIC manager is clicked (partnerRosterId set), never leave them blank —
+    // show the fairest trades with them even if title-neutral. Ranking stays fairness.
+    if (partnerRosterId == null && youDelta <= 0) continue;
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
@@ -2585,7 +2588,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
     if (Date.now() - t0 > 26_000) break;   // return what we have before the client's 30s abort
-    if (youDelta <= 0) continue;   // your title must rise; no other threshold
+    // All-managers "best deals": your title must rise (a real deal FOR you). But when
+    // a SPECIFIC manager is clicked (partnerRosterId set), never leave them blank —
+    // show the fairest trades with them even if title-neutral. Ranking stays fairness.
+    if (partnerRosterId == null && youDelta <= 0) continue;
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     suggestions.push({
