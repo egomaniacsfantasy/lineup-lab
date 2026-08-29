@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { LeaguePeek } from './LeaguePeek';
 import './MobileGate.css';
 
 /**
@@ -12,8 +14,14 @@ import './MobileGate.css';
  */
 
 export function MobileGate() {
+  /* The pitch stays until someone asks for their odds, then the screen turns
+     into the thing it was advertising. Two screens would mean a navigation
+     step between the ad and the payoff, on the surface with the least
+     patience for one. */
+  const [open, setOpen] = useState(false);
+
   return (
-    <div className="mobile-gate">
+    <div className={`mobile-gate${open ? ' mobile-gate--peeking' : ''}`}>
       {/* Two slow amber drifts behind everything, and nothing readable in
           them. Decorative, so they are hidden from assistive tech and stand
           still entirely for anyone who has asked for less motion. */}
@@ -37,8 +45,14 @@ export function MobileGate() {
             the routes rather than against the comments describing them. A
             value proposition the product cannot deliver on is the one that
             gets remembered. */}
-        <h1 className="mobile-gate__headline">There&rsquo;s a book on your league.</h1>
+        {open ? null : (
+          <h1 className="mobile-gate__headline">There&rsquo;s a book on your league.</h1>
+        )}
 
+        {/* The pitch converts once. After that it is five lines of argument
+            standing between someone and the number they just asked for, on a
+            screen with no room to spare. */}
+        {open ? null : (
         <ul className="mobile-gate__props">
           <li>Every matchup priced. Moneyline, spread and total.</li>
           <li>Championship odds for every team, moving all week.</li>
@@ -46,17 +60,37 @@ export function MobileGate() {
           <li>Call the rest of the season and watch the bracket move.</li>
           <li>Parlay your own league, at fair odds.</li>
         </ul>
+        )}
 
         {/* "During the beta", not a flat "free". It is what the sign-up form
             already says, so the two cannot contradict each other, and it is
             the better line anyway: free that will not always be free. */}
-        <p className="mobile-gate__free">All of it free during the beta.</p>
+        {open ? null : <p className="mobile-gate__free">All of it free during the beta.</p>}
 
-        <p className="mobile-gate__cta">Worth grabbing a laptop for.</p>
-        <p className="mobile-gate__copy">
-          Odds Gods opens on a laptop or tablet, where the whole book fits on
-          one screen. The phone is coming.
-        </p>
+        {/* The door.
+
+            This screen used to end in "go and find a laptop", which is a
+            handoff most people never make: the card that brought them here
+            was forwarded into a group chat and opened on a phone, so a wall
+            here breaks the loop the card exists to start. A Sleeper username
+            is a text field, and a text field works on a phone. */}
+        {open ? (
+          <LeaguePeek onCreateAccount={() => setOpen(false)} />
+        ) : (
+          <>
+            <button
+              className="mobile-gate__open"
+              onClick={() => setOpen(true)}
+              type="button"
+            >
+              See your odds
+            </button>
+            <p className="mobile-gate__copy">
+              One Sleeper username. The rest of it opens on a laptop or tablet,
+              where the whole book fits on one screen.
+            </p>
+          </>
+        )}
 
         <span className="mobile-gate__address">oddsgods.net</span>
       </main>

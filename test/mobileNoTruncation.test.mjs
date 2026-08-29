@@ -414,7 +414,10 @@ test('the gate makes the case, and every claim on it has a surface behind it', a
     const pitch = await page.evaluate(() => ({
       props: [...document.querySelectorAll('.mobile-gate__props li')].map((li) => li.textContent),
       free: document.querySelector('.mobile-gate__free')?.textContent ?? '',
-      cta: document.querySelector('.mobile-gate__cta')?.textContent ?? '',
+      /* The way in. This used to be a line of copy telling you to go and
+         find a laptop; it is a control now, because a screen that only
+         gives instructions is the dead end this one stopped being. */
+      cta: document.querySelector('.mobile-gate__open')?.textContent ?? '',
       body: document.querySelector('.mobile-gate').textContent,
     }));
 
@@ -433,8 +436,9 @@ test('the gate makes the case, and every claim on it has a surface behind it', a
     assert.match(pitch.free, /free/i);
     assert.match(pitch.free, /beta/i);
 
-    assert.match(pitch.cta, /laptop/i);
-    /* And it still says where to go, which is the thing it originally did. */
+    assert.match(pitch.cta, /odds/i, 'there is no way into the product from the pitch');
+    /* And it still says where the rest of it lives, which is the thing it
+       originally did and must not lose by gaining a door. */
     assert.match(pitch.body, /laptop or tablet/i);
   } finally {
     await context.close();
@@ -481,3 +485,114 @@ test('the drift runs, and stops for anyone who asked for less motion', async () 
     'reduced motion still resolves to an animation, so the stylesheet is not the thing stopping it',
   );
 });
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The door in the gate: a Sleeper username, and one number.
+
+   The gate used to end at "go and find a laptop", which is a handoff most
+   people never make. The card that brought them here was forwarded into a
+   league group chat and opened on a phone, so a wall at this point breaks
+   the loop the card exists to start.
+
+   What the anonymous view shows is deliberately almost nothing: your
+   championship odds, and the rest of your league by name with every price but
+   yours locked. The tease is a rival's name with a lock where his number
+   should be.
+   ────────────────────────────────────────────────────────────────────────── */
+
+async function peek(page) {
+  await page.locator('.mobile-gate__open').click();
+  await page.locator('.league-peek__input').fill('designgods');
+  await page.locator('.league-peek__go').click();
+  await page.locator('.league-peek__odds').waitFor({ timeout: 15_000 });
+}
+
+test('a username buys exactly one number, and every rival stays locked', async () => {
+  const { page, context } = await visit('/', { width: 375, height: 812 });
+  try {
+    await peek(page);
+
+    const seen = await page.evaluate(() => ({
+      odds: document.querySelector('.league-peek__odds').textContent.trim(),
+      /* Rival rows are named, because a list of nobody does not prove it is
+         your league. Their prices are not, because that is the thing being
+         sold. */
+      rivals: [...document.querySelectorAll('.league-peek__rival')].map((row) => ({
+        named: row.querySelector('.league-peek__rival-name').textContent.trim().length > 0,
+        locked: Boolean(row.querySelector('.league-peek__lock')),
+        /* No stray digits: a percentage or a price anywhere in a rival row
+           would be the one thing this screen must not give away. */
+        leaks: /\d/.test(row.textContent.replace(/\s/g, '')),
+      })),
+      /* And the pitch steps aside: five bullets between someone and the
+         number they just asked for is the argument outstaying its welcome. */
+      pitchStillThere: document.querySelectorAll('.mobile-gate__props').length,
+    }));
+
+    assert.match(seen.odds, /^[+-]?\d/, `the headline number reads "${seen.odds}"`);
+    assert.ok(seen.rivals.length > 0, 'no rival rows to be locked out of');
+    for (const rival of seen.rivals) {
+      assert.ok(rival.named, 'a rival row has no name, so it proves nothing');
+      assert.ok(rival.locked, 'a rival row is not locked');
+      assert.ok(!rival.leaks, 'a rival row is showing a number');
+    }
+    assert.equal(seen.pitchStillThere, 0, 'the pitch is still sitting on top of the answer');
+  } finally {
+    await context.close();
+  }
+});
+
+test('the sign-up is reachable on the shortest phone', async () => {
+  /* The gate was overflow: hidden while it was a fixed poster. With a league
+     listed under the number, that put the call to action past the bottom of
+     a short screen with no way to reach it.
+
+     Asserting this by setting scrollTop proves nothing: an overflow: hidden
+     box is still a scroll container, so a script can scroll it when a finger
+     cannot. What has to be true is that the content either fits, or the box
+     is one the user can actually scroll.
+
+     560px, not 667: an iPhone SE running Safari with its bars showing has
+     about this much room, and a real twelve-team league lists eleven locked
+     rows rather than the fixture's five. */
+  const { page, context } = await visit('/', { width: 375, height: 560 });
+  try {
+    await peek(page);
+    const state = await page.evaluate(() => {
+      const gate = document.querySelector('.mobile-gate');
+      const cta = document.querySelector('.league-peek__cta').getBoundingClientRect();
+      return {
+        overflows: gate.scrollHeight > gate.clientHeight + 1,
+        overflowY: getComputedStyle(gate).overflowY,
+        ctaFitsUnscrolled: cta.bottom <= window.innerHeight + 1,
+      };
+    });
+
+    if (state.ctaFitsUnscrolled) return;
+    assert.ok(state.overflows, 'the button is off screen but the gate does not overflow');
+    assert.match(
+      state.overflowY,
+      /auto|scroll/,
+      `the sign-up is below the fold and the gate is overflow: ${state.overflowY}, so nobody can reach it`,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test('a username nobody has says so, and keeps the field', async () => {
+  const { page, context } = await visit('/', { width: 375, height: 812 });
+  try {
+    await page.locator('.mobile-gate__open').click();
+    await page.locator('.league-peek__input').fill('nobody-has-this-handle');
+    await page.locator('.league-peek__go').click();
+    await page.locator('.league-peek__error').waitFor({ timeout: 15_000 });
+
+    /* A dead end here is the same mistake the gate made: say what happened
+       and leave the way in on screen. */
+    assert.equal(await page.locator('.league-peek__input').count(), 1);
+  } finally {
+    await context.close();
+  }
+});
+

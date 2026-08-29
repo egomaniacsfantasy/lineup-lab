@@ -18,7 +18,20 @@
     var(--space-lg)
     max(var(--space-xl), env(safe-area-inset-bottom));
   background: var(--bg);
-  overflow: hidden;
+  /* Clipped, not scrollable, was fine while this screen was a fixed pitch.
+     It is not fine now: a fourteen-team league puts thirteen locked rows and
+     the sign-up button below the fold, and overflow: hidden made them
+     unreachable rather than merely off screen. The drifts are clipped by
+     their own layer instead. */
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Once someone has asked for their odds the screen stops being a poster, so
+   it stops centring itself: the answer belongs at the top where it is read
+   first, not floated in the middle of whatever height is left. */
+.mobile-gate--peeking {
+  place-items: start center;
 }
 
 /* Two soft amber masses, drifting. Blurred radial gradients rather than an
@@ -26,7 +39,7 @@
    surface every frame, and a transform on a blurred layer is composited. On
    a phone that is the difference between a smooth drift and a slideshow. */
 .mobile-gate__glow {
-  position: absolute;
+  position: fixed;
   top: -30%;
   left: -35%;
   width: 90vmax;
@@ -182,4 +195,25 @@
   font-size: 17px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+/* The way in. Filled, and the only control on the screen, because the screen
+   asks for exactly one thing. */
+.mobile-gate__open {
+  width: 100%;
+  max-width: 22rem;
+  min-height: 52px;
+  margin: var(--space-2xs) 0 var(--space-2xs);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--amber);
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: 0.04em;
+}
+
+.mobile-gate__open:hover {
+  background: var(--amber-mid);
 }

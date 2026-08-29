@@ -1203,12 +1203,45 @@ function predictorHash(picks: { week?: number; matchupId?: number; winnerRosterI
     .join('|');
 }
 
+/* The one username the fixtures answer for. */
+const DESIGN_HANDLE = 'designgods';
+
 export async function maybeHandleDesignFixtureRequest(path: string, init?: RequestInit) {
   if (!import.meta.env.DEV || typeof window === 'undefined') return null;
 
   const url = new URL(path, window.location.origin);
   const parts = url.pathname.split('/').filter(Boolean);
-  if (parts[0] !== 'api' || parts[1] !== 'league') return null;
+  if (parts[0] !== 'api') return null;
+
+  /* The phone's front door: a Sleeper username with no account behind it.
+     Answering it here is what makes that screen designable and testable at
+     all, the same gap that hid the Predictor's waiting state for weeks. Only
+     the one reserved handle resolves; anything else falls through so the
+     "we could not find that account" state stays reachable too. */
+  if (parts[1] === 'connect') {
+    if (decodeURIComponent(parts[2] ?? '').toLowerCase() !== DESIGN_HANDLE) return null;
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const leagueId = FIXTURE_IDS.league;
+    const bundle = BUNDLES.get(leagueId)!;
+    return {
+      user: { id: 'design-user', username: DESIGN_HANDLE, displayName: 'Vlahakis' },
+      season: '2026',
+      leagues: [
+        {
+          id: leagueId,
+          providerId: leagueId,
+          name: 'Mount Olympus',
+          season: '2026',
+          totalTeams: bundle.bootstrap.teams?.length ?? 12,
+          scoringFamily: 'ppr',
+          hasCustomScoring: false,
+          status: 'in_season',
+        },
+      ],
+    };
+  }
+
+  if (parts[1] !== 'league') return null;
 
   const leagueId = parts[2];
   const endpoint = parts[3];
