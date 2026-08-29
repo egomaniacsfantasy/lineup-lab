@@ -227,6 +227,9 @@ function TradeDealsView() {
   // TEMP diagnostic: the server's finder funnel, shown in the empty-state so we can see
   // exactly where trades collapse to zero without needing browser dev tools.
   const [dealsDebug, setDealsDebug] = useState<Record<string, number> | null>(null);
+  // A clicked manager gets its OWN deep scan (partnerRosterId set) at the full sim count,
+  // so its numbers match the analyzer exactly. Null = fall back to filtering the pool.
+  const [managerDeals, setManagerDeals] = useState<TradeSuggestion[] | null>(null);
 
   /* Which page of the pool the board is showing, and whether a fresh scan is
      in flight. Refresh advances the page first and only goes back to the
@@ -467,12 +470,11 @@ function TradeDealsView() {
   const managerSuggestionEntries = useMemo(() => {
     if (!stored || !bootstrap || marketManagerFilter == null) return [];
 
-    // Clicking a manager just FILTERS the one league-wide pool (leagueDeals) to that
-    // manager -- the exact same trades and numbers as the "best deals" board. There is
-    // no separate per-manager scan, so the two can never disagree, and a manager the
-    // board shows a trade with is never empty here. (Only the user's own position
-    // filter and dismissals still narrow it.)
-    const entries = (leagueDeals ?? [])
+    // Prefer the clicked manager's OWN deep scan (managerDeals, full sim count so it
+    // matches the analyzer); fall back to filtering the fast league-wide pool until it
+    // arrives.
+    const source = managerDeals ?? leagueDeals ?? [];
+    const entries = source
       .filter((suggestion) => suggestion.partnerRosterId === marketManagerFilter)
       .map((suggestion) => ({
         suggestion,
@@ -507,6 +509,7 @@ function TradeDealsView() {
     dismissedSignatures,
     friendliness,
     leagueDeals,
+    managerDeals,
     marketManagerFilter,
     marketPositionFilter,
     relationship,
@@ -526,13 +529,37 @@ function TradeDealsView() {
   }, [marketManagerFilter, marketPositionFilter]);
 
   useEffect(() => {
-    // Per-manager trades come from the already-fetched league pool (leagueDeals); there
-    // is no separate per-manager scan, so nothing to fetch or fail here. "Loading" just
-    // tracks whether that pool has arrived.
+    // A clicked manager runs its OWN deep scan at the full sim count so the numbers
+    // match the analyzer. Off (no manager) → clear and fall back to the league pool.
+    if (!stored || marketManagerFilter == null) {
+      setManagerDeals(null);
+      setManagerSuggestionsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setManagerDeals(null);
     setManagerSuggestionsError(null);
-    setManagerSuggestionsLoading(marketManagerFilter != null && leagueDeals === null);
-    setManagerSuggestionsUpdatedAt(leagueDeals !== null ? Date.now() : null);
-  }, [marketManagerFilter, leagueDeals]);
+    setManagerSuggestionsLoading(true);
+    void fetchTradeSuggestions(stored.leagueId, {
+      userId: stored.userId,
+      partnerRosterId: marketManagerFilter,
+    })
+      .then((response) => {
+        if (cancelled) return;
+        setManagerDeals(response.available ? response.suggestions ?? [] : []);
+        setDealsDebug(response.debug ?? null);
+        setManagerSuggestionsLoading(false);
+        setManagerSuggestionsUpdatedAt(Date.now());
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setManagerDeals([]);
+        setManagerSuggestionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [marketManagerFilter, stored]);
 
   // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
   // pre-selects that partner in the builder. We intentionally do NOT pre-fill

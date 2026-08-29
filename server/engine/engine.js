@@ -2230,6 +2230,8 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
+  const optimalStarters = (playerIds) =>
+    optimalAssign(playerIds, slotLabels, projectionMap, catalog, week).map((a) => a.playerId).filter(Boolean);
 
   // Evaluate a give/get trade at a sim count vs a matching baseline; return each
   // side's championship-% change (same seed => CRN cancels sim noise).
@@ -2251,8 +2253,8 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
     const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
     const partnerFinal = partnerAfter.filter((id) => !pSet.has(String(id)));
     const tradedTeams = teams.map((t) =>
-      t.rosterId === userTeam.rosterId ? { ...t, players: userFinal }
-        : t.rosterId === partnerTeam.rosterId ? { ...t, players: partnerFinal } : t);
+      t.rosterId === userTeam.rosterId ? { ...t, players: userFinal, starters: optimalStarters(userFinal) }
+        : t.rosterId === partnerTeam.rosterId ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal) } : t);
     const after = simulateSeason({ ...base, teams: tradedTeams, sims });
     const bu = baseline.find((f) => f.rosterId === userTeam.rosterId);
     const bp = baseline.find((f) => f.rosterId === partnerTeam.rosterId);
@@ -2367,6 +2369,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
 
+  // Best current-week lineup a roster can field — so the after-trade current week
+  // reflects the deal (same fix as the analyzer). Without it the this-week win% is 0.
+  const optimalStarters = (playerIds) =>
+    optimalAssign(playerIds, slotLabels, projectionMap, catalog, week).map((a) => a.playerId).filter(Boolean);
+
   // Season-sim a give/get trade with a specific partner vs a shared baseline.
   const evalTrade = (giveList, getList, partnerTeam, sims, baseline) => {
     const giveSet = new Set(giveList.map(String));
@@ -2382,8 +2389,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
     const partnerFinal = partnerAfter.filter((id) => !pSet.has(String(id)));
     const tradedTeams = teams.map((t) =>
-      t.rosterId === userTeam.rosterId ? { ...t, players: userFinal }
-        : t.rosterId === partnerTeam.rosterId ? { ...t, players: partnerFinal } : t);
+      t.rosterId === userTeam.rosterId ? { ...t, players: userFinal, starters: optimalStarters(userFinal) }
+        : t.rosterId === partnerTeam.rosterId ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal) } : t);
     const after = simulateSeason({ ...base, teams: tradedTeams, sims });
     const bu = baseline.find((f) => f.rosterId === userTeam.rosterId);
     const bp = baseline.find((f) => f.rosterId === partnerTeam.rosterId);
@@ -2537,7 +2544,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // ── Sim ONLY the finalists, at a light count — fast enough to cover every manager
   // inside the budget. CRN + a stable seed keep each delta consistent across refreshes;
   // the finder is a directional read (open a deal in the analyzer for the exact number).
-  const FINDER_SIMS = 600;
+  // A single clicked manager is only ~K trades, so sim it at the FULL analyzer count —
+  // its numbers then MATCH the Build-a-Trade analyzer exactly. The all-managers sweep
+  // stays a light, fast scan (hence approximate, clearly a quick read).
+  const FINDER_SIMS = partnerRosterId != null ? TRADE_SIMS : 600;
   const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS });
   const suggestions = [];
   let re = 0;
