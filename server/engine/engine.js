@@ -2578,18 +2578,34 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       score: Number((youDelta * (accept / 100)).toFixed(2)),
     });
   }
-  // Fairest first: smallest combined title movement across both teams.
-  suggestions.sort((a, b) => (Math.abs(a.youDelta) + Math.abs(a.partnerDelta)) - (Math.abs(b.youDelta) + Math.abs(b.partnerDelta)));
+  // Keep only trades that RAISE the user's title (youDelta > 0) — a deal that lowers
+  // your own championship odds is not a real suggestion. Safety net: if a manager has
+  // NO positive trade at all, keep its single best (highest youDelta) so it never goes
+  // blank. Ordered by your title gain, biggest first — the deals worth proposing.
+  const byMgrSug = new Map();
+  for (const s of suggestions) {
+    const list = byMgrSug.get(s.partnerRosterId) ?? [];
+    list.push(s);
+    byMgrSug.set(s.partnerRosterId, list);
+  }
+  const kept = [];
+  for (const list of byMgrSug.values()) {
+    const positive = list.filter((s) => s.youDelta > 0);
+    if (positive.length) kept.push(...positive);
+    else kept.push([...list].sort((a, b) => b.youDelta - a.youDelta)[0]);
+  }
+  kept.sort((a, b) => b.youDelta - a.youDelta);
 
   return {
     available: true,
-    suggestions: suggestions.slice(0, 60),
+    suggestions: kept.slice(0, 60),
     debug: {
       opponents: opponents.length,
       generated: scored.length,      // candidate combos built (no sim)
       finalists: finalists.length,   // fairest-by-value picked to actually sim
       simmed: re,                    // finalists that finished simulating
-      suggestions: suggestions.length,
+      positive: suggestions.filter((s) => s.youDelta > 0).length,
+      suggestions: kept.length,      // shown (positive, or a per-manager fallback)
       finalErrors,                   // candidates that threw while simming
       ms: Date.now() - t0,
     },

@@ -29,7 +29,6 @@ import { tradeSignature } from '../utils/tradeMarket';
 import {
   acceptanceGaugeLabel,
   sortByTradeFairness,
-  tradeFairnessScore,
 } from '../utils/tradeSuggestionDisplay';
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
@@ -500,8 +499,9 @@ function TradeDealsView() {
     const positionFiltered = entries.filter(
       (entry) => marketPositionFilter === 'all' || entry.position === marketPositionFilter,
     );
+    // Most title gain for YOU first (the finder now returns positive-only deals).
     const ranked = [...positionFiltered].sort(
-      (a, b) => tradeFairnessScore(a.suggestion) - tradeFairnessScore(b.suggestion),
+      (a, b) => (b.valueGain ?? 0) - (a.valueGain ?? 0),
     );
     return ranked.filter((entry) => !dismissedSignatures.has(entry.signature));
   }, [
