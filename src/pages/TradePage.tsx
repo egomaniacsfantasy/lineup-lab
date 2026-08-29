@@ -224,6 +224,9 @@ function TradeDealsView() {
      what made a league-wide scan run and then filter every result away for not
      belonging to a manager nobody had picked. */
   const [leagueDeals, setLeagueDeals] = useState<TradeSuggestion[] | null>(null);
+  // TEMP diagnostic: the server's finder funnel, shown in the empty-state so we can see
+  // exactly where trades collapse to zero without needing browser dev tools.
+  const [dealsDebug, setDealsDebug] = useState<Record<string, number> | null>(null);
 
   /* Which page of the pool the board is showing, and whether a fresh scan is
      in flight. Refresh advances the page first and only goes back to the
@@ -262,6 +265,7 @@ function TradeDealsView() {
         if (cancelled) return;
         const found = response.available ? response.suggestions ?? [] : [];
         setLeagueDeals(found);
+        setDealsDebug(response.debug ?? null);
         try {
           window.sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data: found }));
         } catch {
@@ -425,6 +429,7 @@ function TradeDealsView() {
       .then((response) => {
         const found = response.available ? response.suggestions ?? [] : [];
         setLeagueDeals(found);
+        setDealsDebug(response.debug ?? null);
         setDealPageIndex(0);
         try {
           window.sessionStorage.setItem(
@@ -1361,6 +1366,11 @@ function TradeDealsView() {
             {showingManagerMarket
               ? `The book found no deals with ${selectedPartner?.teamName ?? 'this manager'} this week.`
               : 'Pick a manager above to see the book\'s deals.'}
+            {dealsDebug ? (
+              <span style={{ display: 'block', marginTop: 6, fontSize: 11, opacity: 0.7 }}>
+                debug: {Object.entries(dealsDebug).map(([k, v]) => `${k}=${v}`).join('  ')}
+              </span>
+            ) : null}
           </p>
         )}
         {dismissedSignatures.size > 0 ? (

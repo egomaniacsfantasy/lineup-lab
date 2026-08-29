@@ -910,7 +910,7 @@ export interface TradeSuggestions {
   available: boolean;
   reason?: string;
   suggestions?: TradeSuggestion[];
-  debug?: { enumerated: number; scanned: number; resimmed: number; positive: number; ms: number };
+  debug?: Record<string, number>;
 }
 export function fetchTradeSuggestions(
   leagueId: string,
