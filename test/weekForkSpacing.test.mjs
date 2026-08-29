@@ -353,3 +353,96 @@ test('the wait ends in a board that has moved, and says by how much', async () =
   }
 });
 
+/* Two widths. 1440 is a comfortable desktop; 1220 is the narrowest window
+   where the body is still two columns, so the board is at its tightest while
+   sharing the page. That is where a five-column grid with a zero floor
+   squeezed every team name out of existence, and it is invisible at 1440. */
+for (const width of [1440, 1220]) {
+test(`the board reads as a shape, not twelve numbers to compare by hand, at ${width}px`, async () => {
+  const page = await browser.newPage({ viewport: { width, height: 900 } });
+  try {
+    await callFirstGame(page);
+    await page.waitForSelector('.predictor__row', { timeout: 20_000 });
+
+    const board = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.predictor__row')];
+      return {
+        rows: rows.length,
+        /* A meter per row, and its fill proportional to the number beside it.
+           A column of right-aligned percentages is twelve figures you hold in
+           your head to compare; a bar is a shape you read at once. */
+        meters: rows.map((row) => {
+          const meter = row.querySelector('.predictor__meter');
+          const value = row.querySelector('.predictor__meter-value');
+          return {
+            fill: meter ? parseFloat(getComputedStyle(meter).width) : null,
+            track: meter ? parseFloat(getComputedStyle(meter.parentElement).width) : null,
+            hasValue: Boolean(value && value.textContent.trim()),
+          };
+        }),
+        /* The team column must never collapse: a five-column grid with a zero
+           floor squeezed every name out of the board on a narrow panel. */
+        names: rows.map((row) => row.querySelector('.predictor__row-name').getBoundingClientRect().width),
+      };
+    });
+
+    assert.ok(board.rows > 0, 'the board rendered no rows');
+    assert.ok(board.meters.every((m) => m.fill != null), 'a row has no meter');
+    assert.ok(board.meters.every((m) => m.hasValue), 'a meter carries no number');
+    assert.ok(
+      board.meters.every((m) => m.fill <= m.track + 1),
+      'a meter overflows its track',
+    );
+    /* Not every bar the same length, or it is decoration rather than data. */
+    assert.ok(
+      new Set(board.meters.map((m) => Math.round(m.fill))).size > 1,
+      'every meter is the same width, so it is not showing anything',
+    );
+    assert.ok(
+      board.names.every((width) => width > 20),
+      `a team name column collapsed: ${board.names.map((w) => Math.round(w)).join(', ')}`,
+    );
+  } finally {
+    await page.close();
+  }
+});
+}
+
+test('a called side is amber on both halves of the card', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await page.goto(`${baseUrl}/design/league?view=predictor`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.predictor__game');
+
+    /* One pick on the LEFT of one game and one on the RIGHT of another,
+       because a duplicate --picked rule four hundred lines below the real one
+       used to win on source order for left-hand picks only: the --home
+       variant carries two classes and outranked it. One called game came out
+       green and the next amber, on the same board. */
+    const games = page.locator('.predictor__game');
+    await games.first().locator('button.predictor__side').first().click();
+    await games.last().locator('button.predictor__side').last().click();
+    await page.waitForFunction(
+      () => document.querySelectorAll('.predictor__side--picked').length === 2,
+      undefined,
+      { timeout: 10_000 },
+    );
+
+    const fills = await page.$$eval('.predictor__side--picked', (nodes) =>
+      nodes.map((node) => ({
+        home: node.classList.contains('predictor__side--home'),
+        fill: getComputedStyle(node).backgroundImage,
+      })),
+    );
+
+    assert.equal(fills.length, 2, 'both picks did not stick');
+    /* And one of each, or this proves nothing about the specificity clash. */
+    assert.equal(new Set(fills.map((f) => f.home)).size, 2, 'both picks are on the same side');
+    for (const { fill, home } of fills) {
+      assert.match(fill, /232, 84, 29/, `a called ${home ? 'right' : 'left'} side is not amber: ${fill}`);
+      assert.doesNotMatch(fill, /210, 123|58, 210/, `a called ${home ? 'right' : 'left'} side is green`);
+    }
+  } finally {
+    await page.close();
+  }
+});

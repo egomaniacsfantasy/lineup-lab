@@ -335,10 +335,15 @@ export function Predictor({
 
   const totalRemaining = games.length;
 
+  /* Your row, and where the calls have moved it. Held apart so the header can
+     show the before and the after without digging through the table. */
+  const you = baseline.find((row) => row.isUser) ?? null;
+  const youNow = you && !busy ? (conditioned?.get(you.rosterId) ?? null) : null;
+
   return (
     <section aria-labelledby="predictor-title" className="predictor">
       <header className="predictor__head">
-        <div>
+        <div className="predictor__headline">
           <p className="predictor__kicker">The Predictor</p>
           <h2 className="predictor__title" id="predictor-title">
             Call the rest of the season
@@ -349,9 +354,44 @@ export function Predictor({
               : `${picks.length} of ${totalRemaining} games called. The other ${totalRemaining - picks.length} are still simulated.`}
           </p>
         </div>
-        {/* No clear button here: the week bar carries both resets, and two
-            controls doing the same thing one row apart is how people learn not
-            to trust either. */}
+
+        {/* Your title odds, before and after the calls.
+
+            This is the answer the whole surface exists to produce and it was
+            nowhere on it: you called games and then went hunting for your own
+            row in a twelve-row table to find out what it did. Two numbers and
+            an arrow, at the size the thing deserves, in the corner your eye
+            goes to first.
+
+            Only rendered once there is a second number to show. A before with
+            no after is just the futures board with extra steps. */}
+        {you ? (
+          <div className="predictor__you">
+            <span className="predictor__you-label">
+              {youNow ? 'Your title odds, as called' : 'Your title odds'}
+            </span>
+            <span className="predictor__you-figures">
+              {youNow ? (
+                <>
+                  <span className="predictor__you-was">{formatProbOrOdds(you.titleProb)}</span>
+                  <span aria-hidden="true" className="predictor__you-arrow">→</span>
+                </>
+              ) : null}
+              <span
+                className={[
+                  'predictor__you-now',
+                  youNow && youNow.titleProb > you.titleProb ? 'predictor__you-now--up' : '',
+                  youNow && youNow.titleProb < you.titleProb ? 'predictor__you-now--down' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                {formatProbOrOdds(youNow?.titleProb ?? you.titleProb)}
+              </span>
+            </span>
+            <span className="predictor__you-team">{you.teamName}</span>
+          </div>
+        ) : null}
       </header>
 
       {notice ? <p className="predictor__notice">{notice}</p> : null}
@@ -632,19 +672,34 @@ export function Predictor({
                 <span className="predictor__num predictor__row-pf">
                   {pf != null ? pf.toFixed(1) : '—'}
                 </span>
+                {/* A meter, not just a number.
+
+                    Twelve right-aligned percentages are twelve numbers you
+                    have to read one at a time and hold in your head to
+                    compare. The bar behind them turns the column into a
+                    shape: who is in, who is out, and by how far, at a glance
+                    and before a single figure is read. The number stays on
+                    top of it, so nothing is lost by adding it. */}
                 <span className="predictor__num predictor__row-playoff">
-                  {/* Through the same formatter as the title column, so the
-                      two follow the header toggle together. A raw "%" beside
-                      a formatted price put two scales in one row and made the
-                      toggle look broken. */}
-                  {formatProbOrOdds(next?.playoffProb ?? row.playoffProb)}
-                  {playoffDelta != null && Math.abs(playoffDelta) >= 0.5 ? (
-                    <span
-                      className={`predictor__delta predictor__delta--${playoffDelta > 0 ? 'up' : 'down'}`}
-                    >
-                      {playoffDelta > 0 ? '+' : '−'}{Math.abs(playoffDelta).toFixed(0)}
-                    </span>
-                  ) : null}
+                  <span
+                    aria-hidden="true"
+                    className="predictor__meter"
+                    style={{ '--fill': `${Math.max(0, Math.min(100, next?.playoffProb ?? row.playoffProb))}%` } as React.CSSProperties}
+                  />
+                  <span className="predictor__meter-value">
+                    {/* Through the same formatter as the title column, so the
+                        two follow the header toggle together. A raw "%" beside
+                        a formatted price put two scales in one row and made
+                        the toggle look broken. */}
+                    {formatProbOrOdds(next?.playoffProb ?? row.playoffProb)}
+                    {playoffDelta != null && Math.abs(playoffDelta) >= 0.5 ? (
+                      <span
+                        className={`predictor__delta predictor__delta--${playoffDelta > 0 ? 'up' : 'down'}`}
+                      >
+                        {playoffDelta > 0 ? '+' : '−'}{Math.abs(playoffDelta).toFixed(0)}
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
                 <span className="predictor__num predictor__row-title">
                   {formatProbOrOdds(next?.titleProb ?? row.titleProb)}
