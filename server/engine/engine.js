@@ -2555,15 +2555,20 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const scanBaseline = simulateSeason({ ...base, sims: SCAN_SIMS });
   const scanned = [];
   let simmed = 0;
+  let scanErrors = 0;
   for (const c of promising) {
-    const { youDelta, partnerDelta, theirValueDelta } = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline);
+    if (Date.now() - t0 > 14_000) break;   // stop scanning; leave budget for Pass 2's full-sims
+    let ev;
+    // One bad candidate (a roster/lookup edge case) must NOT take down the whole
+    // request — skip it and keep going. An uncaught throw here was leaving whole
+    // managers (and best-deals) empty.
+    try { ev = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline); }
+    catch { scanErrors += 1; continue; }
     simmed += 1;
     if (simmed % 4 === 0) await yieldToLoop();
-    if (Date.now() - t0 > 14_000) break;   // stop scanning; leave the rest of the budget for Pass 2's full-sims
-    // Best-deals (all managers) still skips deals that clearly HURT you. A CLICKED
-    // manager has NO title constraint at all — its 5 fairest trades always show,
-    // ranked by fairness, exactly as asked.
-    if (partnerRosterId == null && youDelta < -2.5) continue;
+    const { youDelta, partnerDelta } = ev;
+    // No title constraint at all — every simulated trade is kept and RANKED by
+    // fairness, so both best-deals and a clicked manager always have something to show.
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
@@ -2596,16 +2601,16 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const finalBaseline = simulateSeason({ ...base, sims: TRADE_SIMS });
   const suggestions = [];
   let re = 0;
+  let finalErrors = 0;
   for (const c of finalists) {
-    const { youDelta, partnerDelta, youPlayoffDelta, partnerPlayoffDelta, youWeekDelta, partnerWeekDelta } =
-      evalTrade(c.give, c.get, c.partner, TRADE_SIMS, finalBaseline);
+    if (Date.now() - t0 > 26_000) break;   // return what we have before the client's 30s abort
+    let ev;
+    try { ev = evalTrade(c.give, c.get, c.partner, TRADE_SIMS, finalBaseline); }
+    catch { finalErrors += 1; continue; }
+    const { youDelta, partnerDelta, youPlayoffDelta, partnerPlayoffDelta, youWeekDelta, partnerWeekDelta } = ev;
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
-    if (Date.now() - t0 > 26_000) break;   // return what we have before the client's 30s abort
-    // Best-deals (all managers) still skips deals that clearly HURT you. A CLICKED
-    // manager has NO title constraint at all — its 5 fairest trades always show,
-    // ranked by fairness, exactly as asked.
-    if (partnerRosterId == null && youDelta < -2.5) continue;
+    // No title constraint — keep every trade, ranked by fairness below.
     const read = readsByRoster[c.partner.rosterId] ?? {};
     const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
     suggestions.push({
@@ -2630,10 +2635,14 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     available: true,
     suggestions: suggestions.slice(0, 60),
     debug: {
-      generated: scored.length,
-      simmed: promising.length,
-      scanned: scanned.length,
-      positive: suggestions.length,
+      opponents: opponents.length,
+      generated: scored.length,     // fair-value combos built
+      promising: promising.length,  // picked for the cheap scan
+      scanned: scanned.length,      // survived Pass 1
+      finalists: finalists.length,  // re-simmed in Pass 2
+      suggestions: suggestions.length,
+      scanErrors,                   // candidates that threw in Pass 1
+      finalErrors,                  // candidates that threw in Pass 2
       ms: Date.now() - t0,
     },
   };
