@@ -2145,11 +2145,20 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
   const baseline = simulateSeason({ ...base, sims: TRADE_SIMS });
+  // Refresh each traded team's CURRENT-WEEK starters to the best lineup its NEW roster
+  // can field. Without this the sim's current week keeps the pre-trade starters (and even
+  // a player you just traded away), so the this-week win% never moves no matter the deal.
+  // The optimal post-trade lineup is what you'd actually start, so trading in a stud lifts
+  // this week and trading one away drops it.
+  const optimalStarters = (playerIds) =>
+    optimalAssign(playerIds, slotLabels, projectionMap, catalog, week)
+      .map((a) => a.playerId)
+      .filter(Boolean);
   const tradedTeams = teams.map((t) =>
     t.rosterId === userTeam.rosterId
-      ? { ...t, players: userFinal }
+      ? { ...t, players: userFinal, starters: optimalStarters(userFinal) }
       : t.rosterId === partnerTeam.rosterId
-        ? { ...t, players: partnerFinal }
+        ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal) }
         : t,
   );
   const after = simulateSeason({ ...base, teams: tradedTeams, sims: TRADE_SIMS });
