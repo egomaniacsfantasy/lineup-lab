@@ -2455,9 +2455,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     return out;
   };
   const nameOf = (id) => catalog[id]?.name ?? String(id);
-  // 3-for-3 included: it only adds cheap proxy candidates (we still sim just the
-  // top `maxSim`), and balanced 3-for-3 star swaps are common realistic trades.
-  const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]];
+  // Every practical shape, including uneven ones (3-for-2, 3-for-1, etc.) so a lopsided
+  // roster still produces balanced combos. Candidate generation is cheap (no sims); the
+  // gap-sort + fairness ranking still pick the best few to actually simulate.
+  const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3], [3, 2], [2, 3], [3, 1], [1, 3]];
 
   const t0 = Date.now();
   // Optional "upgrade this position" filter: only keep trades that raise the
