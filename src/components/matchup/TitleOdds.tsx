@@ -1,4 +1,4 @@
-import { formatAmericanOdds } from '../../utils/formatOdds';
+import { formatProbOrOdds } from '../../utils/formatOdds';
 import { isMaterialMove } from '../../utils/leagueMovement';
 import './TitleOdds.css';
 
@@ -72,7 +72,7 @@ export function TitleOdds({ rows }: { rows: TitleRow[] }) {
             </span>
             {/* The price is the product, so it is the loudest thing in the
                 row: a quoted number in a box, the way a book posts one. */}
-            <span className="title-odds__price">{formatAmericanOdds(row.championOdds)}</span>
+            <span className="title-odds__price">{formatProbOrOdds(row.titleProb)}</span>
             {hasMovement ? (
               <span className="title-odds__move">
                 {/* Per row, on the same threshold the League tab uses, so the

@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
-import { useDynastyTradesExperimental } from '../../hooks/useLabsFlags';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
+import { tradesSupported } from '../../utils/leagueCapabilities';
 import './BottomTabBar.css';
 
 const BASE_TABS = [
@@ -60,23 +60,13 @@ const BASE_TABS = [
 
 export function BottomTabBar() {
   const { bootstrap, stored } = useLeagueConnection();
-  const dynastyTradesExperimental = useDynastyTradesExperimental();
-  const hideTrade =
-    bootstrap != null &&
-    (bootstrap.league.leagueType === 'keeper' ||
-      (bootstrap.league.leagueType === 'dynasty' && !dynastyTradesExperimental));
-  const showExperimentalMarketTag =
-    bootstrap != null &&
-    bootstrap.league.leagueType === 'dynasty' &&
-    dynastyTradesExperimental;
+  const hideTrade = bootstrap != null && !tradesSupported(bootstrap);
+  /* No experimental badge any more: a dynasty league does not get the tab at
+     all, so there is no half-supported state left to label. */
   const tabs = stored
     ? hideTrade
       ? BASE_TABS.filter((t) => t.path !== '/market')
-      : BASE_TABS.map((tab) =>
-          tab.path === '/market'
-            ? { ...tab, badge: showExperimentalMarketTag ? 'EXP' : null }
-            : tab,
-        )
+      : BASE_TABS
     : BASE_TABS.filter((t) => t.path === '/league').map((tab) => ({
         ...tab,
         label: 'Connect',

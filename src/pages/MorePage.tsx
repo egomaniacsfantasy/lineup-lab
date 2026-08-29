@@ -6,9 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import {
-  useDynastyTradesExperimental,
   usePlayerVotesEnabled,
-  writeDynastyTradesExperimental,
 } from '../hooks/useLabsFlags';
 import { toLeagueConnection } from '../adapters/connectedLeague';
 import { PROVIDER_LABEL } from '../utils/provider';
@@ -35,7 +33,6 @@ export function MorePage() {
   const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate();
-  const dynastyTradesExperimental = useDynastyTradesExperimental();
   const playerVotesEnabled = usePlayerVotesEnabled();
   /* The header's ADMIN pill and this link disagreed, so an account could be
      shown ADMIN in the chrome and still have no way to reach the projections
@@ -232,26 +229,6 @@ export function MorePage() {
       ))}
       <section className="more-page__section">
         <p className="more-page__eyebrow">Labs</p>
-        <div className="more-page__card more-page__labs-card">
-          <div>
-            <h3 className="more-page__card-title">Dynasty trades (experimental)</h3>
-            <p className="more-page__card-body">
-              Temporary override for product testing. Market opens in dynasty leagues, but pricing
-              quality is still provisional.
-            </p>
-          </div>
-          <button
-            aria-pressed={dynastyTradesExperimental}
-            className={[
-              'more-page__toggle',
-              dynastyTradesExperimental ? 'more-page__toggle--on' : '',
-            ].filter(Boolean).join(' ')}
-            onClick={() => writeDynastyTradesExperimental(!dynastyTradesExperimental)}
-            type="button"
-          >
-            <span />
-          </button>
-        </div>
         {playerVotesEnabled ? (
           <Link className="more-page__card" to="/rankings?labs=player-votes">
             <div>

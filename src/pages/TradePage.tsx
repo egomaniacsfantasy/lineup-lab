@@ -35,11 +35,9 @@ import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptance
 import { acceptanceProbability } from '../utils/tradeAcceptance';
 import { signedDeltaClass } from '../utils/deltaTone';
 import { analysisVerdict, deltaTone, signedPct, tradeCardHeadline } from '../utils/tradeVerdict';
-import { formatAmericanOdds } from '../utils/formatOdds';
-import {
-  useDynastyTradesExperimental,
-  useScoutingAffectsAcceptance,
-} from '../hooks/useLabsFlags';
+import { formatProbOrOdds } from '../utils/formatOdds';
+import { tradesSupported } from '../utils/leagueCapabilities';
+import { useScoutingAffectsAcceptance } from '../hooks/useLabsFlags';
 import type { ManagerFile } from '../services/managerFiles';
 import { compileManagerFile } from '../services/managerFiles';
 import {
@@ -295,7 +293,6 @@ function TradeDealsView() {
     [pricing?.futures],
   );
   const scoutingAffectsAcceptance = useScoutingAffectsAcceptance(stored?.leagueId);
-  const dynastyTradesExperimental = useDynastyTradesExperimental();
 
   const currentWeek = pricing?.week ?? bootstrap?.week ?? null;
   const { dismissedSignatures, dismiss, undo, restoreAll, pendingUndoSignature } =
@@ -668,25 +665,18 @@ function TradeDealsView() {
     );
   }
 
-  // TEMPORARY - dynasty trade UX unvalidated
-  if (bootstrap.league.leagueType === 'keeper') {
+  /* One refusal for both. There were two branches here saying nearly the
+     same thing in different words, and only one of them was reached for a
+     dynasty league. */
+  if (!tradesSupported(bootstrap)) {
     return (
       <div className="trade-page">
         <h1 className="visually-hidden">Market</h1>
         <SeasonalNotice>
-          Market deals are still redraft-first. Keeper leagues stay off for now because player age
-          and keep-cost value are not priced yet.
-        </SeasonalNotice>
-      </div>
-    );
-  }
-  if (bootstrap.league.leagueType === 'dynasty' && !dynastyTradesExperimental) {
-    return (
-      <div className="trade-page">
-        <h1 className="visually-hidden">Market</h1>
-        <SeasonalNotice>
-          Dynasty trades are behind the Labs switch right now. Turn on Dynasty trades
-          (experimental) in More to test the flow.
+          Trades are off for dynasty and keeper leagues. Draft picks and players
+          held for future seasons are half of what changes hands here, and the
+          engine prices a rest of season, so every number it could put on one of
+          these would be answering a question nobody in this league is asking.
         </SeasonalNotice>
       </div>
     );
@@ -1126,7 +1116,7 @@ function TradeDealsView() {
                     <span className="trade-cc__manager-chosen-meta">
                       {recordText(selectedPartner.record)}
                       {futuresByRoster.get(selectedPartner.rosterId)?.championOdds != null
-                        ? ` · title ${formatAmericanOdds(futuresByRoster.get(selectedPartner.rosterId)!.championOdds)}`
+                        ? ` · title ${formatProbOrOdds(futuresByRoster.get(selectedPartner.rosterId)!.titleProb)}`
                         : ''}
                     </span>
                   </span>
@@ -1171,7 +1161,7 @@ function TradeDealsView() {
                     <span className="trade-cc__manager-card-stat-label">Title</span>
                     <strong className="trade-cc__manager-card-stat-value">
                       {futuresByRoster.get(team.rosterId)?.championOdds != null
-                        ? formatAmericanOdds(futuresByRoster.get(team.rosterId)!.championOdds)
+                        ? formatProbOrOdds(futuresByRoster.get(team.rosterId)!.titleProb)
                         : 'Off board'}
                     </strong>
                     <span aria-hidden="true" className="trade-cc__manager-card-cta">Find trades ▸</span>

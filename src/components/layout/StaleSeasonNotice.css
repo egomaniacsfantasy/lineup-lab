@@ -1,0 +1,41 @@
+/* Loud on purpose.
+
+   Every number under this is wrong by a year, so it is not a hint tucked into
+   a corner: it is the only true thing on the screen and it says so in red. */
+.stale-season {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding: 10px var(--space-lg);
+  border-bottom: 1px solid rgba(255, 92, 77, 0.42);
+  background: rgba(255, 92, 77, 0.14);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.stale-season__body strong {
+  color: var(--red);
+}
+
+.stale-season__action {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 92, 77, 0.5);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font-condensed);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stale-season__action:hover {
+  border-color: var(--red);
+  background: rgba(255, 92, 77, 0.18);
+}

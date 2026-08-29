@@ -17,6 +17,7 @@ import { TradeRow } from '../components/trade-display/TradeDisplay';
 import { OddsChart, type OddsChartPoint } from '../components/charts/OddsChart';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import { tradesSupported } from '../utils/leagueCapabilities';
 import type { LeaguePricing, PricedFuture } from '../services/leagueApi';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
@@ -30,7 +31,7 @@ import {
 } from '../mocks';
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
-import { formatAmericanOdds, impliedProbability } from '../utils/formatOdds';
+import { formatAmericanOdds, impliedProbability , formatProbOrOdds} from '../utils/formatOdds';
 import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
 import { formatSignedDisplayedDeltaValue } from '../utils/displayDelta';
@@ -1959,7 +1960,7 @@ function MatchupLive({
                   /* The season leads. These are the same four numbers the
                      season band prints above the matchup, formatted there and
                      passed through here. */
-                  titleOdds: userFuture ? formatAmericanOdds(userFuture.championOdds) : null,
+                  titleOdds: userFuture ? formatProbOrOdds(userFuture.titleProb) : null,
                   playoffs:
                     userFuture?.playoffProb != null
                       ? `${Math.round(userFuture.playoffProb)}%`
@@ -2621,7 +2622,10 @@ function MatchupLive({
 
             {/* Trades earn a box of their own rather than a tier inside the
                 start/add widget, but a small one: two rows, above the field. */}
-            {isConnected ? <HubDeals /> : null}
+            {/* Gated on the same rule as the tab. This was the gap: the nav
+                hid Trades for a dynasty league and the Hub went on offering
+                them anyway, which is the worse half of the two to leave. */}
+            {isConnected && tradesSupported(bootstrap) ? <HubDeals /> : null}
 
             {isConnected && titles && titles.length > 2 ? <TitleOdds rows={titles} /> : null}
 

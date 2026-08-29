@@ -428,7 +428,10 @@ export function LeagueFutures({
               id: 'user-history',
               name: userHistory.team.teamName,
               avatarUrl: userHistory.team.avatarUrl,
-              endpointDetail: formatAmericanOdds(userHistory.team.championOdds),
+              endpointDetail:
+                userHistory.team.titleProb != null
+                  ? formatProbOrOdds(userHistory.team.titleProb)
+                  : undefined,
               points: userHistory.series.map<OddsChartPoint>((point) => ({
                 x: point.at,
                 y: point.probability,

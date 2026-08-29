@@ -34,6 +34,20 @@ export function impliedProbability(moneyline: number): number {
  *
  * Anything inside (-101, 100) is even money, quoted +100 and never -100.
  */
+/**
+ * Past this, a number has stopped being a price.
+ *
+ * The engine guards the 0 and 1 singularity with a 1e-9 epsilon so its odds
+ * stay finite, and says in its own comment that the UI is meant to show a
+ * dash off the raw probability rather than print that value. Six call sites
+ * were printing it: a dead team's championship odds came out +99999999900,
+ * which is not a long shot, it is a rendering accident.
+ *
+ * 199900 is the same line formatProbOrOdds already draws at 0.05%, so the two
+ * formatters agree about when a market is off the board.
+ */
+const OFF_THE_BOARD = 199_900;
+
 export function americanOddsValue(odds: number): number {
   const rounded = Math.round(odds);
   if (rounded >= 100 || rounded <= -101) return rounded;
@@ -42,6 +56,11 @@ export function americanOddsValue(odds: number): number {
 
 export function formatAmericanOdds(odds: number): string {
   const value = americanOddsValue(odds);
+
+  /* A backstop, not the main defence: callers with a probability to hand
+     should use formatProbOrOdds, which says the same thing from the number
+     the engine actually trusts. This catches the ones that cannot. */
+  if (Math.abs(value) >= OFF_THE_BOARD) return currentFormat === 'percent' ? '0%' : '—';
 
   if (currentFormat === 'percent') {
     return `${impliedProbability(value).toFixed(1)}%`;

@@ -1,6 +1,9 @@
 import type { LeaguePricing, PricedFuture } from '../../services/leagueApi';
 import type { CSSProperties, ReactNode } from 'react';
-import { formatAmericanOdds, impliedProbability } from '../../utils/formatOdds';
+import {
+  impliedProbability,
+  formatProbOrOdds,
+} from '../../utils/formatOdds';
 import { displayedDelta, formatSignedDisplayedDeltaValue } from '../../utils/displayDelta';
 import './SeasonBand.css';
 
@@ -112,7 +115,7 @@ export function SeasonBand({
   items.push({
     label: 'Championship',
     short: 'Title',
-    value: formatAmericanOdds(future.championOdds),
+    value: formatProbOrOdds(future.titleProb),
     strong: true,
   });
 

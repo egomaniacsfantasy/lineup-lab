@@ -7,6 +7,7 @@ import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { PlayerVotePrompt } from '../votes/PlayerVotePrompt';
 import { canPromptForVote } from '../../utils/playerVotes';
 import { AppHeader } from './AppHeader';
+import { StaleSeasonNotice } from './StaleSeasonNotice';
 import { BottomTabBar } from './BottomTabBar';
 import { PricingCurtain } from './PricingCurtain';
 import { AppErrorBoundary } from '../support/AppErrorBoundary';
@@ -75,6 +76,7 @@ export function AppShell() {
         <PlayerDetailProvider>
           <ScoutingCardProvider>
             <AppHeader />
+            <StaleSeasonNotice />
             {/* keyed on odds format: flipping it re-renders every number */}
             <main className="app-content" id="main-content" key={format} tabIndex={-1}>
               <GuardedContent>
