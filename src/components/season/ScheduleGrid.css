@@ -453,8 +453,11 @@
    priced weeks rather than a bar chart of moods. */
 .schedule-grid__heat-cell {
   position: relative;
-  background: color-mix(in srgb, var(--heat-color) 26%, var(--bg-inset)) !important;
-  border: 1px solid color-mix(in srgb, var(--heat-color) 42%, transparent) !important;
+  /* Up from 26 and 42. The ramp now resolves the range weeks actually fall
+     in, so the mix can carry it: a favoured week should be visibly green
+     across the strip rather than on inspection. */
+  background: color-mix(in srgb, var(--heat-color) 34%, var(--bg-inset)) !important;
+  border: 1px solid color-mix(in srgb, var(--heat-color) 62%, transparent) !important;
   border-radius: var(--radius-sm);
   overflow: hidden;
 }

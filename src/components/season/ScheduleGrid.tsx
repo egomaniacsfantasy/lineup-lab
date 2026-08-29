@@ -27,15 +27,31 @@ interface ScheduleGridProps {
 }
 
 
+/**
+ * How far from a coin flip a week has to be before the chip is fully coloured.
+ *
+ * This used to map 0-100 across the whole ramp, which spends the entire scale
+ * on values a fantasy schedule never produces. Real weeks sit between about
+ * 40% and 62%, so 61.4% - comfortably the softest week of a season - came out
+ * 23% of the way from neutral to green, which is to say grey. A season of
+ * genuinely different weeks rendered as seventeen identical dark boxes.
+ *
+ * Fifteen points either side of even is the honest span: it covers what
+ * actually happens, and it is a fixed ruler rather than one normalised to
+ * each team's own range, so two teams' strips can be compared.
+ */
+const HEAT_SPAN = 15;
+
 function heatColor(winProb: number) {
-  const t = Math.max(0, Math.min(1, winProb / 100));
-  const red = [176, 76, 86];
+  /* -1 is a full underdog, +1 a full favourite, 0 a coin flip. */
+  const t = Math.max(-1, Math.min(1, (winProb - 50) / HEAT_SPAN));
   const neutral = [16, 18, 21];
-  const green = [58, 162, 120];
-  const start = t <= 0.5 ? red : neutral;
-  const end = t <= 0.5 ? neutral : green;
-  const mix = t <= 0.5 ? t * 2 : (t - 0.5) * 2;
-  const mixed = start.map((channel, index) => Math.round(channel + (end[index] - channel) * mix));
+  /* The product's own green and red, so a week that favours you reads as the
+     same green a price does. */
+  const end = t >= 0 ? [52, 210, 123] : [255, 92, 77];
+  const mixed = neutral.map((channel, index) =>
+    Math.round(channel + (end[index] - channel) * Math.abs(t)),
+  );
   return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
 }
 
@@ -60,7 +76,13 @@ function heatTakeaway(items: ScheduleGridItem[]) {
   if (priced.length === 0) return 'No priced regular-season weeks yet.';
   const toughest = priced.reduce((low, item) => (item.winProb! < low.winProb! ? item : low), priced[0]);
   const softest = priced.reduce((high, item) => (item.winProb! > high.winProb! ? item : high), priced[0]);
-  return `Softest: Week ${softest.week} ${formatWinProb(softest)} · toughest: Week ${toughest.week} ${formatWinProb(toughest)}.`;
+  /* The count leads. "Favored in ten of fourteen" is the one sentence that
+     summarises a whole strip, and the two extremes are the detail under it.
+     Only weeks carrying a probability are counted: a played week is a result,
+     not a price, and folding those in would quietly answer a different
+     question. */
+  const favored = priced.filter((item) => item.winProb! > 50).length;
+  return `Favored in ${favored} of ${priced.length} weeks · softest Week ${softest.week} ${formatWinProb(softest)} · toughest Week ${toughest.week} ${formatWinProb(toughest)}.`;
 }
 
 

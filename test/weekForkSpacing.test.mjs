@@ -446,3 +446,130 @@ test('a called side is amber on both halves of the card', async () => {
     await page.close();
   }
 });
+
+/**
+ * The season strip has to look like a season.
+ *
+ * The heat ramp mapped 0-100 across its whole range, and a fantasy schedule
+ * never leaves the 40-62 band, so the softest week of a year came out 23% of
+ * the way from neutral to green. Seventeen genuinely different weeks rendered
+ * as seventeen identical dark boxes, which is a chart that has stopped
+ * charting. This measures the paint, because that was the failure.
+ *
+ * What it measures is HUE, not vividness. The bug was that the ramp did not
+ * resolve the range weeks fall in, so every chip came out the same colour
+ * whatever its number; that is a property, and it is the one asserted here.
+ * How strongly the hue is mixed into the chip is a taste dial, and dialling
+ * it down does not fail these tests. That is deliberate: inventing a
+ * brightness threshold would dress a preference up as a correctness check.
+ */
+test('a favoured week and a hard one are visibly different colours', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await page.goto(`${baseUrl}/design/league?view=season`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.schedule-grid__heat-cell');
+
+    /* Unplayed weeks only. A finished week is painted by its RESULT, full
+       green for a win and full red for a loss, on purpose: it is a scoreboard
+       and not a price. Comparing that paint against the probability in its
+       title compares two different numbers. */
+    const chips = await page.$$eval('.schedule-grid__heat-cell', (nodes) =>
+      nodes
+        .filter(
+          (node) =>
+            !node.classList.contains('schedule-grid__heat-cell--win') &&
+            !node.classList.contains('schedule-grid__heat-cell--loss'),
+        )
+        .map((node) => {
+          const title = node.getAttribute('title') ?? '';
+          const match = title.match(/:\s*([\d.]+)%/);
+          const rgb = getComputedStyle(node)
+            .backgroundColor.match(/[\d.]+/g)
+            ?.map(Number) ?? [];
+          return match ? { prob: Number(match[1]), rgb } : null;
+        })
+        .filter(Boolean),
+    );
+
+    assert.ok(chips.length >= 3, `only ${chips.length} priced weeks to compare`);
+
+    /* Colour channels are what the eye reads, so that is what is asserted.
+       A week you are favoured in must be greener than it is red, and a week
+       you are not must be the other way round. Normalised so the check does
+       not care about the absolute mix, only which way it leans. */
+    const lean = (rgb) => {
+      const [r, g] = rgb;
+      /* Divide by the pair's own sum, not by a floor of 1: Chromium reports
+         this as color(srgb 0..1), so a floor of 1 silently turned every lean
+         into a raw difference and flattened the whole comparison. */
+      return (g - r) / Math.max(1e-6, g + r);
+    };
+
+    for (const chip of chips) {
+      if (chip.prob >= 55) {
+        assert.ok(
+          lean(chip.rgb) > 0.1,
+          `week at ${chip.prob}% is not green: rgb(${chip.rgb.join(', ')})`,
+        );
+      }
+      if (chip.prob <= 45) {
+        assert.ok(
+          lean(chip.rgb) < -0.1,
+          `week at ${chip.prob}% is not red: rgb(${chip.rgb.join(', ')})`,
+        );
+      }
+    }
+
+    /* And the two ends of the season must be far apart. This is the assertion
+       that would have caught the original: every chip leaning the right way
+       is worth nothing if they all lean by two percent. */
+    const best = chips.reduce((a, b) => (b.prob > a.prob ? b : a));
+    const worst = chips.reduce((a, b) => (b.prob < a.prob ? b : a));
+    if (best.prob - worst.prob >= 8) {
+      assert.ok(
+        lean(best.rgb) - lean(worst.rgb) > 0.35,
+        `the softest week (${best.prob}%) and the toughest (${worst.prob}%) are painted almost the same: leans ${lean(best.rgb).toFixed(2)} and ${lean(worst.rgb).toFixed(2)}`,
+      );
+    }
+  } finally {
+    await page.close();
+  }
+});
+
+test('the strip says how many weeks you are favoured in, and counts them right', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await page.goto(`${baseUrl}/design/league?view=season`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.schedule-grid__heat-cell');
+
+    const { claim, probs } = await page.evaluate(() => {
+      const strip = document.querySelector('.schedule-grid__heat-cell').closest('section, div');
+      return {
+        claim: (strip.textContent.match(/Favored in (\d+) of (\d+) weeks/) ?? []).slice(1).map(Number),
+        probs: [...document.querySelectorAll('.schedule-grid__heat-cell')]
+          .filter(
+            (node) =>
+              !node.classList.contains('schedule-grid__heat-cell--win') &&
+              !node.classList.contains('schedule-grid__heat-cell--loss'),
+          )
+          .map((node) => (node.getAttribute('title') ?? '').match(/:\s*([\d.]+)%/))
+          .filter(Boolean)
+          .map((match) => Number(match[1])),
+      };
+    });
+
+    assert.equal(claim.length, 2, 'the strip does not say how many weeks you are favoured in');
+    const [favored, total] = claim;
+    /* Counted independently here, off the chips' own titles, so the sentence
+       has to agree with the strip it sits under rather than with itself. */
+    assert.equal(total, probs.length, `the claim counts ${total} weeks, the strip shows ${probs.length}`);
+    assert.equal(
+      favored,
+      probs.filter((prob) => prob > 50).length,
+      `the claim says ${favored} favoured weeks, the chips show ${probs.filter((p) => p > 50).length}`,
+    );
+  } finally {
+    await page.close();
+  }
+});
+
