@@ -2508,104 +2508,44 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     }
   }
 
-  // Build the SCAN set per opponent: the most BALANCED fair trades, favoring the
-  // ones that lean slightly your way (edge >= 0), since those are the realistic
-  // near-even swaps that raise your title without gutting the partner.
+  // ── Pick each manager's most VALUE-BALANCED candidates WITHOUT simulating. gap =
+  // |give value − get value|, so the smallest gaps are the fairest, most realistic
+  // swaps. ONLY these get the (expensive) season sim below. This is the whole fix:
+  // the old design SCANNED hundreds of trades with full sims and timed out after ~20,
+  // leaving most managers empty. Now we sim ~K per manager and always cover everyone.
   const dedupeKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
-  const numOpp = Math.max(1, opponents.length);
-  // Guarantee every opponent a fair slice of the scan budget so the all-teams sweep
-  // never starves teams late in the loop — the old fixed 54-cap did exactly that,
-  // leaving most managers blank. Deep on a single clicked partner.
-  const perOpp = partnerRosterId != null ? 40 : 10;  // scan ~10 candidates per manager so the round-robin below can cover everyone
-  const SCAN_CAP = perOpp * numOpp;
-  const byOpp = new Map();
-  for (const c of scored) {
-    const list = byOpp.get(c.partner.rosterId) ?? [];
-    list.push(c);
-    byOpp.set(c.partner.rosterId, list);
-  }
+  const K_PER_MGR = partnerRosterId != null ? 8 : 5;
+  const byMgr = new Map();
   const seen = new Set();
-  const promising = [];
-  const takeFrom = (sorted, quota) => {
-    let taken = 0;
-    for (const c of sorted) {
-      if (taken >= quota || promising.length >= SCAN_CAP) break;
-      const key = dedupeKey(c);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      promising.push(c);
-      taken += 1;
-    }
-  };
-  for (const list of byOpp.values()) {
-    if (promising.length >= SCAN_CAP) break;
-    // Balanced trades that lean your way first, then any balanced trade.
-    takeFrom(list.filter((c) => c.edge >= 0).sort((a, b) => a.gap - b.gap), Math.ceil(perOpp * 0.7));
-    takeFrom([...list].sort((a, b) => a.gap - b.gap), perOpp);
-  }
-
-  // ── Pass 1: cheap scan. A suggestion must raise YOUR title (youDelta > 0) — that
-  // is the ONLY constraint (no partner-drop scam guard; a small partner dip is ok).
-  // Survivors are RANKED by FAIRNESS: the total title-odds movement across both
-  // teams, |youDelta| + |partnerDelta|, smallest first. The fairest trade barely
-  // moves either side's title price. Acceptance probability plays NO part. The
-  // ONLY constraint is that YOUR title rises (youDelta > 0) — there is no
-  // partner-drop threshold, so a deal where the partner dips a little is allowed.
-  const SCAN_SIMS = 1200;
-  const scanBaseline = simulateSeason({ ...base, sims: SCAN_SIMS });
-  const scanned = [];
-  let simmed = 0;
-  let scanErrors = 0;
-  for (const c of promising) {
-    if (Date.now() - t0 > 14_000) break;   // stop scanning; leave budget for Pass 2's full-sims
-    let ev;
-    // One bad candidate (a roster/lookup edge case) must NOT take down the whole
-    // request — skip it and keep going. An uncaught throw here was leaving whole
-    // managers (and best-deals) empty.
-    try { ev = evalTrade(c.give, c.get, c.partner, SCAN_SIMS, scanBaseline); }
-    catch { scanErrors += 1; continue; }
-    simmed += 1;
-    if (simmed % 4 === 0) await yieldToLoop();
-    const { youDelta, partnerDelta } = ev;
-    // No title constraint at all — every simulated trade is kept and RANKED by
-    // fairness, so both best-deals and a clicked manager always have something to show.
-    const read = readsByRoster[c.partner.rosterId] ?? {};
-    const accept = acceptanceProbability(partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
-    scanned.push({ ...c, youDelta, partnerDelta, accept, score: youDelta * (accept / 100) });
-  }
-
-  // ── Pass 2: re-sim the fairest survivors for the displayed Δc, at TRADE_SIMS —
-  // the SAME sim count the Build-a-Trade analyzer uses — so a trade shown here
-  // prices IDENTICALLY when you open it in the analyzer. Stable seed + CRN keep
-  // each delta accurate at this count, and it re-sims many finalists in budget.
-  const fairness = (c) => Math.abs(c.youDelta) + Math.abs(c.partnerDelta);
-  // Cover EVERY manager: take each manager's fairest few candidates and full-sim them
-  // ROUND-ROBIN (manager 1's best, manager 2's best, ... then everyone's 2nd best...).
-  // The pool ends up spread across all managers, so "best deals" is just the top of
-  // this pool and clicking a manager filters the SAME pool -- the two can't disagree,
-  // and any manager with a youDelta>0 trade is never empty. Round-robin also means a
-  // time cut-off still leaves every manager their fairest trade.
-  const K_PER_MGR = 5;
-  const byMgrScan = new Map();
-  for (const c of scanned) {
-    const list = byMgrScan.get(c.partner.rosterId) ?? [];
+  for (const c of scored) {
+    const key = dedupeKey(c);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const list = byMgr.get(c.partner.rosterId) ?? [];
     list.push(c);
-    byMgrScan.set(c.partner.rosterId, list);
+    byMgr.set(c.partner.rosterId, list);
   }
-  const perMgr = [...byMgrScan.values()].map((list) =>
-    list.sort((a, b) => fairness(a) - fairness(b)).slice(0, K_PER_MGR));
+  // Each manager contributes its K fairest-by-value trades, interleaved round-robin so
+  // a time cut-off still leaves every manager represented rather than starving the tail.
+  const perMgr = [...byMgr.values()].map((list) =>
+    [...list].sort((a, b) => a.gap - b.gap).slice(0, K_PER_MGR));
   const finalists = [];
   for (let i = 0; i < K_PER_MGR; i += 1) {
     for (const list of perMgr) if (list[i]) finalists.push(list[i]);
   }
-  const finalBaseline = simulateSeason({ ...base, sims: TRADE_SIMS });
+
+  // ── Sim ONLY the finalists, at a light count — fast enough to cover every manager
+  // inside the budget. CRN + a stable seed keep each delta consistent across refreshes;
+  // the finder is a directional read (open a deal in the analyzer for the exact number).
+  const FINDER_SIMS = 600;
+  const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS });
   const suggestions = [];
   let re = 0;
   let finalErrors = 0;
   for (const c of finalists) {
     if (Date.now() - t0 > 26_000) break;   // return what we have before the client's 30s abort
     let ev;
-    try { ev = evalTrade(c.give, c.get, c.partner, TRADE_SIMS, finalBaseline); }
+    try { ev = evalTrade(c.give, c.get, c.partner, FINDER_SIMS, finalBaseline); }
     catch { finalErrors += 1; continue; }
     const { youDelta, partnerDelta, youPlayoffDelta, partnerPlayoffDelta, youWeekDelta, partnerWeekDelta } = ev;
     re += 1;
@@ -2636,13 +2576,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     suggestions: suggestions.slice(0, 60),
     debug: {
       opponents: opponents.length,
-      generated: scored.length,     // fair-value combos built
-      promising: promising.length,  // picked for the cheap scan
-      scanned: scanned.length,      // survived Pass 1
-      finalists: finalists.length,  // re-simmed in Pass 2
+      generated: scored.length,      // candidate combos built (no sim)
+      finalists: finalists.length,   // fairest-by-value picked to actually sim
+      simmed: re,                    // finalists that finished simulating
       suggestions: suggestions.length,
-      scanErrors,                   // candidates that threw in Pass 1
-      finalErrors,                  // candidates that threw in Pass 2
+      finalErrors,                   // candidates that threw while simming
       ms: Date.now() - t0,
     },
   };

@@ -52,18 +52,13 @@ export function sortTradeSuggestions<T extends TradeDisplayMover>(suggestions: T
 }
 
 export function applyTradeDisplayPolicy<T extends TradeDisplayMover>(suggestions: T[]) {
-  const sorted = sortTradeSuggestions(suggestions);
-  const visible = sorted.filter((suggestion) => {
-    const band = getAcceptanceLingo(suggestion.acceptanceProbability ?? 100);
-    return band?.label !== LONG_SHOT_LABEL;
-  });
-  if (visible.length > 0) {
-    return { visible, longShotFallback: null as T | null };
-  }
-  return {
-    visible: sorted.slice(0, 1),
-    longShotFallback: sorted[0] ?? null,
-  };
+  // Show EVERY trade, ranked by fairness (smallest combined title movement first).
+  // Previously this hid low-acceptance "long shots", which — combined with the finder
+  // returning mostly title-neutral deals — left the board looking empty. The user
+  // asked to always see the fairest options regardless of how likely they are to accept.
+  void LONG_SHOT_LABEL; void getAcceptanceLingo; // retained for other exports
+  const visible = sortByTradeFairness(suggestions);
+  return { visible, longShotFallback: null as T | null };
 }
 
 export function lowAcceptanceTag(probability: number | null | undefined, prominent = false) {
