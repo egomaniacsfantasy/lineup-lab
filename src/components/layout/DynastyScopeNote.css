@@ -1,0 +1,24 @@
+/* A scope note, not an alarm.
+
+   Amber, because a healthy league on a supported path is not an error, and red
+   here would teach people to stop reading red. Quiet enough to sit under a
+   price without competing with it. */
+
+.dynasty-scope {
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(232, 84, 29, 0.28);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+  text-wrap: pretty;
+}
+
+.dynasty-scope strong {
+  color: var(--text-amber);
+  font-weight: 600;
+}

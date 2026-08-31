@@ -7,6 +7,7 @@ import { PENDING_SLEEPER_PARAM, rememberPendingSleeper } from '../utils/pendingS
 import { trackEvent } from '../services/leagueApi';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints } from '../utils/formatOdds';
 import { TeamAvatar } from '../components/league/TeamAvatar';
+import { DynastyScopeNote } from '../components/layout/DynastyScopeNote';
 import { MatchupPage } from './MatchupPage';
 import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
@@ -352,6 +353,8 @@ function Book({ league, username }: { league: PeekLeague; username: string }) {
             </li>
           ))}
       </ol>
+
+      <DynastyScopeNote leagueType={league.leagueType} />
 
       <a
         className={styles.go}

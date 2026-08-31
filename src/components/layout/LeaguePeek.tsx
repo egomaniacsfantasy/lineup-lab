@@ -1,4 +1,5 @@
 import { usePeek } from '../../hooks/usePeek';
+import { DynastyScopeNote } from './DynastyScopeNote';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints } from '../../utils/formatOdds';
 import { TeamAvatar } from '../league/TeamAvatar';
 import { SimulationLoader } from '../ui/SimulationLoader';
@@ -156,15 +157,23 @@ export function LeaguePeek({ onCreateAccount }: { onCreateAccount: (username: st
           <span className="league-peek__you-name">{league.you.teamName}</span>
         </div>
 
+        <DynastyScopeNote leagueType={league.leagueType} />
+
         {/* What the locks are hiding, said once, in front of them. Someone who
             has just watched one game get priced is being told the same thing
             has been done to every other game in their league. */}
         <p className="league-peek__pitch">
           The rest of the book is open. Moneylines, spreads and totals on every
           matchup in your league, championship odds that move all week, and a
-          bet slip that parlays your own league at fair odds. Plus a trade
-          finder that prices every deal from both sides and tells you whether
-          he will accept.
+          bet slip that parlays your own league at fair odds.
+          {/* The trade finder is not offered to a league it does not serve.
+              The scope note directly above says trade pricing is off here, and
+              following that with "plus a trade finder" is the product
+              contradicting itself inside two sentences, on the screen where it
+              is asking to be believed. */}
+          {league.leagueType === 'redraft'
+            ? ' Plus a trade finder that prices every deal from both sides and tells you whether he will accept.'
+            : ''}
         </p>
 
         {/* Names shown, prices locked. Hiding the names too would make this a

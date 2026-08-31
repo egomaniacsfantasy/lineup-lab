@@ -762,6 +762,33 @@ and adding before it is used.
     file path in its target list (which the landing rewrite created) fails only
     when someone runs it by hand. Worth folding into the suite.
 
+22. **A dynasty league was offered twice, a year apart.** The username lookup
+    merges this season and last on purpose (Sleeper's idea of the current
+    season can lag in the off-season), and Sleeper does not roll a dynasty
+    league forward: each season is a new league with the same name. So a
+    dynasty manager saw two identical entries and no way to tell which was
+    current. `visibleLeagues` now drops any league another league in the list
+    replaced, using `previous_league_id`, which both ends of are already in
+    hand, and then shows only the current season **when there is one**. The
+    blunt season filter alone would have resurrected the off-season bug the
+    merge exists to solve.
+23. **The dynasty scope note reached the app but not the funnel.** Both
+    anonymous screens render above the app shell, which is where the note
+    lives, so a dynasty manager arriving from an advert saw trade and ranking
+    claims that do not apply to their league. The peek and the landing book now
+    carry a short version, and the pitch beside it drops the trade-finder
+    sentence in those leagues: saying "trade pricing is off" and "plus a trade
+    finder" two sentences apart is the product contradicting itself on the
+    screen where it is asking to be believed.
+24. **The sign-up exemption disabled the phone gate for the whole visit.**
+    `useIsPhone` read `window.location` once in an effect with no dependencies,
+    which was fine while every exemption was a property of the visit. The
+    sign-up exemption is a property of one path, so a phone that reached
+    `/signin?sleeper=` and then navigated got the entire desktop app, which is
+    the outcome the gate exists to prevent, through the door added to help
+    them. It now reads the router and re-evaluates on every route, in both
+    directions.
+
 ## Still open
 
 15. **`server/engine/leverage.js` is not wired to a route.** The file documents

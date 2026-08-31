@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 
 /**
@@ -76,9 +77,9 @@ function askedForItAnyway(): boolean {
  * Read straight off the URL rather than from storage: a stored flag would keep
  * letting a phone past this screen long after the visit that earned it.
  */
-function cameFromThePeek(): boolean {
+function cameFromThePeek(search: string): boolean {
   try {
-    return Boolean(new URLSearchParams(window.location.search).get('sleeper'));
+    return Boolean(new URLSearchParams(search).get('sleeper'));
   } catch {
     return false;
   }
@@ -86,19 +87,40 @@ function cameFromThePeek(): boolean {
 
 export function useIsPhone(): boolean {
   const [phone, setPhone] = useState(false);
+  /* From the router, not from window.location, so this re-runs when the app
+     navigates.
+     
+     It used to read window.location once, in an effect with no dependencies.
+     That was fine while every exemption was a property of the whole visit
+     (native, a design route, an explicit override). The sign-up exemption is
+     not: it is true of ONE path. Read once, it disabled the gate for the rest
+     of the page load, so somebody who arrived at /signin from the peek and
+     then moved on got the entire desktop app on their phone. Which is the one
+     outcome this hook exists to prevent, reached through the door added to
+     help them. */
+  const { pathname, search } = useLocation();
 
   useEffect(() => {
-    if (Capacitor.isNativePlatform()) return;
-    if (window.location.pathname.startsWith('/design/')) return;
-    if (window.location.pathname === '/signin' && cameFromThePeek()) return;
-    if (askedForItAnyway()) return;
+    const exempt =
+      Capacitor.isNativePlatform()
+      || pathname.startsWith('/design/')
+      || (pathname === '/signin' && cameFromThePeek(search))
+      || askedForItAnyway();
+
+    /* Set on every route, both ways. An early return could only ever leave
+       the gate off, which is how the leak above survived: turning it back on
+       when an exemption stops applying is the half that was missing. */
+    if (exempt) {
+      setPhone(false);
+      return undefined;
+    }
 
     const mq = window.matchMedia(PHONE);
     const sync = () => setPhone(mq.matches);
     sync();
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
-  }, []);
+  }, [pathname, search]);
 
   return phone;
 }

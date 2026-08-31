@@ -53,6 +53,12 @@ export interface PeekMatchup {
 
 export interface PeekLeague {
   name: string;
+  /* Carried because the anonymous screens sit ABOVE the app shell, and the
+     shell is where the dynasty scope note lives. Somebody peeking at a dynasty
+     league from a phone was being shown trade and ranking claims that do not
+     apply to their league, with nothing saying so, on the one screen we point
+     advertising at. */
+  leagueType: 'redraft' | 'keeper' | 'dynasty';
   you: PeekRow;
   others: PeekRow[];
   matchup: PeekMatchup | null;
@@ -203,6 +209,7 @@ export function usePeek(area: string) {
           name: 'peek',
           league: {
             name: league.name,
+            leagueType: bootstrap.league.leagueType,
             you,
             others: rows.filter((row) => !row.isUser),
             matchup: buildPeekMatchup(bootstrap, pricing, you.rosterId),

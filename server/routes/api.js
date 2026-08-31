@@ -55,6 +55,7 @@ import {
 import { computeRosterNeeds, computeSuperlatives } from '../services/scoutingSignals.js';
 import { seasonParam } from '../season.js';
 import { rateLimitPricing } from '../rateLimit.js';
+import { visibleLeagues } from '../leagueChoices.js';
 
 const DAY = 24 * 60 * 60_000;
 const autoHarvested = new Set();
@@ -348,7 +349,9 @@ async function resolveConnect(provider, username) {
         if (!byId.has(lg.id)) byId.set(lg.id, lg);
       }
     }
-    const leagues = [...byId.values()];
+    /* Both seasons in hand, so a dynasty chain can be collapsed to the season
+       it is in now rather than listed twice. See visibleLeagues. */
+    const leagues = visibleLeagues([...byId.values()], season);
 
     if (leagues.length === 0) {
       return {

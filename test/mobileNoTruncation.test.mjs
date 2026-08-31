@@ -295,6 +295,41 @@ test('a phone is turned away at the door, before it is asked to sign up', async 
   }
 });
 
+test('the sign-up door closes behind them', async () => {
+  /* The exemption is true of one path, and it used to be read once per page
+     load. So a phone that arrived at /signin from the peek had the gate
+     disabled for the rest of the visit: navigate anywhere afterwards and the
+     entire desktop app rendered on the phone, which is the one outcome the
+     gate exists to prevent, reached through the door added to help them. */
+  const { page, context } = await visit('/signin?sleeper=designgods', {
+    width: 375,
+    height: 812,
+  });
+  try {
+    await page.locator('.auth-landing__form').waitFor({ timeout: 15_000 });
+
+    /* Move on the way the app does after an account is made: a client side
+       route change, not a fresh load. */
+    await page.evaluate(() => {
+      window.history.pushState({}, '', '/connect');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await page.locator('.mobile-gate').waitFor({ timeout: 10_000 });
+
+    const after = await page.evaluate(() => ({
+      path: window.location.pathname,
+      gate: document.querySelectorAll('.mobile-gate').length,
+      shell: document.querySelectorAll('.app-shell').length,
+    }));
+
+    assert.equal(after.path, '/connect');
+    assert.equal(after.gate, 1, 'the gate stayed off after the sign-up path');
+    assert.equal(after.shell, 0, 'the desktop shell rendered on a phone');
+  } finally {
+    await context.close();
+  }
+});
+
 test('the one way through is a phone that has already been shown its league', async () => {
   /* The exemption, and its exact width. ?sleeper= is set by one thing only:
      the peek's button, which cannot be pressed until the screen has priced a
@@ -1023,6 +1058,53 @@ test('the landing page acknowledges Sleeper and ESPN and nothing else', async ()
     }
     assert.match(text, /Sleeper/);
     assert.match(text, /ESPN/);
+  } finally {
+    await context.close();
+  }
+});
+
+test('a dynasty peek says what is missing, and does not contradict itself', async () => {
+  /* The scope note lives in the app shell, and both anonymous screens render
+     ABOVE the shell, so a dynasty manager arriving from an advert saw trade
+     and ranking claims that do not apply to their league with nothing saying
+     so. They are also the audience most likely to read that as broken rather
+     than early. */
+  const { page, context } = await visit('/?dynasty=1', { width: 375, height: 812 });
+  try {
+    await peek(page);
+    await page.locator('.dynasty-scope').waitFor({ timeout: 15_000 });
+
+    const seen = await page.evaluate(() => ({
+      note: document.querySelector('.dynasty-scope').textContent,
+      pitch: document.querySelector('.league-peek__pitch').textContent,
+    }));
+
+    assert.match(seen.note, /Dynasty league/i);
+    assert.match(seen.note, /trade pricing is off/i);
+    assert.match(seen.note, /this season alone/i);
+
+    /* And the pitch beside it must not offer the thing the note just said is
+       off. Saying both, two sentences apart, is the product contradicting
+       itself on the screen where it is asking to be believed. */
+    assert.ok(
+      !/trade finder/i.test(seen.pitch),
+      `the note says trade pricing is off and the pitch offers it: "${seen.pitch}"`,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test('a redraft peek is not given the dynasty note, and keeps the full pitch', async () => {
+  const { page, context } = await visit('/', { width: 375, height: 812 });
+  try {
+    await peek(page);
+    const seen = await page.evaluate(() => ({
+      notes: document.querySelectorAll('.dynasty-scope').length,
+      pitch: document.querySelector('.league-peek__pitch').textContent,
+    }));
+    assert.equal(seen.notes, 0, 'a redraft league was given the dynasty note');
+    assert.match(seen.pitch, /trade finder/i, 'the redraft pitch lost the trade finder');
   } finally {
     await context.close();
   }
