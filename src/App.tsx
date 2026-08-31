@@ -31,6 +31,21 @@ function HomeGate() {
   return <Navigate replace to={stored ? '/matchup' : '/connect'} />;
 }
 
+/**
+ * Every path that is not a route still has to land somewhere.
+ *
+ * This tree had no catch-all, and a Routes with nothing to match renders
+ * NOTHING: no error, no redirect, a page painted in the background colour and
+ * left there. /demo was the case that surfaced it, because /demo is a real
+ * route in the signed-out tree and was never added to this one, so following a
+ * marketing link while already signed in produced a blank screen. But the bug
+ * was never about /demo. Any typo, any stale bookmark, any link to a route
+ * that has since been renamed did the same thing, and did it silently.
+ */
+function NotFoundGate() {
+  return <Navigate replace to="/" />;
+}
+
 /** There is no demo: every app tab requires a synced league. */
 function RequireLeague() {
   const { stored } = useLeagueConnection();
@@ -60,7 +75,13 @@ function AppRoutes() {
               </Route>
               <Route path="/projections" element={<Navigate replace to="/rankings?view=sheet" />} />
               <Route path="/admin/projections" element={<AdminProjectionsPage />} />
+              {/* The demo is a marketing destination, so it answers for
+                  everybody. A link that works for a stranger and breaks for
+                  the people who already signed up is the worst version of it,
+                  and that is exactly what it was. */}
+              <Route path="/demo" element={<DemoPage />} />
             </Route>
+            <Route path="*" element={<NotFoundGate />} />
           </Routes>
           </OddsFormatProvider>
         </LeagueConnectionProvider>

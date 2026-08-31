@@ -4,6 +4,7 @@ import {
   clamp,
   roundTo,
 } from '../utils/lineupComparison';
+import { opponentLineFrom } from '../utils/matchupSides';
 import { getDisplayedWinProbabilityDelta } from '../utils/matchupDelta';
 import { evaluateStarterSlot } from '../utils/starterEvaluation';
 import { getWeek8ReplayProjection } from '../data/playerManifest';
@@ -332,23 +333,30 @@ export function useMatchupEngine(matchup: MatchupData): MatchupEngineState {
     [buildLineFromSelections, selectedAlternatives],
   );
 
-  const activeLine = useMemo(() => {
-    const opponentProjection = roundTo(activeYourLine.total - activeYourLine.projection);
+  const activeLine = useMemo(
+    /* The opponent's price is CONVERTED from their win probability, not
+       carried across as an offset from the baseline price.
 
-    return {
-      yours: activeYourLine,
-      opponent: {
-        moneyline: Math.round(
-          baselineLine.opponent.moneyline -
-            (activeYourLine.moneyline - baselineLine.yours.moneyline),
-        ),
-        winProbability: roundTo(100 - activeYourLine.winProbability),
-        projection: opponentProjection,
-        spread: roundTo(activeYourLine.spread * -1),
-        total: activeYourLine.total,
-      },
-    };
-  }, [activeYourLine, baselineLine.opponent, baselineLine.yours.moneyline]);
+       It used to read:
+
+         baselineLine.opponent.moneyline
+           - (activeYourLine.moneyline - baselineLine.yours.moneyline)
+
+       which treats American odds as if they were linear. They are not: the
+       scale jumps across the -100/+100 boundary and compresses as it runs out
+       toward the favourite, so subtracting a delta measured in odds-space
+       produces a number that is not the price of anything. At baseline the
+       delta is zero and it looked correct, so it only went wrong once somebody
+       changed a lineup, which is the entire point of this screen.
+
+       Concretely: from -260/+210, a swap that moved your side to -356 priced
+       the opponent at +306, leaving BOTH teams as underdogs in a two-team
+       game. The demo is a marketing destination and it was showing that.
+
+       opponentLineFrom cannot do this, and says why in its own doc. */
+    () => ({ yours: activeYourLine, opponent: opponentLineFrom(activeYourLine) }),
+    [activeYourLine],
+  );
 
   const roster = useMemo(
     () =>

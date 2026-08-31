@@ -1,7 +1,7 @@
 import { useEffect, type ReactElement } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
-import { connectionForDesignScene, type DesignScene } from '../dev/designFixtures';
+import { SUCCESSOR_SUFFIX, connectionForDesignScene, type DesignScene } from '../dev/designFixtures';
 import { LeaguePage } from './LeaguePage';
 import { MatchupPage } from './MatchupPage';
 import { MyBoardPage } from './MyBoardPage';
@@ -26,17 +26,29 @@ export function DesignFixturePage() {
   const validScene = isDesignScene(scene);
   const target = validScene ? connectionForDesignScene(scene) : null;
 
+  /* A league this scene is allowed to be showing.
+   *
+   * The scene's own league, or the one it rolls over into. ?staleSeason makes
+   * the fixture answer as last season, and the app now follows the chain to
+   * this season by itself, so the connection legitimately changes underneath
+   * this page. Insisting on an exact match made the two fight: the app
+   * switched forward, this switched back, and the scene rendered an error for
+   * a league neither of them was serving. */
+  const onScene = (leagueId: string | undefined) =>
+    leagueId != null
+    && (leagueId === target?.leagueId || leagueId === `${target?.leagueId}${SUCCESSOR_SUFFIX}`);
+
   useEffect(() => {
     if (!target) return;
-    if (stored?.leagueId === target.leagueId) return;
+    if (onScene(stored?.leagueId)) return;
     connect(target);
-  }, [connect, stored?.leagueId, target]);
+  });
 
   if (!validScene || !target) {
     return <Navigate replace to="/design/matchup" />;
   }
 
-  if (stored?.leagueId !== target.leagueId) {
+  if (!onScene(stored?.leagueId)) {
     return <div className="app-boot" aria-hidden="true" />;
   }
 

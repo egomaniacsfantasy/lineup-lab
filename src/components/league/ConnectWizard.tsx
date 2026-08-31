@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { consumePendingSleeper } from '../../utils/pendingSleeper';
 import {
   connectUsername,
   fetchBootstrap,
@@ -40,7 +41,11 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
      account is in, and adding all of them turned the switcher into a list of a
      dozen entries nobody chose. */
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [username, setUsername] = useState('');
+  /* Prefilled from the phone gate when there is one. Someone who typed their
+     username into the pitch, watched their own matchup get priced, and then
+     made an account should not be asked for it a second time. Consumed on
+     read, so it cannot resurface months later with a name they have changed. */
+  const [username, setUsername] = useState(() => consumePendingSleeper());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

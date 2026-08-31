@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './PricingOdds.css';
 
 /**
  * A price being worked out, rather than a price.
@@ -16,6 +17,21 @@ import { useEffect, useState } from 'react';
  * draws random values because they are meaningless. Anything derived from real
  * projections would be a half-computed price shown as if it were finished,
  * which is the problem it exists to solve.
+ *
+ * ────────────────────────────────────────────────────────────────────────
+ * WHY IT IS DIMMED AND MONOSPACED
+ *
+ * This was briefly replaced with a dash, because a report of a hero at -311
+ * that "repriced" to +169 turned out to be two frames of THIS, read as the
+ * book changing its mind by five hundred points. The diagnosis was right and
+ * the fix was wrong: the churn is the design, and a frozen board is the worse
+ * failure.
+ *
+ * What was actually wrong is that a frame of it was indistinguishable from a
+ * settled quote in a screenshot. So the churn stays and the costume goes: it
+ * is dimmed, it is set in the mono face rather than the price face every real
+ * number on this screen uses, and it pulses. Still a moving board, no longer
+ * something you can screenshot as a price.
  */
 const FRAME_MS = 80;
 

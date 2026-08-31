@@ -519,6 +519,8 @@ export function MyBoardPage() {
     setSearchDraft((current) => (current === query ? current : query));
   }, [query]);
 
+  const [unavailable, setUnavailable] = useState(false);
+
   useEffect(() => {
     let alive = true;
     setError(null);
@@ -526,9 +528,15 @@ export function MyBoardPage() {
       .then((payload) => {
         if (!alive) return;
         if (!payload.available) {
+          /* Not the same thing as a filter matching nothing, and it used to
+             render as if it were: an empty board under the words "No players
+             match this filter", which sends someone to clear filters they
+             never set. The board has no rows because the source has none. */
           setBoard([]);
+          setUnavailable(true);
           return;
         }
+        setUnavailable(false);
         setBoard(payload.rankings);
       })
       .catch((err) => {
@@ -857,7 +865,9 @@ export function MyBoardPage() {
             The Gods&apos; projections · {scoringLabel(scoring)}
           </p>
           <p className="board-page__freshness">
-            Updated {formatUpdatedDate(projectionData.updatedAt)} · {board.length} players
+            {unavailable
+              ? 'Player values are not available right now.'
+              : `Updated ${formatUpdatedDate(projectionData.updatedAt)} · ${board.length} players`}
           </p>
         </div>
         {isAdmin ? (
@@ -1045,7 +1055,11 @@ export function MyBoardPage() {
             );
           })}
           {visibleRows.length === 0 ? (
-            <p className="board-page__empty">No players match this filter.</p>
+            <p className="board-page__empty">
+              {unavailable
+                ? 'Player values are not available right now. Nothing is wrong with your filters.'
+                : 'No players match this filter.'}
+            </p>
           ) : null}
         </section>
       ) : (
@@ -1157,7 +1171,9 @@ export function MyBoardPage() {
                       className="board-page__empty-cell"
                       colSpan={columnCountForSheet(sheetStatColumns.length)}
                     >
-                      No players match this filter.
+                      {unavailable
+                        ? 'Player values are not available right now.'
+                        : 'No players match this filter.'}
                     </td>
                   </tr>
                 ) : null}

@@ -10,7 +10,7 @@ function peakDensity(h: DensityHistogram): number {
  * The margin distribution, drawn as the module's one real chart: red where you
  * lose, green where you win, split at zero. The axis is labelled with what the
  * two sides MEAN rather than with the extreme margins of the sample, because
- * the tails of a 5,000-run sample are the least useful thing on the page.
+ * the tails of a 10,000-run sample are the least useful thing on the page.
  */
 function MarginChart({ histogram, label }: { histogram: DensityHistogram; label: string }) {
   const W = 300;

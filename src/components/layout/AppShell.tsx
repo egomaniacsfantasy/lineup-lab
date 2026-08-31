@@ -7,7 +7,7 @@ import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { PlayerVotePrompt } from '../votes/PlayerVotePrompt';
 import { canPromptForVote } from '../../utils/playerVotes';
 import { AppHeader } from './AppHeader';
-import { StaleSeasonNotice } from './StaleSeasonNotice';
+import { ShellNotices } from './ShellNotices';
 import { BottomTabBar } from './BottomTabBar';
 import { PricingCurtain } from './PricingCurtain';
 import { AppErrorBoundary } from '../support/AppErrorBoundary';
@@ -84,7 +84,7 @@ export function AppShell() {
                 header contributes no height to the flex column; .app-content
                 is the only thing that already accounts for it. */}
             <main className="app-content" id="main-content" key={format} tabIndex={-1}>
-              <StaleSeasonNotice />
+              <ShellNotices />
               <GuardedContent>
                 <Outlet />
               </GuardedContent>

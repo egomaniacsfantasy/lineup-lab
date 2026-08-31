@@ -18,6 +18,17 @@ import { Capacitor } from '@capacitor/core';
  *   - Anyone who has asked to see it anyway, with ?desktop=1. There has to be
  *     a way to look at the real thing on a real phone while it is built, and
  *     the choice sticks so it survives every link you follow afterwards.
+ *   - The sign-up screen, but ONLY when it arrives carrying a username from
+ *     the peek. The gate's whole job is to end in an account, and an email and
+ *     a password are two text fields, which a phone has; without this the
+ *     button at the bottom of the pitch loops straight back to the pitch.
+ *
+ *     Narrow on purpose. A bare /signin on a phone is still gated, because the
+ *     original complaint stands for anyone arriving cold: they would be asked
+ *     to make an account and told at the END of it to go and find a laptop.
+ *     ?sleeper= is proof that has already happened in the other order, since
+ *     the only thing that sets it is the peek, and the peek only exists after
+ *     someone has watched their own league get priced.
  */
 
 const KEY = 'oddsgods.forceDesktop';
@@ -59,12 +70,27 @@ function askedForItAnyway(): boolean {
   }
 }
 
+/**
+ * Did the sign-up screen arrive from the peek, rather than cold?
+ *
+ * Read straight off the URL rather than from storage: a stored flag would keep
+ * letting a phone past this screen long after the visit that earned it.
+ */
+function cameFromThePeek(): boolean {
+  try {
+    return Boolean(new URLSearchParams(window.location.search).get('sleeper'));
+  } catch {
+    return false;
+  }
+}
+
 export function useIsPhone(): boolean {
   const [phone, setPhone] = useState(false);
 
   useEffect(() => {
     if (Capacitor.isNativePlatform()) return;
     if (window.location.pathname.startsWith('/design/')) return;
+    if (window.location.pathname === '/signin' && cameFromThePeek()) return;
     if (askedForItAnyway()) return;
 
     const mq = window.matchMedia(PHONE);

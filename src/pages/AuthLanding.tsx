@@ -1,4 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { PENDING_SLEEPER_PARAM, rememberPendingSleeper } from '../utils/pendingSleeper';
 import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { useAuth } from '../contexts/AuthContext';
 import './AuthLanding.css';
@@ -52,9 +54,35 @@ function useViewportReadout() {
   return readout;
 }
 
+/**
+ * Every tab of the app, for someone with no account.
+ *
+ * This screen is the signed-out tree's catch-all, so it answers for /league,
+ * /market and /rankings as well as for /signin. Those three are reachable from
+ * the demo's own tab bar, which means the most common way to arrive here is by
+ * pressing a tab and being silently replaced by a sign-up form. That reads as a
+ * broken link rather than a wall, so the wall says what it is.
+ *
+ * Matched on the path rather than passed as state: the tab bar renders real
+ * links, and a link that has to carry a payload to work is a link somebody will
+ * eventually copy without it.
+ */
+const APP_TAB_PATHS = new Set(['/league', '/market', '/rankings', '/matchup', '/season', '/more', '/trade', '/trade-analyzer']);
+
 export function AuthLanding() {
   const { signUp, signIn } = useAuth();
   const viewport = useViewportReadout();
+  const { pathname } = useLocation();
+  const cameFromApp = APP_TAB_PATHS.has(pathname);
+  const [searchParams] = useSearchParams();
+  const fromPeek = searchParams.get(PENDING_SLEEPER_PARAM) ?? '';
+
+  /* Moved off the URL and into storage the moment this screen renders. The
+     query string does not survive the sign-up, and the connect screen on the
+     other side of it is where the name is actually needed. */
+  useEffect(() => {
+    if (fromPeek) rememberPendingSleeper(fromPeek);
+  }, [fromPeek]);
   const [mode, setMode] = useState<'signup' | 'login'>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -81,6 +109,13 @@ export function AuthLanding() {
         <section className="auth-landing__panel">
           <img alt="" className="auth-landing__mark" src="/og-logo.png" />
           <h1 className="auth-landing__wordmark">ODDS GODS</h1>
+          {fromPeek ? (
+            <p className="auth-landing__context">
+              One account and {fromPeek}&rsquo;s league opens on your laptop.
+            </p>
+          ) : cameFromApp ? (
+            <p className="auth-landing__context">Sign in to open the full book.</p>
+          ) : null}
           <div className="auth-landing__tabs" role="tablist">
             <button
               aria-selected={mode === 'signup'}

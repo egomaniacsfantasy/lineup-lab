@@ -1,0 +1,108 @@
+/* The fixed strip under the header.
+
+   Fixed rather than sticky, and this is the second time that has mattered.
+   Sticky measures from the SCROLLPORT, and the scrollport here already starts
+   under the fixed header because .app-content is padded for it, so a sticky
+   `top: header-height` counts the header twice: the bar reserves its slot at
+   the top of the content, where it belongs, and then paints itself a header's
+   height further down, inside the page, behind whatever sticky bar the page
+   has of its own. The result is an empty gap where the message should be and
+   an invisible message somewhere below it.
+
+   Fixed removes the double count: the offset is from the viewport, which is
+   where the header is measured from too. */
+
+.shell-notices {
+  position: fixed;
+  top: var(--shell-header-height, 0px);
+  right: 0;
+  left: 0;
+  /* Above the pages' own sticky bars, below the header it sits under. The
+     header is at 21 and this never overlaps it geometrically, so 22 is
+     unambiguous rather than a fight. */
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding: 9px var(--space-lg);
+  /* Opaque, because the page scrolls underneath it. */
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.shell-notice__body {
+  max-width: 82ch;
+  text-wrap: pretty;
+}
+
+.shell-notice__body strong {
+  font-weight: 600;
+}
+
+/* Every number below this is wrong by a year. Red is the product's colour for
+   a price going against you, and this is the one message that earns it. */
+.shell-notice--alert {
+  border-bottom: 1px solid rgba(255, 92, 77, 0.42);
+  background: color-mix(in srgb, var(--red) 14%, var(--bg));
+}
+
+.shell-notice--alert .shell-notice__body strong {
+  color: var(--red);
+}
+
+/* Not an alarm. A confirmation and a scope note are both "here is what this
+   is", and dressing them in red teaches people to stop reading red. Amber is
+   the brand's own voice and already means "this is about you". */
+.shell-notice--note {
+  border-bottom: 1px solid rgba(232, 84, 29, 0.34);
+  background: color-mix(in srgb, var(--amber) 11%, var(--bg));
+}
+
+.shell-notice--note .shell-notice__body strong {
+  color: var(--text-amber);
+}
+
+.shell-notice__dismiss {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.shell-notice__dismiss:hover {
+  background: rgba(244, 245, 242, 0.08);
+  color: var(--text-primary);
+}
+
+.shell-notice__dismiss:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+/* A phone has no room for a sentence and a half across the top of the screen,
+   and this strip is above the one surface where every pixel is already spoken
+   for. It stays, because what it says is still true; it just gets tighter. */
+@media (max-width: 640px) {
+  .shell-notice {
+    padding: 8px var(--space-md);
+    font-size: 12px;
+    text-align: left;
+  }
+}

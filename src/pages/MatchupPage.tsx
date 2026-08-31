@@ -31,7 +31,7 @@ import {
 } from '../mocks';
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
-import { formatAmericanOdds, impliedProbability , formatProbOrOdds} from '../utils/formatOdds';
+import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints, impliedProbability } from '../utils/formatOdds';
 import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
 import { formatSignedDisplayedDeltaValue } from '../utils/displayDelta';
@@ -89,8 +89,10 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function formatProjection(value: number) {
-  return value.toFixed(1);
+/* Thin wrapper so every projection on this page goes through the same
+   not-yet-known rule. See formatProjectionPoints. */
+function formatProjection(value: number, known = true) {
+  return formatProjectionPoints(value, known);
 }
 
 const SUGGESTION_LOADING_MESSAGES = [
@@ -1892,7 +1894,7 @@ function MatchupLive({
           {pickOrder >= 0 ? (
             <span className="matchup-page__pick-badge">{pickOrder + 1}</span>
           ) : (
-            <span className="matchup-page__projection">{formatProjection(projection)}</span>
+            <span className="matchup-page__projection">{formatProjection(projection, isPriced)}</span>
           )}
         </button>
         {actionLabel && onAction ? (
@@ -2065,7 +2067,7 @@ function MatchupLive({
               <p className="matchup-page__meta-copy">
                 Proj{' '}
                 <span className="matchup-page__inline-number">
-                  {formatProjection(engine.activeLine.yours.projection)}
+                  {formatProjection(engine.activeLine.yours.projection, isPriced)}
                 </span>{' '}
                 pts
               </p>
@@ -2139,28 +2141,45 @@ function MatchupLive({
               <p className="matchup-page__meta-copy">
                 Proj{' '}
                 <span className="matchup-page__inline-number">
-                  {formatProjection(engine.activeLine.opponent.projection)}
+                  {formatProjection(engine.activeLine.opponent.projection, isPriced)}
                 </span>{' '}
                 pts
               </p>
             </div>
           </div>
 
+          {/* The rest of the hero holds its tongue until the book opens.
+
+              The price above already did; these did not, so a syncing league
+              still published a win bar, a spread and a total worked out from
+              scoring history while every player on both rosters projected
+              nothing. Three numbers surviving next to a dash do not read as
+              provisional, they read as the parts that are known. None of them
+              is known. */}
           <div
-            aria-label={`Win probability ${engine.activeLine.yours.winProbability.toFixed(1)}%`}
+            aria-label={
+              isPriced
+                ? `Win probability ${engine.activeLine.yours.winProbability.toFixed(1)}%`
+                : 'Win probability not priced yet'
+            }
             className="matchup-page__winbar"
           >
             <span
               className="matchup-page__winbar-fill"
-              style={{ width: `${engine.activeLine.yours.winProbability}%` }}
+              style={{ width: isPriced ? `${engine.activeLine.yours.winProbability}%` : '0%' }}
             />
           </div>
           <div className="matchup-page__winbar-labels">
             <span className="matchup-page__winbar-label matchup-page__winbar-label--user">
-              {engine.activeLine.yours.winProbability.toFixed(1)}% you
+              {/* A bare dash, not "— you": the copy scan only exempts the mark
+                  on its own, and it is right to. A dash welded to a word reads
+                  as a sentence with a hole in it rather than as a value that is
+                  not known yet. Which side is which is already carried by the
+                  position and the --user class. */}
+              {isPriced ? `${engine.activeLine.yours.winProbability.toFixed(1)}% you` : NO_VALUE}
             </span>
             <span className="matchup-page__winbar-label">
-              {engine.activeLine.opponent.winProbability.toFixed(1)}% them
+              {isPriced ? `${engine.activeLine.opponent.winProbability.toFixed(1)}% them` : NO_VALUE}
             </span>
           </div>
 
@@ -2168,13 +2187,13 @@ function MatchupLive({
             <span className="matchup-page__meta-copy">
               Spread{' '}
               <span className="matchup-page__inline-number">
-                {formatTeamSpread(engine.activeLine.yours.spread)}
+                {isPriced ? formatTeamSpread(engine.activeLine.yours.spread) : NO_VALUE}
               </span>
             </span>
             <span className="matchup-page__meta-copy">
               Total{' '}
               <span className="matchup-page__inline-number">
-                {engine.activeLine.yours.total.toFixed(1)}
+                {isPriced ? engine.activeLine.yours.total.toFixed(1) : NO_VALUE}
               </span>
             </span>
 
@@ -2287,7 +2306,7 @@ function MatchupLive({
                               </span>
                             </span>
                             <span className="matchup-page__slot-numbers">
-                              <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection)}</span>
+                              <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection, isPriced)}</span>
                             </span>
                           </>
                         ) : (
@@ -2326,7 +2345,7 @@ function MatchupLive({
                         {row.opponentSlot ? (
                           <>
                             <span className="matchup-page__slot-numbers matchup-page__slot-numbers--right">
-                              <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection)}</span>
+                              <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection, isPriced)}</span>
                             </span>
                             <span className="matchup-page__slot-copy matchup-page__slot-copy--right">
                               <span className="matchup-page__row-name">{row.opponentSlot.starter.shortName}</span>
@@ -2406,7 +2425,7 @@ function MatchupLive({
                               <span className="matchup-page__row-secondary">{lineupMetaFor(benchRow.player)}</span>
                             </span>
                           </span>
-                          <span className="matchup-page__projection">{formatProjection(benchRow.projection)}</span>
+                          <span className="matchup-page__projection">{formatProjection(benchRow.projection, isPriced)}</span>
                         </span>
                       </div>
                     ))}

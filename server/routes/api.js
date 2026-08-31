@@ -54,6 +54,7 @@ import {
 } from '../services/scoutingStore.js';
 import { computeRosterNeeds, computeSuperlatives } from '../services/scoutingSignals.js';
 import { seasonParam } from '../season.js';
+import { rateLimitPricing } from '../rateLimit.js';
 
 const DAY = 24 * 60 * 60_000;
 const autoHarvested = new Set();
@@ -116,6 +117,11 @@ function getProvider(req) {
 }
 
 export const apiRouter = Router();
+
+/* The unauthenticated pricing path. These three are everything the phone
+   gate's peek touches, and the only expensive routes a stranger can reach
+   without an account. See server/rateLimit.js. */
+const pricingLimit = rateLimitPricing();
 
 function providerName(req) {
   return req.query.provider === 'espn' || req.body?.provider === 'espn' ? 'espn' : 'sleeper';
@@ -269,18 +275,61 @@ apiRouter.get('/rankings', async (req, res, next) => {
  * Tries the current season; if the user has none yet (offseason), falls
  * back to the previous season so the app still has something real to show.
  */
-apiRouter.get('/connect/:username', async (req, res, next) => {
+/**
+ * How long a username lookup is worth keeping.
+ *
+ * This is now the first thing every ad click and every forwarded card touches,
+ * and it is three upstream calls: the user, the season state, and the league
+ * list for two seasons. The answer changes when somebody joins a league, which
+ * is not a thing that happens between two page loads.
+ *
+ * Five minutes is the whole point of the cache rather than a hedge: a creator
+ * link means the SAME handful of usernames arriving hundreds of times in a
+ * burst, and without this each one is three round trips to Sleeper against a
+ * published limit of under 1,000 calls a minute for the whole box.
+ */
+const CONNECT_TTL_MS = 5 * 60_000;
+
+apiRouter.get('/connect/:username', pricingLimit, async (req, res, next) => {
   try {
     const provider = getProvider(req);
-    const user = await provider.getUser(req.params.username.trim());
+    const handle = req.params.username.trim();
+
+    /* Keyed by provider as well as handle: an ESPN request never shares an
+       answer with a Sleeper one, however alike the two names look. */
+    const answer = await cached(
+      `connect:${providerName(req)}:${handle.toLowerCase()}`,
+      CONNECT_TTL_MS,
+      () => resolveConnect(provider, handle),
+    );
+
+    if (answer.error) {
+      res.status(answer.status).json({ error: answer.error, message: answer.message });
+      return;
+    }
+    res.json(answer.body);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * The username lookup itself, split out so the cache has a plain function to
+ * call and so a "we could not find that" answer is cached too. A misspelling
+ * that a creator link repeats is exactly as expensive as a real one otherwise,
+ * and it is the case a burst is most likely to contain.
+ */
+async function resolveConnect(provider, username) {
+  {
+    const user = await provider.getUser(username);
 
     if (!user) {
-      res.status(404).json({
+      return {
+        status: 404,
         error: 'unknown_username',
         message:
           "We couldn't find that Sleeper username. Check the spelling. Use the name you log in with, not your team name.",
-      });
-      return;
+      };
     }
 
     const state = await provider.getSeasonState();
@@ -302,18 +351,16 @@ apiRouter.get('/connect/:username', async (req, res, next) => {
     const leagues = [...byId.values()];
 
     if (leagues.length === 0) {
-      res.status(404).json({
+      return {
+        status: 404,
         error: 'no_leagues',
         message: `${user.displayName} has no Sleeper leagues for ${state.season} or ${state.previousSeason}. Join or create a league in Sleeper first.`,
-      });
-      return;
+      };
     }
 
-    res.json({ user, season, leagues });
-  } catch (error) {
-    next(error);
+    return { body: { user, season, leagues } };
   }
-});
+}
 
 /**
  * ESPN connect: there's no username lookup, so the user supplies their league
@@ -770,7 +817,7 @@ apiRouter.get('/league/:leagueId/successor', async (req, res, next) => {
   }
 });
 
-apiRouter.get('/league/:leagueId/bootstrap', async (req, res, next) => {
+apiRouter.get('/league/:leagueId/bootstrap', pricingLimit, async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const ctx = await loadLeagueContext(
@@ -949,7 +996,7 @@ apiRouter.get('/scouting/league/:leagueId/superlatives', async (req, res, next) 
 });
 
 /** Engine-priced lines for a league (requires an active projection import). */
-apiRouter.get('/league/:leagueId/lines', async (req, res, next) => {
+apiRouter.get('/league/:leagueId/lines', pricingLimit, async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const { leagueId } = req.params;

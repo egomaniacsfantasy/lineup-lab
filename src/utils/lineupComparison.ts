@@ -1,5 +1,9 @@
 import type { Player } from '../types';
 import { getPlayerManifestEntry } from '../data/playerManifest';
+import { roundTo } from './matchupSides';
+/* Re-exported rather than redefined. Both live in matchupSides, which imports
+   nothing from the app graph and can therefore be reached by a node test. */
+export { opponentLineFrom, roundTo, winProbabilityToMoneyline } from './matchupSides';
 
 const NFL_TEAMS = ['KC', 'BUF', 'PHI', 'SF', 'DAL', 'MIA', 'BAL', 'DET', 'CIN', 'HOU'];
 
@@ -13,10 +17,6 @@ export function hashString(input: string) {
   return hash;
 }
 
-export function roundTo(value: number, decimals = 1) {
-  const factor = 10 ** decimals;
-  return Math.round(value * factor) / factor;
-}
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -30,15 +30,6 @@ export function moneylineToWinProbability(moneyline: number) {
   return roundTo((100 / (moneyline + 100)) * 100);
 }
 
-export function winProbabilityToMoneyline(winProbability: number) {
-  const probability = clamp(winProbability / 100, 0.01, 0.99);
-
-  if (probability >= 0.5) {
-    return -Math.round((probability / (1 - probability)) * 100);
-  }
-
-  return Math.round(((1 - probability) / probability) * 100);
-}
 
 // Voice: short, declarative, sportsbook-confident. Avoid em-dashes, hedging, and "you should..." constructions.
 const COMPARISON_VERDICTS = {

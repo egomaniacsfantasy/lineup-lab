@@ -1,7 +1,5 @@
-import { useState } from 'react';
-import { connectUsername, fetchBootstrap, fetchLines } from '../../services/leagueApi';
-import type { ApiLeagueSummary } from '../../services/leagueApi';
-import { formatProbOrOdds } from '../../utils/formatOdds';
+import { usePeek } from '../../hooks/usePeek';
+import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints } from '../../utils/formatOdds';
 import { TeamAvatar } from '../league/TeamAvatar';
 import { SimulationLoader } from '../ui/SimulationLoader';
 import './LeaguePeek.css';
@@ -16,111 +14,32 @@ import './LeaguePeek.css';
  * path behind it already exists and is already cached: /api/connect, then
  * bootstrap and lines.
  *
- * What it shows is deliberately almost nothing. Your championship odds, and
- * the rest of your league listed by name with every number but yours locked.
+ * What it shows: one whole matchup, unlocked, then your championship price,
+ * then the rest of your league by name with every number but yours behind a
+ * lock.
+ *
+ * The matchup is the part that earns the rest. A championship price on its own
+ * is one number from a machine nobody has watched work, so the locked rows
+ * underneath are asking for an account on trust. A priced matchup is the
+ * product doing the thing it claims to do, on their own league, against a
+ * manager they know, before anything is asked of them. The locks then read as
+ * more of a thing that already works rather than as the first thing they see.
+ *
  * Fantasy is not a solitary game and the itch is never "what are my odds", it
  * is "am I ahead of Dave" - so the tease is Dave's name with a lock where his
  * price should be. It is honest about what it is holding back: you can count
  * the rows and see exactly what an account buys.
  */
 
-type Stage =
-  | { name: 'idle' }
-  | { name: 'working' }
-  | { name: 'leagues'; user: PeekUser; leagues: ApiLeagueSummary[] }
-  | { name: 'peek'; league: PeekLeague }
-  | { name: 'failed'; message: string };
+export function LeaguePeek({ onCreateAccount }: { onCreateAccount: (username: string) => void }) {
+  /* The machine is shared with the landing page, which runs the identical
+     path on a screen that looks nothing like this one. See usePeek. */
+  const { username, setUsername, stage, submit, look } = usePeek('phone_gate');
 
-interface PeekUser {
-  id: string;
-  name: string;
-}
-
-interface PeekRow {
-  rosterId: string;
-  teamName: string;
-  avatarUrl: string | null;
-  isUser: boolean;
-  titleProb: number;
-}
-
-interface PeekLeague {
-  name: string;
-  you: PeekRow;
-  others: PeekRow[];
-}
-
-export function LeaguePeek({ onCreateAccount }: { onCreateAccount: () => void }) {
-  const [username, setUsername] = useState('');
-  const [stage, setStage] = useState<Stage>({ name: 'idle' });
-
-  const look = async (user: PeekUser, league: ApiLeagueSummary) => {
-    setStage({ name: 'working' });
-    try {
-      const [bootstrap, pricing] = await Promise.all([
-        fetchBootstrap(league.id, user.id),
-        fetchLines(league.id, user.id),
-      ]);
-
-      /* Crests live on the bootstrap and prices on the lines, keyed by the
-         same roster id. */
-      const crests = new Map(
-        (bootstrap.teams ?? []).map((team) => [String(team.rosterId), team.avatarUrl ?? null]),
-      );
-      const rows: PeekRow[] = [...(pricing.futures ?? [])]
-        .sort((a, b) => b.titleProb - a.titleProb)
-        .map((team) => ({
-          rosterId: String(team.rosterId),
-          teamName: team.teamName,
-          avatarUrl: crests.get(String(team.rosterId)) ?? null,
-          isUser: Boolean(team.isUser),
-          titleProb: team.titleProb,
-        }));
-
-      const you = rows.find((row) => row.isUser);
-      if (!you) {
-        setStage({
-          name: 'failed',
-          message: `We found ${league.name} but could not find your team in it.`,
-        });
-        return;
-      }
-      setStage({
-        name: 'peek',
-        league: { name: league.name, you, others: rows.filter((row) => !row.isUser) },
-      });
-    } catch {
-      setStage({ name: 'failed', message: 'We could not price that league just now.' });
-    }
-  };
-
-  const submit = async (event: React.FormEvent) => {
+  const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    const handle = username.trim();
-    if (!handle || stage.name === 'working') return;
-
-    setStage({ name: 'working' });
-    try {
-      const result = await connectUsername(handle);
-      const user = { id: result.user.id, name: result.user.displayName ?? handle };
-      const leagues = result.leagues ?? [];
-
-      if (leagues.length === 0) {
-        setStage({ name: 'failed', message: `No leagues found for ${handle} this season.` });
-        return;
-      }
-      /* One league is not a choice, so it is not a screen. */
-      if (leagues.length === 1) {
-        await look(user, leagues[0]);
-        return;
-      }
-      setStage({ name: 'leagues', user, leagues });
-    } catch {
-      setStage({
-        name: 'failed',
-        message: `We could not find a Sleeper account called ${handle}.`,
-      });
-    }
+    if (stage.name === 'working') return;
+    void submit(username);
   };
 
   if (stage.name === 'working') {
@@ -164,12 +83,71 @@ export function LeaguePeek({ onCreateAccount }: { onCreateAccount: () => void })
 
   if (stage.name === 'peek') {
     const { league } = stage;
+    const game = league.matchup;
+
     return (
       <div className="league-peek league-peek--result">
         <span className="league-peek__eyebrow">{league.name}</span>
 
-        {/* The number, at the size it deserves. It is the only one on the
-            screen that is not behind a lock. */}
+        {/* One whole matchup, unlocked.
+
+            This is the product working, on their league, before anything is
+            asked of them. It sits above the championship price on purpose: a
+            season-long number is an assertion, and a priced game against a
+            manager they know is a demonstration. The demonstration goes
+            first. */}
+        {game ? (
+          <section className="league-peek__game" aria-label={`Week ${game.week} matchup`}>
+            <span className="league-peek__game-week">Week {game.week}</span>
+
+            <div className="league-peek__game-grid">
+              {[game.you, game.them].map((side, index) => (
+                <div
+                  className={
+                    index === 0
+                      ? 'league-peek__game-side league-peek__game-side--you'
+                      : 'league-peek__game-side'
+                  }
+                  key={side.teamName + String(index)}
+                >
+                  <TeamAvatar avatarUrl={side.avatarUrl} name={side.teamName} />
+                  <span className="league-peek__game-name">{side.teamName}</span>
+                  <span className="league-peek__game-record">{side.record}</span>
+                  {/* American only. The gate runs above every provider, so
+                      there is no format toggle here to disagree with, and the
+                      module default is American. Never both at once. */}
+                  <span className="league-peek__game-price">
+                    {game.priced ? formatAmericanOdds(side.moneyline) : NO_VALUE}
+                  </span>
+                  <span className="league-peek__game-proj">
+                    {formatProjectionPoints(side.projection, game.priced)} pts
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* The bar is the only place a percentage appears, and there is no
+                price beside it. Amber is you; the remainder is the neutral
+                rule underneath rather than a second team colour. */}
+            <div
+              aria-label={`Win probability ${game.you.winProbability.toFixed(1)} percent`}
+              className="league-peek__game-bar"
+              role="img"
+            >
+              <span
+                className="league-peek__game-bar-fill"
+                style={{ width: `${game.priced ? Math.max(2, Math.min(98, game.you.winProbability)) : 0}%` }}
+              />
+            </div>
+            <span className="league-peek__game-bar-label">
+              {game.priced
+                ? `${game.you.winProbability.toFixed(1)}% you`
+                : 'Pricing this week now.'}
+            </span>
+          </section>
+        ) : null}
+
+        {/* The number, at the size it deserves. */}
         <span className="league-peek__odds">{formatProbOrOdds(league.you.titleProb)}</span>
         <span className="league-peek__odds-label">to win it all</span>
 
@@ -177,6 +155,17 @@ export function LeaguePeek({ onCreateAccount }: { onCreateAccount: () => void })
           <TeamAvatar avatarUrl={league.you.avatarUrl} name={league.you.teamName} />
           <span className="league-peek__you-name">{league.you.teamName}</span>
         </div>
+
+        {/* What the locks are hiding, said once, in front of them. Someone who
+            has just watched one game get priced is being told the same thing
+            has been done to every other game in their league. */}
+        <p className="league-peek__pitch">
+          The rest of the book is open. Moneylines, spreads and totals on every
+          matchup in your league, championship odds that move all week, and a
+          bet slip that parlays your own league at fair odds. Plus a trade
+          finder that prices every deal from both sides and tells you whether
+          he will accept.
+        </p>
 
         {/* Names shown, prices locked. Hiding the names too would make this a
             list of nobody; showing them makes it unmistakably YOUR league,
@@ -198,18 +187,18 @@ export function LeaguePeek({ onCreateAccount }: { onCreateAccount: () => void })
           ))}
         </ul>
 
-        <button className="league-peek__cta" onClick={onCreateAccount} type="button">
-          See the whole league
+        <button className="league-peek__cta" onClick={() => onCreateAccount(username.trim())} type="button">
+          Create a free account
         </button>
         <p className="league-peek__cta-note">
-          Free during the beta. No card, one account for every league you are in.
+          The full book opens on a laptop or desktop. Free during the beta.
         </p>
       </div>
     );
   }
 
   return (
-    <form className="league-peek" onSubmit={submit}>
+    <form className="league-peek" onSubmit={onSubmit}>
       <label className="league-peek__ask" htmlFor="peek-username">
         Your Sleeper username
       </label>

@@ -1,0 +1,34 @@
+/* A board still working, not a price.
+
+   The churn is deliberate and stays: a frozen placeholder in the slot a price
+   is about to occupy reads as broken. What it must never be is mistakable for
+   the finished number, which is what got a frame of it screenshotted and
+   reported as the book flip-flopping by five hundred points.
+
+   So it is dressed as scaffolding rather than as a quote: dimmed, set in the
+   mono face rather than the display face every settled price on this screen
+   uses, and breathing. Same shape, same width, unmistakably not the answer. */
+
+.pricing-odds {
+  display: inline-block;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  /* Or every frame is a different width and the hero jitters sideways at
+     twelve frames a second, which is its own kind of broken. */
+  font-variant-numeric: tabular-nums;
+  animation: pricing-odds-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes pricing-odds-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+
+/* Still, for anyone who asked for less motion. The component already stops
+   cycling for them; this stops the pulse too. */
+@media (prefers-reduced-motion: reduce) {
+  .pricing-odds {
+    animation: none;
+    opacity: 0.7;
+  }
+}

@@ -1,265 +1,395 @@
-import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
-/* 512px, not the 1254px original. The landing page draws it at 96px on desktop
-   and about 200 on the phone stage, and the full-size file was 370KB of the
-   first paint on a box that also serves the API. */
-import logo from '../assets/og-hero.png';
-import { useReel } from '../hooks/useReel';
-import { LeagueFutures } from '../components/league/LeagueFutures';
-import { MOCK_LEAGUE_FUTURES } from '../mocks/league';
-import { MOCK_LEAGUE_HISTORY } from '../mocks/leagueHistory';
-import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
-import { formatAmericanOdds } from '../utils/formatOdds';
-import { apiUrl } from '../services/apiBase';
-import { LINE_FRAMES, type TradeFrame, type TradeFramePlayer } from './landingReel';
-import { TRADE_FRAMES } from './landingTrades';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { usePeek, type PeekLeague } from '../hooks/usePeek';
+import type { ApiLeagueSummary } from '../services/leagueApi';
+import { PRICING_LINES } from '../components/layout/pricingLines';
+import { PENDING_SLEEPER_PARAM, rememberPendingSleeper } from '../utils/pendingSleeper';
+import { trackEvent } from '../services/leagueApi';
+import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints } from '../utils/formatOdds';
+import { TeamAvatar } from '../components/league/TeamAvatar';
 import { MatchupPage } from './MatchupPage';
+import { useAuth } from '../contexts/AuthContext';
+import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
+import mark from '../assets/og-hero.png';
 import styles from './LandingPage.module.css';
 
 /**
- * The hero used to be three invented cards floating next to the copy. Two of
- * them advertised things that are not the product: a start/sit toggle, which
- * every fantasy site has had for fifteen years, and a package of two top-twelve
- * players for one at 38% acceptance, which is a trade nobody sends and an
- * example of the tool saying no.
+ * The ticket window.
  *
- * So the hero is the product now. The board below is the real LeagueFutures
- * component, the same one the League tab renders, running on the demo league.
- * The market toggle works, the chart is thirty real days of authored history,
- * and everything a visitor clicks is a thing they will find again after they
- * connect a league. Nothing here computes: LeagueFutures formats what it is
- * handed, and what it is handed is a book that balances (see src/mocks/league.ts).
+ * ────────────────────────────────────────────────────────────────────────
+ * WHAT THIS REPLACED, AND WHY
+ *
+ * The old page described the product beside a demo league: a real futures
+ * board running on twelve invented teams, a rotating trade card, a line that
+ * moved. It was the best-looking thing we had shipped and it was selling the
+ * wrong thing. A stranger read about Mount Olympus, which is nobody's league,
+ * and the argument the page had to win was never "is this well made", it was
+ * "does this know anything about MY team".
+ *
+ * So the page asks for one string, and the moment it has it, it stops being a
+ * page about the product and becomes the product, pointed at the visitor's own
+ * league. The transformation is the pitch. There is nothing else on the first
+ * screen because anything else would be competing with the field.
+ *
+ * One viewport, no scrolling, in the first state. If a thing does not fit, it
+ * does not belong.
  */
 
-function DemoFutures() {
-  return (
-    <div aria-label="The demo league's futures market" className={styles.heroBoard}>
-      <LeagueFutures
-        currentWeek={8}
-        futures={MOCK_LEAGUE_FUTURES}
-        history={MOCK_LEAGUE_HISTORY}
-        leagueName="Mount Olympus"
-        mode="inseason"
-        playoffTeams={6}
-        scoringFormat="half-ppr"
-        totalTeams={12}
-      />
-    </div>
-  );
-}
+/* Two or three seconds is the point, not the cost: this is the first time
+   anybody watches the book work, and rushing it would waste the one moment
+   the product performs before it is asked for anything. */
+const LINE_MS = 1100;
 
-function LineCard() {
-  const frame = LINE_FRAMES[useReel(LINE_FRAMES.length, 3600)];
-  const moved = frame.move !== 0;
-
-  return (
-    <article className={styles.boardCard}>
-      <div className={styles.boardCardHead}>
-        <span>Week 8 · head-to-head</span>
-        <span className={styles.boardLive}>Live line</span>
-      </div>
-      <div className={styles.boardFaceoff}>
-        <div>
-          <p className={styles.boardTeam}>{frame.you.team}</p>
-          <p className={styles.boardNumber} key={frame.you.moneyline}>
-            {formatAmericanOdds(frame.you.moneyline)}
-          </p>
-        </div>
-        <span className={styles.boardVs}>VS</span>
-        <div className={styles.boardFaceoffRight}>
-          <p className={styles.boardTeam}>{frame.them.team}</p>
-          <p className={styles.boardNumberDim} key={frame.them.moneyline}>
-            {formatAmericanOdds(frame.them.moneyline)}
-          </p>
-        </div>
-      </div>
-      <div aria-hidden="true" className={styles.boardBar}>
-        <span style={{ width: `${frame.you.prob}%` }} />
-      </div>
-      <div className={styles.boardBarLabels}>
-        <span>{frame.you.prob.toFixed(1)}% you</span>
-        <span>{frame.them.prob.toFixed(1)}% them</span>
-      </div>
-      <p className={styles.boardTicker} key={frame.note}>
-        <span className={styles.boardTickerNote}>{frame.note}</span>
-        {moved ? (
-          <span className={frame.move > 0 ? styles.boardTickerUp : styles.boardTickerDown}>
-            {frame.move > 0 ? '▲' : '▼'} {Math.abs(frame.move).toFixed(1)}%
-          </span>
-        ) : null}
-      </p>
-    </article>
-  );
-}
-
-function ReelFace({ name, position, sleeperId }: TradeFramePlayer) {
-  return (
-    <span className={styles.reelFace}>
-      {/* An empty slug on purpose: these players are chosen by the engine, not
-          drawn from the twenty-odd hand-listed entries in playerManifest, so
-          the photo comes through the app's asset proxy instead. */}
-      <PlayerHeadshot
-        className={styles.reelAvatar}
-        fallbackClassName={styles.reelAvatarFallback}
-        imageClassName={styles.reelAvatarImage}
-        name={name}
-        player={{
-          id: '',
-          slug: '',
-          shortName: name,
-          position,
-          headshotUrl: sleeperId ? apiUrl(`/api/img/headshot/${sleeperId}`) : null,
-          teamLogoUrl: null,
-        } as never}
-        position={position}
-      />
-      <span className={styles.reelName}>{name}</span>
-    </span>
-  );
-}
-
-function TradeSideFaces({ side }: { side: TradeFrame['send'] }) {
-  return (
-    <span className={styles.reelStack}>
-      {side.map((player) => (
-        <ReelFace key={player.name} {...player} />
-      ))}
-    </span>
-  );
-}
-
-function TradeCard() {
-  const frame = TRADE_FRAMES[useReel(TRADE_FRAMES.length, 5600, 1800)];
-  const band = getAcceptanceLingo(frame.acceptance);
-
-  return (
-    <article className={styles.boardCard}>
-      <div className={styles.boardCardHead}>
-        <span>{frame.partner}</span>
-        {/* The point of the whole feature: a fair trade is not one where you
-            win, it is one where the shapes of the two rosters fit. */}
-        <span className={styles.boardMotive}>
-          You +{frame.youTitleDelta}% · Them +{frame.partnerTitleDelta}%
-        </span>
-      </div>
-      {/* Two rows, not one wrapping line: packages are lopsided by nature
-          (2-for-1, 1-for-2) and inline wrapping orphans the Get tag. */}
-      <div className={styles.reelTrade} key={frame.partner}>
-        <div className={styles.reelTradeRow}>
-          <span className={styles.boardTag}>Send</span>
-          <TradeSideFaces side={frame.send} />
-        </div>
-        <div className={styles.reelTradeRow}>
-          <span className={styles.boardTagStart}>Get</span>
-          <TradeSideFaces side={frame.get} />
-        </div>
-      </div>
-      <div className={styles.boardAccept}>
-        <div aria-hidden="true" className={styles.boardAcceptBar}>
-          <span style={{ width: `${frame.acceptance}%` }} />
-        </div>
-        <span className={styles.boardAcceptLabel}>
-          {formatAcceptancePercent(frame.acceptance)} they take it
-          {' · '}
-          {band?.label}
-        </span>
-      </div>
-    </article>
-  );
-}
+type Door = 'espn' | null;
 
 export function LandingPage() {
+  const { username, setUsername, stage, submit, look } = usePeek('landing');
+  const [door, setDoor] = useState<Door>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    void trackEvent('landing', 'view');
+  }, []);
+
+  const priced = stage.name === 'peek';
+
   return (
-    <main className={styles.page}>
-      {/* Two entries, one displayed. A phone gets the mark and two choices and
-          nothing to scroll; a desktop has the room for the board to sell the
-          product. Rendering both and hiding one is the only way to give each
-          breakpoint the layout it actually wants, and display:none keeps the
-          hidden copy out of the a11y tree. */}
-      <div className={styles.mobileStage}>
-        <img alt="Odds Gods" className={styles.mark} src={logo} />
-        <h1 className={styles.wordmark}>Odds Gods</h1>
-        <p className={styles.tagline}>Fantasy football, priced like a sportsbook.</p>
-        <div className={styles.actions}>
-          <a className={styles.primaryCta} href="/signin">Get started</a>
-          <a className={styles.signInLink} href="/signin">
-            Already have an account? <span>Sign in</span>
-          </a>
-        </div>
-      </div>
+    <main className={priced ? `${styles.stage} ${styles.stagePriced}` : styles.stage}>
+      {/* Two slow amber masses behind everything, and nothing readable in
+          them. Blurred radial gradients rather than an animated background
+          position: a gradient animation repaints the whole surface every
+          frame, and a transform on a blurred layer is composited. */}
+      <div aria-hidden="true" className={styles.glow} />
+      <div aria-hidden="true" className={`${styles.glow} ${styles.glowSecond}`} />
 
-      <section className={styles.hero}>
-        <div className={styles.heroCopy}>
-          <img alt="Odds Gods" className={styles.heroLogo} src={logo} />
-          <div className={styles.kicker}>FANTASY FOOTBALL · PRICED LIKE A SPORTSBOOK</div>
-          <h1 className={styles.headline}>Every decision has a price.</h1>
-          <p className={styles.sub}>
-            Your league already argues about who is best. We simulate it ten
-            thousand times a day and put a number on it.
-          </p>
-          <div className={styles.ctaRow}>
-            <a className={styles.primaryCta} href="/signin">Get started</a>
-            <a className={styles.signInLink} href="/signin">
-              Already have an account? <span>Sign in</span>
-            </a>
-          </div>
-          <div className={styles.proofStrip}>
-            <span>Works with Sleeper and ESPN</span>
-            <span className={styles.dot}>·</span>
-            <span>10,000 season sims. 5,000 per matchup.</span>
-          </div>
-        </div>
-        <DemoFutures />
-      </section>
-
-      <section className={styles.section}>
-        <div className={styles.sectionCopy}>
-          <p className={styles.sectionKicker}>Trades</p>
-          <h2 className={styles.sectionTitle}>Find the trade he says yes to.</h2>
-          <p className={styles.sectionBody}>
-            Every other trade tool grades your side, which is why every trade
-            you send gets ignored. Ours reads his roster too, and only shows
-            you deals that raise both title prices. You are not trying to rob
-            him. You are trying to find the one where you both get better.
-          </p>
-        </div>
-        <TradeCard />
-      </section>
-
-      <section className={styles.section}>
-        <div className={styles.sectionCopy}>
-          <p className={styles.sectionKicker}>Your matchup</p>
-          <h2 className={styles.sectionTitle}>The line moves all week.</h2>
-          <p className={styles.sectionBody}>
-            It opens Tuesday and re-prices on every projection refresh, every
-            waiver run, every lineup change in the league. By Sunday you know
-            exactly what moved you and by how much.
-          </p>
-        </div>
-        <LineCard />
-      </section>
-
-      {/* Somebody who read to the bottom is the most convinced visitor on the
-          page and the old one had nothing to press. */}
-      <section className={styles.close}>
-        <h2 className={styles.closeTitle}>What are your odds?</h2>
-        <p className={styles.closeBody}>
-          Connect a league and the board opens on your team in about a minute.
-        </p>
-        <a className={styles.primaryCta} href="/signin">Get started</a>
-      </section>
-
-      <footer className={styles.footer}>
-        <span>© 2026 Odds Gods</span>
-      </footer>
+      {stage.name === 'peek' ? (
+        <Book league={stage.league} username={username} />
+      ) : stage.name === 'working' ? (
+        <Pricing />
+      ) : stage.name === 'leagues' ? (
+        <WhichLeague
+          leagues={stage.leagues}
+          onPick={(league) => void look(stage.user, league)}
+          user={stage.user.name}
+        />
+      ) : door === 'espn' ? (
+        <EspnDoor onBack={() => setDoor(null)} />
+      ) : (
+        <Window
+          error={stage.name === 'failed' ? stage.message : null}
+          inputRef={inputRef}
+          onEspn={() => {
+            void trackEvent('landing', 'door_espn');
+            setDoor('espn');
+          }}
+          onSubmit={() => void submit(username)}
+          setUsername={setUsername}
+          username={username}
+        />
+      )}
     </main>
   );
 }
 
+/* ── State 1: the window ─────────────────────────────────────────────── */
+
+function Window({
+  error,
+  inputRef,
+  onEspn,
+  onSubmit,
+  setUsername,
+  username,
+}: {
+  error: string | null;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onEspn: () => void;
+  onSubmit: () => void;
+  setUsername: (value: string) => void;
+  username: string;
+}) {
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [inputRef]);
+
+  return (
+    <section className={styles.window}>
+      {/* The mark is the identity of this screen rather than an ornament on
+          top of it, so it is drawn at the size that makes it one. It is also
+          what spins while the league is priced: the dice are literally the
+          thing that rolls ten thousand times. */}
+      <img alt="" className={styles.mark} src={mark} />
+      <p className={styles.wordmark}>Odds Gods</p>
+
+      <h1 className={styles.headline}>
+        Ten thousand simulations are about to have an opinion about your team.
+      </h1>
+
+      <form
+        className={styles.form}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+      >
+        <input
+          autoCapitalize="none"
+          autoComplete="username"
+          autoCorrect="off"
+          className={styles.input}
+          onChange={(event) => setUsername(event.target.value)}
+          placeholder="Your Sleeper username"
+          ref={inputRef}
+          spellCheck={false}
+          value={username}
+        />
+        <button className={styles.go} disabled={username.trim().length === 0} type="submit">
+          Price my league
+        </button>
+      </form>
+
+      {/* The field survives a miss, and so do the other doors: somebody who
+          mistyped may in fact be an ESPN manager who has no Sleeper name to
+          spell correctly, and a dead end here is the end of the visit. */}
+      {error ? (
+        <p className={styles.error} role="status">
+          {error}
+        </p>
+      ) : null}
+
+      <p className={styles.doors}>
+        <button className={styles.door} onClick={onEspn} type="button">
+          My league is on ESPN
+        </button>
+        <Link
+          className={styles.door}
+          onClick={() => void trackEvent('landing', 'door_demo')}
+          to="/demo"
+        >
+          Just looking?
+        </Link>
+      </p>
+
+      <p className={styles.fine}>
+        Free during the beta. No money anywhere in this. 10,000 simulations per matchup.
+      </p>
+      <p className={styles.fine}>
+        Already have an account? <Link className={styles.fineLink} to="/signin">Sign in</Link>
+      </p>
+    </section>
+  );
+}
+
+/* ── The ESPN door ───────────────────────────────────────────────────── */
+
+function EspnDoor({ onBack }: { onBack: () => void }) {
+  /* An interstitial, not a wall, and never a credential field. ESPN needs a
+     signed-in browser session, which is a thing an account and a computer can
+     do and a landing page must not ask for. Saying how long it takes and why
+     is the difference between a hurdle and a door. */
+  return (
+    <section className={styles.window}>
+      <img alt="" className={styles.markSmall} src={mark} />
+      <h1 className={styles.headline}>ESPN leagues connect after you make an account.</h1>
+      <p className={styles.espnCopy}>
+        It takes about two minutes and needs a computer, because ESPN requires a
+        signed in session. Worth it.
+      </p>
+      <Link
+        className={styles.go}
+        onClick={() => void trackEvent('landing', 'account_create', { from: 'espn' })}
+        to="/signin"
+      >
+        Create a free account
+      </Link>
+      <p className={styles.doors}>
+        <button className={styles.door} onClick={onBack} type="button">
+          Back
+        </button>
+      </p>
+    </section>
+  );
+}
+
+/* ── State 2: pricing ────────────────────────────────────────────────── */
+
+function Pricing() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setIndex((current) => (current + 1) % PRICING_LINES.length),
+      LINE_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <section aria-busy="true" className={styles.window} role="status">
+      {/* The same mark, rolling. */}
+      <img alt="" className={`${styles.mark} ${styles.markRolling}`} src={mark} />
+      <p className={styles.wordmark}>Odds Gods</p>
+      <p className={styles.pricingLine}>{PRICING_LINES[index]}...</p>
+    </section>
+  );
+}
+
+/* ── The pick-a-league step ──────────────────────────────────────────── */
+
+function WhichLeague({
+  leagues,
+  onPick,
+  user,
+}: {
+  leagues: ApiLeagueSummary[];
+  onPick: (league: ApiLeagueSummary) => void;
+  user: string;
+}) {
+  return (
+    <section className={styles.window}>
+      <img alt="" className={styles.markSmall} src={mark} />
+      <h1 className={styles.headline}>Which one is yours, {user}?</h1>
+      <ul className={styles.leagues}>
+        {leagues.map((league) => (
+          <li key={league.id}>
+            <button className={styles.league} onClick={() => onPick(league)} type="button">
+              <span>{league.name}</span>
+              <span className={styles.leagueMeta}>{league.totalTeams} teams</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* ── State 3: their book ─────────────────────────────────────────────── */
+
+function Book({ league, username }: { league: PeekLeague; username: string }) {
+  const game = league.matchup;
+
+  return (
+    <section className={styles.book}>
+      <header className={styles.bookHead}>
+        <img alt="" className={styles.markSmall} src={mark} />
+        <p className={styles.bookLeague}>{league.name}</p>
+      </header>
+
+      {game ? (
+        <div className={styles.game}>
+          <span className={styles.gameWeek}>Week {game.week}</span>
+          <div className={styles.gameGrid}>
+            {[game.you, game.them].map((side, index) => (
+              <div
+                className={index === 0 ? `${styles.side} ${styles.sideYou}` : styles.side}
+                key={side.teamName + String(index)}
+              >
+                <TeamAvatar avatarUrl={side.avatarUrl} name={side.teamName} />
+                <span className={styles.sideName}>{side.teamName}</span>
+                <span className={styles.sideRecord}>{side.record}</span>
+                <span className={styles.sidePrice}>
+                  {game.priced ? formatAmericanOdds(side.moneyline) : NO_VALUE}
+                </span>
+                <span className={styles.sideProj}>
+                  {formatProjectionPoints(side.projection, game.priced)} pts
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* The bar carries the only percentage on the screen, and there is
+              no price beside it: one unit at a time. */}
+          <div
+            aria-label={`Win probability ${game.you.winProbability.toFixed(1)} percent`}
+            className={styles.bar}
+            role="img"
+          >
+            <span
+              className={styles.barFill}
+              style={{
+                width: `${game.priced ? Math.max(2, Math.min(98, game.you.winProbability)) : 0}%`,
+              }}
+            />
+          </div>
+          <span className={styles.barLabel}>
+            {game.priced ? `${game.you.winProbability.toFixed(1)}% you` : 'Pricing this week now.'}
+          </span>
+        </div>
+      ) : null}
+
+      <div className={styles.title}>
+        <span className={styles.titleLabel}>To win it all</span>
+        <span className={styles.titlePrice}>{formatProbOrOdds(league.you.titleProb)}</span>
+        <span className={styles.titleTeam}>{league.you.teamName}</span>
+      </div>
+
+      {/* Names shown, prices locked. Hiding the names would make this a list
+          of nobody; showing them makes it unmistakably THEIR league, and puts
+          the question they actually want answered one click away. */}
+      <ol className={styles.table}>
+        {[league.you, ...league.others]
+          .slice()
+          .sort((a, b) => b.titleProb - a.titleProb)
+          .map((row, index) => (
+            <li
+              className={row.isUser ? `${styles.row} ${styles.rowYou}` : styles.row}
+              key={row.rosterId}
+            >
+              <span className={styles.rank}>{index + 1}</span>
+              <TeamAvatar avatarUrl={row.avatarUrl} name={row.teamName} />
+              <span className={styles.rowName}>{row.teamName}</span>
+              {row.isUser ? (
+                <span className={styles.rowPrice}>{formatProbOrOdds(row.titleProb)}</span>
+              ) : (
+                <span aria-label="locked" className={styles.lock}>
+                  <svg aria-hidden="true" height="13" viewBox="0 0 24 24" width="13">
+                    <path
+                      d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h1Zm2 0h6V7a3 3 0 1 0-6 0v3Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </span>
+              )}
+            </li>
+          ))}
+      </ol>
+
+      <a
+        className={styles.go}
+        href={`/signin?${PENDING_SLEEPER_PARAM}=${encodeURIComponent(username.trim())}`}
+        onClick={() => {
+          rememberPendingSleeper(username);
+          void trackEvent('landing', 'account_create', { from: 'book' });
+        }}
+      >
+        Create a free account
+      </a>
+      <p className={styles.fine}>
+        The whole book opens when you do. Free during the beta.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The demo, which answers for everybody.
+ *
+ * The Hub falls back to the sample league whenever nothing is connected, so
+ * this is the Hub with a banner on it rather than a second implementation of
+ * it. The banner is the only way out of the demo, so it has to lead somewhere
+ * real in every state: to the sign-up form for a stranger, and to their own
+ * league for anyone who already has one.
+ */
 export function DemoPage() {
+  const { session } = useAuth();
+  const { stored } = useLeagueConnection();
+  const exit = !session ? '/signin' : stored ? '/matchup' : '/connect';
+
   return (
     <div className={styles.demoShell}>
-      <a className={styles.demoBanner} href="/signin">
-        Demo league · Price your own league →
+      <a className={styles.demoBanner} href={exit}>
+        {session && stored
+          ? 'Demo league · Back to your league →'
+          : 'Demo league · Price your own league →'}
       </a>
       <MatchupPage />
     </div>

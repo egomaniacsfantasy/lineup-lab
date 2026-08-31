@@ -23,6 +23,13 @@ const PORT = process.env.PORT ?? 8799;
 
 const app = express();
 
+/* One proxy hop, which is what Render puts in front of a web service. Without
+   this req.ip is the proxy's address for every request, so the per-IP limiter
+   below counts the entire internet as one visitor and starts refusing real
+   people during precisely the spike it exists to survive. A limiter with the
+   wrong key is worse than no limiter. */
+app.set('trust proxy', 1);
+
 /* Mounted before every /api route and before any body parser, so a preflight is
    answered whatever the route would have done. Localhost is allowed off
    production only: in development the site runs on a Vite port and the API on

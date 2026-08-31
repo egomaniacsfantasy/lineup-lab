@@ -1,17 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
+import { PRICING_LINES } from './pricingLines';
 import './PricingCurtain.css';
 
 const PRICING_CURTAIN_SEEN_KEY = 'og.pricingCurtain.seenThisSession';
-
-const PRICING_LINES = [
-  'Setting the line',
-  'Balancing the book',
-  'Reading every roster',
-  'Finding the edge',
-  'Moving the market',
-  'Locking the number',
-];
 
 export function PricingCurtain() {
   const { stored, bootstrap, pricing, isLoading, error } = useLeagueConnection();

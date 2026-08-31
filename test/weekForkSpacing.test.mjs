@@ -24,12 +24,22 @@ import { chromium } from 'playwright';
  */
 
 const cwd = process.cwd();
-/* Reuse the dev server the other browser test brings up when it happens to be
-   there already, and only fall back to our own. Two Vite servers plus two
-   Chromiums on one machine is enough contention to make a neighbouring
-   pixel-sampling test fail once in a while, and a suite that fails somewhere
-   else when you add a test here is worse than the test is good. */
-const SHARED_PORT = 4181;
+/* This used to adopt the dev server on 4181 whenever it happened to be up,
+   to save starting a second one.
+   
+   4181 belongs to mobileNoHorizontalScroll, which is a DIFFERENT test file and
+   therefore a different process. The runner starts files concurrently, so that
+   file finishes whenever it finishes and takes its server with it. Adopting it
+   meant this file's remaining navigations died with ECONNREFUSED, and which
+   tests died depended entirely on the relative speed of two unrelated files.
+   Adding a test anywhere in the suite could move the boundary.
+   
+   That is the flake that has been blamed twice on "one Vite server too many".
+   The count was a correlate: more load pushed the neighbour over the line
+   sooner. The cause was borrowing a resource owned by a process that can exit.
+   
+   So it owns its own, always. A second Vite is cheaper than a suite whose
+   failures move around when you touch an unrelated file. */
 const OWN_PORT = 4182;
 let port = OWN_PORT;
 let baseUrl = `http://127.0.0.1:${OWN_PORT}`;
@@ -76,9 +86,7 @@ test.before(async () => {
     ownsApi = true;
     await waitForUrl(`http://127.0.0.1:${API_PORT}/api/health`);
   }
-  if (await isPortOpen(SHARED_PORT)) {
-    port = SHARED_PORT;
-  } else if (!(await isPortOpen(OWN_PORT))) {
+  if (!(await isPortOpen(OWN_PORT))) {
     vite = spawn(
       'npm',
       ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(OWN_PORT), '--strictPort'],
@@ -574,120 +582,217 @@ test('the strip says how many weeks you are favoured in, and counts them right',
 });
 
 /* ──────────────────────────────────────────────────────────────────────────
-   The stale-season warning has to be VISIBLE, which is a different claim
-   from being rendered.
+   THE SHELL'S NOTICE STRIP
 
-   The predicate behind it was right from the day it shipped and the banner
-   was still useless: as a flex child of the shell it rendered at y=0,
-   underneath a position:fixed header 80px tall at z-index 21. Six pixels of
-   it showed. A test that only asks whether the component is in the DOM
-   passes happily while nobody can read a word of it, so this one asks the
-   page what is actually painted at the banner's own centre.
+   Two claims that keep coming apart: the strip has to be RENDERED, and it has
+   to be VISIBLE. The predicate behind it was correct from the day it shipped
+   and nobody could read a word of it, twice, for two different reasons.
+
+   First it was a flex child of the shell, rendering at y=0 underneath a fixed
+   80px header. Then it was sticky at the header's height, which double-counts
+   the header because the scrollport already starts below it: the strip
+   reserved its slot at the top of the content and painted itself 80px lower,
+   behind the page's own sticky season band, which has the same z-index and
+   comes later in the document. What the user saw was an empty gap and no
+   message.
+
+   So these ask the page what is actually painted at the strip's own centre,
+   not whether the component exists.
 
    Here rather than in its own file because every rendered test in this repo
-   runs its own Vite, and a ninth one pushes this machine far enough that the
+   runs its own Vite, and one more pushes this machine far enough that the
    fork tests above time out waiting for their server.
    ────────────────────────────────────────────────────────────────────────── */
 
-test('a stale-season warning is on top of the page, not under the header', async () => {
-  const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
-  try {
-    /* ?staleSeason makes the design league answer as last year's, which is
-       the only way to reach this state without a real rolled-over league. */
-    await page.goto(`${baseUrl}/design/league?staleSeason=1`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.stale-season', { timeout: 15_000 });
-
-    const seen = await page.evaluate(() => {
-      const notice = document.querySelector('.stale-season');
-      const rect = notice.getBoundingClientRect();
-      const header = document.querySelector('.app-header')?.getBoundingClientRect();
-      const atCentre = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return {
-        height: rect.height,
-        top: rect.top,
-        headerBottom: header ? header.bottom : 0,
-        /* The thing the old version failed: whatever is painted at the
-           banner's own middle has to BE the banner. */
-        onTop: notice.contains(atCentre) || atCentre === notice,
-        /* Opaque, or the page scrolls through a sticky warning. */
-        opaque: !/rgba\([^)]*,\s*0?\.\d+\)/.test(getComputedStyle(notice).backgroundColor),
-        says: notice.textContent,
-      };
-    });
-
-    assert.ok(seen.height > 20, `the banner is ${seen.height}px tall`);
-    assert.ok(
-      seen.top >= seen.headerBottom - 1,
-      `the banner starts at ${seen.top} with the header ending at ${seen.headerBottom}, so it is underneath it`,
+/** Whatever the shell is currently saying, and whether it can be read. */
+async function noticeState(page) {
+  return page.evaluate(() => {
+    const notice = document.querySelector('.shell-notice');
+    if (!notice) return { present: false };
+    const rect = notice.getBoundingClientRect();
+    const header = document.querySelector('.app-header')?.getBoundingClientRect();
+    const atCentre = document.elementFromPoint(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
     );
-    assert.ok(seen.onTop, 'something is painted over the middle of the banner');
-    assert.ok(seen.opaque, 'the sticky banner is translucent, so the page reads through it');
-    /* It names both years, because "your data is old" without saying how old
-       is not actionable. */
-    assert.match(seen.says, /2025/);
-    assert.match(seen.says, /2026/);
-  } finally {
-    await page.close();
-  }
-});
+    const firstContent = document.querySelector('.app-content > *:not(.shell-notices)');
+    return {
+      present: true,
+      height: rect.height,
+      top: rect.top,
+      bottom: rect.bottom,
+      headerBottom: header ? header.bottom : 0,
+      /* The thing every previous version failed: what is painted at the
+         strip's own middle has to BE the strip. */
+      onTop: notice.contains(atCentre) || atCentre === notice,
+      /* Opaque, or the page scrolls through a fixed warning. */
+      opaque: !/rgba\([^)]*,\s*0?\.\d+\)/.test(getComputedStyle(notice).backgroundColor),
+      /* And nothing may be hiding underneath it. */
+      contentTop: firstContent ? firstContent.getBoundingClientRect().top : null,
+      says: notice.textContent,
+      tone: notice.className,
+    };
+  });
+}
 
-/**
- * And it offers the league that replaced this one.
- *
- * Saying "the year is wrong, go to Connect" leaves someone to work out which
- * of their leagues is the right one, in a product where the whole problem is
- * that two of them look identical. The server walks previous_league_id the
- * other way, so the fix is one button.
- *
- * The two ways of finding nothing need different things said. A league whose
- * commissioner has not rolled it over yet is not a mistake the user made, and
- * offering to reconnect would send them looking for a league that does not
- * exist.
- */
-test('the stale banner offers this season\'s league by name', async () => {
+test('a league that has rolled over is moved forward by itself', async () => {
+  /* This used to be a button. It should never have been: we know what season
+     it is, the chain is public, and nobody wants to be looking at last year.
+     Asking someone to confirm the repair is asking them to approve a fault
+     they did not cause. */
   const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
   try {
     await page.goto(`${baseUrl}/design/league?staleSeason=1`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.stale-season__action', { timeout: 15_000 });
+    await page.waitForSelector('.shell-notice', { timeout: 15_000 });
 
-    const seen = await page.evaluate(() => {
-      const notice = document.querySelector('.stale-season');
-      const action = notice.querySelector('.stale-season__action');
-      return { text: notice.textContent, action: action.textContent.trim(), tag: action.tagName };
-    });
+    const seen = await noticeState(page);
 
-    /* Named, not "your other league": the name is how someone recognises it. */
-    assert.match(seen.text, /Odds Gods Design Replay is your 2026 league/);
-    /* A control, not a link to go and hunt. */
-    assert.equal(seen.tag, 'BUTTON');
-    assert.match(seen.action, /2026/);
+    /* It says what it did, and which season it landed on. A board that
+       silently changes to different teams is indistinguishable from a bug. */
+    assert.match(seen.says, /Moved you to 2026/i, `the strip says "${seen.says}"`);
+    assert.match(seen.says, /Odds Gods Design Replay/, 'the receipt does not name the league');
+    /* Amber, not red. Being put on the right season is not an alarm. */
+    assert.match(seen.tone, /shell-notice--note/, 'a successful repair is dressed as a warning');
+
+    /* And the connection really moved, rather than the strip merely claiming
+       it did. */
+    const connected = await page.evaluate(
+      () => JSON.parse(localStorage.getItem('og.olympus.connected-league') || '{}').leagueId,
+    );
+    assert.match(connected, /-2026$/, `still connected to ${connected}`);
   } finally {
     await page.close();
   }
 });
 
-test('a league nobody has rolled over yet is not offered a switch', async () => {
+test('the notice strip is readable, and nothing is hidden underneath it', async () => {
   const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
   try {
     await page.goto(`${baseUrl}/design/league?staleSeason=1&notRolledOver=1`, {
       waitUntil: 'networkidle',
     });
-    await page.waitForSelector('.stale-season', { timeout: 15_000 });
-    await page.waitForTimeout(900);
+    await page.waitForSelector('.shell-notice', { timeout: 15_000 });
 
-    const seen = await page.evaluate(() => {
-      const notice = document.querySelector('.stale-season');
-      return {
-        text: notice.textContent,
-        actions: notice.querySelectorAll('.stale-season__action').length,
-      };
-    });
+    const seen = await noticeState(page);
 
-    assert.match(seen.text, /nothing to switch to/i);
-    /* No button and no link: there is genuinely nowhere to send them. */
-    assert.equal(seen.actions, 0, 'offering a switch to a league that does not exist');
+    assert.ok(seen.height > 20, `the strip is ${seen.height}px tall`);
+    assert.ok(
+      seen.top >= seen.headerBottom - 1,
+      `the strip starts at ${seen.top} with the header ending at ${seen.headerBottom}, so it is underneath it`,
+    );
+    assert.ok(seen.onTop, 'something is painted over the middle of the strip');
+    assert.ok(seen.opaque, 'the fixed strip is translucent, so the page reads through it');
+    /* The strip is fixed, so the shell has to pad the content by its height.
+       Without that the first thing on every page starts underneath it, which
+       is a different way of hiding the same message. */
+    assert.ok(
+      seen.contentTop >= seen.bottom - 1,
+      `content starts at ${seen.contentTop} with the strip ending at ${seen.bottom}`,
+    );
   } finally {
     await page.close();
   }
 });
 
+test('a league nobody has rolled over yet says so, and stays put', async () => {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+  try {
+    await page.goto(`${baseUrl}/design/league?staleSeason=1&notRolledOver=1`, {
+      waitUntil: 'networkidle',
+    });
+    await page.waitForSelector('.shell-notice', { timeout: 15_000 });
+    await page.waitForTimeout(900);
+
+    const seen = await noticeState(page);
+
+    assert.match(seen.says, /nothing to move you to/i, `the strip says "${seen.says}"`);
+    /* Both years, because "your data is old" without saying how old is not
+       actionable. */
+    assert.match(seen.says, /2025/);
+    assert.match(seen.says, /2026/);
+    /* Red, and only here: this is the one case where every number below
+       really is a year out of date. */
+    assert.match(seen.tone, /shell-notice--alert/, 'the one real warning is not dressed as one');
+
+    const connected = await page.evaluate(
+      () => JSON.parse(localStorage.getItem('og.olympus.connected-league') || '{}').leagueId,
+    );
+    assert.ok(
+      !connected.endsWith('-2026'),
+      'it switched to a league that does not exist',
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+/* ──────────────────────────────────────────────────────────────────────────
+   WHAT THIS PRODUCT IS NOT, YET, IN A DYNASTY LEAGUE
+
+   Trades are hidden in these leagues and that call is right: the engine
+   simulates a rest-of-season, and half of what changes hands in dynasty is
+   picks and players valued for years the sim does not run. But hiding a tab
+   explains nothing. Somebody whose league is a dynasty league saw a product
+   with a piece missing and no account of why, and filled the gap in for
+   themselves.
+   ────────────────────────────────────────────────────────────────────────── */
+
+test('a dynasty league is told what is missing and why', async () => {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+  try {
+    await page.goto(`${baseUrl}/design/matchup?dynasty=1`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.shell-notice', { timeout: 15_000 });
+
+    const seen = await page.evaluate(() => {
+      const notice = document.querySelector('.shell-notice');
+      return {
+        says: notice.textContent,
+        tone: notice.className,
+        dismissible: Boolean(notice.querySelector('.shell-notice__dismiss')),
+        /* The tab really is gone, so the note is describing the product
+           rather than contradicting it. */
+        tabs: [...document.querySelectorAll('.app-header a')].map((a) => a.textContent.trim()),
+      };
+    });
+
+    /* Both halves of the claim, because they are different limitations and a
+       user hits them on different screens. */
+    assert.match(seen.says, /trade pricing is off/i, `the note says "${seen.says}"`);
+    assert.match(seen.says, /this season alone/i, 'it does not scope the player values');
+    /* Amber. A healthy league on a supported path is not an alarm, and an
+       alarm that fires on one teaches people to stop reading alarms. */
+    assert.match(seen.tone, /shell-notice--note/, 'a scope note is dressed as a warning');
+    assert.ok(seen.dismissible, 'the note cannot be put away');
+    assert.ok(
+      !seen.tabs.some((label) => /trade/i.test(label)),
+      `the note says trades are off but the tab is still there: ${JSON.stringify(seen.tabs)}`,
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test('a redraft league is not told any of that', async () => {
+  /* The note must be specific to the leagues it is about. A scope warning on
+     a league it does not apply to is just noise at the top of the product. */
+  const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+  try {
+    await page.goto(`${baseUrl}/design/matchup`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.matchup-page', { timeout: 15_000 });
+    await page.waitForTimeout(900);
+
+    const seen = await page.evaluate(() => ({
+      notices: document.querySelectorAll('.shell-notice').length,
+      noticeHeight: getComputedStyle(document.documentElement)
+        .getPropertyValue('--shell-notice-height')
+        .trim(),
+    }));
+
+    assert.equal(seen.notices, 0, 'a redraft league is being shown a dynasty note');
+    /* And the shell takes back the room, or every page keeps a strip of empty
+       space where a notice is not. */
+    assert.match(seen.noticeHeight, /^0px$/, `the shell still reserves ${seen.noticeHeight}`);
+  } finally {
+    await page.close();
+  }
+});

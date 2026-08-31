@@ -739,18 +739,25 @@ export function startEspnLogin(body: {
     .finally(() => clearTimeout(timer));
 }
 
-export function trackEspnConnectEvent(event: string, payload: Record<string, unknown> = {}) {
+/**
+ * One line in the funnel.
+ *
+ * keepalive so an event fired on the way out of the page still lands, and it
+ * swallows its own failures: telemetry is never a reason for a screen to break.
+ * The server strips anything that looks like a credential before logging, so
+ * payloads stay small and boring by design.
+ */
+export function trackEvent(area: string, event: string, payload: Record<string, unknown> = {}) {
   return fetch(apiUrl('/api/telemetry/event'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      area: 'espn_connect',
-      event,
-      payload,
-      at: Date.now(),
-    }),
+    body: JSON.stringify({ area, event, payload, at: Date.now() }),
     keepalive: true,
   }).catch(() => undefined);
+}
+
+export function trackEspnConnectEvent(event: string, payload: Record<string, unknown> = {}) {
+  return trackEvent('espn_connect', event, payload);
 }
 
 export function fetchBootstrap(leagueId: string, userId: string) {

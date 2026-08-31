@@ -282,12 +282,27 @@ test('a phone gets the gate and nothing else', async () => {
 
 test('a phone is turned away at the door, before it is asked to sign up', async () => {
   /* The gate sits above the auth split. Below it, a signed-out phone was
-     shown the whole sign-up flow and told at the END of it to find a laptop. */
+     shown the whole sign-up flow and told at the END of it to find a laptop.
+
+     A BARE /signin is still in this list. The peek now hands the sign-up
+     screen a username and that case is exempted below, but the complaint here
+     was never about the form: it was about the order. Somebody arriving cold
+     has been given nothing yet, so they get the pitch. */
   for (const path of ['/', '/signin', '/connect', '/matchup']) {
     const seen = await gated(path, { width: 375, height: 812 });
     assert.equal(seen.gate, 1, `${path} was not gated on a phone`);
     assert.equal(seen.signup, 0, `${path} showed a phone a sign-up form`);
   }
+});
+
+test('the one way through is a phone that has already been shown its league', async () => {
+  /* The exemption, and its exact width. ?sleeper= is set by one thing only:
+     the peek's button, which cannot be pressed until the screen has priced a
+     real matchup and a real championship number. So this is the account being
+     asked for AFTER the value, which is the order the test above is about. */
+  const seen = await gated('/signin?sleeper=designgods', { width: 375, height: 812 });
+  assert.equal(seen.gate, 0, 'the peek handoff was bounced back to the pitch');
+  assert.equal(seen.signup, 1, 'the sign-up form did not render for the handoff');
 });
 
 test('a phone on its side is still a phone', async () => {
@@ -596,3 +611,419 @@ test('a username nobody has says so, and keeps the field', async () => {
   }
 });
 
+
+/* ──────────────────────────────────────────────────────────────────────────
+   THE MATCHUP, UNLOCKED
+
+   The peek used to open with a championship price and nothing else, which is
+   one number from a machine nobody has watched work: the locked rows under it
+   were asking for an account on trust. It now prices one whole matchup first,
+   on their league, against a manager they know.
+
+   That section is the thing being demonstrated, so these guard the two ways a
+   demonstration can lie: by quoting a price that is not a price, and by
+   quoting two.
+   ────────────────────────────────────────────────────────────────────────── */
+
+test('the gate prices one whole matchup before it locks anything', async () => {
+  const { page, context } = await visit('/', { width: 375, height: 812 });
+  try {
+    await peek(page);
+    await page.locator('.league-peek__game').waitFor({ timeout: 15_000 });
+
+    const game = await page.evaluate(() => {
+      const sides = [...document.querySelectorAll('.league-peek__game-side')];
+      return {
+        sideCount: sides.length,
+        week: document.querySelector('.league-peek__game-week').textContent.trim(),
+        names: sides.map((side) => side.querySelector('.league-peek__game-name').textContent.trim()),
+        records: sides.map((side) => side.querySelector('.league-peek__game-record').textContent.trim()),
+        prices: sides.map((side) => side.querySelector('.league-peek__game-price').textContent.trim()),
+        projections: sides.map((side) => side.querySelector('.league-peek__game-proj').textContent.trim()),
+        barWidth: document.querySelector('.league-peek__game-bar-fill').style.width,
+      };
+    });
+
+    assert.equal(game.sideCount, 2, 'a matchup has two sides');
+    assert.match(game.week, /^Week \d+$/, `week reads "${game.week}"`);
+    for (const name of game.names) assert.ok(name.length > 0, 'a side has no team name');
+    for (const record of game.records) assert.match(record, /^\d+-\d+(-\d+)?$/, `record reads "${record}"`);
+    for (const projection of game.projections) {
+      assert.match(projection, /^(\d+\.\d|—) pts$/, `projection reads "${projection}"`);
+    }
+    assert.match(game.barWidth, /^\d+(\.\d+)?%$/, `the win bar has width "${game.barWidth}"`);
+
+    /* The invariant a book cannot break: in a two-team game exactly one side
+       is the favourite. The Hub's engine used to derive the second price by
+       arithmetic on the first, which produced two favourites in one game. */
+    const signs = game.prices.map((price) => price.trim()[0]);
+    assert.ok(
+      game.prices.every((price) => /^[+-]\d+$/.test(price)),
+      `prices read ${JSON.stringify(game.prices)}`,
+    );
+    assert.notEqual(
+      signs[0],
+      signs[1],
+      `both sides of one game are priced ${JSON.stringify(game.prices)}`,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test('the gate never shows a price and a percentage as the same claim', async () => {
+  /* The product's rule: one unit at a time. The win bar carries the only
+     percentage on the screen and there is no price beside it, so the reader is
+     never asked to check two numbers against each other. */
+  const { page, context } = await visit('/', { width: 375, height: 812 });
+  try {
+    await peek(page);
+    await page.locator('.league-peek__game').waitFor({ timeout: 15_000 });
+
+    const mixed = await page.evaluate(() => {
+      const sides = [...document.querySelectorAll('.league-peek__game-side')];
+      return sides.map((side) => ({
+        text: side.textContent,
+        hasPercent: side.textContent.includes('%'),
+      }));
+    });
+
+    for (const side of mixed) {
+      assert.ok(!side.hasPercent, `a priced side is also showing a percentage: "${side.text}"`);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test('the sign-up carries the username it was already given', async () => {
+  /* The conversion point for every phone-first visitor. Somebody who typed
+     their username into the pitch and watched their own matchup get priced
+     must not be asked for it again on the next screen, or on the laptop. */
+  const { page, context } = await visit('/', { width: 375, height: 812 });
+  try {
+    await peek(page);
+    await page.locator('.league-peek__cta').click();
+    await page.waitForURL(/\/signin/, { timeout: 15_000 });
+    /* The button leaves via a full navigation, because the gate sits above the
+       router and there is nothing to push to. waitForURL returns on the URL
+       change, which is before the new document has rendered anything, so wait
+       for the thing being asserted rather than for the address bar. */
+    await page.waitForLoadState('domcontentloaded');
+    await page.locator('.auth-landing__form, .mobile-gate').first().waitFor({ timeout: 15_000 });
+
+    const landed = await page.evaluate(() => ({
+      url: window.location.pathname + window.location.search,
+      /* The form itself, not the gate again. /signin is exempt from the phone
+         gate for exactly this reason: without it the button at the bottom of
+         the pitch loops straight back to the pitch. */
+      hasForm: Boolean(document.querySelector('.auth-landing__form')),
+      gateStillUp: Boolean(document.querySelector('.mobile-gate')),
+      remembered: window.localStorage.getItem('og.olympus.pending-sleeper'),
+    }));
+
+    assert.match(landed.url, /sleeper=designgods/, `landed on "${landed.url}"`);
+    assert.ok(landed.hasForm, 'the sign-up form did not render');
+    assert.ok(!landed.gateStillUp, 'the gate bounced the sign-up back to itself');
+    assert.equal(landed.remembered, 'designgods', 'the username was not kept for the connect screen');
+  } finally {
+    await context.close();
+  }
+});
+
+test('a league still being priced waits, and never invents a number or blames the user', async () => {
+  /* The reported failure, and the reason it was so hard to believe: a hero
+     quoting -311 with every player projecting 0.0, which "repriced" to +169
+     the moment projections landed.
+
+     Neither number came from the engine. Both were frames of the placeholder
+     that used to sit in that slot, which drew random magnitudes between 105
+     and 365 with a random sign, i.e. exactly the range real prices live in.
+     It was indistinguishable from a quote, so it got read as one, and the
+     book looked like it had changed its mind by five hundred points.
+
+     ?syncing answers the pricing call the way a freshly connected league does:
+     available false, nothing behind it. Two things must be true in that
+     window. Nothing on screen may be a number, and the message must not be the
+     old one, which told the user we could not find their team in their own
+     league. That was never true and it landed on the screen most of the paid
+     traffic arrives on. */
+  const { page, context } = await visit('/?syncing=1', { width: 375, height: 812 });
+  try {
+    await page.locator('.mobile-gate__open').click();
+    await page.locator('.league-peek__input').fill('designgods');
+    await page.locator('.league-peek__go').click();
+
+    // It should still be waiting well after the point it used to give up.
+    await page.waitForTimeout(3_000);
+    const waiting = await page.evaluate(() => ({
+      busy: Boolean(document.querySelector('.league-peek--busy')),
+      odds: document.querySelector('.league-peek__odds')?.textContent ?? null,
+      error: document.querySelector('.league-peek__error')?.textContent ?? null,
+    }));
+
+    assert.ok(waiting.busy, 'the gate stopped waiting for a league that is still syncing');
+    assert.equal(waiting.odds, null, 'a championship price appeared for an unpriced league');
+    assert.equal(waiting.error, null, `it gave up early with "${waiting.error}"`);
+
+    // And when it does give up, it says the true thing.
+    await page.locator('.league-peek__error').waitFor({ timeout: 30_000 });
+    const gaveUp = await page.evaluate(
+      () => document.querySelector('.league-peek__error').textContent.trim(),
+    );
+    assert.match(gaveUp, /still being priced/, `it gave up with "${gaveUp}"`);
+    assert.ok(
+      !/could not find your team/i.test(gaveUp),
+      'it still blames the user for a league that simply has not been priced',
+    );
+    assert.equal(
+      await page.locator('.league-peek__input').count(),
+      1,
+      'the way back in is gone',
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+/* ──────────────────────────────────────────────────────────────────────────
+   THE TICKET WINDOW
+
+   The landing page runs the same machine as the phone gate above, on a screen
+   that looks nothing like it, which is exactly why the machine was pulled out
+   into usePeek rather than copied. These test the page's three states plus the
+   two ways it can go wrong.
+
+   Here rather than in a file of their own because every rendered test in this
+   repo brings up its own Vite, and this file already owns one and already
+   exercises the identical path on the other screen.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const DESKTOP = { width: 1440, height: 900 };
+
+async function landing(query = '') {
+  /* ?desktop=1 so the phone gate never intercepts. The viewport is desktop
+     anyway; the flag makes that explicit rather than incidental. */
+  const { page, context } = await visit(`/${query}${query ? '&' : '?'}desktop=1`, DESKTOP);
+  await page.locator('input').waitFor({ timeout: 15_000 });
+  return { page, context };
+}
+
+async function priceIt(page, handle = 'designgods') {
+  await page.locator('input').fill(handle);
+  await page.locator('form button[type="submit"]').click();
+}
+
+test('the window asks for one thing and nothing competes with it', async () => {
+  const { page, context } = await landing();
+  try {
+    const seen = await page.evaluate(() => {
+      const main = document.querySelector('main');
+      const input = document.querySelector('input');
+      const submit = document.querySelector('form button[type="submit"]');
+      const inputBox = input.getBoundingClientRect();
+      const submitBox = submit.getBoundingClientRect();
+      /* Every other control on the screen, so "largest" is a claim about all
+         of them rather than about the two we happened to think of. */
+      const others = [...main.querySelectorAll('a, button')]
+        .filter((el) => el !== submit)
+        .map((el) => {
+          const r = el.getBoundingClientRect();
+          return { text: el.textContent.trim(), area: r.width * r.height };
+        });
+      return {
+        text: main.textContent,
+        placeholder: input.placeholder,
+        submit: submit.textContent.trim(),
+        ctaArea: submitBox.width * submitBox.height,
+        inputArea: inputBox.width * inputBox.height,
+        others,
+        /* One viewport. Anything below the fold on this screen does not
+           belong on it. */
+        pageHeight: document.documentElement.scrollHeight,
+        viewport: window.innerHeight,
+      };
+    });
+
+    assert.equal(seen.placeholder, 'Your Sleeper username');
+    assert.equal(seen.submit, 'Price my league');
+    assert.match(seen.text, /Ten thousand simulations are about to have an opinion about your team\./);
+
+    /* The doors are present and quiet: both reachable, both smaller than the
+       thing they sit under. */
+    assert.match(seen.text, /My league is on ESPN/);
+    assert.match(seen.text, /Just looking\?/);
+    for (const other of seen.others) {
+      assert.ok(
+        other.area < seen.ctaArea,
+        `"${other.text}" is as big as the call to action, so it competes with it`,
+      );
+    }
+    assert.ok(seen.inputArea > 0, 'no field');
+
+    /* The small print, as one plain cluster. */
+    assert.match(seen.text, /Free during the beta\. No money anywhere in this\. 10,000 simulations per matchup\./);
+    assert.match(seen.text, /Already have an account\?/);
+
+    /* And none of the old page: no demo league, no invented teams, no
+       feature grid. */
+    assert.ok(!/Mount Olympus/.test(seen.text), 'the demo league is on the landing page again');
+    assert.ok(!/Every decision has a price/.test(seen.text), 'the retired tagline is back');
+
+    assert.ok(
+      seen.pageHeight <= seen.viewport + 1,
+      `the window is ${seen.pageHeight}px in a ${seen.viewport}px viewport, so it scrolls`,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test('a username turns the page into the visitor own book', async () => {
+  const { page, context } = await landing();
+  try {
+    await priceIt(page);
+    /* State 2 is a real state, not a flicker: the ritual has to be on screen
+       while the league is priced. */
+    await page.locator('[aria-busy="true"]').waitFor({ timeout: 5_000 });
+
+    await page.locator('ol li').first().waitFor({ timeout: 20_000 });
+
+    const book = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('ol li')];
+      const cta = document.querySelector('main a[href*="signin"]');
+      return {
+        text: document.querySelector('main').textContent,
+        rows: rows.length,
+        /* Their row is priced; everybody else's is a lock. */
+        locked: rows.filter((r) => r.querySelector('svg')).length,
+        priced: rows.filter((r) => !r.querySelector('svg')).length,
+        prices: [...document.querySelectorAll('main span')]
+          .map((s) => s.textContent.trim())
+          .filter((t) => /^[+-]\d+$/.test(t)),
+        cta: cta?.textContent.trim(),
+        ctaHref: cta?.getAttribute('href'),
+      };
+    });
+
+    assert.ok(book.rows >= 2, `only ${book.rows} teams in the table`);
+    assert.equal(book.priced, 1, 'more than one row is unlocked');
+    assert.equal(book.locked, book.rows - 1, 'not every rival is locked');
+
+    /* The matchup is priced, and a two-team game has exactly one favourite. */
+    const [yours, theirs] = book.prices;
+    assert.ok(yours && theirs, `expected two matchup prices, got ${JSON.stringify(book.prices)}`);
+    assert.notEqual(
+      Math.sign(Number(yours)),
+      Math.sign(Number(theirs)),
+      `both sides priced ${yours} / ${theirs}`,
+    );
+
+    assert.equal(book.cta, 'Create a free account');
+    /* Carried through, so it is never typed twice. */
+    assert.match(book.ctaHref, /sleeper=designgods/, `the CTA points at ${book.ctaHref}`);
+    assert.match(book.text, /The whole book opens when you do\. Free during the beta\./);
+  } finally {
+    await context.close();
+  }
+});
+
+test('a name nobody has says so, and leaves every door open', async () => {
+  const { page, context } = await landing();
+  try {
+    await priceIt(page, 'nobody-has-this-handle');
+    /* Not [role="status"]: the pricing state carries that too, and waiting on
+       it matched the ritual rather than the failure. Wait for the field to
+       come BACK, which is the thing being asserted anyway. */
+    await page.getByText(/No Sleeper account by that name/i).waitFor({ timeout: 20_000 });
+
+    const seen = await page.evaluate(() => ({
+      error: [...document.querySelectorAll('main p')]
+        .map((p) => p.textContent.trim())
+        .find((t) => /No Sleeper account/i.test(t)) ?? '',
+      fieldKept: Boolean(document.querySelector('input')),
+      value: document.querySelector('input')?.value,
+      text: document.querySelector('main').textContent,
+    }));
+
+    assert.match(seen.error, /No Sleeper account by that name/i, `it said "${seen.error}"`);
+    assert.ok(seen.fieldKept, 'the field is gone, so there is no second try');
+    assert.equal(seen.value, 'nobody-has-this-handle', 'it threw away what they typed');
+    /* The other doors survive a miss. Somebody who "mistyped" may have no
+       Sleeper name to spell correctly, and a dead end here ends the visit. */
+    assert.match(seen.text, /My league is on ESPN/);
+    assert.match(seen.text, /Just looking\?/);
+  } finally {
+    await context.close();
+  }
+});
+
+test('somebody in two leagues is asked which one', async () => {
+  const { page, context } = await landing('?multiLeague=1');
+  try {
+    await priceIt(page);
+    await page.locator('ul li button').first().waitFor({ timeout: 20_000 });
+
+    const choice = await page.evaluate(() => ({
+      options: [...document.querySelectorAll('ul li button')].map((b) => b.textContent.trim()),
+      text: document.querySelector('main').textContent,
+    }));
+
+    assert.equal(choice.options.length, 2, `offered ${choice.options.length} leagues`);
+    assert.ok(choice.options.some((o) => /Mount Olympus/.test(o)));
+    assert.ok(choice.options.some((o) => /The Second Circle/.test(o)));
+
+    /* And picking one gets to the book. */
+    await page.locator('ul li button').first().click();
+    await page.locator('ol li').first().waitFor({ timeout: 20_000 });
+  } finally {
+    await context.close();
+  }
+});
+
+test('the ESPN door explains itself and never asks for ESPN credentials', async () => {
+  const { page, context } = await landing();
+  try {
+    await page.getByText('My league is on ESPN').click();
+    await page.getByText('ESPN leagues connect after you make an account.').waitFor({
+      timeout: 10_000,
+    });
+
+    const door = await page.evaluate(() => ({
+      text: document.querySelector('main').textContent,
+      /* The one thing this screen must never do. */
+      passwords: document.querySelectorAll('input[type="password"]').length,
+      inputs: document.querySelectorAll('input').length,
+      cta: document.querySelector('main a[href*="signin"]')?.textContent.trim(),
+    }));
+
+    assert.equal(door.passwords, 0, 'the landing page is asking for an ESPN password');
+    assert.equal(door.inputs, 0, 'the ESPN door is collecting something');
+    assert.match(door.text, /needs a computer/);
+    assert.equal(door.cta, 'Create a free account');
+  } finally {
+    await context.close();
+  }
+});
+
+test('the landing page acknowledges Sleeper and ESPN and nothing else', async () => {
+  const { page, context } = await landing();
+  try {
+    /* Placeholders count as visible words on this page: "Sleeper" appears in
+       the field rather than in prose, which is the whole design. */
+    const text = await page.evaluate(() => {
+      const main = document.querySelector('main');
+      const placeholders = [...main.querySelectorAll('input')]
+        .map((input) => input.placeholder)
+        .join(' ');
+      return `${main.textContent} ${placeholders}`;
+    });
+    for (const other of ['Yahoo', 'NFL.com', 'CBS', 'MyFantasyLeague', 'Fleaflicker']) {
+      assert.ok(!new RegExp(other, 'i').test(text), `the page mentions ${other}`);
+    }
+    assert.match(text, /Sleeper/);
+    assert.match(text, /ESPN/);
+  } finally {
+    await context.close();
+  }
+});

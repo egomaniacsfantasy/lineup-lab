@@ -28,6 +28,27 @@ export type DesignScene =
 const STALE_SEASON =
   typeof window !== 'undefined' && window.location.search.includes('staleSeason');
 
+/* ?syncing answers the pricing call the way a league does in the first seconds
+   after it is connected: real teams and real records, no projections behind
+   them yet.
+
+   Without it that window was unreachable by hand, which is how a hero shipped
+   quoting a moneyline with every player on both rosters projecting 0.0 points.
+   The numbers were not wrong so much as not numbers: they were derived from an
+   import that had not landed. A price that flips from -311 to +169 once the
+   real projections arrive is worse than no price, and the product's own rule
+   is that a dash beats a wrong number. */
+const SYNCING =
+  typeof window !== 'undefined' && window.location.search.includes('syncing');
+
+/* ?dynasty makes the design league answer as a dynasty league. Trades vanish
+   and the shell's scope note appears, and neither of those states was
+   reachable at all without a real dynasty league to connect, which is how the
+   dynasty experience went unlooked-at long enough to ship a tab that was
+   simply missing with nothing said about why. */
+const DYNASTY =
+  typeof window !== 'undefined' && window.location.search.includes('dynasty');
+
 const FIXTURE_IDS = {
   'matchup-cold': 'og-design-matchup-cold',
   matchup: 'og-design-matchup-empty',
@@ -37,8 +58,21 @@ const FIXTURE_IDS = {
   board: 'og-design-league-live',
 } as const;
 
+/* The id the stale fixture rolls over INTO.
+   
+   It has to resolve to a real bundle. While the switch was a button nobody
+   pressed in a test, the fixture could hand back an invented id and nothing
+   noticed; the moment the app started following the chain by itself, every
+   stale design scene switched to a league that did not exist and rendered
+   "something on our side broke loading that league". A fixture that answers
+   with something unloadable is a fixture that tests the wrong thing. */
+export const SUCCESSOR_SUFFIX = '-2026';
+
 const FIXTURE_SCENE_BY_ID = new Map<string, DesignScene>(
-  Object.entries(FIXTURE_IDS).map(([scene, leagueId]) => [leagueId, scene as DesignScene]),
+  Object.entries(FIXTURE_IDS).flatMap(([scene, leagueId]) => [
+    [leagueId, scene as DesignScene],
+    [`${leagueId}${SUCCESSOR_SUFFIX}`, scene as DesignScene],
+  ]),
 );
 
 const WEEK = 8;
@@ -917,7 +951,7 @@ function buildBootstrap(leagueId: string): LeagueBootstrap {
       playoffTeams: 4,
       lastScoredWeek: 7,
       regularSeasonWeeks: 10,
-      leagueType: 'redraft',
+      leagueType: DYNASTY ? 'dynasty' : 'redraft',
       bestBall: false,
       divisions: null,
       playoffReseed: null,
@@ -1167,7 +1201,7 @@ export function connectionForDesignScene(scene: DesignScene): StoredConnection {
 }
 
 export function isDesignFixtureLeague(leagueId: string) {
-  return BUNDLES.has(leagueId);
+  return BUNDLES.has(leagueId) || BUNDLES.has(leagueId.replace(SUCCESSOR_SUFFIX, ''));
 }
 
 export function sceneForFixtureLeague(leagueId: string): DesignScene | null {
@@ -1229,10 +1263,17 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
     if (decodeURIComponent(parts[2] ?? '').toLowerCase() !== DESIGN_HANDLE) return null;
     await new Promise((resolve) => setTimeout(resolve, 700));
     const leagueId = FIXTURE_IDS.league;
-    const bundle = BUNDLES.get(leagueId)!;
+    const bundle = (BUNDLES.get(leagueId)
+      ?? BUNDLES.get(leagueId.replace(SUCCESSOR_SUFFIX, '')))!;
     return {
       user: { id: 'design-user', username: DESIGN_HANDLE, displayName: 'Vlahakis' },
       season: '2026',
+      /* ?multiLeague answers with two, which is the branch that puts a
+         pick-a-league step between the username and the board. Somebody in
+         one league never sees that screen, so without a way to force it the
+         landing page's second state could not be looked at or asserted
+         against. The second entry points at the SAME bundle: what is being
+         designed is the choice, not a second league. */
       leagues: [
         {
           id: leagueId,
@@ -1244,6 +1285,20 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
           hasCustomScoring: false,
           status: 'in_season',
         },
+        ...(window.location.search.includes('multiLeague')
+          ? [
+              {
+                id: leagueId,
+                providerId: leagueId,
+                name: 'The Second Circle',
+                season: '2026',
+                totalTeams: 10,
+                scoringFamily: 'half-ppr',
+                hasCustomScoring: false,
+                status: 'in_season',
+              },
+            ]
+          : []),
       ],
     };
   }
@@ -1252,13 +1307,33 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
 
   const leagueId = parts[2];
   const endpoint = parts[3];
-  if (!leagueId || !endpoint || !BUNDLES.has(leagueId)) return null;
-
-  const bundle = BUNDLES.get(leagueId)!;
+  /* A rolled-over league is the same fixture wearing this season's id, so the
+     board after an automatic switch is a board rather than an error page.
+     
+     The gate has to know that too. It used to ask BUNDLES.has(leagueId) and
+     bail, which rejected the successor id before the tolerant lookup below it
+     ever ran, so every stale design scene fell through to the real API and
+     came back "something on our side broke loading that league". */
+  const bundle = leagueId
+    ? BUNDLES.get(leagueId) ?? BUNDLES.get(leagueId.replace(SUCCESSOR_SUFFIX, ''))
+    : undefined;
+  if (!leagueId || !endpoint || !bundle) return null;
   const method = (init?.method ?? 'GET').toUpperCase();
 
   if (endpoint === 'bootstrap' && method === 'GET') {
     await maybeDelay(bundle);
+    /* The rolled-over id has to answer as THIS season, or the app is right to
+       keep saying the year is wrong: it switches forward, asks again, is told
+       2025 again, and re-runs the whole check for ever.
+       
+       Patched here rather than in the bundle because a bundle is built once
+       per base league id and never sees which id was requested. */
+    if (leagueId.endsWith(SUCCESSOR_SUFFIX)) {
+      return {
+        ...bundle.bootstrap,
+        league: { ...bundle.bootstrap.league, id: leagueId, season: '2026' },
+      };
+    }
     return bundle.bootstrap;
   }
   if (endpoint === 'schedule' && method === 'GET') {
@@ -1266,6 +1341,10 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
   }
   if (endpoint === 'lines' && method === 'GET') {
     await maybeDelay(bundle);
+    /* Shaped like the real unpriced answer: available false with a reason, and
+       nothing else. Handing back the priced bundle with a flag flipped would
+       let a surface read numbers that a real syncing league does not have. */
+    if (SYNCING) return { available: false, reason: 'projections_syncing' };
     return bundle.pricing;
   }
   if (endpoint === 'line-history' && method === 'GET') {
@@ -1301,7 +1380,9 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
      successor, ?staleSeason&notRolledOver finds nothing. */
   if (endpoint === 'successor' && method === 'GET') {
     await new Promise((resolve) => setTimeout(resolve, 350));
-    if (!STALE_SEASON) return { successor: null, reason: 'already_current', season: '2026' };
+    if (!STALE_SEASON || leagueId.endsWith(SUCCESSOR_SUFFIX)) {
+      return { successor: null, reason: 'already_current', season: '2026' };
+    }
     if (window.location.search.includes('notRolledOver')) {
       return { successor: null, reason: 'not_rolled_over', season: '2026' };
     }

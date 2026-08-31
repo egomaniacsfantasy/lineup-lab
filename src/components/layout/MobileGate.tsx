@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LeaguePeek } from './LeaguePeek';
+import { PENDING_SLEEPER_PARAM, rememberPendingSleeper } from '../../utils/pendingSleeper';
 import './MobileGate.css';
 
 /**
@@ -75,7 +76,20 @@ export function MobileGate() {
             here breaks the loop the card exists to start. A Sleeper username
             is a text field, and a text field works on a phone. */}
         {open ? (
-          <LeaguePeek onCreateAccount={() => setOpen(false)} />
+          <LeaguePeek
+            /* Straight to the sign-up form, carrying who they are on Sleeper.
+               A full navigation rather than a route change because the gate
+               sits above the router: on a phone there is no router underneath
+               it to push to. /signin is exempt from the gate for exactly this
+               reason, so the form renders instead of bouncing back here. */
+            onCreateAccount={(username) => {
+              rememberPendingSleeper(username);
+              const query = username
+                ? `?${PENDING_SLEEPER_PARAM}=${encodeURIComponent(username)}`
+                : '';
+              window.location.assign(`/signin${query}`);
+            }}
+          />
         ) : (
           <>
             <button

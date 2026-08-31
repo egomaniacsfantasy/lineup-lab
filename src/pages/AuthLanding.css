@@ -37,6 +37,18 @@
   text-align: center;
 }
 
+/* Why you are looking at a sign-up form instead of the tab you pressed. Sits
+   between the wordmark and the tabs, where the eye already is, and only
+   renders when the path says you came from inside the app. */
+.auth-landing__context {
+  margin: -12px 0 20px;
+  color: var(--text-amber);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
 .auth-landing__thesis {
   margin: 18px 0 28px;
   max-width: 44ch;

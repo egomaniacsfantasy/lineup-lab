@@ -20,7 +20,11 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: clip;
-  padding-top: var(--shell-header-height);
+  /* The header, plus the stale-season bar when there is one. That bar is
+     fixed, so without this the first thing on every page renders underneath
+     it. StaleSeasonNotice measures itself and publishes the height; it is 0
+     whenever the bar is not on screen. */
+  padding-top: calc(var(--shell-header-height) + var(--shell-notice-height, 0px));
   /* The bar sits below this in the flex column now rather than on top of it,
      so there is nothing to reserve space for. */
   padding-bottom: var(--space-md);

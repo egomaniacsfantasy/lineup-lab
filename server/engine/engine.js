@@ -10,7 +10,7 @@
  * Matchup lines: 10,000-sim Monte Carlo over truncated-normal player
  * scores. Swap deltas: analytic normal approximation (documented — the
  * delta of means/variances is exact under the same model and keeps a
- * full-league recompute well under 2s). Futures: 2,000-sim remaining-
+ * full-league recompute well under 2s). Futures: SEASON_SIMS-run remaining-
  * schedule simulation; title odds = playoff prob × strength share among
  * playoff teams (simplification, documented).
  */

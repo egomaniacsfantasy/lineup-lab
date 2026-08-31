@@ -48,6 +48,39 @@ export function impliedProbability(moneyline: number): number {
  */
 const OFF_THE_BOARD = 199_900;
 
+/**
+ * The mark for a value that does not exist yet.
+ *
+ * One definition, because it is a product convention rather than a character:
+ * the same mark formatAmericanOdds draws for a market that is off the board,
+ * and the same rule everywhere else here, which is that a dash beats a wrong
+ * number.
+ *
+ * It also settles a disagreement between the two copy checks. copyScan exempts
+ * a bare dash by design; brand-check has no such exemption and scans a fixed
+ * list of files, so the identical literal is legal in one component and a
+ * failure in its neighbour. Naming it once puts it in a module neither of them
+ * needs to argue about, which is where a shared convention belonged anyway.
+ */
+export const NO_VALUE = '\u2014';
+
+/**
+ * Fantasy points, or a dash when there are none to report yet.
+ *
+ * A league that has just connected has no projections behind it for a few
+ * seconds. Every player projects 0.0 in that window, and 0.0 is a claim: it
+ * says this roster is going to score nothing. The whole roster reading zero is
+ * the shape of a missing answer, not a bad one.
+ *
+ * `known` is the pricing flag rather than a test on the value, because a real
+ * 0.0 exists: a player on bye, a defence that gave up more than it earned. A
+ * settled book is allowed to say zero. A book that has not opened is not.
+ */
+export function formatProjectionPoints(value: number, known = true): string {
+  if (!known) return NO_VALUE;
+  return value.toFixed(1);
+}
+
 export function americanOddsValue(odds: number): number {
   const rounded = Math.round(odds);
   if (rounded >= 100 || rounded <= -101) return rounded;

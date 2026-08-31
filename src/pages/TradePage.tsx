@@ -105,6 +105,23 @@ type MarketView = 'finder' | 'build';
    split because neither fitted beside the other in 402px. On a desktop they
    are the same job — the finder searches the whole league, and picking a
    manager narrows the same search. */
+/**
+ * The finder's funnel counts (enumerated / scanned / resimmed / positive / ms).
+ *
+ * These used to render under the empty state, which is how a line reading
+ * "debug: enumerated=18 scanned=18 ..." ended up on a surface a stranger sees.
+ * They are still worth having when a league legitimately finds no deals, so
+ * they go to the console instead of the page.
+ *
+ * Module scope rather than a useCallback: nothing here closes over a render,
+ * and at component scope every effect that calls it has to carry it as a
+ * dependency for no reason.
+ */
+function reportDealsFunnel(debug: Record<string, number> | null | undefined) {
+  if (!debug) return;
+  console.info('[trade-finder]', debug);
+}
+
 const MARKET_VIEWS: { id: MarketView; label: string }[] = [
   { id: 'finder', label: 'Trade finder' },
   { id: 'build', label: 'Build trades' },
@@ -225,7 +242,6 @@ function TradeDealsView() {
   const [leagueDeals, setLeagueDeals] = useState<TradeSuggestion[] | null>(null);
   // TEMP diagnostic: the server's finder funnel, shown in the empty-state so we can see
   // exactly where trades collapse to zero without needing browser dev tools.
-  const [dealsDebug, setDealsDebug] = useState<Record<string, number> | null>(null);
   // A clicked manager gets its OWN deep scan (partnerRosterId set) at the full sim count,
   // so its numbers match the analyzer exactly. Null = fall back to filtering the pool.
   const [managerDeals, setManagerDeals] = useState<TradeSuggestion[] | null>(null);
@@ -267,7 +283,7 @@ function TradeDealsView() {
         if (cancelled) return;
         const found = response.available ? response.suggestions ?? [] : [];
         setLeagueDeals(found);
-        setDealsDebug(response.debug ?? null);
+        reportDealsFunnel(response.debug);
         try {
           window.sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data: found }));
         } catch {
@@ -431,7 +447,7 @@ function TradeDealsView() {
       .then((response) => {
         const found = response.available ? response.suggestions ?? [] : [];
         setLeagueDeals(found);
-        setDealsDebug(response.debug ?? null);
+        reportDealsFunnel(response.debug);
         setDealPageIndex(0);
         try {
           window.sessionStorage.setItem(
@@ -547,7 +563,7 @@ function TradeDealsView() {
       .then((response) => {
         if (cancelled) return;
         setManagerDeals(response.available ? response.suggestions ?? [] : []);
-        setDealsDebug(response.debug ?? null);
+        reportDealsFunnel(response.debug);
         setManagerSuggestionsLoading(false);
         setManagerSuggestionsUpdatedAt(Date.now());
       })
@@ -1393,11 +1409,6 @@ function TradeDealsView() {
             {showingManagerMarket
               ? `The book found no deals with ${selectedPartner?.teamName ?? 'this manager'} this week.`
               : 'Pick a manager above to see the book\'s deals.'}
-            {dealsDebug ? (
-              <span style={{ display: 'block', marginTop: 6, fontSize: 11, opacity: 0.7 }}>
-                debug: {Object.entries(dealsDebug).map(([k, v]) => `${k}=${v}`).join('  ')}
-              </span>
-            ) : null}
           </p>
         )}
         {dismissedSignatures.size > 0 ? (

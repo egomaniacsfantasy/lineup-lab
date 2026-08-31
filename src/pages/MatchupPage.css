@@ -2776,6 +2776,17 @@
      for the lineup rather than something watching the whole page. */
   grid-column: 1 / -1;
   position: sticky;
+  /* Zero, and it has to stay zero.
+     
+     A sticky offset here is measured from the SCROLLPORT'S CONTENT BOX, and
+     the scrollport is .app-content, which is padded by the header plus the
+     shell's notice strip. So 0 already means "just below whatever is fixed
+     above me", and it is correct in both states without knowing about either.
+     
+     Offsetting this by the notice height instead double-counts padding that
+     is already there: with a 57px notice the bar pinned 137px lower than it
+     should, which is what put a band of empty page between the notice and the
+     first thing under it. */
   top: 0;
   z-index: 20;
   /* Opaque, not a fade. The gradient used to reach fully transparent exactly
@@ -3343,10 +3354,7 @@
 
 /* The cycling price. Dimmed so it never competes with a settled number, and
    tabular so the width does not jitter as the digits change. */
-.pricing-odds {
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
+/* .pricing-odds now lives with its component, in PricingOdds.css. */
 
 /* The trades header. The refresh moved here from the start/sit call above it,
    which is the one list on the rail where pressing it produces something the
