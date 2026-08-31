@@ -197,13 +197,22 @@ argument the page had to win was never "is this well made", it was "does this
 know anything about MY team".
 
 **State 1, the window.** One viewport, no scrolling. The mark at several times
-the size it was, the wordmark under it, one sentence, and the field. The
-headline is set in the body face and in sentence case rather than shouted in
-poster caps, because it is a sentence with a joke in it and the display face
-turns it into a slogan. Under the field, two quiet doors: **My league is on
-ESPN** and **Just looking?**. Then ticket small print, in mono: "Free during
-the beta. No money anywhere in this. 10,000 simulations per matchup." Nothing
-else. No feature grid, no screenshots, no second fold.
+the size it was, the wordmark under it, one sentence, and the field.
+
+The headline is **"Somewhere in your league sits the championship favorite.
+Odds are it isn't you."** It replaced a first attempt ("Ten thousand
+simulations are about to have an opinion about your team") that sold the
+machine rather than the book: a sentence a data scientist would write, walking
+away from the sportsbook framing the whole product rests on. It is set in the
+brand display face, which the first version was not.
+
+Under the field, one quiet door: **My league is on ESPN**. A second door,
+"Just looking?", pointed at the demo and is gone: it offered a stranger
+somebody else's league at the exact moment they were deciding whether to type
+their own. Then "Already have an account? Sign in" at a size somebody can
+read, and ticket small print in mono: "Free during the beta. No money anywhere
+in this. 10,000 simulations per matchup." Nothing else. No feature grid, no
+screenshots, no second fold.
 
 **State 2, pricing.** The book's ritual, run in place: the mark rolls (the dice
 are what roll ten thousand times) and the lines cycle. Two or three seconds is
@@ -214,8 +223,17 @@ so the two cannot drift.
 their current-week matchup priced on both sides with projected points and the
 win bar, their championship price at full size, and the whole title-odds table
 with real leaguemates. Their row is amber and priced; every other row is a
-name and a lock. One CTA, **Create a free account**, carrying the username
-through so it is never typed twice.
+name and a lock.
+
+Two actions, and they are not rivals. **Create a free account** is the
+conversion and stays the filled one, carrying the username through so it is
+never typed twice. **Share my card** is the loop: it draws the Hub's own share
+card, from the same generator, so the advert for the product looks like the
+product. The person most likely to send one is somebody who just watched their
+own price appear and has not committed to anything yet, and the card carries
+the address into a group chat. Every card's plug bar now says the product is
+free, because that is the objection it has to answer in the half second a
+forwarded image is looked at.
 
 **The doors.** ESPN opens an interstitial, never a credential field: ESPN needs
 a signed-in browser session, which an account and a computer can do and a

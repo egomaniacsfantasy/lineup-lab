@@ -216,7 +216,7 @@ export async function drawParlayCard(
   ctx.fillStyle = P.bg;
   ctx.font = `400 50px ${P.display}`;
   ctx.letterSpacing = '2px';
-  ctx.fillText('PRICE YOUR TEAM AT ODDSGODS.NET', W / 2, H - BAR + 70);
+  ctx.fillText('PRICE YOUR TEAM FREE AT ODDSGODS.NET', W / 2, H - BAR + 70);
   ctx.letterSpacing = '0px';
 
   return canvas;

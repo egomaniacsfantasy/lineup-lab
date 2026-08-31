@@ -882,12 +882,24 @@ test('the window asks for one thing and nothing competes with it', async () => {
 
     assert.equal(seen.placeholder, 'Your Sleeper username');
     assert.equal(seen.submit, 'Price my league');
-    assert.match(seen.text, /Ten thousand simulations are about to have an opinion about your team\./);
+    assert.match(
+      seen.text,
+      /Somewhere in your league sits the championship favorite\./,
+      'the headline is not the one that shipped',
+    );
+    /* The first version sold the machine rather than the book, which walks
+       away from the framing the whole product is built on. */
+    assert.ok(
+      !/Ten thousand simulations are about to/.test(seen.text),
+      'the retired headline is back',
+    );
 
-    /* The doors are present and quiet: both reachable, both smaller than the
-       thing they sit under. */
+    /* One door, present and quiet, and smaller than the thing it sits under.
+       "Just looking?" is deliberately gone: it offered a stranger somebody
+       else's league at the exact moment they were deciding to type their
+       own. */
     assert.match(seen.text, /My league is on ESPN/);
-    assert.match(seen.text, /Just looking\?/);
+    assert.ok(!/Just looking/.test(seen.text), 'the demo door is back on the landing page');
     for (const other of seen.others) {
       assert.ok(
         other.area < seen.ctaArea,
@@ -984,10 +996,9 @@ test('a name nobody has says so, and leaves every door open', async () => {
     assert.match(seen.error, /No Sleeper account by that name/i, `it said "${seen.error}"`);
     assert.ok(seen.fieldKept, 'the field is gone, so there is no second try');
     assert.equal(seen.value, 'nobody-has-this-handle', 'it threw away what they typed');
-    /* The other doors survive a miss. Somebody who "mistyped" may have no
+    /* The ESPN door survives a miss. Somebody who "mistyped" may have no
        Sleeper name to spell correctly, and a dead end here ends the visit. */
     assert.match(seen.text, /My league is on ESPN/);
-    assert.match(seen.text, /Just looking\?/);
   } finally {
     await context.close();
   }
@@ -1105,6 +1116,114 @@ test('a redraft peek is not given the dynasty note, and keeps the full pitch', a
     }));
     assert.equal(seen.notes, 0, 'a redraft league was given the dynasty note');
     assert.match(seen.pitch, /trade finder/i, 'the redraft pitch lost the trade finder');
+  } finally {
+    await context.close();
+  }
+});
+
+test('a priced visitor can send the card as well as make an account', async () => {
+  /* Two things to do with a number you were just shown, and they are not
+     rivals: the account is the conversion, the card is the loop. The card is
+     the SAME generator the Hub uses, so the advert for the product looks like
+     the product. */
+  const { page, context } = await landing();
+  try {
+    await priceIt(page);
+    await page.locator('ol li').first().waitFor({ timeout: 20_000 });
+
+    const actions = await page.evaluate(() => {
+      const account = document.querySelector('main a[href*="signin"]');
+      const share = [...document.querySelectorAll('main button')].find((b) =>
+        /share my card/i.test(b.textContent),
+      );
+      const box = (el) => (el ? el.getBoundingClientRect() : null);
+      const a = box(account);
+      const s = box(share);
+      return {
+        account: account?.textContent.trim(),
+        share: share?.textContent.trim(),
+        /* Weight says which one is the point, rather than hiding the other. */
+        accountFilled: account ? getComputedStyle(account).backgroundColor : null,
+        shareFilled: share ? getComputedStyle(share).backgroundColor : null,
+        accountWider: a && s ? a.width >= s.width : false,
+      };
+    });
+
+    assert.equal(actions.account, 'Create a free account');
+    assert.equal(actions.share, 'Share my card');
+    assert.notEqual(
+      actions.accountFilled,
+      actions.shareFilled,
+      'the two actions are dressed identically, so neither reads as the point',
+    );
+    assert.ok(actions.accountWider, 'the secondary action is wider than the primary one');
+
+    /* And it draws. A share button that opens an empty preview is worse than
+       no share button. */
+    await page.getByText('Share my card').click();
+    await page.locator('img[src^="data:image/png"]').waitFor({ timeout: 20_000 });
+  } finally {
+    await context.close();
+  }
+});
+
+test('the card tells whoever it is forwarded to that it is free', async () => {
+  /* The plug bar is the only reason a card that gets forwarded twice brings
+     anybody back, and "free" is the objection it has to answer in the half
+     second it is looked at. */
+  const source = await import('node:fs/promises').then((fs) =>
+    fs.readFile(new URL('../src/utils/shareCard.ts', import.meta.url), 'utf8'),
+  );
+  assert.match(source, /FREE AT ODDSGODS\.NET/, 'the plug bar stopped saying it is free');
+});
+
+test('a shared card shows the real lineup, not the pre-draft message', async () => {
+  /* The card's empty-starters state says "your lineup lands here once you
+     draft", which is right for a league that has not, and a lie under the team
+     name of somebody who drafted in August. The peek reads starters off the
+     bootstrap it already fetches, so the card it sends is the Hub's card with
+     the same faces on it. */
+  const { page, context } = await landing();
+  try {
+    await priceIt(page);
+    await page.locator('ol li').first().waitFor({ timeout: 20_000 });
+    await page.getByText('Share my card').click();
+    await page.locator('img[src^="data:image/png"]').waitFor({ timeout: 20_000 });
+
+    /* Read the drawn pixels rather than the DOM: the card is a canvas, so the
+       only way to know what it says is to look at it. */
+    const drawn = await page.evaluate(async () => {
+      const img = document.querySelector('img[src^="data:image/png"]');
+      const bitmap = await createImageBitmap(
+        await (await fetch(img.src)).blob(),
+      );
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0);
+      /* Rows with ink, so an empty band in the middle is measurable. */
+      const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+      const painted = [];
+      for (let y = 0; y < canvas.height; y += 1) {
+        let hits = 0;
+        for (let x = 0; x < canvas.width; x += 6) {
+          const i = (y * canvas.width + x) * 4;
+          if (data[i] > 70 || data[i + 1] > 70 || data[i + 2] > 70) hits += 1;
+        }
+        painted.push(hits);
+      }
+      return { height: canvas.height, painted };
+    });
+
+    /* No roster-sized hole. The same ceiling the card's own layout test uses. */
+    const body = drawn.painted.slice(160, drawn.height - 108);
+    let run = 0;
+    let worst = 0;
+    for (const hits of body) {
+      run = hits === 0 ? run + 1 : 0;
+      if (run > worst) worst = run;
+    }
+    assert.ok(worst <= 120, `the shared card has a ${worst}px empty band in it`);
   } finally {
     await context.close();
   }

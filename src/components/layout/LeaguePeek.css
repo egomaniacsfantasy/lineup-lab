@@ -349,3 +349,25 @@
   text-align: left;
   text-wrap: pretty;
 }
+
+/* The second thing to do with your own number. Outlined against the filled
+   account button above it: which one is the point is said by weight, not by
+   hiding the other. */
+.league-peek__share {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+
+.league-peek__share:hover {
+  border-color: var(--amber);
+  color: var(--text-amber);
+}

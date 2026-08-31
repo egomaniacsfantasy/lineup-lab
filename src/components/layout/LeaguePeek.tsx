@@ -1,4 +1,8 @@
+import { useState } from 'react';
 import { usePeek } from '../../hooks/usePeek';
+import { ShareCardPreview } from '../matchup/ShareCardPreview';
+import { drawShareCard } from '../../utils/shareCard';
+import { peekShareCard } from '../../utils/peekShareCard';
 import { DynastyScopeNote } from './DynastyScopeNote';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints } from '../../utils/formatOdds';
 import { TeamAvatar } from '../league/TeamAvatar';
@@ -36,6 +40,7 @@ export function LeaguePeek({ onCreateAccount }: { onCreateAccount: (username: st
   /* The machine is shared with the landing page, which runs the identical
      path on a screen that looks nothing like this one. See usePeek. */
   const { username, setUsername, stage, submit, look } = usePeek('phone_gate');
+  const [sharing, setSharing] = useState(false);
 
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -196,12 +201,29 @@ export function LeaguePeek({ onCreateAccount }: { onCreateAccount: (username: st
           ))}
         </ul>
 
+        {/* The account is the conversion and stays the filled one. The card is
+            the loop, and the phone is where a group chat is. */}
         <button className="league-peek__cta" onClick={() => onCreateAccount(username.trim())} type="button">
           Create a free account
+        </button>
+        <button
+          className="league-peek__share"
+          onClick={() => setSharing(true)}
+          type="button"
+        >
+          Share my card
         </button>
         <p className="league-peek__cta-note">
           The full book opens on a laptop or desktop. Free during the beta.
         </p>
+
+        {sharing ? (
+          <ShareCardPreview
+            draw={(options) => drawShareCard(peekShareCard(league), options)}
+            message={`${league.you.teamName} is ${formatProbOrOdds(league.you.titleProb)} to win ${league.name}.`}
+            onClose={() => setSharing(false)}
+          />
+        ) : null}
       </div>
     );
   }

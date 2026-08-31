@@ -313,7 +313,7 @@ export async function drawTradeCard(
   ctx.fillStyle = P.bg;
   ctx.font = `400 50px ${P.display}`;
   ctx.letterSpacing = '2px';
-  ctx.fillText('PRICE YOUR TRADES AT ODDSGODS.NET', W / 2, BAR_TOP + 70);
+  ctx.fillText('PRICE YOUR TRADES FREE AT ODDSGODS.NET', W / 2, BAR_TOP + 70);
   ctx.letterSpacing = '0px';
 
   return canvas;

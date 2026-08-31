@@ -30,7 +30,14 @@ export interface ShareCardLine {
   finish?: string | null;
   seed?: string | null;
   /** Your starters, in lineup order. The roster is the most personal thing on
-      the card and the only part that looks like a team rather than a table. */
+      the card and the only part that looks like a team rather than a table.
+      
+      Empty or absent means the league has not drafted, and the card says so
+      rather than leaving a roster-sized hole in its middle. Every caller must
+      therefore send the real list when it has one: the anonymous peek reads
+      them off the bootstrap it already fetches, because telling somebody who
+      drafted in August that their lineup arrives once they draft is a card
+      confidently wrong about them in the one place it is most personal. */
   starters?: ShareCardStarter[] | null;
   /** This week, compressed to one line. It is this week's card, but it is
       not this week's story. */
@@ -332,7 +339,7 @@ export async function drawShareCard(
   ctx.fillStyle = P.bg;
   ctx.font = `400 50px ${P.display}`;
   ctx.letterSpacing = '2px';
-  ctx.fillText('PRICE YOUR TEAM AT ODDSGODS.NET', W / 2, BAR_TOP + 70);
+  ctx.fillText('PRICE YOUR TEAM FREE AT ODDSGODS.NET', W / 2, BAR_TOP + 70);
   ctx.letterSpacing = '0px';
 
   return canvas;

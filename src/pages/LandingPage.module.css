@@ -132,17 +132,28 @@
   text-transform: uppercase;
 }
 
-/* Sentence case, and set in the body face rather than the display one. It is a
-   sentence with a joke in it, and shouting it in poster caps turns it into a
-   slogan, which is the register this page is trying not to be in. */
+/* The display face, which is the brand's voice.
+
+   This was set in the body face on the theory that the display one would turn
+   a sentence into a slogan. Wrong twice over: the body face is not a brand
+   face at all, so the biggest words on the page were the one thing on it that
+   did not look like us, and the line is a bookmaker's line rather than a joke.
+   It can carry the weight.
+
+   Staatliches has no lowercase, so this sets as caps whatever the markup
+   says. That is fine for a line this short and it is why the measure is wide:
+   at 20ch it broke to four lines, and four lines of poster caps is a wall
+   rather than a sentence. Wide enough for three, balanced so the break lands
+   before "Odds are". */
 .headline {
   margin: 0 0 var(--space-md);
-  max-width: 22ch;
+  max-width: 26ch;
   color: var(--text-primary);
-  font-size: clamp(26px, 3.4vw, 38px);
-  font-weight: 500;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 3.6vw, 44px);
+  font-weight: 400;
+  line-height: 1.14;
+  letter-spacing: 0.01em;
   text-wrap: balance;
 }
 
@@ -177,7 +188,12 @@
   align-items: center;
   justify-content: center;
   min-height: 58px;
-  padding: 0 var(--space-lg);
+  /* Staatliches carries a tall internal leading and no descenders in most of
+     its caps, so a box-centred label reads as sitting high in the button. The
+     nudge is optical: line-height 1 removes the inherited half-leading, and
+     the padding pair puts the difference back under the glyphs. */
+  padding: 2px var(--space-lg) 0;
+  line-height: 1;
   border: 0;
   border-radius: var(--radius-md);
   background: var(--amber);
@@ -230,6 +246,22 @@
 }
 
 .door:hover { color: var(--text-primary); }
+
+/* Not small print. Somebody who already has an account is the easiest
+   conversion on the page and was being offered a way in at eleven pixels,
+   below the legal text. It sits above the small print now, at a size that
+   reads as an offer. */
+.signIn {
+  margin: 0 0 var(--space-sm);
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.signInLink {
+  color: var(--text-amber);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 /* Actual ticket small print: mono, quiet, one cluster, plain sentences. */
 .fine {
@@ -517,6 +549,49 @@
   border-radius: var(--radius-sm);
   background: rgba(244, 245, 242, 0.06);
   color: var(--text-dim);
+}
+
+/* The account and the card, side by side. Filled and outlined: which one is
+   the point is said by weight rather than by hiding the other. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2xs);
+  width: 100%;
+  margin-top: var(--space-2xs);
+}
+
+.actions .go {
+  flex: 1 1 16rem;
+}
+
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 12rem;
+  min-height: 58px;
+  padding: 2px var(--space-lg) 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: 0.03em;
+  line-height: 1;
+}
+
+.secondary:hover {
+  border-color: var(--amber);
+  color: var(--text-amber);
+}
+
+.secondary:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
 }
 
 /* ── The demo shell ──────────────────────────────────────────────────── */

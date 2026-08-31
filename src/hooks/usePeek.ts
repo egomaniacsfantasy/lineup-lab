@@ -25,6 +25,12 @@ export interface PeekRow {
   avatarUrl: string | null;
   isUser: boolean;
   titleProb: number;
+  /* The rest of the futures row. Kept because the share card draws all four
+     and the peek was throwing three of them away after fetching them, which
+     left a 293px hole in the middle of every card the landing page sent. */
+  playoffProb: number;
+  projRecord: string | null;
+  avgSeed: number | null;
 }
 
 /**
@@ -51,6 +57,13 @@ export interface PeekMatchup {
   them: PeekSide;
 }
 
+/** One starter, in the shape the share card wants. */
+export interface PeekStarter {
+  name: string;
+  position: string;
+  playerId: string;
+}
+
 export interface PeekLeague {
   name: string;
   /* Carried because the anonymous screens sit ABOVE the app shell, and the
@@ -62,6 +75,17 @@ export interface PeekLeague {
   you: PeekRow;
   others: PeekRow[];
   matchup: PeekMatchup | null;
+  /* The user's own starters, for the share card.
+     
+     Already on the bootstrap, which the peek reads anyway: teams carry their
+     starter ids and the payload carries a catalog keyed by them. Left as null
+     when the league has not drafted, which the card has its own honest thing
+     to say about, and undefined never happens here because we always know.
+     
+     Without this the card drew a roster-sized hole in its middle, and filling
+     that hole with the pre-draft message would have told somebody who drafted
+     in August that their lineup arrives once they draft. */
+  starters: PeekStarter[] | null;
 }
 
 export type PeekStage =
@@ -194,6 +218,13 @@ export function usePeek(area: string) {
             avatarUrl: crests.get(String(team.rosterId)) ?? null,
             isUser: Boolean(team.isUser),
             titleProb: team.titleProb,
+            playoffProb: team.playoffProb,
+            projRecord:
+              team.projRecord
+              ?? (team.projWins != null && team.projLosses != null
+                ? `${team.projWins.toFixed(1)}-${team.projLosses.toFixed(1)}`
+                : null),
+            avgSeed: team.avgSeed ?? null,
           }));
 
         const you = rows.find((row) => row.isUser);
@@ -205,11 +236,28 @@ export function usePeek(area: string) {
           return;
         }
 
+        /* Kickers and defences are left out for the same reason the Hub leaves
+           them out: the card shows six faces and those two are not faces. */
+        const catalog = bootstrap.players ?? {};
+        const userTeam = (bootstrap.teams ?? []).find(
+          (team) => String(team.rosterId) === you.rosterId,
+        );
+        const starters = (userTeam?.starters ?? [])
+          .map((id) => catalog[id])
+          .filter((player) => player && player.position !== 'DEF' && player.position !== 'K')
+          .slice(0, 6)
+          .map((player) => ({
+            name: player.name,
+            position: player.position,
+            playerId: player.id,
+          }));
+
         setStage({
           name: 'peek',
           league: {
             name: league.name,
             leagueType: bootstrap.league.leagueType,
+            starters: starters.length > 0 ? starters : null,
             you,
             others: rows.filter((row) => !row.isUser),
             matchup: buildPeekMatchup(bootstrap, pricing, you.rosterId),

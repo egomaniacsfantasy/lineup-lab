@@ -9,6 +9,9 @@ import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints 
 import { TeamAvatar } from '../components/league/TeamAvatar';
 import { DynastyScopeNote } from '../components/layout/DynastyScopeNote';
 import { MatchupPage } from './MatchupPage';
+import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
+import { drawShareCard } from '../utils/shareCard';
+import { peekShareCard } from '../utils/peekShareCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import mark from '../assets/og-hero.png';
@@ -122,8 +125,16 @@ function Window({
       <img alt="" className={styles.mark} src={mark} />
       <p className={styles.wordmark}>Odds Gods</p>
 
+      {/* The brief's own alternate, chosen after the first one shipped and
+          read wrong. "Ten thousand simulations" sells the machine: it is a
+          sentence a data scientist would write, and it walks away from the
+          sportsbook framing the whole product is built on. This one is a
+          bookmaker's line. It says there is a favourite, it says it is
+          probably not you, and it makes the number personal before the number
+          exists. */}
       <h1 className={styles.headline}>
-        Ten thousand simulations are about to have an opinion about your team.
+        Somewhere in your league sits the championship favorite. Odds are it
+        isn&rsquo;t you.
       </h1>
 
       <form
@@ -158,24 +169,21 @@ function Window({
         </p>
       ) : null}
 
+      {/* One door, not two. "Just looking?" offered a stranger somebody
+          else's league at the exact moment they were deciding whether to type
+          their own, which is the one moment this page has. The demo still
+          exists at /demo for anywhere else that wants it. */}
       <p className={styles.doors}>
         <button className={styles.door} onClick={onEspn} type="button">
           My league is on ESPN
         </button>
-        <Link
-          className={styles.door}
-          onClick={() => void trackEvent('landing', 'door_demo')}
-          to="/demo"
-        >
-          Just looking?
-        </Link>
       </p>
 
-      <p className={styles.fine}>
-        Free during the beta. No money anywhere in this. 10,000 simulations per matchup.
+      <p className={styles.signIn}>
+        Already have an account? <Link className={styles.signInLink} to="/signin">Sign in</Link>
       </p>
       <p className={styles.fine}>
-        Already have an account? <Link className={styles.fineLink} to="/signin">Sign in</Link>
+        Free during the beta. No money anywhere in this. 10,000 simulations per matchup.
       </p>
     </section>
   );
@@ -268,6 +276,7 @@ function WhichLeague({
 
 function Book({ league, username }: { league: PeekLeague; username: string }) {
   const game = league.matchup;
+  const [sharing, setSharing] = useState(false);
 
   return (
     <section className={styles.book}>
@@ -356,19 +365,46 @@ function Book({ league, username }: { league: PeekLeague; username: string }) {
 
       <DynastyScopeNote leagueType={league.leagueType} />
 
-      <a
-        className={styles.go}
-        href={`/signin?${PENDING_SLEEPER_PARAM}=${encodeURIComponent(username.trim())}`}
-        onClick={() => {
-          rememberPendingSleeper(username);
-          void trackEvent('landing', 'account_create', { from: 'book' });
-        }}
-      >
-        Create a free account
-      </a>
+      {/* Two things to do with a number you have just been shown, and they are
+          not rivals. The account is the conversion and stays the filled one.
+          The card is the loop: it carries the address into a group chat, and
+          the person most likely to send one is somebody who just watched their
+          own price appear and has not committed to anything yet. Asking them
+          to choose between the two would be pretending sharing costs us
+          something. */}
+      <div className={styles.actions}>
+        <a
+          className={styles.go}
+          href={`/signin?${PENDING_SLEEPER_PARAM}=${encodeURIComponent(username.trim())}`}
+          onClick={() => {
+            rememberPendingSleeper(username);
+            void trackEvent('landing', 'account_create', { from: 'book' });
+          }}
+        >
+          Create a free account
+        </a>
+        <button
+          className={styles.secondary}
+          onClick={() => {
+            setSharing(true);
+            void trackEvent('landing', 'share_card');
+          }}
+          type="button"
+        >
+          Share my card
+        </button>
+      </div>
       <p className={styles.fine}>
         The whole book opens when you do. Free during the beta.
       </p>
+
+      {sharing ? (
+        <ShareCardPreview
+          draw={(options) => drawShareCard(peekShareCard(league), options)}
+          message={`${league.you.teamName} is ${formatProbOrOdds(league.you.titleProb)} to win ${league.name}.`}
+          onClose={() => setSharing(false)}
+        />
+      ) : null}
     </section>
   );
 }
