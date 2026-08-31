@@ -14,6 +14,7 @@ import {
   computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
 } from '../engine/engine.js';
 import { predictSeason, weekForks, weekProjections, PREDICTOR_SIMS } from '../engine/leverage.js';
+import { findSuccessorLeague } from '../leagueSuccession.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { registerLeague, readRegistry } from '../engine/leagueRegistry.js';
 import {
@@ -734,6 +735,41 @@ apiRouter.post('/league/:leagueId/playoff-settings', async (req, res, next) => {
 });
 
 /** Everything one league needs to render: league, teams, week matchups, players. */
+/**
+ * The league that replaced this one.
+ *
+ * Sleeper gives a league a new id every season and threads them together with
+ * previous_league_id, so a dynasty league connected last year keeps answering
+ * for ever with last year's rosters. Nothing errors; it is a healthy response
+ * about the wrong year. This walks the chain the other way: of the leagues
+ * this user is in THIS season, which one traces back to the one they have
+ * connected.
+ *
+ * Answers with a reason rather than a bare null, because the two ways of
+ * finding nothing need different things said to the user: a league whose
+ * commissioner has not rolled it over yet is not the same as one we failed to
+ * look for.
+ */
+apiRouter.get('/league/:leagueId/successor', async (req, res, next) => {
+  try {
+    const result = await findSuccessorLeague(
+      getProvider(req),
+      req.params.leagueId,
+      req.query.userId,
+    );
+    if (result.reason === 'league_not_found') {
+      res.status(404).json({
+        error: 'league_not_found',
+        message: 'That league is no longer on Sleeper.',
+      });
+      return;
+    }
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 apiRouter.get('/league/:leagueId/bootstrap', async (req, res, next) => {
   try {
     const provider = getProvider(req);

@@ -630,3 +630,64 @@ test('a stale-season warning is on top of the page, not under the header', async
     await page.close();
   }
 });
+
+/**
+ * And it offers the league that replaced this one.
+ *
+ * Saying "the year is wrong, go to Connect" leaves someone to work out which
+ * of their leagues is the right one, in a product where the whole problem is
+ * that two of them look identical. The server walks previous_league_id the
+ * other way, so the fix is one button.
+ *
+ * The two ways of finding nothing need different things said. A league whose
+ * commissioner has not rolled it over yet is not a mistake the user made, and
+ * offering to reconnect would send them looking for a league that does not
+ * exist.
+ */
+test('the stale banner offers this season\'s league by name', async () => {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+  try {
+    await page.goto(`${baseUrl}/design/league?staleSeason=1`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.stale-season__action', { timeout: 15_000 });
+
+    const seen = await page.evaluate(() => {
+      const notice = document.querySelector('.stale-season');
+      const action = notice.querySelector('.stale-season__action');
+      return { text: notice.textContent, action: action.textContent.trim(), tag: action.tagName };
+    });
+
+    /* Named, not "your other league": the name is how someone recognises it. */
+    assert.match(seen.text, /Odds Gods Design Replay is your 2026 league/);
+    /* A control, not a link to go and hunt. */
+    assert.equal(seen.tag, 'BUTTON');
+    assert.match(seen.action, /2026/);
+  } finally {
+    await page.close();
+  }
+});
+
+test('a league nobody has rolled over yet is not offered a switch', async () => {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+  try {
+    await page.goto(`${baseUrl}/design/league?staleSeason=1&notRolledOver=1`, {
+      waitUntil: 'networkidle',
+    });
+    await page.waitForSelector('.stale-season', { timeout: 15_000 });
+    await page.waitForTimeout(900);
+
+    const seen = await page.evaluate(() => {
+      const notice = document.querySelector('.stale-season');
+      return {
+        text: notice.textContent,
+        actions: notice.querySelectorAll('.stale-season__action').length,
+      };
+    });
+
+    assert.match(seen.text, /nothing to switch to/i);
+    /* No button and no link: there is genuinely nowhere to send them. */
+    assert.equal(seen.actions, 0, 'offering a switch to a league that does not exist');
+  } finally {
+    await page.close();
+  }
+});
+

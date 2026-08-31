@@ -22,6 +22,21 @@ export interface ApiLeagueSummary {
   scoringFamily: 'ppr' | 'half-ppr' | 'standard';
   hasCustomScoring: boolean;
   status: 'pre_draft' | 'drafting' | 'in_season' | 'complete';
+  /** Sleeper only: the league this one replaced, or null for a first season. */
+  previousLeagueId?: string | null;
+}
+
+export interface LeagueSuccessor {
+  successor: ApiLeagueSummary | null;
+  season?: string;
+  reason: 'found' | 'not_rolled_over' | 'already_current' | 'no_user' | 'unsupported_provider';
+}
+
+/** Which league replaced the one you have connected. See the route's note. */
+export function fetchLeagueSuccessor(leagueId: string, userId: string) {
+  return get<LeagueSuccessor>(
+    `/api/league/${leagueId}/successor?userId=${encodeURIComponent(userId)}`,
+  );
 }
 
 export interface ApiLeague extends ApiLeagueSummary {

@@ -1295,6 +1295,33 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
      board that moves and nothing like enough to price one. It never leaves
      dev, and the delay is here because the real run is slow and the waiting
      is the part being designed. */
+  /* Which league replaced this one. Only answered while the fixture is
+     pretending to be last season, so the "found" and "not rolled over"
+     branches of the banner are both reachable: ?staleSeason alone finds the
+     successor, ?staleSeason&notRolledOver finds nothing. */
+  if (endpoint === 'successor' && method === 'GET') {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    if (!STALE_SEASON) return { successor: null, reason: 'already_current', season: '2026' };
+    if (window.location.search.includes('notRolledOver')) {
+      return { successor: null, reason: 'not_rolled_over', season: '2026' };
+    }
+    return {
+      successor: {
+        id: `${leagueId}-2026`,
+        providerId: 'sleeper',
+        name: 'Odds Gods Design Replay',
+        season: '2026',
+        totalTeams: bundle.bootstrap.teams?.length ?? 12,
+        scoringFamily: 'ppr',
+        hasCustomScoring: false,
+        status: 'in_season',
+        previousLeagueId: leagueId,
+      },
+      season: '2026',
+      reason: 'found',
+    };
+  }
+
   if (endpoint === 'predictor' && method === 'POST') {
     const body =
       typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};

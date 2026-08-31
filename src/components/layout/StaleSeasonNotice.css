@@ -33,8 +33,14 @@
   color: var(--red);
 }
 
+/* One rule for both, because this is a button when we found the league and a
+   link when we did not, and the two must not look like different offers. */
 .stale-season__action {
   flex-shrink: 0;
+  border: 1px solid rgba(255, 92, 77, 0.5);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
   padding: 6px 14px;
   border: 1px solid rgba(255, 92, 77, 0.5);
   border-radius: var(--radius-pill);
@@ -45,6 +51,11 @@
   text-decoration: none;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.stale-season__action:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .stale-season__action:hover {

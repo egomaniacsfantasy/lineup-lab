@@ -71,6 +71,12 @@ function mapLeagueSummary(raw) {
     hasCustomScoring: hasCustomScoring(raw.scoring_settings),
     status: raw.status, // pre_draft | drafting | in_season | complete
     avatar: raw.avatar ?? null,
+    /* Sleeper does not roll a league forward: each season gets a NEW league
+       id, and this is the only thread back to the one it replaced. Without
+       it, a league connected last year is indistinguishable from a league
+       that simply has old data, and there is no way to find the one that
+       took its place. */
+    previousLeagueId: raw.previous_league_id ?? null,
   };
 }
 
