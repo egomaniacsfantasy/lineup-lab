@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { MobileGate } from './components/layout/MobileGate';
+import { MobileHub } from './components/layout/MobileHub';
 import { useIsPhone } from './hooks/useIsPhone';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SeasonModeProvider } from './contexts/SeasonModeContext';
@@ -129,6 +130,19 @@ function PublicRoutes() {
                 {import.meta.env.DEV ? <Route path="/design/chart/:variant" element={<DesignChartPage />} /> : null}
                 {import.meta.env.DEV ? <Route path="/design/:scene" element={<DesignFixturePage />} /> : null}
               </Route>
+              {/* Outside the shell, because the real thing is.
+              
+                  A signed-in phone gets MobileHub on its own: no header, no
+                  tab bar, no shell. Reviewing it inside the shell would put a
+                  five-tab bar under a screen whose whole premise is that there
+                  is only one tab, which is the fixture disagreeing with the
+                  product about the thing being designed. */}
+              {import.meta.env.DEV ? (
+                <Route
+                  path="/design/mobile-hub"
+                  element={<DesignFixturePage scene="mobile-hub" />}
+                />
+              ) : null}
               <Route path="*" element={<AuthLanding />} />
             </Routes>
           </OddsFormatProvider>
@@ -145,22 +159,43 @@ function AuthGate() {
   return <AppRoutes />;
 }
 
+/**
+ * A phone, once it belongs to somebody.
+ *
+ * The gate turns an ANONYMOUS phone away, and that is still right: the desktop
+ * layout is a book that does not fit one, and serving a cramped version of it
+ * lets people decide for themselves that the product is bad.
+ *
+ * It was wrong for a phone with an account. The funnel ended in a wall: make
+ * an account on your phone and the next thing you saw was the pitch again,
+ * which is the product asking for a commitment and then refusing to honour it.
+ *
+ * So a signed-in phone gets the short version of the Hub. The providers mount
+ * only on that branch, so an anonymous phone still costs no session fetch and
+ * no league bootstrap, which is what putting the gate above them bought.
+ */
+function PhoneApp() {
+  const { session, loading } = useAuth();
+  if (loading) return <div className="app-boot" aria-hidden="true" />;
+  if (!session) return <MobileGate />;
+
+  return (
+    <SeasonModeProvider>
+      <LeagueConnectionProvider>
+        <OddsFormatProvider>
+          <MobileHub />
+        </OddsFormatProvider>
+      </LeagueConnectionProvider>
+    </SeasonModeProvider>
+  );
+}
+
 export default function App() {
-  /* Above the auth gate, not below it.
-
-     Inside the shell this only covered signed-in routes, which meant a phone
-     visitor was shown a sign-up form, made an account, and was told at the
-     end of it to go and find a laptop. Turning someone away is only polite
-     if you do it at the door.
-
-     It also means none of the providers underneath ever mount on a phone:
-     no session fetch, no league bootstrap, no ambient canvas. */
   const phone = useIsPhone();
-  if (phone) return <MobileGate />;
 
   return (
     <AuthProvider>
-      <AuthGate />
+      {phone ? <PhoneApp /> : <AuthGate />}
     </AuthProvider>
   );
 }

@@ -19,7 +19,8 @@ export type DesignScene =
   | 'matchup-live'
   | 'market'
   | 'league'
-  | 'board';
+  | 'board'
+  | 'mobile-hub';
 
 /* ?staleSeason makes the design league answer as last year's. A league that
    has not rolled over is the only way to reach the stale-season warning, and
@@ -56,6 +57,7 @@ const FIXTURE_IDS = {
   market: 'og-design-market-live',
   league: 'og-design-league-live',
   board: 'og-design-league-live',
+  'mobile-hub': 'og-design-league-live',
 } as const;
 
 /* The id the stale fixture rolls over INTO.

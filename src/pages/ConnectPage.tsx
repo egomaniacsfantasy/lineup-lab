@@ -4,8 +4,9 @@
  * The demo stays reachable, one click below.
  */
 import { consumeEspnIdentityRecheck } from '../contexts/LeagueConnectionContext';
+import { consumePendingConnection } from '../utils/pendingSleeper';
 import { ProviderMark } from '../components/league/ProviderMark';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
@@ -26,6 +27,22 @@ export function ConnectPage() {
   const [searchParams] = useSearchParams();
   const hasEspnCapture = searchParams.has('espnCapture') || searchParams.has('espnLeagueId');
   const [flow, setFlow] = useState<'none' | 'sleeper' | 'espn'>(hasEspnCapture ? 'espn' : 'none');
+
+  /* A league the anonymous screens already resolved.
+   *
+   * Somebody who typed their username on the landing page or the phone gate,
+   * picked their league and watched it get priced has done every step this
+   * screen exists to walk them through. Making them do it again on the far
+   * side of the sign-up form is the same sync twice, and it is the moment the
+   * funnel stops feeling like a door.
+   *
+   * Consumed on read, so it can never reopen a league months later. */
+  useEffect(() => {
+    if (stored) return;
+    const pending = consumePendingConnection();
+    if (!pending) return;
+    connect(pending);
+  }, [connect, stored]);
 
   // already connected — straight to the board
   if (stored) {

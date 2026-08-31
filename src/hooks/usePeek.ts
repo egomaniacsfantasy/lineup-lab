@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { connectUsername, fetchBootstrap, fetchLines, trackEvent } from '../services/leagueApi';
 import type { ApiLeagueSummary, LeagueBootstrap, LeaguePricing } from '../services/leagueApi';
+import type { StoredConnection } from '../contexts/LeagueConnectionContext';
 
 /**
  * A Sleeper username, and the book it opens.
@@ -86,6 +87,14 @@ export interface PeekLeague {
      that hole with the pre-draft message would have told somebody who drafted
      in August that their lineup arrives once they draft. */
   starters: PeekStarter[] | null;
+  /* Everything the app needs to open this league, resolved already.
+     
+     By the time somebody presses sign up we know who they are, which league
+     they picked, its name and its season. Without this the app asked for the
+     username again and made them pick the league again on the other side of
+     the form: the same sync twice, which is the step that makes a door feel
+     like a form. */
+  connection: StoredConnection;
 }
 
 export type PeekStage =
@@ -167,6 +176,15 @@ const PRICING_RETRY_MS = 2_000;
 export function usePeek(area: string) {
   const [username, setUsername] = useState('');
   const [stage, setStage] = useState<PeekStage>({ name: 'idle' });
+
+  /* Held from the username lookup so the peek can hand the app a whole
+     connection rather than a name to look up again. */
+  const [account, setAccount] = useState<{
+    user: PeekUser;
+    username: string;
+    leagues: ApiLeagueSummary[];
+    season: string | null;
+  } | null>(null);
 
   const look = useCallback(
     async (user: PeekUser, league: ApiLeagueSummary, attempt = 0) => {
@@ -258,6 +276,21 @@ export function usePeek(area: string) {
             name: league.name,
             leagueType: bootstrap.league.leagueType,
             starters: starters.length > 0 ? starters : null,
+            connection: {
+              provider: 'sleeper',
+              leagueId: league.id,
+              leagueName: league.name,
+              userId: user.id,
+              username: account?.username ?? user.name,
+              displayName: user.name,
+              allLeagueIds: (account?.leagues ?? [league]).map((entry) => entry.id),
+              allLeagues: (account?.leagues ?? [league]).map((entry) => ({
+                id: entry.id,
+                name: entry.name,
+                season: entry.season,
+              })),
+              season: league.season ?? account?.season ?? undefined,
+            },
             you,
             others: rows.filter((row) => !row.isUser),
             matchup: buildPeekMatchup(bootstrap, pricing, you.rosterId),
@@ -271,7 +304,7 @@ export function usePeek(area: string) {
         });
       }
     },
-    [area],
+    [account, area],
   );
 
   const submit = useCallback(
@@ -285,6 +318,7 @@ export function usePeek(area: string) {
         const result = await connectUsername(handle);
         const user = { id: result.user.id, name: result.user.displayName ?? handle };
         const leagues = result.leagues ?? [];
+        setAccount({ user, username: handle, leagues, season: result.season ?? null });
 
         if (leagues.length === 0) {
           setStage({ name: 'failed', message: `No leagues found for ${handle} this season.` });

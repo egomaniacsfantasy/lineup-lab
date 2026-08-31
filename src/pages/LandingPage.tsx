@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { usePeek, type PeekLeague } from '../hooks/usePeek';
 import type { ApiLeagueSummary } from '../services/leagueApi';
 import { PRICING_LINES } from '../components/layout/pricingLines';
-import { PENDING_SLEEPER_PARAM, rememberPendingSleeper } from '../utils/pendingSleeper';
+import { PENDING_SLEEPER_PARAM, rememberPendingConnection, rememberPendingSleeper } from '../utils/pendingSleeper';
 import { trackEvent } from '../services/leagueApi';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints } from '../utils/formatOdds';
 import { TeamAvatar } from '../components/league/TeamAvatar';
@@ -125,16 +125,23 @@ function Window({
       <img alt="" className={styles.mark} src={mark} />
       <p className={styles.wordmark}>Odds Gods</p>
 
-      {/* The brief's own alternate, chosen after the first one shipped and
-          read wrong. "Ten thousand simulations" sells the machine: it is a
-          sentence a data scientist would write, and it walks away from the
-          sportsbook framing the whole product is built on. This one is a
-          bookmaker's line. It says there is a favourite, it says it is
-          probably not you, and it makes the number personal before the number
-          exists. */}
+      {/* Two tiers, because the sentence has two jobs.
+      
+          The first half sets the scene and the second half is the line. Set at
+          one size they compete, and the punch lands in the middle of a
+          paragraph. Staatliches has a single weight, so the hierarchy is scale
+          and colour rather than a bolder cut: the setup runs small, tracked
+          and muted, and the payoff gets the room.
+      
+          It replaced "Ten thousand simulations are about to have an opinion
+          about your team", which sold the machine. That is a sentence a data
+          scientist would write, and it walks away from the sportsbook framing
+          the whole product rests on. */}
       <h1 className={styles.headline}>
-        Somewhere in your league sits the championship favorite. Odds are it
-        isn&rsquo;t you.
+        <span className={styles.headlineSetup}>
+          Somewhere in your league sits the championship favorite.
+        </span>
+        <span className={styles.headlinePunch}>Odds are it isn&rsquo;t you.</span>
       </h1>
 
       <form
@@ -182,9 +189,11 @@ function Window({
       <p className={styles.signIn}>
         Already have an account? <Link className={styles.signInLink} to="/signin">Sign in</Link>
       </p>
-      <p className={styles.fine}>
-        Free during the beta. No money anywhere in this. 10,000 simulations per matchup.
-      </p>
+      {/* One clause. The other two were answering questions nobody had asked
+          yet: a simulation count means nothing before you have seen a number,
+          and "no money anywhere in this" raises the spectre of money on a
+          screen that had not mentioned it. */}
+      <p className={styles.fine}>Completely free during the beta.</p>
     </section>
   );
 }
@@ -377,7 +386,11 @@ function Book({ league, username }: { league: PeekLeague; username: string }) {
           className={styles.go}
           href={`/signin?${PENDING_SLEEPER_PARAM}=${encodeURIComponent(username.trim())}`}
           onClick={() => {
+            /* The whole connection, not just the name. They have already
+               picked this league and watched it get priced; asking them to do
+               both again after the form is the same sync twice. */
             rememberPendingSleeper(username);
+            rememberPendingConnection(league.connection);
             void trackEvent('landing', 'account_create', { from: 'book' });
           }}
         >

@@ -1,26 +1,35 @@
+import type { StoredConnection } from '../contexts/LeagueConnectionContext';
+
 /**
- * The Sleeper username someone typed on their phone, kept for the laptop.
+ * The league somebody already showed us, kept for the other side of sign-up.
  *
- * The phone gate ends in a real number about a real league, which means by the
- * time somebody presses the sign-up button they have already told us who they
- * are on Sleeper. Making them type it again on the next device is the one
- * avoidable step in a funnel that already spans two screens.
+ * The anonymous screens end in a real number about a real league, which means
+ * by the time anybody presses the sign-up button we have already resolved
+ * everything a connection needs: who they are on Sleeper, their user id, which
+ * league they picked, its name and its season.
+ *
+ * Storing only the username, which is what this did first, meant the app then
+ * asked them to type it again and pick the league again on the other side of
+ * the form. That is the same sync twice, and it is the step that makes the
+ * funnel feel like a form rather than a door. Somebody who has already watched
+ * their own league get priced has done the work; the account should land them
+ * on it.
  *
  * Two carriers, because neither is sufficient alone:
  *
  *   - The URL, so the handoff survives a device change. Someone who sends
- *     themselves the link, or opens the same page on a laptop, arrives with it.
- *   - localStorage, so it survives the sign-up itself on THIS device. The URL
- *     is gone by the time the account exists and the connect screen renders.
- *
- * A username is not a secret: it is the same string that is public on every
- * league page the person is in, so there is nothing here that a query string
- * should not carry.
+ *     themselves the link, or opens the page on a laptop, arrives with the
+ *     username at least. It carries the handle ONLY: a league id and a user id
+ *     in a query string are somebody else's to copy, and a username is already
+ *     public on every league page they are in.
+ *   - localStorage, which carries the whole connection, because it never
+ *     leaves the device that resolved it.
  */
 
 const KEY = 'og.olympus.pending-sleeper';
+const CONNECTION_KEY = 'og.olympus.pending-connection';
 
-/** Query parameter the phone gate hands to the sign-up screen. */
+/** Query parameter the anonymous screens hand to the sign-up screen. */
 export const PENDING_SLEEPER_PARAM = 'sleeper';
 
 export function rememberPendingSleeper(username: string): void {
@@ -31,6 +40,18 @@ export function rememberPendingSleeper(username: string): void {
   } catch {
     /* Private windows throw. A prefilled field is a convenience, never a
        reason to take the page down. */
+  }
+}
+
+/**
+ * Keep the whole resolved connection, so sign-up lands on the league rather
+ * than on the form that finds it again.
+ */
+export function rememberPendingConnection(connection: StoredConnection): void {
+  try {
+    window.localStorage.setItem(CONNECTION_KEY, JSON.stringify(connection));
+  } catch {
+    /* Same as above: the username alone still gets them most of the way. */
   }
 }
 
@@ -57,4 +78,38 @@ export function consumePendingSleeper(): string {
     /* nothing to undo */
   }
   return handle;
+}
+
+/**
+ * The connection, read once and cleared.
+ *
+ * Validated rather than trusted: this is JSON out of local storage, which any
+ * older build of the app may have written in a different shape, and connecting
+ * to a half-built object is a worse failure than asking for the username
+ * again.
+ */
+export function consumePendingConnection(): StoredConnection | null {
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(CONNECTION_KEY);
+    window.localStorage.removeItem(CONNECTION_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredConnection>;
+    if (
+      (parsed.provider !== 'sleeper' && parsed.provider !== 'espn')
+      || typeof parsed.leagueId !== 'string'
+      || typeof parsed.userId !== 'string'
+      || !Array.isArray(parsed.allLeagueIds)
+    ) {
+      return null;
+    }
+    return parsed as StoredConnection;
+  } catch {
+    return null;
+  }
 }

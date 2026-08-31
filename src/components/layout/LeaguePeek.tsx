@@ -3,6 +3,7 @@ import { usePeek } from '../../hooks/usePeek';
 import { ShareCardPreview } from '../matchup/ShareCardPreview';
 import { drawShareCard } from '../../utils/shareCard';
 import { peekShareCard } from '../../utils/peekShareCard';
+import { rememberPendingConnection } from '../../utils/pendingSleeper';
 import { DynastyScopeNote } from './DynastyScopeNote';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints } from '../../utils/formatOdds';
 import { TeamAvatar } from '../league/TeamAvatar';
@@ -203,7 +204,16 @@ export function LeaguePeek({ onCreateAccount }: { onCreateAccount: (username: st
 
         {/* The account is the conversion and stays the filled one. The card is
             the loop, and the phone is where a group chat is. */}
-        <button className="league-peek__cta" onClick={() => onCreateAccount(username.trim())} type="button">
+        <button
+          className="league-peek__cta"
+          onClick={() => {
+            /* Same handover as the landing page: they picked this league
+               already. */
+            rememberPendingConnection(league.connection);
+            onCreateAccount(username.trim());
+          }}
+          type="button"
+        >
           Create a free account
         </button>
         <button

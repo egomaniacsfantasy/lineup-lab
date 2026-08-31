@@ -203,16 +203,24 @@ The headline is **"Somewhere in your league sits the championship favorite.
 Odds are it isn't you."** It replaced a first attempt ("Ten thousand
 simulations are about to have an opinion about your team") that sold the
 machine rather than the book: a sentence a data scientist would write, walking
-away from the sportsbook framing the whole product rests on. It is set in the
-brand display face, which the first version was not.
+away from the sportsbook framing the whole product rests on.
+
+It sets in two tiers, because the sentence has two jobs. The setup runs small,
+tracked and muted; the payoff gets its own line at roughly four times the size.
+Staatliches has a single weight and no lowercase, so the hierarchy is built out
+of scale, tracking and colour rather than a bolder cut. That is the only lever
+there is and it is enough.
 
 Under the field, one quiet door: **My league is on ESPN**. A second door,
 "Just looking?", pointed at the demo and is gone: it offered a stranger
 somebody else's league at the exact moment they were deciding whether to type
 their own. Then "Already have an account? Sign in" at a size somebody can
-read, and ticket small print in mono: "Free during the beta. No money anywhere
-in this. 10,000 simulations per matchup." Nothing else. No feature grid, no
-screenshots, no second fold.
+read, and one line of ticket small print in mono: "Completely free during the
+beta." The other two clauses it used to carry were answering questions nobody
+had asked yet: a simulation count means nothing before you have seen a number,
+and "no money anywhere in this" raises the spectre of money on a screen that
+had not mentioned it. Nothing else. No feature grid, no screenshots, no second
+fold.
 
 **State 2, pricing.** The book's ritual, run in place: the mark rolls (the dice
 are what roll ten thousand times) and the lines cycle. Two or three seconds is
@@ -397,6 +405,20 @@ desktop path rather than offered and then failing.
 **Units on the gate:** American odds only. The win bar carries the only
 percentage on the screen and there is no price beside it, so the reader is
 never asked to reconcile two numbers.
+
+**Signed in, a phone gets the Hub.** Not the desktop layout reflowed: a
+one-column short version with the three questions somebody opens the app on a
+phone to answer, each of them one number. This week priced on both sides, the
+season in a championship price plus playoff odds, projected finish and average
+seed, and the full title board with their row in amber. A share card, and one
+line at the bottom saying where the rest is.
+
+Deliberately absent, each for its own reason: **trades** (a decision made with
+two rosters open), the **start/sit swap** (needs the lineup beside it), the
+**line-movement chart** (a thirty-point sparkline in a 340px column is a
+smudge), and **lineup vs lineup** (the most desktop-shaped thing in the
+product). Guarded by a test, because the list of what is left out is a product
+decision rather than an unfinished screen.
 
 **Mid-sync:** a league whose projections have not landed is waited for, not
 guessed at. See §8.

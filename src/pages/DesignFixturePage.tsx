@@ -6,6 +6,7 @@ import { LeaguePage } from './LeaguePage';
 import { MatchupPage } from './MatchupPage';
 import { MyBoardPage } from './MyBoardPage';
 import { TradePage } from './TradePage';
+import { MobileHub } from '../components/layout/MobileHub';
 
 const SCENES: Record<DesignScene, ReactElement> = {
   'matchup-cold': <MatchupPage />,
@@ -14,14 +15,26 @@ const SCENES: Record<DesignScene, ReactElement> = {
   market: <TradePage />,
   league: <LeaguePage />,
   board: <MyBoardPage />,
+  /* The signed-in phone screen. It needs a session and a connected league,
+     and the design routes are the only way to reach a surface with neither. */
+  'mobile-hub': <MobileHub />,
 };
 
 function isDesignScene(value: string | undefined): value is DesignScene {
   return value != null && value in SCENES;
 }
 
-export function DesignFixturePage() {
-  const { scene } = useParams<{ scene?: string }>();
+export function DesignFixturePage({ scene: fixed }: { scene?: DesignScene } = {}) {
+  /* The scene comes from the path, except where a route names it outright.
+     
+     One scene is mounted OUTSIDE the app shell, because the real thing is: a
+     signed-in phone gets MobileHub on its own, and reviewing it under a
+     five-tab bar would be the fixture disagreeing with the product about the
+     screen being designed. A static route has no :scene param to read, so it
+     hands the name in instead of leaving this to fall through to the
+     default. */
+  const params = useParams<{ scene?: string }>();
+  const scene = fixed ?? params.scene;
   const { stored, connect } = useLeagueConnection();
   const validScene = isDesignScene(scene);
   const target = validScene ? connectionForDesignScene(scene) : null;

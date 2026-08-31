@@ -908,8 +908,15 @@ test('the window asks for one thing and nothing competes with it', async () => {
     }
     assert.ok(seen.inputArea > 0, 'no field');
 
-    /* The small print, as one plain cluster. */
-    assert.match(seen.text, /Free during the beta\. No money anywhere in this\. 10,000 simulations per matchup\./);
+    /* One clause. The other two were answering questions nobody had asked
+       yet: a simulation count means nothing before you have seen a number, and
+       "no money anywhere in this" raises the spectre of money on a screen that
+       had not mentioned it. */
+    assert.match(seen.text, /Completely free during the beta\./);
+    assert.ok(
+      !/simulations per matchup/.test(seen.text),
+      'the sim count is back in the small print',
+    );
     assert.match(seen.text, /Already have an account\?/);
 
     /* And none of the old page: no demo league, no invented teams, no
@@ -1224,6 +1231,119 @@ test('a shared card shows the real lineup, not the pre-draft message', async () 
       if (run > worst) worst = run;
     }
     assert.ok(worst <= 120, `the shared card has a ${worst}px empty band in it`);
+  } finally {
+    await context.close();
+  }
+});
+
+/* ──────────────────────────────────────────────────────────────────────────
+   THE HUB, FOR A PHONE THAT BELONGS TO SOMEBODY
+
+   The gate turns an anonymous phone away and that is still right. It was wrong
+   for a phone with an account: the funnel ended in a wall, where making an
+   account got you the pitch again.
+
+   What matters here is as much what is ABSENT as what is present. This is the
+   short version on purpose, and the list of things left out is a product
+   decision rather than an unfinished screen.
+   ────────────────────────────────────────────────────────────────────────── */
+
+test('the phone Hub answers the three questions and leaves the rest on the laptop', async () => {
+  const { page, context } = await visit('/design/mobile-hub', { width: 375, height: 812 });
+  try {
+    await page.locator('.mobile-hub__table').waitFor({ timeout: 20_000 });
+
+    const hub = await page.evaluate(() => {
+      const root = document.querySelector('.mobile-hub');
+      return {
+        text: root.textContent,
+        /* This week, priced, both sides. */
+        prices: [...root.querySelectorAll('.mobile-hub__side-price')].map((s) =>
+          s.textContent.trim(),
+        ),
+        /* The season, in one number and the three that qualify it. */
+        title: root.querySelector('.mobile-hub__title-price')?.textContent.trim(),
+        stats: [...root.querySelectorAll('.mobile-hub__stats dd')].map((d) =>
+          d.textContent.trim(),
+        ),
+        /* And where everybody sits, unlocked: this is their league now. */
+        rows: root.querySelectorAll('.mobile-hub__row').length,
+        locks: root.querySelectorAll('svg path[d^="M7 10V7"]').length,
+        /* No shell. The whole premise is that there is one tab. */
+        tabBar: document.querySelectorAll('.bottom-tab-bar').length,
+        header: document.querySelectorAll('.app-header').length,
+      };
+    });
+
+    assert.equal(hub.prices.length, 2, 'the week is not priced on both sides');
+    const [yours, theirs] = hub.prices;
+    assert.notEqual(
+      Math.sign(Number(yours)),
+      Math.sign(Number(theirs)),
+      `both sides priced ${yours} / ${theirs}`,
+    );
+    assert.match(hub.title, /^[+-]?\d|^—$/, `the title price reads "${hub.title}"`);
+    assert.equal(hub.stats.length, 3, 'the three qualifying numbers are not all there');
+    assert.ok(hub.rows >= 2, `only ${hub.rows} teams on the board`);
+    assert.equal(hub.locks, 0, 'a signed-in phone is still being shown locks');
+    assert.equal(hub.tabBar, 0, 'the phone Hub grew a tab bar');
+    assert.equal(hub.header, 0, 'the phone Hub grew the desktop header');
+
+    /* Said once, and at the bottom: above the fold it reads as an apology for
+       the screen you are on. */
+    assert.match(hub.text, /open on a laptop/i, 'nothing says where the rest is');
+  } finally {
+    await context.close();
+  }
+});
+
+test('the phone Hub leaves out every widget that needs a desktop', async () => {
+  /* Each of these is on the desktop Hub and each was excluded for its own
+     reason: a trade is a decision made with two rosters open, a start/sit
+     needs the lineup beside it, a thirty-point sparkline in a 340px column is
+     a smudge, and eighteen rows of two-column comparison is the most
+     desktop-shaped thing in the product. */
+  const { page, context } = await visit('/design/mobile-hub', { width: 375, height: 812 });
+  try {
+    await page.locator('.mobile-hub__table').waitFor({ timeout: 20_000 });
+
+    const found = await page.evaluate(() => {
+      const text = document.querySelector('.mobile-hub').textContent;
+      return {
+        trades: /trades to try|suggested trades|find trades/i.test(text),
+        startSit: /\bsit\b.*\bstart\b|start\/sit/i.test(text),
+        lineMovement: /line movement/i.test(text),
+        lineupVsLineup: /lineup vs lineup/i.test(text),
+      };
+    });
+
+    assert.ok(!found.trades, 'the trade widget is on the phone Hub');
+    assert.ok(!found.startSit, 'the start/sit widget is on the phone Hub');
+    assert.ok(!found.lineMovement, 'the line movement chart is on the phone Hub');
+    assert.ok(!found.lineupVsLineup, 'lineup vs lineup is on the phone Hub');
+  } finally {
+    await context.close();
+  }
+});
+
+test('the phone Hub fits a phone', async () => {
+  const { page, context } = await visit('/design/mobile-hub', { width: 375, height: 812 });
+  try {
+    await page.locator('.mobile-hub__table').waitFor({ timeout: 20_000 });
+    const overflow = await page.evaluate(() => ({
+      docWidth: document.documentElement.scrollWidth,
+      viewport: window.innerWidth,
+      /* Nothing clipped mid-word, which is what a fixed-width table does to a
+         long team name. */
+      clipped: [...document.querySelectorAll('.mobile-hub__row-name')].filter(
+        (el) => el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).textOverflow !== 'ellipsis',
+      ).length,
+    }));
+    assert.ok(
+      overflow.docWidth <= overflow.viewport + 1,
+      `the phone Hub scrolls sideways: ${overflow.docWidth}px in ${overflow.viewport}px`,
+    );
+    assert.equal(overflow.clipped, 0, 'a team name is cut off with no ellipsis');
   } finally {
     await context.close();
   }
