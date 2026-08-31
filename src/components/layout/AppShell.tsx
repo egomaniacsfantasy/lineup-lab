@@ -76,9 +76,15 @@ export function AppShell() {
         <PlayerDetailProvider>
           <ScoutingCardProvider>
             <AppHeader />
-            <StaleSeasonNotice />
-            {/* keyed on odds format: flipping it re-renders every number */}
+            {/* Inside the scroller, not beside it.
+
+                As a flex child of the shell this sat at y=0 with the header
+                fixed on top of it at z-index 21, so the warning that every
+                number below is a year old was itself invisible. A fixed
+                header contributes no height to the flex column; .app-content
+                is the only thing that already accounts for it. */}
             <main className="app-content" id="main-content" key={format} tabIndex={-1}>
+              <StaleSeasonNotice />
               <GuardedContent>
                 <Outlet />
               </GuardedContent>

@@ -21,6 +21,13 @@ export type DesignScene =
   | 'league'
   | 'board';
 
+/* ?staleSeason makes the design league answer as last year's. A league that
+   has not rolled over is the only way to reach the stale-season warning, and
+   without this the one state that invalidates every number in the app could
+   not be looked at or asserted against. */
+const STALE_SEASON =
+  typeof window !== 'undefined' && window.location.search.includes('staleSeason');
+
 const FIXTURE_IDS = {
   'matchup-cold': 'og-design-matchup-cold',
   matchup: 'og-design-matchup-empty',
@@ -899,7 +906,7 @@ function buildBootstrap(leagueId: string): LeagueBootstrap {
       id: leagueId,
       providerId: leagueId,
       name: 'Odds Gods Design Replay',
-      season: '2026',
+      season: STALE_SEASON ? '2025' : '2026',
       totalTeams: TEAM_POOL.length,
       scoringFamily: 'ppr',
       hasCustomScoring: false,

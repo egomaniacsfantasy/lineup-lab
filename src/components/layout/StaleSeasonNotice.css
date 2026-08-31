@@ -2,7 +2,16 @@
 
    Every number under this is wrong by a year, so it is not a hint tucked into
    a corner: it is the only true thing on the screen and it says so in red. */
+/* Sticky to the top of the scroller so it cannot be scrolled away from. It
+   describes the whole app, not the top of one page.
+
+   top is the header's height because the scrollport starts behind the fixed
+   header: sticking at 0 would park it back underneath, which is the bug this
+   is fixing. */
 .stale-season {
+  position: sticky;
+  top: var(--shell-header-height, 0px);
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,7 +19,10 @@
   flex-wrap: wrap;
   padding: 10px var(--space-lg);
   border-bottom: 1px solid rgba(255, 92, 77, 0.42);
-  background: rgba(255, 92, 77, 0.14);
+  /* Opaque, because it is sticky: a translucent bar lets the page scroll
+     through it and the warning ends up printed over the numbers it is
+     warning about. */
+  background: color-mix(in srgb, var(--red) 14%, var(--bg));
   color: var(--text-primary);
   font-size: 13px;
   line-height: 1.4;

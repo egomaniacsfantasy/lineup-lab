@@ -573,3 +573,60 @@ test('the strip says how many weeks you are favoured in, and counts them right',
   }
 });
 
+/* ──────────────────────────────────────────────────────────────────────────
+   The stale-season warning has to be VISIBLE, which is a different claim
+   from being rendered.
+
+   The predicate behind it was right from the day it shipped and the banner
+   was still useless: as a flex child of the shell it rendered at y=0,
+   underneath a position:fixed header 80px tall at z-index 21. Six pixels of
+   it showed. A test that only asks whether the component is in the DOM
+   passes happily while nobody can read a word of it, so this one asks the
+   page what is actually painted at the banner's own centre.
+
+   Here rather than in its own file because every rendered test in this repo
+   runs its own Vite, and a ninth one pushes this machine far enough that the
+   fork tests above time out waiting for their server.
+   ────────────────────────────────────────────────────────────────────────── */
+
+test('a stale-season warning is on top of the page, not under the header', async () => {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+  try {
+    /* ?staleSeason makes the design league answer as last year's, which is
+       the only way to reach this state without a real rolled-over league. */
+    await page.goto(`${baseUrl}/design/league?staleSeason=1`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.stale-season', { timeout: 15_000 });
+
+    const seen = await page.evaluate(() => {
+      const notice = document.querySelector('.stale-season');
+      const rect = notice.getBoundingClientRect();
+      const header = document.querySelector('.app-header')?.getBoundingClientRect();
+      const atCentre = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return {
+        height: rect.height,
+        top: rect.top,
+        headerBottom: header ? header.bottom : 0,
+        /* The thing the old version failed: whatever is painted at the
+           banner's own middle has to BE the banner. */
+        onTop: notice.contains(atCentre) || atCentre === notice,
+        /* Opaque, or the page scrolls through a sticky warning. */
+        opaque: !/rgba\([^)]*,\s*0?\.\d+\)/.test(getComputedStyle(notice).backgroundColor),
+        says: notice.textContent,
+      };
+    });
+
+    assert.ok(seen.height > 20, `the banner is ${seen.height}px tall`);
+    assert.ok(
+      seen.top >= seen.headerBottom - 1,
+      `the banner starts at ${seen.top} with the header ending at ${seen.headerBottom}, so it is underneath it`,
+    );
+    assert.ok(seen.onTop, 'something is painted over the middle of the banner');
+    assert.ok(seen.opaque, 'the sticky banner is translucent, so the page reads through it');
+    /* It names both years, because "your data is old" without saying how old
+       is not actionable. */
+    assert.match(seen.says, /2025/);
+    assert.match(seen.says, /2026/);
+  } finally {
+    await page.close();
+  }
+});
