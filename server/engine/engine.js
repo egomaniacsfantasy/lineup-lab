@@ -2578,6 +2578,50 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       score: Number((youDelta * (accept / 100)).toFixed(2)),
     });
   }
+  // ── ALL-MANAGERS SWEEP consistency: the deltas above are a light 600-sim ESTIMATE, which
+  // does not match the Build-a-Trade analyzer (TRADE_SIMS). Re-sim the deals we will actually
+  // surface at the FULL analyzer count so every number shown MATCHES the analyzer exactly
+  // (identical sims + CRN seed => identical result). Bounded to a few per manager, ranked by
+  // the light estimate, round-robin so coverage holds, and time-guarded so it never times out.
+  // Only re-simmed deals are kept, so nothing displayed is an approximation. (A single clicked
+  // manager already ran at TRADE_SIMS above, so it is skipped here.)
+  if (partnerRosterId == null && suggestions.length) {
+    const REFINE_PER_MGR = 3;
+    const bySugMgr = new Map();
+    for (const s of suggestions) {
+      const l = bySugMgr.get(s.partnerRosterId) ?? [];
+      l.push(s);
+      bySugMgr.set(s.partnerRosterId, l);
+    }
+    const perMgrTop = [...bySugMgr.values()].map((l) =>
+      [...l].sort((a, b) => b.youDelta - a.youDelta).slice(0, REFINE_PER_MGR));
+    const refineOrder = [];
+    for (let i = 0; i < REFINE_PER_MGR; i += 1) {
+      for (const l of perMgrTop) if (l[i]) refineOrder.push(l[i]);
+    }
+    const fullBaseline = simulateSeason({ ...base, sims: TRADE_SIMS });
+    const refined = [];
+    for (const s of refineOrder) {
+      if (Date.now() - t0 > 25_000) break;   // client aborts at 30s — return the exact ones we have
+      const partnerTeam = teams.find((t) => t.rosterId === s.partnerRosterId);
+      let ev;
+      try { ev = evalTrade(s.give.map((g) => g.id), s.get.map((g) => g.id), partnerTeam, TRADE_SIMS, fullBaseline); }
+      catch { continue; }
+      s.youDelta = Number(ev.youDelta.toFixed(1));
+      s.partnerDelta = Number(ev.partnerDelta.toFixed(1));
+      s.youPlayoffDelta = Number(ev.youPlayoffDelta.toFixed(1));
+      s.partnerPlayoffDelta = Number(ev.partnerPlayoffDelta.toFixed(1));
+      s.youWeekDelta = ev.youWeekDelta ?? s.youWeekDelta;
+      s.partnerWeekDelta = ev.partnerWeekDelta ?? s.partnerWeekDelta;
+      const read = readsByRoster[s.partnerRosterId] ?? {};
+      s.acceptance = acceptanceProbability(s.partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
+      s.score = Number((s.youDelta * (s.acceptance / 100)).toFixed(2));
+      refined.push(s);
+      if (refined.length % 3 === 0) await yieldToLoop();
+    }
+    suggestions.length = 0;
+    suggestions.push(...refined);
+  }
   // Keep only trades that RAISE the user's title (youDelta > 0) — a deal that lowers
   // your own championship odds is not a real suggestion. Safety net: if a manager has
   // NO positive trade at all, keep its single best (highest youDelta) so it never goes
