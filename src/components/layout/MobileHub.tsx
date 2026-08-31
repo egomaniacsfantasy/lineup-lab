@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { buildPeekMatchup } from '../../hooks/usePeek';
+import { switchableLeagues } from '../../utils/leagueSwitcher';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints } from '../../utils/formatOdds';
 import { DynastyScopeNote } from './DynastyScopeNote';
 import { ShareCardPreview } from '../matchup/ShareCardPreview';
@@ -39,8 +40,15 @@ import './MobileHub.css';
  * a phone to answer, and they are all one number each.
  */
 export function MobileHub() {
-  const { bootstrap, pricing, stored, isLoading, error } = useLeagueConnection();
+  const { bootstrap, pricing, stored, leagues, switchLeague, isLoading, error } =
+    useLeagueConnection();
   const [sharing, setSharing] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  /* Everywhere the league name can take you. See switchableLeagues: the
+     comparison is by provider AND id, because the two providers mint ids
+     independently. */
+  const others = switchableLeagues(leagues, stored);
 
   const rows = useMemo(() => {
     const crests = new Map(
@@ -123,8 +131,48 @@ export function MobileHub() {
     <div className="mobile-hub">
       <header className="mobile-hub__head">
         <img alt="" className="mobile-hub__mark" height={128} src="/og-mark.png" width={128} />
-        <span className="mobile-hub__league">{bootstrap.league.name}</span>
+        {/* The league name is the switcher, because it is the only thing on
+            this screen that names what you are looking at, and somebody in
+            three leagues opening the app on a phone is as likely to want a
+            different one as the one they left. Only a control when there is
+            somewhere to go: a lone league dressed as a menu is a promise the
+            screen cannot keep. */}
+        {others.length > 0 ? (
+          <button
+            aria-expanded={switching}
+            aria-haspopup="listbox"
+            className="mobile-hub__league mobile-hub__league--switch"
+            onClick={() => setSwitching((open) => !open)}
+            type="button"
+          >
+            {bootstrap.league.name}
+            <span aria-hidden="true" className="mobile-hub__caret">
+              {switching ? '\u25B4' : '\u25BE'}
+            </span>
+          </button>
+        ) : (
+          <span className="mobile-hub__league">{bootstrap.league.name}</span>
+        )}
       </header>
+
+      {switching ? (
+        <ul aria-label="Your leagues" className="mobile-hub__leagues" role="listbox">
+          {others.map((entry) => (
+            <li key={`${entry.provider}:${entry.leagueId}`}>
+              <button
+                className="mobile-hub__league-option"
+                onClick={() => {
+                  setSwitching(false);
+                  switchLeague(entry.provider, entry.leagueId);
+                }}
+                type="button"
+              >
+                {entry.leagueName ?? entry.leagueId}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <DynastyScopeNote leagueType={bootstrap.league.leagueType} />
 

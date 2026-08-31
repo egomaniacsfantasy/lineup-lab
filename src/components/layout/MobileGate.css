@@ -14,9 +14,9 @@
      bar, so the address line at the bottom would sit off the screen until you
      scrolled, on a screen with nothing to scroll. */
   min-height: 100dvh;
-  padding: max(var(--space-xl), env(safe-area-inset-top))
+  padding: max(var(--space-lg), env(safe-area-inset-top))
     var(--space-lg)
-    max(var(--space-xl), env(safe-area-inset-bottom));
+    max(var(--space-lg), env(safe-area-inset-bottom));
   background: var(--bg);
   /* Clipped, not scrollable, was fine while this screen was a fixed pitch.
      It is not fine now: a fourteen-team league puts thirteen locked rows and
@@ -97,37 +97,61 @@
   text-align: center;
 }
 
-.mobile-gate__brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: var(--space-md);
-}
-
+/* The identity of the screen, the way it is on the desktop window. The source
+   art carries about a fifth of its width in transparent padding on every side,
+   so the box is sized to what is visible rather than to the file. */
 .mobile-gate__mark {
-  width: 44px;
-  height: 44px;
+  /* 15vh, not 22: on a 667px phone the taller setting pushed the small print
+     69px past the bottom of a screen that must not scroll. The mark is the
+     first thing to give, because it is the only element here whose size
+     carries no information. */
+  width: clamp(72px, 15vh, 140px);
+  height: auto;
+  margin-bottom: 2px;
 }
 
+/* Subordinate to the mark, and to the line under it. It was 30px and set
+   beside the mark, from when this screen led with the brand because it had
+   nothing else to offer. */
 .mobile-gate__wordmark {
-  color: var(--text-primary);
+  margin: 0 0 var(--space-sm);
+  color: var(--text-soft);
   font-family: var(--font-display);
-  font-size: 30px;
-  letter-spacing: 0.06em;
+  font-size: 17px;
+  letter-spacing: 0.16em;
   line-height: 1;
+  text-transform: uppercase;
 }
 
+/* The desktop headline, in two tiers, on a phone.
+
+   The setup runs small, tracked and muted; the line gets its own row and the
+   room. Staatliches has a single weight and no lowercase, so the hierarchy is
+   scale, tracking and colour rather than a bolder cut. */
 .mobile-gate__headline {
-  margin: 0;
-  color: var(--text-primary);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: 0 0 var(--space-md);
   font-family: var(--font-display);
-  /* Fills a phone without ever wrapping to three lines on the narrowest one. */
-  font-size: clamp(30px, 8.5vw, 42px);
   font-weight: 400;
-  letter-spacing: 0.02em;
-  line-height: 1.05;
-  /* Or the narrowest phone breaks it after "FOR" and leaves "NOW." on a line
-     by itself, which reads as a mistake rather than a line break. */
+}
+
+.mobile-gate__headline-setup {
+  max-width: 26ch;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  letter-spacing: 0.13em;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.mobile-gate__headline-punch {
+  max-width: 14ch;
+  color: var(--text-primary);
+  font-size: clamp(34px, 10vw, 46px);
+  letter-spacing: 0.005em;
+  line-height: 1.03;
   text-wrap: balance;
 }
 
@@ -141,53 +165,8 @@
 
 /* The four reasons. Left-aligned inside a centred column: a ragged-centre
    list of four sentences is a poster, and this one has to be read. */
-.mobile-gate__props {
-  display: grid;
-  gap: 9px;
-  margin: var(--space-sm) 0 var(--space-xs);
-  padding: 0;
-  list-style: none;
-  text-align: left;
-}
-
-.mobile-gate__props li {
-  position: relative;
-  padding-left: 20px;
-  color: var(--text-primary);
-  font-size: 15px;
-  line-height: 1.35;
-}
-
 /* A small amber tick rather than a bullet: these are things you get, not
    things in a list. */
-.mobile-gate__props li::before {
-  content: '';
-  position: absolute;
-  top: 7px;
-  left: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: var(--amber);
-}
-
-.mobile-gate__free {
-  margin: 0 0 var(--space-sm);
-  color: var(--text-amber);
-  font-family: var(--font-display);
-  font-size: 18px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.mobile-gate__cta {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 22px;
-  letter-spacing: 0.02em;
-}
-
 .mobile-gate__address {
   margin-top: var(--space-md);
   color: var(--text-amber);
@@ -216,4 +195,54 @@
 
 .mobile-gate__open:hover {
   background: var(--amber-mid);
+}
+
+/* The other door, and the way back in. Both were missing: this screen ended
+   in a button and a sentence about laptops, so an ESPN manager had nowhere to
+   go and somebody who already had an account had no way to use it. */
+.mobile-gate__doors {
+  margin: var(--space-xs) 0 var(--space-2xs);
+}
+
+.mobile-gate__door {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: underline;
+  text-decoration-color: rgba(244, 245, 242, 0.22);
+  text-underline-offset: 3px;
+}
+
+.mobile-gate__signin {
+  margin: 0 0 var(--space-sm);
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.mobile-gate__signin-link {
+  color: var(--text-amber);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Ticket small print, same as the desktop window. */
+.mobile-gate__fine {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+}
+
+/* The one phone-specific line. It replaced five bullet points arguing for a
+   laptop, which is what this screen had to do while a phone could not use the
+   product at all. */
+.mobile-gate__fine--where {
+  max-width: 34ch;
+  margin-top: 5px;
+  text-wrap: pretty;
 }

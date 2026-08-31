@@ -375,13 +375,25 @@ rather than offering it and failing.
 The web layout targets a screen that can hold a whole book. Phones get a
 dedicated gate instead of a cramped version.
 
-**The pitch:** brand mark, drifting amber gradients, the headline "There's a
-book on your league", five value propositions, "All of it free during the
-beta", and one button.
+**The window, same as desktop.** The mark, the wordmark, the same two-tier
+headline, and the same field asking for the same thing in the same words:
+"Your Sleeper username" and **Price my league**. Under it the same quiet ESPN
+door, "Already have an account? Sign in", and "Completely free during the
+beta." Then one phone-specific line about where the rest of it lives.
 
-**The door:** a Sleeper username. That is the whole ask, and a text field works
-on a phone in a way ESPN's cookie handshake never will, so ESPN is named as a
-desktop path rather than offered and then failing.
+This screen used to be a pitch with a door in it: five value propositions and a
+"See your odds" button that revealed the field. Every one of those steps existed
+because a phone could not use the product, so the screen had to argue for a
+laptop before it could ask for anything. A phone can use the product now.
+
+**ESPN** opens the same interstitial the desktop page does, and never a
+credential field. It used to be one grey line saying that one needs a laptop,
+which is a door with no handle on it.
+
+**Sign in** was missing entirely, on the screen every returning visit starts at,
+and `/signin` was gated on phones so a link would not have worked anyway. Both
+fixed: a signed-in phone gets the Hub, so the account being asked for buys
+something on the device it is asked on.
 
 **What comes back, top to bottom:**
 
@@ -411,7 +423,9 @@ one-column short version with the three questions somebody opens the app on a
 phone to answer, each of them one number. This week priced on both sides, the
 season in a championship price plus playoff odds, projected finish and average
 seed, and the full title board with their row in amber. A share card, and one
-line at the bottom saying where the rest is.
+line at the bottom saying where the rest is. The league name is the switcher
+when the account holds more than one league, and a plain label when it does
+not.
 
 Deliberately absent, each for its own reason: **trades** (a decision made with
 two rosters open), the **start/sit swap** (needs the lineup beside it), the

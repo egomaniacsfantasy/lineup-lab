@@ -280,64 +280,30 @@ test('a phone gets the gate and nothing else', async () => {
   assert.equal(seen.signup, 0, 'a phone was shown a sign-up form');
 });
 
-test('a phone is turned away at the door, before it is asked to sign up', async () => {
-  /* The gate sits above the auth split. Below it, a signed-out phone was
-     shown the whole sign-up flow and told at the END of it to find a laptop.
-
-     A BARE /signin is still in this list. The peek now hands the sign-up
-     screen a username and that case is exempted below, but the complaint here
-     was never about the form: it was about the order. Somebody arriving cold
-     has been given nothing yet, so they get the pitch. */
-  for (const path of ['/', '/signin', '/connect', '/matchup']) {
+test('a phone gets the window, not the desktop app', async () => {
+  /* The gate sits above the auth split, so none of these render the shell. */
+  for (const path of ['/', '/connect', '/matchup', '/league']) {
     const seen = await gated(path, { width: 375, height: 812 });
     assert.equal(seen.gate, 1, `${path} was not gated on a phone`);
-    assert.equal(seen.signup, 0, `${path} showed a phone a sign-up form`);
   }
 });
 
-test('the sign-up door closes behind them', async () => {
-  /* The exemption is true of one path, and it used to be read once per page
-     load. So a phone that arrived at /signin from the peek had the gate
-     disabled for the rest of the visit: navigate anywhere afterwards and the
-     entire desktop app rendered on the phone, which is the one outcome the
-     gate exists to prevent, reached through the door added to help them. */
-  const { page, context } = await visit('/signin?sleeper=designgods', {
-    width: 375,
-    height: 812,
-  });
-  try {
-    await page.locator('.auth-landing__form').waitFor({ timeout: 15_000 });
+test('a phone can sign in', async () => {
+  /* This used to assert the opposite, and the reversal is the point.
 
-    /* Move on the way the app does after an account is made: a client side
-       route change, not a fresh load. */
-    await page.evaluate(() => {
-      window.history.pushState({}, '', '/connect');
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    });
-    await page.locator('.mobile-gate').waitFor({ timeout: 10_000 });
+     /signin was gated because of ORDER: somebody arriving cold would be asked
+     to make an account and told at the END of it to go and find a laptop. That
+     objection is spent. A signed-in phone gets the short Hub, so the account
+     being asked for buys something on the device it is asked on, and a
+     returning user needs a way in from the screen every visit starts at.
 
-    const after = await page.evaluate(() => ({
-      path: window.location.pathname,
-      gate: document.querySelectorAll('.mobile-gate').length,
-      shell: document.querySelectorAll('.app-shell').length,
-    }));
-
-    assert.equal(after.path, '/connect');
-    assert.equal(after.gate, 1, 'the gate stayed off after the sign-up path');
-    assert.equal(after.shell, 0, 'the desktop shell rendered on a phone');
-  } finally {
-    await context.close();
+     It was briefly exempt only when carrying ?sleeper= from the peek, which
+     left the "Already have an account?" link with nowhere to go. */
+  for (const path of ['/signin', '/signin?sleeper=designgods']) {
+    const seen = await gated(path, { width: 375, height: 812 });
+    assert.equal(seen.gate, 0, `${path} bounced a phone back to the window`);
+    assert.equal(seen.signup, 1, `${path} did not render the form`);
   }
-});
-
-test('the one way through is a phone that has already been shown its league', async () => {
-  /* The exemption, and its exact width. ?sleeper= is set by one thing only:
-     the peek's button, which cannot be pressed until the screen has priced a
-     real matchup and a real championship number. So this is the account being
-     asked for AFTER the value, which is the order the test above is about. */
-  const seen = await gated('/signin?sleeper=designgods', { width: 375, height: 812 });
-  assert.equal(seen.gate, 0, 'the peek handoff was bounced back to the pitch');
-  assert.equal(seen.signup, 1, 'the sign-up form did not render for the handoff');
 });
 
 test('a phone on its side is still a phone', async () => {
@@ -425,9 +391,15 @@ for (const [width, height, what] of [
              made the case. */
           contentBottom: document.querySelector('.mobile-gate__address').getBoundingClientRect().bottom,
           viewport: innerHeight,
-          headlineLines: Math.round(
-            headline.getBoundingClientRect().height /
-              (parseFloat(getComputedStyle(headline).fontSize) * 1.05),
+          /* The line has to be the biggest thing on the screen. Counting
+             rendered lines off one font-size stopped meaning anything when the
+             headline became two tiers, and it was never the point: what
+             matters is that the payoff dominates the setup. */
+          punch: parseFloat(
+            getComputedStyle(headline.querySelector('.mobile-gate__headline-punch')).fontSize,
+          ),
+          setup: parseFloat(
+            getComputedStyle(headline.querySelector('.mobile-gate__headline-setup')).fontSize,
           ),
         };
       });
@@ -441,7 +413,10 @@ for (const [width, height, what] of [
         box.contentBottom <= box.viewport,
         `the pitch runs ${(box.contentBottom - box.viewport).toFixed(0)}px off the bottom`,
       );
-      assert.ok(box.headlineLines <= 2, `the headline runs to ${box.headlineLines} lines`);
+      assert.ok(
+        box.punch >= box.setup * 2,
+        `the line is ${box.punch}px against a ${box.setup}px setup, so it does not carry`,
+      );
     } finally {
       await context.close();
     }
@@ -449,47 +424,72 @@ for (const [width, height, what] of [
 }
 
 /**
- * The pitch, and only claims the product can honour.
+ * The window, on a phone.
  *
- * This screen is the first and often the only one an advert sends someone to,
- * so it sells rather than apologises. Every reason on it has to be a surface
- * that exists: the Predictor was left off a draft of this list on the word of
- * a comment in src/services/predictor.ts saying its endpoints were unbuilt,
- * which they have not been for some time. The route is right there in
- * server/routes/api.js. Claims get checked against routes, not against prose.
+ * This screen was a pitch with a door in it: a mark, five value propositions
+ * and a "See your odds" button that revealed the field. Every one of those
+ * steps existed because a phone could not use the product, so the screen had
+ * to argue for a laptop before it could ask for anything.
+ *
+ * A phone can use the product now, so it opens with the same window the
+ * desktop page does, in the same words and the same order. What this guards is
+ * that the two do not drift apart again, and that the two ways out which were
+ * missing from here entirely are both present.
  */
-test('the gate makes the case, and every claim on it has a surface behind it', async () => {
+test('the phone window opens with the same door the desktop one does', async () => {
   const { page, context } = await visit('/league', { width: 375, height: 812 });
   try {
-    const pitch = await page.evaluate(() => ({
-      props: [...document.querySelectorAll('.mobile-gate__props li')].map((li) => li.textContent),
-      free: document.querySelector('.mobile-gate__free')?.textContent ?? '',
-      /* The way in. This used to be a line of copy telling you to go and
-         find a laptop; it is a control now, because a screen that only
-         gives instructions is the dead end this one stopped being. */
-      cta: document.querySelector('.mobile-gate__open')?.textContent ?? '',
-      body: document.querySelector('.mobile-gate').textContent,
+    const seen = await page.evaluate(() => {
+      const gate = document.querySelector('.mobile-gate');
+      const input = gate.querySelector('.league-peek__input');
+      return {
+        text: gate.textContent,
+        placeholder: input?.placeholder,
+        submit: gate.querySelector('.league-peek__go')?.textContent.trim(),
+        /* The field is the screen, not a step behind a button. */
+        gateStep: gate.querySelectorAll('.mobile-gate__open').length,
+        props: gate.querySelectorAll('.mobile-gate__props li').length,
+        signIn: gate.querySelector('.mobile-gate__signin-link')?.getAttribute('href'),
+      };
+    });
+
+    /* Word for word what the desktop window asks. */
+    assert.equal(seen.placeholder, 'Your Sleeper username');
+    assert.equal(seen.submit, 'Price my league');
+    assert.match(seen.text, /Somewhere in your league sits the championship favorite\./);
+    assert.match(seen.text, /Odds are it isn.t you\./);
+    assert.match(seen.text, /Completely free during the beta\./);
+
+    assert.equal(seen.gateStep, 0, 'the field is behind a button again');
+    assert.equal(seen.props, 0, 'the five value propositions are back');
+
+    /* The two ways out, both of which this screen simply did not have. */
+    assert.match(seen.text, /My league is on ESPN/);
+    assert.equal(seen.signIn, '/signin', 'there is no way in for somebody who has an account');
+
+    /* And it still says where the rest of it lives, which is the one
+       phone-specific thing on the screen. */
+    assert.match(seen.text, /open on a laptop/i);
+  } finally {
+    await context.close();
+  }
+});
+
+test('the phone ESPN door explains itself and asks for nothing', async () => {
+  const { page, context } = await visit('/league', { width: 375, height: 812 });
+  try {
+    await page.getByText('My league is on ESPN').click();
+    await page.getByText(/ESPN connects after you make an account/).waitFor({ timeout: 10_000 });
+
+    const door = await page.evaluate(() => ({
+      text: document.querySelector('.mobile-gate').textContent,
+      /* The one thing this screen must never do. */
+      inputs: document.querySelectorAll('input').length,
     }));
 
-    assert.ok(pitch.props.length >= 4, `only ${pitch.props.length} reasons to walk to a laptop`);
-
-    /* The five surfaces, by the words someone would recognise them by. */
-    for (const claim of [/moneyline/i, /championship odds/i, /trade/i, /bracket|season/i, /parlay/i]) {
-      assert.ok(
-        pitch.props.some((prop) => claim.test(prop)),
-        `nothing on the gate mentions ${claim}`,
-      );
-    }
-
-    /* Free, and specifically the same "during the beta" the sign-up form
-       says. A flat "free" here would contradict the next screen. */
-    assert.match(pitch.free, /free/i);
-    assert.match(pitch.free, /beta/i);
-
-    assert.match(pitch.cta, /odds/i, 'there is no way into the product from the pitch');
-    /* And it still says where the rest of it lives, which is the thing it
-       originally did and must not lose by gaining a door. */
-    assert.match(pitch.body, /laptop or tablet/i);
+    assert.equal(door.inputs, 0, 'the phone gate is collecting ESPN credentials');
+    assert.match(door.text, /needs a computer/);
+    assert.match(door.text, /Create a free account/);
   } finally {
     await context.close();
   }
@@ -551,7 +551,10 @@ test('the drift runs, and stops for anyone who asked for less motion', async () 
    ────────────────────────────────────────────────────────────────────────── */
 
 async function peek(page) {
-  await page.locator('.mobile-gate__open').click();
+  /* No "See your odds" step any more: the field is the screen. The gate used
+     to be a pitch with a door in it, because a phone could not use the
+     product; signing in gets the short Hub now, so it opens with the same
+     window the desktop page does. */
   await page.locator('.league-peek__input').fill('designgods');
   await page.locator('.league-peek__go').click();
   await page.locator('.league-peek__odds').waitFor({ timeout: 15_000 });
@@ -633,7 +636,6 @@ test('the sign-up is reachable on the shortest phone', async () => {
 test('a username nobody has says so, and keeps the field', async () => {
   const { page, context } = await visit('/', { width: 375, height: 812 });
   try {
-    await page.locator('.mobile-gate__open').click();
     await page.locator('.league-peek__input').fill('nobody-has-this-handle');
     await page.locator('.league-peek__go').click();
     await page.locator('.league-peek__error').waitFor({ timeout: 15_000 });
@@ -785,7 +787,6 @@ test('a league still being priced waits, and never invents a number or blames th
      traffic arrives on. */
   const { page, context } = await visit('/?syncing=1', { width: 375, height: 812 });
   try {
-    await page.locator('.mobile-gate__open').click();
     await page.locator('.league-peek__input').fill('designgods');
     await page.locator('.league-peek__go').click();
 
@@ -1344,6 +1345,29 @@ test('the phone Hub fits a phone', async () => {
       `the phone Hub scrolls sideways: ${overflow.docWidth}px in ${overflow.viewport}px`,
     );
     assert.equal(overflow.clipped, 0, 'a team name is cut off with no ellipsis');
+  } finally {
+    await context.close();
+  }
+});
+
+test('the phone Hub names the league, and does not fake a menu', async () => {
+  /* The fixture account holds exactly one league, because the design
+     connection builds its list from the one stored connection. So this guards
+     the half that is reachable here: the name is a label when there is nowhere
+     to go. Which leagues get OFFERED, and the provider-plus-id comparison that
+     decides it, is unit tested in leagueSwitcher.test.mjs, where a second
+     league can actually exist. */
+  const { page, context } = await visit('/design/mobile-hub', { width: 375, height: 812 });
+  try {
+    await page.locator('.mobile-hub__table').waitFor({ timeout: 20_000 });
+    const seen = await page.evaluate(() => ({
+      label: document.querySelectorAll('.mobile-hub__league').length,
+      switcher: document.querySelectorAll('.mobile-hub__league--switch').length,
+      menu: document.querySelectorAll('.mobile-hub__leagues').length,
+    }));
+    assert.equal(seen.label, 1, 'the league is not named at all');
+    assert.equal(seen.switcher, 0, 'a single league is dressed as a menu');
+    assert.equal(seen.menu, 0, 'an empty switcher rendered');
   } finally {
     await context.close();
   }

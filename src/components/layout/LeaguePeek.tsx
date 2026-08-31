@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { usePeek } from '../../hooks/usePeek';
 import { ShareCardPreview } from '../matchup/ShareCardPreview';
 import { drawShareCard } from '../../utils/shareCard';
@@ -37,7 +37,21 @@ import './LeaguePeek.css';
  * the rows and see exactly what an account buys.
  */
 
-export function LeaguePeek({ onCreateAccount }: { onCreateAccount: (username: string) => void }) {
+export function LeaguePeek({
+  intro,
+  outro,
+  onCreateAccount,
+}: {
+  /* Rendered above and below the field, and ONLY while there is a field: the
+     headline, the other door, the small print. They belong to the screen
+     around this rather than to the machine, and they must disappear the moment
+     the screen becomes somebody's league, which is a thing only this component
+     knows. Passing them in is what lets the phone's opening screen be laid out
+     like the desktop one without either of them owning the other's copy. */
+  intro?: ReactNode;
+  outro?: ReactNode;
+  onCreateAccount: (username: string) => void;
+}) {
   /* The machine is shared with the landing page, which runs the identical
      path on a screen that looks nothing like this one. See usePeek. */
   const { username, setUsername, stage, submit, look } = usePeek('phone_gate');
@@ -239,36 +253,35 @@ export function LeaguePeek({ onCreateAccount }: { onCreateAccount: (username: st
   }
 
   return (
-    <form className="league-peek" onSubmit={onSubmit}>
-      <label className="league-peek__ask" htmlFor="peek-username">
-        Your Sleeper username
-      </label>
-      <div className="league-peek__row">
+    <>
+      {intro}
+      {/* The same field the desktop page opens with, in the same words. It
+          used to be a step behind a "See your odds" button, under five lines
+          of value proposition, because this screen was a pitch that happened
+          to have a door in it. It is the door now. */}
+      <form className="league-peek" onSubmit={onSubmit}>
         <input
+          aria-label="Your Sleeper username"
           autoCapitalize="none"
+          autoComplete="username"
           autoCorrect="off"
           className="league-peek__input"
           id="peek-username"
           onChange={(event) => setUsername(event.target.value)}
-          placeholder="username"
+          placeholder="Your Sleeper username"
           spellCheck={false}
           value={username}
         />
         <button className="league-peek__go" disabled={username.trim().length === 0} type="submit">
-          See my odds
+          Price my league
         </button>
-      </div>
-      {stage.name === 'failed' ? (
-        <p className="league-peek__error" role="status">
-          {stage.message}
-        </p>
-      ) : (
-        <p className="league-peek__hint">
-          {/* ESPN needs a cookie handshake a phone browser cannot do, so it is
-              named as a desktop path rather than offered and then failing. */}
-          On ESPN? That one needs a laptop.
-        </p>
-      )}
-    </form>
+        {stage.name === 'failed' ? (
+          <p className="league-peek__error" role="status">
+            {stage.message}
+          </p>
+        ) : null}
+      </form>
+      {outro}
+    </>
   );
 }

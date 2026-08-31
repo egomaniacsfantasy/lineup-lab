@@ -19,17 +19,16 @@ import { Capacitor } from '@capacitor/core';
  *   - Anyone who has asked to see it anyway, with ?desktop=1. There has to be
  *     a way to look at the real thing on a real phone while it is built, and
  *     the choice sticks so it survives every link you follow afterwards.
- *   - The sign-up screen, but ONLY when it arrives carrying a username from
- *     the peek. The gate's whole job is to end in an account, and an email and
- *     a password are two text fields, which a phone has; without this the
- *     button at the bottom of the pitch loops straight back to the pitch.
+ *   - The sign-in screen. An email and a password are two text fields, which
+ *     a phone has.
  *
- *     Narrow on purpose. A bare /signin on a phone is still gated, because the
- *     original complaint stands for anyone arriving cold: they would be asked
- *     to make an account and told at the END of it to go and find a laptop.
- *     ?sleeper= is proof that has already happened in the other order, since
- *     the only thing that sets it is the peek, and the peek only exists after
- *     someone has watched their own league get priced.
+ *     This was narrow for a while, exempting /signin only when it carried a
+ *     username from the peek, because the objection was about ORDER: somebody
+ *     arriving cold would be asked to make an account and told at the END of it
+ *     to go and find a laptop. That objection is spent. A signed-in phone gets
+ *     the Hub, so the account it is asking for now buys something on the
+ *     device it is asked on, and a returning user needs a way in from the one
+ *     screen every visit starts at.
  */
 
 const KEY = 'oddsgods.forceDesktop';
@@ -71,20 +70,6 @@ function askedForItAnyway(): boolean {
   }
 }
 
-/**
- * Did the sign-up screen arrive from the peek, rather than cold?
- *
- * Read straight off the URL rather than from storage: a stored flag would keep
- * letting a phone past this screen long after the visit that earned it.
- */
-function cameFromThePeek(search: string): boolean {
-  try {
-    return Boolean(new URLSearchParams(search).get('sleeper'));
-  } catch {
-    return false;
-  }
-}
-
 export function useIsPhone(): boolean {
   const [phone, setPhone] = useState(false);
   /* From the router, not from window.location, so this re-runs when the app
@@ -92,19 +77,18 @@ export function useIsPhone(): boolean {
      
      It used to read window.location once, in an effect with no dependencies.
      That was fine while every exemption was a property of the whole visit
-     (native, a design route, an explicit override). The sign-up exemption is
-     not: it is true of ONE path. Read once, it disabled the gate for the rest
-     of the page load, so somebody who arrived at /signin from the peek and
-     then moved on got the entire desktop app on their phone. Which is the one
-     outcome this hook exists to prevent, reached through the door added to
-     help them. */
-  const { pathname, search } = useLocation();
+     (native, an explicit override). Two of them are properties of a single
+     PATH, and read once they disabled the gate for the rest of the page load:
+     somebody who reached /signin and then moved on got the entire desktop app
+     on their phone, which is the outcome this hook exists to prevent, reached
+     through the door added to help them. */
+  const { pathname } = useLocation();
 
   useEffect(() => {
     const exempt =
       Capacitor.isNativePlatform()
       || pathname.startsWith('/design/')
-      || (pathname === '/signin' && cameFromThePeek(search))
+      || pathname === '/signin'
       || askedForItAnyway();
 
     /* Set on every route, both ways. An early return could only ever leave
@@ -120,7 +104,7 @@ export function useIsPhone(): boolean {
     sync();
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
-  }, [pathname, search]);
+  }, [pathname]);
 
   return phone;
 }
