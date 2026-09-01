@@ -20,8 +20,36 @@
 
 const WINDOW_MS = 60_000;
 
-/** Requests per IP per window on the unauthenticated pricing path. */
-export const PRICING_LIMIT = 20;
+/**
+ * Requests per IP per window on the anonymous ENTRY point: a username lookup.
+ *
+ * One call per attempt, so a person who mistypes twice and then gets it right
+ * has used three. Thirty is generous for a human and still cheap to refuse a
+ * script, which is the only thing that reaches this number.
+ */
+export const CONNECT_LIMIT = 30;
+
+/**
+ * And on the league data routes, which are a different problem entirely.
+ *
+ * These were on the same 20/minute allowance as the lookup, and that was
+ * wrong in a way that only shows up on a real account. Loading one league is
+ * not one request: it is bootstrap, lines, schedule, line history, forks and
+ * the trade scan. Switching leagues does it again. Somebody with fourteen
+ * leagues who clicks through three of them has spent forty requests without
+ * doing anything unusual, and the app answered by refusing to load their
+ * league and offering to reconnect it, which is what a broken account looks
+ * like.
+ *
+ * So this is a backstop against a script rather than a budget for a person:
+ * high enough that no amount of ordinary clicking reaches it, low enough that
+ * a loop is stopped. The expensive part is cached upstream anyway, so a repeat
+ * within the window costs a map lookup rather than a simulation.
+ */
+export const LEAGUE_LIMIT = 240;
+
+/** Kept as the historical name so nothing importing it breaks. */
+export const PRICING_LIMIT = CONNECT_LIMIT;
 
 const windows = new Map();
 
@@ -43,7 +71,7 @@ export function resetRateLimits() {
  * Exported separately from the middleware so the accounting can be tested
  * without an HTTP server, which is the only part with anything to get wrong.
  */
-export function hit(key, now, limit = PRICING_LIMIT) {
+export function hit(key, now, limit = CONNECT_LIMIT) {
   const entry = windows.get(key);
   if (!entry || now - entry.start >= WINDOW_MS) {
     windows.set(key, { start: now, count: 1 });
@@ -73,12 +101,23 @@ function clientKey(req) {
   return req.ip || req.socket?.remoteAddress || 'unknown';
 }
 
-export function rateLimitPricing(limit = PRICING_LIMIT) {
+/**
+ * @param {number} limit    requests per window
+ * @param {string} bucket   which allowance this is
+ *
+ * The bucket is part of the key, and it has to be. Both limiters share this
+ * module's one Map, so keying by address alone would have them counting into
+ * the same tally: a league request would spend the lookup's allowance and the
+ * lower of the two limits would silently govern both. Two allowances that are
+ * actually one allowance is worse than having only ever had one, because the
+ * numbers in the code stop describing the behaviour.
+ */
+export function rateLimitPricing(limit = CONNECT_LIMIT, bucket = 'connect') {
   return (req, res, next) => {
     const now = Date.now();
     if (windows.size > 5_000) sweep(now);
 
-    const result = hit(clientKey(req), now, limit);
+    const result = hit(`${bucket}:${clientKey(req)}`, now, limit);
     res.set('x-ratelimit-remaining', String(result.remaining));
 
     if (result.allowed) {
@@ -88,9 +127,14 @@ export function rateLimitPricing(limit = PRICING_LIMIT) {
 
     const seconds = Math.ceil(result.retryAfterMs / 1000);
     res.set('retry-after', String(seconds));
+    /* `retryable` so the client can tell this apart from a league that is
+       actually broken. Without it a 429 came back through the same path as a
+       dead connection and the app offered to reconnect a league that was
+       perfectly fine. */
     res.status(429).json({
       error: 'rate_limited',
-      message: `That is a lot of leagues at once. Try again in ${seconds} seconds.`,
+      retryable: true,
+      message: `That is a lot of requests at once. Try again in ${seconds} seconds.`,
     });
   };
 }

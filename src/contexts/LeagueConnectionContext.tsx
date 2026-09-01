@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  LeagueApiError,
   connectUsername,
   fetchBootstrap,
   fetchLiveStatus,
@@ -202,6 +203,16 @@ interface LeagueConnectionValue {
   lineHistory: LineHistoryEntry[] | null;
   isLoading: boolean;
   error: string | null;
+  /**
+   * Is the failure above worth waiting out?
+   *
+   * A rate limit and a dead connection arrive through the same path. Without
+   * this the League tab treated every failure as the second and offered to
+   * RECONNECT a league that was working perfectly, which is the app telling
+   * somebody their account is broken because it was asked a question too
+   * quickly.
+   */
+  errorIsRetryable: boolean;
   connect: (connection: StoredConnection) => void;
   switchLeague: (provider: StoredConnection['provider'], leagueId: string) => void;
   disconnect: () => void;
@@ -499,6 +510,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const [lineHistory, setLineHistory] = useState<LineHistoryEntry[] | null>(null);
   const [isLoading, setIsLoading] = useState(Boolean(stored));
   const [error, setError] = useState<string | null>(null);
+  const [errorIsRetryable, setErrorIsRetryable] = useState(false);
   const [isScanningMarket, setIsScanningMarket] = useState(false);
   const [lastMarketScanAt, setLastMarketScanAt] = useState<number | null>(
     () => (stored ? readLastMarketScan(stored.leagueId) : null),
@@ -548,6 +560,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           setPricingMeta(EMPTY_PRICING_META);
           setLineHistory(null);
           setError(null);
+      setErrorIsRetryable(false);
           return;
         }
         if (rows.length === 0 && stored) {
@@ -863,6 +876,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const hydrate = useCallback(async (connection: StoredConnection) => {
     setIsLoading(true);
     setError(null);
+    setErrorIsRetryable(false);
 
     try {
       const data = await fetchBootstrap(connection.leagueId, connection.userId);
@@ -928,6 +942,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
           ? caught.message
           : 'Could not load your league. Try again in a minute.',
       );
+      setErrorIsRetryable(caught instanceof LeagueApiError && caught.retryable);
       setBootstrap(null);
     } finally {
       setIsLoading(false);
@@ -960,6 +975,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setPricingMeta(EMPTY_PRICING_META);
     setLineHistory(null);
     setError(null);
+    setErrorIsRetryable(false);
     setIsLoading(true);
     setStored(connection);
   }, []);
@@ -1109,6 +1125,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     setPricingMeta(EMPTY_PRICING_META);
     setLineHistory(null);
     setError(null);
+    setErrorIsRetryable(false);
   }, [leagues, activateLocal]);
 
   const disconnect = useCallback(() => removeLeague(stored), [removeLeague, stored]);
@@ -1133,6 +1150,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       setPricingMeta(EMPTY_PRICING_META);
       setLineHistory(null);
       setError(null);
+      setErrorIsRetryable(false);
     }
   }, [stored]);
 
@@ -1268,6 +1286,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       lineHistory,
       isLoading,
       error,
+      errorIsRetryable,
       connect,
       switchLeague,
       disconnect,
@@ -1292,6 +1311,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
       lineHistory,
       isLoading,
       error,
+      errorIsRetryable,
       connect,
       switchLeague,
       disconnect,

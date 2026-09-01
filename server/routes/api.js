@@ -54,7 +54,7 @@ import {
 } from '../services/scoutingStore.js';
 import { computeRosterNeeds, computeSuperlatives } from '../services/scoutingSignals.js';
 import { seasonParam } from '../season.js';
-import { rateLimitPricing } from '../rateLimit.js';
+import { CONNECT_LIMIT, LEAGUE_LIMIT, rateLimitPricing } from '../rateLimit.js';
 import { visibleLeagues } from '../leagueChoices.js';
 
 const DAY = 24 * 60 * 60_000;
@@ -119,10 +119,14 @@ function getProvider(req) {
 
 export const apiRouter = Router();
 
-/* The unauthenticated pricing path. These three are everything the phone
-   gate's peek touches, and the only expensive routes a stranger can reach
-   without an account. See server/rateLimit.js. */
-const pricingLimit = rateLimitPricing();
+/* Two different jobs, two different allowances. See server/rateLimit.js.
+   
+   The lookup is the anonymous entry point and is one call per attempt. The
+   league routes are what the signed-in app lives on, and putting them on the
+   same allowance meant a real account with several leagues could be refused
+   for clicking around, which the app then reported as a broken connection. */
+const connectLimit = rateLimitPricing(CONNECT_LIMIT, 'connect');
+const leagueLimit = rateLimitPricing(LEAGUE_LIMIT, 'league');
 
 function providerName(req) {
   return req.query.provider === 'espn' || req.body?.provider === 'espn' ? 'espn' : 'sleeper';
@@ -291,7 +295,7 @@ apiRouter.get('/rankings', async (req, res, next) => {
  */
 const CONNECT_TTL_MS = 5 * 60_000;
 
-apiRouter.get('/connect/:username', pricingLimit, async (req, res, next) => {
+apiRouter.get('/connect/:username', connectLimit, async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const handle = req.params.username.trim();
@@ -820,7 +824,7 @@ apiRouter.get('/league/:leagueId/successor', async (req, res, next) => {
   }
 });
 
-apiRouter.get('/league/:leagueId/bootstrap', pricingLimit, async (req, res, next) => {
+apiRouter.get('/league/:leagueId/bootstrap', leagueLimit, async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const ctx = await loadLeagueContext(
@@ -999,7 +1003,7 @@ apiRouter.get('/scouting/league/:leagueId/superlatives', async (req, res, next) 
 });
 
 /** Engine-priced lines for a league (requires an active projection import). */
-apiRouter.get('/league/:leagueId/lines', pricingLimit, async (req, res, next) => {
+apiRouter.get('/league/:leagueId/lines', leagueLimit, async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const { leagueId } = req.params;

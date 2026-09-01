@@ -51,3 +51,41 @@ test('a hammered address does not extend its own penalty for ever', () => {
   for (let t = 0; t < MINUTE; t += 5_000) hit('6.6.6.6', T0 + t);
   assert.equal(hit('6.6.6.6', T0 + MINUTE).allowed, true, 'the window still expires on time');
 });
+
+test('the two allowances do not spend each other', async () => {
+  /* Both limiters share this module's one Map. Keyed by address alone they
+     counted into the same tally, so a league request spent the lookup's
+     allowance and the lower of the two limits silently governed both. That is
+     how a signed-in account with fourteen leagues got refused for clicking
+     around, and was then told its league needed reconnecting. */
+  const { CONNECT_LIMIT, LEAGUE_LIMIT } = await import('../server/rateLimit.js');
+  resetRateLimits();
+
+  // Spend the smaller allowance completely.
+  for (let i = 0; i < CONNECT_LIMIT; i += 1) hit(`connect:7.7.7.7`, T0, CONNECT_LIMIT);
+  assert.equal(hit('connect:7.7.7.7', T0, CONNECT_LIMIT).allowed, false);
+
+  // The league allowance for the same address must be untouched.
+  assert.equal(
+    hit('league:7.7.7.7', T0, LEAGUE_LIMIT).allowed,
+    true,
+    'a league request is spending the username lookup allowance',
+  );
+});
+
+test('the league allowance survives ordinary use', async () => {
+  /* Loading one league is not one request: bootstrap, lines, schedule, line
+     history, forks and the trade scan. Switching leagues does it again. This
+     is the number that was 20. */
+  const { LEAGUE_LIMIT } = await import('../server/rateLimit.js');
+  resetRateLimits();
+  const perLeagueView = 8;
+  const leaguesClickedThrough = 6;
+  for (let i = 0; i < perLeagueView * leaguesClickedThrough; i += 1) {
+    assert.equal(
+      hit('league:8.8.8.8', T0, LEAGUE_LIMIT).allowed,
+      true,
+      `refused after ${i} requests, which is ${Math.floor(i / perLeagueView)} leagues`,
+    );
+  }
+});

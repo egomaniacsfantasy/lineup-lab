@@ -140,8 +140,9 @@ function recordLabel(team: { record: { wins: number; losses: number; ties: numbe
 
 export function LeaguePage() {
   const { mode } = useSeasonMode();
-  const { stored, bootstrap, schedule, pricing, lineHistory, isLoading, error, connect } =
-    useLeagueConnection();
+  const {
+    stored, bootstrap, schedule, pricing, lineHistory, isLoading, error, errorIsRetryable, connect,
+  } = useLeagueConnection();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -154,7 +155,17 @@ export function LeaguePage() {
   /* A hidden tab still has a URL. Without this, ?view=standings rendered the
      table for anyone who typed it or kept an old bookmark, which would make
      the gate decorative. */
-  const isReconnectState = Boolean(stored && !bootstrap && !isLoading && error);
+  /* A league that failed to LOAD is not a league that needs reconnecting.
+  
+     This offered the reconnect wizard for any error at all, so a rate limit
+     from clicking through several leagues took somebody to "Choose a
+     provider" under the heading "Reconnect your league" - the app announcing
+     that a perfectly good connection was broken, in response to being asked a
+     question too quickly. A transient failure waits; it does not send people
+     back through setup. */
+  const isReconnectState = Boolean(
+    stored && !bootstrap && !isLoading && error && !errorIsRetryable,
+  );
   const hasConnectHash = location.hash.startsWith('#connect');
   const isWizardOpen = showWizard || hasConnectHash || isReconnectState;
   const flow =

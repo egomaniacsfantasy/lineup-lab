@@ -469,9 +469,21 @@ export function fetchBoard(limit = 800, scoring?: string, modelOnly = false) {
 export class LeagueApiError extends Error {
   code: string;
 
-  constructor(code: string, message: string) {
+  /**
+   * Will this succeed if we simply wait?
+   *
+   * A rate limit and a dead connection arrive through the same path, and the
+   * app used to treat every failure as the second: a 429 from clicking around
+   * too fast made the League tab offer to RECONNECT a league that was working
+   * perfectly. Telling somebody their account is broken when it is not costs
+   * more than the error it was reporting.
+   */
+  retryable: boolean;
+
+  constructor(code: string, message: string, retryable = false) {
     super(message);
     this.code = code;
+    this.retryable = retryable;
   }
 }
 
@@ -629,6 +641,9 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
     throw new LeagueApiError(
       body?.error ?? `request_failed_${response.status}`,
       body?.detail && body.detail !== friendly ? `${friendly} (${body.detail})` : friendly,
+      /* The server says so for a rate limit; 429 and 5xx are transient by
+         definition whoever sent them. */
+      Boolean(body?.retryable) || response.status === 429 || response.status >= 500,
     );
   }
 
