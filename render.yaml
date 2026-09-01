@@ -34,6 +34,15 @@ services:
         value: "true"
       - key: ESPN_LOGIN_WORKER_URL
         value: "https://odds-gods-espn-login-worker.onrender.com"
+      # The published connector. Unlisted, so this link is the ONLY way anybody
+      # reaches it: it will never appear in Web Store search. Without it the
+      # connect screen tells every ESPN user the connector is not published,
+      # which has been false since 20 August.
+      #
+      # Read at BUILD time (vite `define`), not at runtime, so a change here
+      # needs a redeploy of the frontend rather than a restart.
+      - key: VITE_ESPN_EXTENSION_URL
+        value: "https://chromewebstore.google.com/detail/hcjemdgdjdfdjcpjliffkfboolebbidn"
       - key: ADMIN_PASSWORD
         sync: false
   - type: web

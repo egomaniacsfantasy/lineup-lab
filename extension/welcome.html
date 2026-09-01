@@ -8,7 +8,10 @@
   <style>
     body { padding: 56px 20px 96px; }
     main { max-width: 620px; margin: 0 auto; display: grid; gap: 26px; }
-    h1 { font-size: 30px; line-height: 1.1; letter-spacing: 0.01em; }
+    /* The display face, the way every heading on the site is set. It was
+       inheriting --ui, so the one line that says the thing worked was the one
+       line that did not look like us. */
+    h1 { font-family: var(--display); font-weight: 400; font-size: 38px; line-height: 1.05; letter-spacing: 0.01em; }
     .lede { color: var(--soft); font-size: 15px; line-height: 1.6; }
     ol { list-style: none; display: grid; gap: 12px; }
     li {

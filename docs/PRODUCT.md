@@ -359,8 +359,14 @@ you are in more than one, done.
 
 1. **Chrome extension** ("Odds Gods ESPN Connector", MV3, `cookies` permission,
    `*.espn.com` host permission, read-only). The site detects the extension by
-   postMessage and requests the session. **Built and packaged; not submitted to
-   the Chrome Web Store.**
+   postMessage and requests the session. **Published to the Chrome Web Store as
+   `Published - unlisted`**, id `hcjemdgdjdfdjcpjliffkfboolebbidn`, verified end
+   to end on production: the ping is answered and both ESPN cookies come back.
+
+   Unlisted means it will never appear in Web Store search, so the direct link
+   is the only way anybody reaches it. That link is a BUILD-time constant
+   (`VITE_ESPN_EXTENSION_URL`), which is why the connect screen told every ESPN
+   user the connector was unpublished for the eleven days after it went live.
 2. **Hosted login worker** — a separate Render service running Playwright that
    performs the ESPN sign-in server-side and returns the cookies. Rate-limited
    to 2 concurrent logins, queue of 10, 30-second timeout.
@@ -631,7 +637,8 @@ Roughly fifty endpoints. The load-bearing ones:
 - **Phone web** — the gate plus the league peek. Deliberately limited.
 - **iOS** — Capacitor 8 wraps the same bundle, pointed at the production API.
   Builds and runs; not submitted to the App Store.
-- **Chrome extension** — built, packaged, not submitted.
+- **Chrome extension** — published to the Chrome Web Store, unlisted, id
+  `hcjemdgdjdfdjcpjliffkfboolebbidn`. Verified working against production.
 
 ## 5.11 Testing
 
@@ -852,10 +859,20 @@ and adding before it is used.
     still bounces to the sign-up wall. That is now deliberate rather than
     accidental: the wall says "Sign in to open the full book" instead of
     silently swapping in a form.
-17. **Not shipped:** Chrome Web Store submission, App Store submission, and a
-    `/parlay` engine endpoint for exact same-game pricing.
-18. **The rate limiter is per instance.** In memory, so the real ceiling is
+17. **Not shipped:** App Store submission, and a `/parlay` engine endpoint for
+    exact same-game pricing. The Chrome extension is published (unlisted).
+18. **The store URL is set in `render.yaml`, which manages STAGING only.**
+    Production is configured in the Render dashboard, and the frontend is served
+    from a CDN, so `VITE_ESPN_EXTENSION_URL` has to be set wherever the
+    production frontend is built or the connect screen keeps saying the
+    connector is unpublished.
+19. **The connector's fonts shipped as system stacks.** Only the colours were
+    copied from the app's tokens; the two font tokens were left as
+    `ui-sans-serif` and `ui-monospace`, so the one screen that exists to
+    reassure somebody they installed the right thing looked like a stranger's.
+    Fixed in 1.0.1, which is packaged and NOT yet uploaded.
+20. **The rate limiter is per instance.** In memory, so the real ceiling is
     20/min x instances. Worth knowing rather than a reason to reach for a
     shared store on a service running one box.
-19. **Full dynasty support.** Pick and future-season valuation is the missing
+21. **Full dynasty support.** Pick and future-season valuation is the missing
     piece, and until it exists the note in 13 is the honest position.

@@ -1,6 +1,47 @@
 /* Shared surface for the connector's two screens. The app's own tokens, hand
    copied rather than imported: an extension cannot reach the site's stylesheet,
-   and a connector that looks like a stranger is the thing people uninstall. */
+   and a connector that looks like a stranger is the thing people uninstall.
+
+   ────────────────────────────────────────────────────────────────────────
+   THE FONTS ARE BUNDLED, AND THEY HAVE TO BE
+
+   Only the COLOURS were copied the first time. The two font tokens were left
+   as system stacks, so the connector shipped in whatever the OS hands out: the
+   one screen that exists to reassure somebody they installed the right thing
+   looked like a stranger's page wearing our colours.
+
+   Bundled rather than linked from Google Fonts. An extension page that fetches
+   a remote stylesheet is one that fails offline, tells a third party every
+   time it opens, and gives a store reviewer a remote resource to ask about.
+   These three files are 72KB, which is smaller than one of the screenshots.
+
+   Hanken Grotesk is a VARIABLE font: Google serves one file for every weight
+   and slices it with the CSS. Downloading 400/600/700/800 gave four byte
+   identical copies, so one file carries a 100..900 range instead. */
+@font-face {
+  font-family: 'Staatliches';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/staatliches-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/hanken.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('fonts/jetbrains-700.woff2') format('woff2');
+}
+
 :root {
   color-scheme: dark;
   --bg: #0d0f11;
@@ -13,8 +54,10 @@
   --text: #f4f5f2;
   --soft: #c9c4bd;
   --muted: #8b857e;
-  --ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --num: ui-monospace, "SF Mono", Menlo, monospace;
+  /* The site's three faces, same roles and same fallbacks. */
+  --display: "Staatliches", "Arial Narrow", sans-serif;
+  --ui: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --num: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,9 +77,13 @@ body {
 
 .brand img { width: 26px; height: 26px; display: block; }
 
+/* The wordmark, in the face the wordmark is set in everywhere else. Staatliches
+   carries its own weight, so the 800 that was compensating for a system sans
+   comes off. */
 .brand-name {
-  font-size: 13px;
-  font-weight: 800;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 400;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
