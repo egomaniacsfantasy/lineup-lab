@@ -474,3 +474,37 @@
 .espn-connect__walk-step .espn-connect__submit {
   margin-top: 9px;
 }
+
+/* A disclosure, and nothing else.
+
+   The card styling deliberately does NOT live here. Chromium hides closed
+   content with content-visibility, so a layout mode on the details is harmless
+   there, but not every engine does it that way and setting one on the element
+   itself is the documented way to break the closed state. The box goes on a
+   wrapper inside instead, which costs one element and removes the question. */
+.espn-connect__disclosure {
+  margin: 0;
+}
+
+.espn-connect__disclosure > summary {
+  cursor: pointer;
+  padding: 10px 2px;
+  list-style: none;
+}
+
+.espn-connect__disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.espn-connect__disclosure > summary::before {
+  content: '\25B8';
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--text-dim);
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.espn-connect__disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}

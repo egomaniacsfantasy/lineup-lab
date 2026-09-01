@@ -1372,3 +1372,113 @@ test('the phone Hub names the league, and does not fake a menu', async () => {
     await context.close();
   }
 });
+
+/* ──────────────────────────────────────────────────────────────────────────
+   NEVER ASK FOR AN ESPN PASSWORD WE DO NOT NEED
+
+   The private-league screen rendered the ESPN email and password form first
+   and unconditionally, with the connector walkthrough underneath it. So
+   somebody who had installed the connector, and whose ESPN session the page
+   could already read, was asked for their ESPN password by a product whose own
+   extension description promises the password never leaves ESPN.
+
+   ?private opens that branch without needing ESPN to answer 401 for a league
+   id we do not have.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** Stand in for the extension: answer the ping, hand back a session. */
+const FAKE_CONNECTOR = `
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || !e.data || e.data.source !== 'oddsgods-page') return;
+    if (e.data.type === 'ODDSGODS_PING') {
+      window.postMessage({ source: 'oddsgods-ext', type: 'ODDSGODS_READY' }, location.origin);
+    }
+    if (e.data.type === 'ODDSGODS_GET_SESSION') {
+      window.postMessage(
+        { source: 'oddsgods-ext', type: 'ODDSGODS_SESSION', espnS2: 'x'.repeat(320), swid: '{FAKE}' },
+        location.origin,
+      );
+    }
+  });
+  window.postMessage({ source: 'oddsgods-ext', type: 'ODDSGODS_READY' }, location.origin);
+`;
+
+test('a working connector means the password form is never on screen', async () => {
+  const { page, context } = await visit('/design/espn-connect?private=1', {
+    width: 1100,
+    height: 900,
+  });
+  try {
+    await page.getByText('This ESPN league is private.').waitFor({ timeout: 15_000 });
+    await page.evaluate(FAKE_CONNECTOR);
+    await page.getByText('Ready to connect').waitFor({ timeout: 15_000 });
+
+    const seen = await page.evaluate(() => {
+      /* checkVisibility, not a bounding box.
+      
+         A closed <details> hides its content with content-visibility, which
+         keeps the layout boxes: every field inside one still reports a real
+         width and height. Measuring the box said a password field was on
+         screen when the browser itself, and a user, could see nothing. Ask the
+         browser the question instead of inferring it. */
+      const open = [...document.querySelectorAll('input[type="password"]')].filter((el) =>
+        el.checkVisibility({
+          contentVisibilityAuto: true,
+          opacityProperty: true,
+          visibilityProperty: true,
+        }),
+      );
+      return {
+        visiblePasswords: open.length,
+        text: document.body.innerText,
+        /* The fallback still exists, closed, for somebody who cannot install
+           it. Removing it entirely would strand them. */
+        disclosureOpen: [...document.querySelectorAll('details')].some((d) => d.open),
+      };
+    });
+
+    assert.equal(
+      seen.visiblePasswords,
+      0,
+      'a password field is on screen for somebody whose connector already works',
+    );
+    assert.match(seen.text, /Ready to connect/);
+    assert.match(seen.text, /Connect my ESPN league/i);
+    assert.ok(!seen.disclosureOpen, 'the password fallback is open by default');
+  } finally {
+    await context.close();
+  }
+});
+
+test('no connector means install it, with the password path a last resort', async () => {
+  const { page, context } = await visit('/design/espn-connect?private=1', {
+    width: 1100,
+    height: 900,
+  });
+  try {
+    await page.getByText('This ESPN league is private.').waitFor({ timeout: 15_000 });
+
+    const seen = await page.evaluate(() => ({
+      text: document.body.innerText,
+      /* See above: a bounding box is not visibility inside a closed
+         <details>. */
+      visiblePasswords: [...document.querySelectorAll('input[type="password"]')].filter((el) =>
+        el.checkVisibility({
+          contentVisibilityAuto: true,
+          opacityProperty: true,
+          visibilityProperty: true,
+        }),
+      ).length,
+      hasFallback: document.querySelectorAll('details').length,
+    }));
+
+    /* The connector leads even when it is not installed: it is the path that
+       does not involve an ESPN password. */
+    assert.match(seen.text, /Add the connector/);
+    assert.equal(seen.visiblePasswords, 0, 'the password form is showing itself unbidden');
+    assert.equal(seen.hasFallback, 1, 'somebody who cannot install it has nowhere to go');
+    assert.match(seen.text, /Cannot install the connector\?/);
+  } finally {
+    await context.close();
+  }
+});

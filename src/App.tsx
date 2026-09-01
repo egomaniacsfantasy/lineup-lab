@@ -107,7 +107,20 @@ function PublicRoutes() {
                     path="/design/espn-connect"
                     element={
                       <div style={{ padding: 32, maxWidth: 720, margin: '0 auto' }}>
-                        <EspnConnect onConnected={() => undefined} />
+                        {/* ?private=1 opens straight on the private-league
+                            branch. Reaching it for real needs ESPN to answer
+                            401 for a league id we do not have, so the branch
+                            that decides whether to ask somebody for their ESPN
+                            password could only be reviewed by borrowing a
+                            private league and waiting on a network call. */}
+                        <EspnConnect
+                          initialPaste={
+                            new URLSearchParams(window.location.search).has('private')
+                              ? 'design-private'
+                              : ''
+                          }
+                          onConnected={() => undefined}
+                        />
                       </div>
                     }
                   />

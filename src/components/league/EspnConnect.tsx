@@ -45,6 +45,81 @@ type Step =
       swid: string | null;
     };
 
+/**
+ * The ESPN email and password fields.
+ *
+ * One definition, two placements: it leads on a phone, where the connector
+ * cannot run, and hides behind a disclosure on a desktop, where it is a last
+ * resort. Two copies of a password form is two chances for one of them to stop
+ * saying what happens to the password.
+ */
+function EspnPasswordFields({
+  email,
+  isLoading,
+  onConnect,
+  onEmail,
+  onOtp,
+  onPassword,
+  otp,
+  otpNeeded,
+  password,
+}: {
+  email: string;
+  isLoading: boolean;
+  onConnect: () => void;
+  onEmail: (value: string) => void;
+  onOtp: (value: string) => void;
+  onPassword: (value: string) => void;
+  otp: string;
+  otpNeeded: boolean;
+  password: string;
+}) {
+  return (
+    <>
+      <label className="espn-connect__field">
+        <span className="espn-connect__label">ESPN email</span>
+        <input
+          autoComplete="username"
+          className="espn-connect__input"
+          onChange={(event) => onEmail(event.target.value)}
+          type="email"
+          value={email}
+        />
+      </label>
+      <label className="espn-connect__field">
+        <span className="espn-connect__label">ESPN password</span>
+        <input
+          autoComplete="current-password"
+          className="espn-connect__input"
+          onChange={(event) => onPassword(event.target.value)}
+          type="password"
+          value={password}
+        />
+      </label>
+      {otpNeeded ? (
+        <label className="espn-connect__field">
+          <span className="espn-connect__label">Code ESPN emailed you</span>
+          <input
+            autoComplete="one-time-code"
+            className="espn-connect__input"
+            inputMode="numeric"
+            onChange={(event) => onOtp(event.target.value)}
+            value={otp}
+          />
+        </label>
+      ) : null}
+      <button
+        className="espn-connect__submit"
+        disabled={isLoading}
+        onClick={onConnect}
+        type="button"
+      >
+        {isLoading ? 'Connecting…' : 'Connect with ESPN'}
+      </button>
+    </>
+  );
+}
+
 export function EspnConnect({
   initialLeagueInput = '',
   initialPaste = '',
@@ -372,23 +447,32 @@ export function EspnConnect({
           </label>
 
           {showFallback ? (
+            /* A private league, and exactly one way forward on screen.
+            
+               This used to render the ESPN email and password form first and
+               unconditionally, with the connector walkthrough underneath it. So
+               somebody who had installed the connector, and whose ESPN session
+               the page could already read, was asked for their ESPN password by
+               a product whose own extension description promises the password
+               never leaves ESPN. The thing that worked was below the thing that
+               should not have been offered.
+            
+               Now the state decides. Everything needed already in hand means
+               one button. Connector but no ESPN session means one step. No
+               connector means install it. The password form is what is left
+               when none of that is possible, which on a desktop is nothing, and
+               on a phone is everything. */
             <div className="espn-connect__cookies">
-              <p className="espn-connect__cookies-note">
-                This ESPN league is private.
-              </p>
+              <p className="espn-connect__cookies-note">This ESPN league is private.</p>
 
               {isNativeEspnAuthAvailable() ? (
                 <div className="espn-connect__login-card">
                   <div className="espn-connect__login-brand">
-                    <img
-                      alt="ESPN"
-                      className="espn-connect__login-mark"
-                      src="/brand/espn-logo.png"
-                    />
+                    <img alt="ESPN" className="espn-connect__login-mark" src="/brand/espn-logo.png" />
                     <span className="espn-connect__login-lockup">Sign in</span>
                   </div>
                   <p className="espn-connect__cookies-note">
-                    Opens ESPN's own sign-in. Your password goes to ESPN and
+                    Opens ESPN&rsquo;s own sign-in. Your password goes to ESPN and
                     never passes through us.
                   </p>
                   <button
@@ -399,200 +483,140 @@ export function EspnConnect({
                     Sign in with ESPN
                   </button>
                 </div>
-              ) : espnLoginEnabled ? (
-                <div className="espn-connect__login-card">
-                  {/* Asking for someone's ESPN password inside an unbranded dark
-                      box reads exactly like phishing. Their mark, on their red,
-                      at the top of the panel, so it is obvious whose sign-in
-                      this is. */}
-                  <div className="espn-connect__login-brand">
-                    <img
-                      alt="ESPN"
-                      className="espn-connect__login-mark"
-                      src="/brand/espn-logo.png"
-                    />
-                    <span className="espn-connect__login-lockup">Sign in</span>
-                  </div>
-                  <p className="espn-connect__cookies-note">
-                    {/* It does reach us: it is posted to our server, which signs
-                        in on your behalf. What is true is that it is used once,
-                        stored nowhere, and redacted from our logs. */}
-                    Read-only. Your password is used once to sign in, stored
-                    nowhere, and kept out of our logs.
+              ) : extensionReady && espnSignedIn ? (
+                /* Nothing left to ask for. The connector is here and it can see
+                   a live ESPN session, so the only honest thing on screen is
+                   the button that finishes. */
+                <div className="espn-connect__fallback-card">
+                  <p className="espn-connect__fallback-title">Ready to connect</p>
+                  <p className="espn-connect__method-note">
+                    The connector is installed and your ESPN session is live in
+                    this browser. We read the league above and match your team
+                    automatically.
                   </p>
-                  <label className="espn-connect__field">
-                    <span className="espn-connect__label">ESPN email</span>
-                    <input
-                      autoComplete="username"
-                      className="espn-connect__input"
-                      onChange={(event) => setLoginEmail(event.target.value)}
-                      type="email"
-                      value={loginEmail}
-                    />
-                  </label>
-                  <label className="espn-connect__field">
-                    <span className="espn-connect__label">ESPN password</span>
-                    <input
-                      autoComplete="current-password"
-                      className="espn-connect__input"
-                      onChange={(event) => setLoginPassword(event.target.value)}
-                      type="password"
-                      value={loginPassword}
-                    />
-                  </label>
-                  {loginChallengeId ? (
-                    <label className="espn-connect__field">
-                      <span className="espn-connect__label">Code ESPN emailed you</span>
-                      <input
-                        autoComplete="one-time-code"
-                        className="espn-connect__input"
-                        inputMode="numeric"
-                        onChange={(event) => setLoginOtp(event.target.value)}
-                        value={loginOtp}
-                      />
-                    </label>
-                  ) : null}
                   <button
                     className="espn-connect__submit"
                     disabled={isLoading}
-                    onClick={connectWithLogin}
+                    onClick={connectWithExtension}
                     type="button"
                   >
-                    {isLoading ? 'Connecting…' : 'Connect with ESPN'}
+                    {isLoading ? 'Checking ESPN…' : 'Connect my ESPN league'}
                   </button>
+                </div>
+              ) : extensionReady ? (
+                /* The connector is here; ESPN is not signed in. One thing to do,
+                   and it happens on ESPN's site, not ours. */
+                <div className="espn-connect__fallback-card">
+                  <p className="espn-connect__fallback-title">Sign in to ESPN</p>
+                  <p className="espn-connect__method-note">
+                    The connector is installed. Sign in on ESPN&rsquo;s own site, in
+                    any tab, and come back. Your password never touches Odds
+                    Gods, and this page notices on its own.
+                  </p>
+                  <button className="espn-connect__submit" onClick={openEspnLeague} type="button">
+                    Open ESPN ↗︎
+                  </button>
+                </div>
+              ) : connectorSupported() ? (
+                /* No connector yet, and this browser can run one. */
+                <div className="espn-connect__fallback-card">
+                  <p className="espn-connect__fallback-title">Add the connector</p>
+                  <p className="espn-connect__method-note">
+                    ESPN keeps your sign-in in a cookie no website may read. A
+                    small Chrome add-on hands that one cookie over, read-only.
+                    Five seconds, once, ever. Your ESPN password is never
+                    involved.
+                  </p>
+                  {CONNECTOR_STORE_URL ? (
+                    <a
+                      className="espn-connect__submit"
+                      href={CONNECTOR_STORE_URL}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Add the connector ↗︎
+                    </a>
+                  ) : (
+                    <p className="espn-connect__method-note">
+                      The connector is not published yet.
+                    </p>
+                  )}
+                  <p className="espn-connect__method-note">
+                    This page notices the moment it is installed. Nothing to
+                    reload.
+                  </p>
                 </div>
               ) : null}
 
-              <div className="espn-connect__fallback-card">
-                <p className="espn-connect__fallback-title">This league is private</p>
-                <p className="espn-connect__method-note">
-                  ESPN keeps your sign-in in a cookie no website may read. The
-                  connector hands that one cookie over, read-only.
-                </p>
-
-                {!connectorSupported() && espnLoginEnabled ? (
-                  /* The sign-in above IS the phone path. This paragraph used to
-                     say a private league needs a computer full stop, directly
-                     under a form that connects one from a phone — the screen
-                     contradicted itself. The connector is the fallback now, not
-                     the requirement. */
-                  <p className="espn-connect__method-note">
-                    Signing in above is all a phone needs.
-                  </p>
-                ) : !connectorSupported() ? (
-                  <p className="espn-connect__method-note">
-                    Connecting a private league needs a computer, because phone
-                    browsers cannot run the connector. Do it once on a laptop
-                    and this league then works on every device, including this
-                    one.
-                  </p>
+              {/* The password path, and where it belongs.
+              
+                  On a phone it is the only way through, because a phone browser
+                  cannot run the connector, so it leads. On a desktop it is a
+                  last resort behind a disclosure: offering it beside a working
+                  connector is how somebody ends up typing an ESPN password they
+                  never needed to type. */}
+              {espnLoginEnabled && !isNativeEspnAuthAvailable() ? (
+                connectorSupported() ? (
+                  /* The card styling sits on the INNER wrapper rather than on
+                     the <details>.
+                     
+                     Chromium hides closed content with content-visibility, so
+                     `display: grid` directly on the element is fine there. Not
+                     every engine does it that way, and a layout mode on the
+                     details itself is the documented way to break the closed
+                     state elsewhere. A wrapper costs one element and removes
+                     the question. */
+                  <details className="espn-connect__disclosure">
+                    <summary className="espn-connect__fallback-title">
+                      Cannot install the connector?
+                    </summary>
+                    <div className="espn-connect__fallback-card">
+                      <p className="espn-connect__method-note">
+                        We can sign in to ESPN for you instead. Your password is
+                        used once, stored nowhere, and kept out of our logs. The
+                        connector is the better path if you can use it.
+                      </p>
+                      <EspnPasswordFields
+                        email={loginEmail}
+                        isLoading={isLoading}
+                        onConnect={connectWithLogin}
+                        onEmail={setLoginEmail}
+                        onOtp={setLoginOtp}
+                        onPassword={setLoginPassword}
+                        otp={loginOtp}
+                        otpNeeded={Boolean(loginChallengeId)}
+                        password={loginPassword}
+                      />
+                    </div>
+                  </details>
                 ) : (
-                  /* Three steps, each showing whether it is actually done
-                     rather than telling you to do it and hoping. The page can
-                     see the connector, and the connector can see ESPN, so both
-                     tick themselves off and the only thing left to press is
-                     the last one. */
-                  <ol className="espn-connect__walk">
-                    <li
-                      className={[
-                        'espn-connect__walk-step',
-                        extensionReady ? 'espn-connect__walk-step--done' : 'espn-connect__walk-step--now',
-                      ].join(' ')}
-                    >
-                      <span className="espn-connect__walk-mark" aria-hidden="true">
-                        {extensionReady ? '✓' : '1'}
-                      </span>
-                      <span className="espn-connect__walk-copy">
-                        <span className="espn-connect__walk-title">
-                          {extensionReady ? 'Connector installed' : 'Add the connector'}
-                        </span>
-                        <span className="espn-connect__walk-body">
-                          {extensionReady
-                            ? 'Found it in this browser. Nothing to do here.'
-                            : 'A small Chrome add-on. It reads one ESPN cookie and nothing else. Takes about five seconds, once, ever.'}
-                        </span>
-                        {!extensionReady ? (
-                          CONNECTOR_STORE_URL ? (
-                            <a
-                              className="espn-connect__walk-action"
-                              href={CONNECTOR_STORE_URL}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              Add the connector ↗︎
-                            </a>
-                          ) : (
-                            <span className="espn-connect__walk-body">
-                              The connector is not published yet.
-                            </span>
-                          )
-                        ) : null}
-                      </span>
-                    </li>
-
-                    <li
-                      className={[
-                        'espn-connect__walk-step',
-                        !extensionReady
-                          ? 'espn-connect__walk-step--wait'
-                          : espnSignedIn
-                            ? 'espn-connect__walk-step--done'
-                            : 'espn-connect__walk-step--now',
-                      ].join(' ')}
-                    >
-                      <span className="espn-connect__walk-mark" aria-hidden="true">
-                        {extensionReady && espnSignedIn ? '✓' : '2'}
-                      </span>
-                      <span className="espn-connect__walk-copy">
-                        <span className="espn-connect__walk-title">
-                          {extensionReady && espnSignedIn
-                            ? 'Signed in to ESPN'
-                            : 'Sign in to ESPN'}
-                        </span>
-                        <span className="espn-connect__walk-body">
-                          {extensionReady && espnSignedIn
-                            ? 'Your ESPN session is live in this browser.'
-                            : 'On ESPN\u2019s own site, in any tab. Your password never touches Odds Gods. Come back here afterwards, this page notices on its own.'}
-                        </span>
-                        {extensionReady && !espnSignedIn ? (
-                          <button
-                            className="espn-connect__walk-action"
-                            onClick={openEspnLeague}
-                            type="button"
-                          >
-                            Open ESPN ↗︎
-                          </button>
-                        ) : null}
-                      </span>
-                    </li>
-
-                    <li
-                      className={[
-                        'espn-connect__walk-step',
-                        extensionReady && espnSignedIn
-                          ? 'espn-connect__walk-step--now'
-                          : 'espn-connect__walk-step--wait',
-                      ].join(' ')}
-                    >
-                      <span className="espn-connect__walk-mark" aria-hidden="true">3</span>
-                      <span className="espn-connect__walk-copy">
-                        <span className="espn-connect__walk-title">Connect this league</span>
-                        <span className="espn-connect__walk-body">
-                          We read the league above and match your team automatically.
-                        </span>
-                        <button
-                          className="espn-connect__submit"
-                          disabled={isLoading || !extensionReady}
-                          onClick={connectWithExtension}
-                          type="button"
-                        >
-                          {isLoading ? 'Checking ESPN…' : 'Connect my ESPN league'}
-                        </button>
-                      </span>
-                    </li>
-                  </ol>
-                )}
-              </div>
+                  <div className="espn-connect__login-card">
+                    {/* Asking for someone's ESPN password inside an unbranded
+                        dark box reads exactly like phishing. Their mark, on
+                        their red, at the top of the panel. */}
+                    <div className="espn-connect__login-brand">
+                      <img alt="ESPN" className="espn-connect__login-mark" src="/brand/espn-logo.png" />
+                      <span className="espn-connect__login-lockup">Sign in</span>
+                    </div>
+                    <p className="espn-connect__cookies-note">
+                      A phone browser cannot run the connector, so we sign in for
+                      you. Your password is used once, stored nowhere, and kept
+                      out of our logs.
+                    </p>
+                    <EspnPasswordFields
+                      email={loginEmail}
+                      isLoading={isLoading}
+                      onConnect={connectWithLogin}
+                      onEmail={setLoginEmail}
+                      onOtp={setLoginOtp}
+                      onPassword={setLoginPassword}
+                      otp={loginOtp}
+                      otpNeeded={Boolean(loginChallengeId)}
+                      password={loginPassword}
+                    />
+                  </div>
+                )
+              ) : null}
 
               <button
                 className="espn-connect__linkbtn espn-connect__linkbtn--block"
