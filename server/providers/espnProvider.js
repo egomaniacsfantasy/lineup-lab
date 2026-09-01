@@ -19,6 +19,8 @@ import { cached } from '../cache.js';
 import { sleeperProvider } from './sleeperProvider.js';
 import { normalizeName } from '../projections/importer.js';
 import { getEspnCreds } from './espnCredStore.js';
+import { anyGameLive } from '../live/nflGameStatus.js';
+import { LIVE_MATCHUP_TTL_MS } from '../gameWindows.js';
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -112,6 +114,47 @@ function resolvePlayer(espnPlayer, crosswalk, synthetic) {
     number: null,
   };
   return synthId;
+}
+
+/* One player's ACTUAL fantasy points for a scoring period, from ESPN's stats[].
+   stats[] entries: statSourceId 0 = actual, 1 = projected; statSplitTypeId 1 =
+   a single scoring period (not season-to-date). We want the actual single-week
+   total for the given period — ESPN updates this live as a game is played, so it
+   serves both mid-game and final. Returns null when ESPN has published nothing
+   (pre-game / off-season). */
+export function actualAppliedTotal(espnPlayer, scoringPeriodId) {
+  const stats = espnPlayer?.stats ?? [];
+  for (const s of stats) {
+    if (Number(s?.statSourceId) !== 0) continue;
+    if (Number(s?.scoringPeriodId) !== Number(scoringPeriodId)) continue;
+    if (s?.statSplitTypeId != null && Number(s.statSplitTypeId) !== 1) continue;
+    if (typeof s?.appliedTotal === 'number') return s.appliedTotal;
+  }
+  return null;
+}
+
+/* Per-player points for one matchup side, keyed by the SAME resolved id the
+   lineup uses (resolvePlayer), so the live overlay + applyLiveLocks line up with
+   the projection map. Reads the roster the mMatchup view already carries (no
+   extra fetch). Empty when ESPN has published no scores yet, which keeps the
+   live path a no-op exactly as before.
+
+   Structurally verified against the mMatchup schema; UNTESTED against a real
+   in-game payload until live games (same caveat as the rest of the live stack). */
+export function playersPointsForSide(roster, scoringPeriodId, crosswalk, synthetic) {
+  const out = {};
+  for (const entry of roster?.entries ?? []) {
+    const espnPlayer = entry?.playerPoolEntry?.player;
+    if (!espnPlayer) continue;
+    const id = resolvePlayer(espnPlayer, crosswalk, synthetic);
+    let pts = actualAppliedTotal(espnPlayer, scoringPeriodId);
+    // Fallback: ESPN populates appliedStatTotal on the current-period entry.
+    if (pts == null && typeof entry.playerPoolEntry?.appliedStatTotal === 'number') {
+      pts = entry.playerPoolEntry.appliedStatTotal;
+    }
+    if (typeof pts === 'number') out[id] = pts;
+  }
+  return out;
 }
 
 function scoringFamily(scoringSettings) {
@@ -241,9 +284,27 @@ export function createEspnProvider({ season, espnS2, swid }) {
     );
   };
 
+  /* Live scores only. The full league blob (settings/teams/rosters) is static
+     during a game and stays on its 5-min cache; this pulls JUST the scoreboard-
+     bearing view (schedule[].home/away rosters + status) on the short live TTL
+     (LIVE_MATCHUP_TTL_MS, sized just under the ~90s live cycle) so the live loop
+     sees fresh player points. Only ever called while a game is live, so it adds
+     no ESPN load pre-game / off-season. */
+  const loadLiveScores = (leagueId) => {
+    const authed = (espnS2 && swid) || getEspnCreds(leagueId);
+    return cached(
+      `espn:live:${season}:${leagueId}:${authed ? 'auth' : 'pub'}`,
+      LIVE_MATCHUP_TTL_MS,
+      () => espnGet(leagueId, ['mMatchup']),
+    );
+  };
+
   /* Separate from loadLeague on purpose: the draft blob is big, it is frozen
      the moment the draft ends, and folding it into the league view would make
-     every roster read pay for it. Cached long for the same reason. */
+     every roster read pay for it. Cached long for the same reason.
+
+     (loadLiveScores above pulls just the scoreboard view on the ~90s live TTL so
+     the live loop sees fresh player points without re-pulling the league blob.) */
   const loadDraft = (leagueId) => {
     const authed = (espnS2 && swid) || getEspnCreds(leagueId);
     return cached(
@@ -384,9 +445,34 @@ export function createEspnProvider({ season, espnS2, swid }) {
     },
 
     async getMatchups(leagueId, week) {
-      const [blob, teams] = await Promise.all([loadLeague(leagueId), buildTeams(leagueId)]);
+      const [blob, teams, crosswalk] = await Promise.all([
+        loadLeague(leagueId),
+        buildTeams(leagueId),
+        getCrosswalk(),
+      ]);
+      /* While a game is live, read the schedule + per-player scores from the
+         short-TTL scoreboard fetch instead of the 5-min league blob, so live
+         points move every cycle. Teams/starters stay on the static blob (they
+         don't change mid-game). Off-game reads are unchanged. */
+      const scoreBlob = anyGameLive() ? await loadLiveScores(leagueId) : blob;
+      const status = scoreBlob.status ?? blob.status;
       const teamsById = new Map(teams.map((t) => [t.rosterId, t]));
-      const games = (blob.schedule ?? []).filter((g) => g.matchupPeriodId === week);
+      const games = (scoreBlob.schedule ?? []).filter((g) => g.matchupPeriodId === week);
+
+      /* For the CURRENT week we read the live current-scoring-period roster and
+         its period; for past weeks the matchup-period roster and that week. In a
+         normal (1-week) regular-season matchup the scoring period == the week. */
+      const isCurrentWeek = week === (status?.currentMatchupPeriod ?? week);
+      const scoringPeriodId = isCurrentWeek
+        ? (status?.currentScoringPeriod ?? week)
+        : week;
+      const rosterFor = (side) =>
+        isCurrentWeek
+          ? side?.rosterForCurrentScoringPeriod ?? side?.rosterForMatchupPeriod
+          : side?.rosterForMatchupPeriod ?? side?.rosterForCurrentScoringPeriod;
+      // Synthetic bin is discarded here (getMatchups doesn't render players); its
+      // only role is to give resolvePlayer a place to write unmatched ids.
+      const synthetic = {};
 
       const out = [];
       games.forEach((game, index) => {
@@ -400,7 +486,9 @@ export function createEspnProvider({ season, espnS2, swid }) {
             week,
             rosterId: side.teamId,
             points: side.totalPoints ?? 0,
-            playersPoints: {},
+            playersPoints: playersPointsForSide(
+              rosterFor(side), scoringPeriodId, crosswalk, synthetic,
+            ),
             starters: team.starters,
             players: team.players,
           });

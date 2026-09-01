@@ -45,3 +45,14 @@ export function matchupTtlMs(date = new Date()) {
   // minutes, not an hour. Sleeper's API is fine with this cadence.
   return isGameWindow(date) ? 90_000 : 10 * 60_000;
 }
+
+/**
+ * Matchup/score TTL while an NFL game is actually in progress (not merely a
+ * game-window time slot). Sits just UNDER the live cycle (CYCLE_MS = 90s) so
+ * each cycle pulls one fresh score; providers gate this on anyGameLive() so it
+ * only applies when a game is truly live (pre-game / off-game reads keep the
+ * longer TTLs above). ~0.7 calls/min/league/provider during game windows —
+ * chosen over a tighter cadence to stay comfortable as league count scales
+ * (well inside Sleeper's <1000/min even at hundreds of leagues).
+ */
+export const LIVE_MATCHUP_TTL_MS = 85_000;

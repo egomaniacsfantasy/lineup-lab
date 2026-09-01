@@ -17,7 +17,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cached, recordCall } from '../cache.js';
-import { matchupTtlMs } from '../gameWindows.js';
+import { matchupTtlMs, LIVE_MATCHUP_TTL_MS } from '../gameWindows.js';
+import { anyGameLive } from '../live/nflGameStatus.js';
 
 const BASE = 'https://api.sleeper.app/v1';
 const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
@@ -220,7 +221,12 @@ export const sleeperProvider = {
   },
 
   async getMatchups(leagueId, week) {
-    const raw = await cached(`sleeper:matchups:${leagueId}:${week}`, matchupTtlMs(), () =>
+    // While a game is actually live, refresh on the short live TTL (just under
+    // the ~90s live cycle); otherwise keep the window-aware cadence (90s in-window
+    // / 10min off). players_points updates live from Sleeper, so this is what
+    // makes live scores move.
+    const ttl = anyGameLive() ? LIVE_MATCHUP_TTL_MS : matchupTtlMs();
+    const raw = await cached(`sleeper:matchups:${leagueId}:${week}`, ttl, () =>
       sleeperGet(`/league/${leagueId}/matchups/${week}`, 'league/matchups'),
     );
     return (raw ?? []).map((m) => ({

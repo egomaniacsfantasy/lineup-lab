@@ -13,7 +13,9 @@
  * loadLeagueContext + the engine; this keeps liveEngine free of a circular import.
  */
 
-const CYCLE_MS = 30_000;
+// Live refresh cadence. 90s keeps upstream call volume low as league count
+// scales (see LIVE_MATCHUP_TTL_MS in gameWindows.js, sized just under this).
+const CYCLE_MS = 90_000;
 
 const state = {
   on: false,
