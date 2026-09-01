@@ -19,7 +19,8 @@
     "preview": "vite preview",
     "server": "node server/index.js",
     "start": "node server/index.js",
-    "test": "node --experimental-strip-types --test test/*.test.mjs"
+    "test": "node --experimental-strip-types --test test/*.test.mjs",
+    "package-extension": "node scripts/package-extension.mjs"
   },
   "dependencies": {
     "@capacitor/cli": "^8.5.0",

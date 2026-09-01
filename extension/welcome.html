@@ -6,40 +6,68 @@
   <title>Connector installed — Odds Gods</title>
   <link rel="stylesheet" href="theme.css" />
   <style>
-    body { padding: 56px 20px 96px; }
-    main { max-width: 620px; margin: 0 auto; display: grid; gap: 26px; }
-    /* The display face, the way every heading on the site is set. It was
-       inheriting --ui, so the one line that says the thing worked was the one
-       line that did not look like us. */
-    h1 { font-family: var(--display); font-weight: 400; font-size: 38px; line-height: 1.05; letter-spacing: 0.01em; }
+    body { padding: 48px 20px 96px; }
+    main { max-width: 560px; margin: 0 auto; display: grid; gap: 22px; }
+    h1 {
+      font-family: var(--display);
+      font-weight: 400;
+      font-size: 38px;
+      line-height: 1.05;
+      letter-spacing: 0.01em;
+    }
     .lede { color: var(--soft); font-size: 15px; line-height: 1.6; }
-    ol { list-style: none; display: grid; gap: 12px; }
+
+    /* Two steps, and only one of them is ever the one to do. The state of the
+       first decides which, so nobody has to work out where they are. */
+    ol { list-style: none; display: grid; gap: 10px; }
     li {
       display: grid;
-      grid-template-columns: 30px minmax(0, 1fr);
+      grid-template-columns: 26px minmax(0, 1fr);
       gap: 14px;
       align-items: start;
-      padding: 15px 16px;
+      padding: 16px;
       border: 1px solid var(--line);
       border-radius: 14px;
       background: var(--surface);
     }
+    /* Done steps recede. The one to do now is the only lit thing on screen. */
+    li.done { opacity: 0.55; }
+    li.wait { opacity: 0.45; }
     .n {
       display: grid;
       place-items: center;
-      width: 30px; height: 30px;
-      border-radius: 9px;
+      width: 26px; height: 26px;
+      border-radius: 8px;
       background: rgba(232, 84, 29, 0.18);
       color: var(--amber-bright);
       font-family: var(--num);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 700;
     }
+    li.done .n { background: rgba(58, 210, 159, 0.16); color: var(--green); }
     .t { display: block; font-size: 15px; font-weight: 700; }
-    .b { display: block; margin-top: 4px; color: var(--soft); font-size: 13.5px; line-height: 1.55; }
-    .pin { color: var(--amber-bright); font-weight: 700; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
-    .actions .btn { width: auto; min-width: 190px; }
+    .b { display: block; margin-top: 5px; color: var(--soft); font-size: 13.5px; line-height: 1.55; }
+    .step-action { margin-top: 12px; }
+    .step-action .btn { width: auto; min-width: 170px; }
+
+    /* The one thing people actually get stuck on: where the league link is.
+       Shown as the thing it looks like in the address bar. */
+    .sample {
+      display: block;
+      margin-top: 8px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--raised);
+      color: var(--muted);
+      font-family: var(--num);
+      font-size: 11.5px;
+      overflow-wrap: anywhere;
+    }
+    .sample b { color: var(--amber-bright); font-weight: 700; }
+
+    .foot { color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+    .foot a { color: var(--soft); }
   </style>
 </head>
 <body>
@@ -51,59 +79,63 @@
 
     <div>
       <h1>Connector installed.</h1>
-      <p class="lede">
-        Three things and your ESPN league is priced. You only ever do this once.
-      </p>
+      <p class="lede" id="lede">Checking your ESPN sign in...</p>
     </div>
 
+    <!--
+      Two steps, not three, and the first one ticks itself off.
+
+      The old page opened with "pin it, so you can see it working": a thing
+      nobody has to do, in the position of the thing everybody has to do. Below
+      it, "paste your league URL" without saying where a league URL comes from,
+      which is the only part anybody was ever stuck on.
+    -->
     <ol>
-      <li>
-        <span class="n">1</span>
+      <li id="stepSignIn">
+        <span class="n" id="signInMark">1</span>
         <span>
-          <span class="t">Pin it, so you can see it working</span>
-          <span class="b">
-            Click the <span class="pin">puzzle piece</span> in Chrome's toolbar, find
-            Odds Gods ESPN Connector, and click the pin. The icon tells you at a
-            glance whether ESPN is signed in.
+          <span class="t" id="signInTitle">Sign in to ESPN</span>
+          <span class="b" id="signInBody">
+            On ESPN's own site, in this browser. Your password goes to ESPN and
+            never touches Odds Gods.
+          </span>
+          <span class="step-action" id="signInAction">
+            <a class="btn btn--primary" href="https://www.espn.com/fantasy/" target="_blank" rel="noreferrer">
+              Sign in to ESPN
+            </a>
           </span>
         </span>
       </li>
-      <li>
+
+      <li id="stepLink">
         <span class="n">2</span>
         <span>
-          <span class="t">Sign in to ESPN</span>
+          <span class="t">Copy your league link and paste it into Odds Gods</span>
           <span class="b">
-            In this browser, in any tab. You sign in on ESPN's own page. Your
-            password never touches Odds Gods, and the connector never sees it.
+            Open your league on ESPN. Copy the whole web address out of the
+            address bar and paste it into the box on Odds Gods. It looks like
+            this:
+            <span class="sample">fantasy.espn.com/football/league?<b>leagueId=1234567</b></span>
+            Any page inside your league works. We only need the number.
           </span>
-        </span>
-      </li>
-      <li>
-        <span class="n">3</span>
-        <span>
-          <span class="t">Come back and press Connect</span>
-          <span class="b">
-            Odds Gods notices the connector on its own, no reload. Paste your
-            league URL and press Connect. That is the last step.
+          <span class="step-action">
+            <a class="btn btn--quiet" href="https://oddsgods.net/league#connect" target="_blank" rel="noreferrer">
+              Open Odds Gods
+            </a>
           </span>
         </span>
       </li>
     </ol>
 
-    <div class="actions">
-      <a class="btn btn--primary" href="https://fantasy.espn.com" target="_blank" rel="noreferrer">
-        Sign in to ESPN
-      </a>
-      <a class="btn btn--quiet" href="https://oddsgods.net/league#connect" target="_blank" rel="noreferrer">
-        Go to Odds Gods
-      </a>
-    </div>
-
     <p class="foot">
-      The connector reads two ESPN cookies and only when an Odds Gods tab asks for
-      them. It stores nothing and sends nothing anywhere else.
+      That is the whole setup, once, ever. After this your league re-prices on
+      its own, including on your phone.
+      <br />
+      The connector reads two ESPN cookies and only when an Odds Gods tab asks
+      for them. It stores nothing and sends nothing anywhere else.
       <a href="https://oddsgods.net/privacy.html" target="_blank" rel="noreferrer">Privacy</a>
     </p>
   </main>
+  <script src="welcome.js"></script>
 </body>
 </html>

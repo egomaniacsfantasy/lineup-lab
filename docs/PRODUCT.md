@@ -850,6 +850,25 @@ and adding before it is used.
     them. It now reads the router and re-evaluates on every route, in both
     directions.
 
+22. **The published connector was older than the source.** The 1.0.0 zip was
+    made by hand, so the localhost content-script matches added afterwards were
+    never in it: the connector could not be exercised against a dev server at
+    all, which is why the ESPN path had only ever been tested by clicking
+    production. `npm run package-extension` builds the zip now, and does the
+    one thing a hand-made zip cannot: it STRIPS localhost from what ships.
+    Granting it to every installed copy would hand the user's ESPN cookies to
+    anything serving on those ports on their machine, which contradicts the one
+    sentence the extension is sold on. The source keeps it so the path stays
+    developable, and a test asserts the two cannot drift.
+23. **The connector's welcome page was three steps, and the first was
+    housekeeping.** "Pin it, so you can see it working" is a thing nobody has
+    to do, in the position of the thing everybody has to do; the last step said
+    "paste your league URL" without saying where a league URL comes from, which
+    is the only part anybody was stuck on. It is two steps now, the first ticks
+    itself off when ESPN is already signed in (an extension page can simply
+    look), and the league link is shown as the thing it looks like in the
+    address bar.
+
 ## Still open
 
 15. **`server/engine/leverage.js` is not wired to a route.** The file documents
