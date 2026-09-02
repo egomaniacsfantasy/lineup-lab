@@ -71,11 +71,24 @@ test.after(async () => {
   if (vite && ownsVite) vite.kill('SIGTERM');
 });
 
+/**
+ * Wait on the thing being tested, not on the network going quiet.
+ *
+ * The Hub asks for a headshot per player and every one of them 500s without
+ * an API server, so retries keep the connection busy and `networkidle` is a
+ * coin flip under load - which is exactly how this passed on its own and
+ * then timed out inside the pre-push hook. Waiting for a selector is both
+ * deterministic and a stronger statement about what has to be true.
+ */
+async function openHub(page, url, ready) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector(ready, { timeout: 45_000 });
+  await page.evaluate(() => document.fonts.ready);
+}
+
 async function openTour(width = 1440, height = 900) {
   const page = await browser.newPage({ viewport: { width, height } });
-  await page.goto(scene, { waitUntil: 'networkidle' });
-  await page.waitForSelector('.tour__card');
-  await page.evaluate(() => document.fonts.ready);
+  await openHub(page, scene, '.tour__card');
   return page;
 }
 
@@ -87,8 +100,7 @@ async function settle(page) {
 test('every stop still has something on the Hub to point at', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
-    await page.goto(plain, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.matchup-page__module--hero');
+    await openHub(page, plain, '.matchup-page__module--hero');
 
     const missing = [];
     for (const step of TOUR_STEPS) {
@@ -277,8 +289,7 @@ test('the plain Hub is not interrupted by a tour', async () => {
      that opened here would cover every element those tests measure. */
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
-    await page.goto(plain, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.matchup-page__module--hero');
+    await openHub(page, plain, '.matchup-page__module--hero');
     await page.waitForTimeout(2_000); // longer than the tour's settle delay
     assert.equal(
       await page.$('.tour__card'),
