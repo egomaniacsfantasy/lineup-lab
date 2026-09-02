@@ -1,98 +1,153 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ProductTour } from '../components/onboarding/ProductTour';
-import { shouldOfferTour } from '../components/onboarding/tourStorage';
+import { TOURS, tourById, tourForPath } from '../components/onboarding/tourSteps';
+import { markTourSkipped, shouldOfferTour } from '../components/onboarding/tourStorage';
 import { useAuth } from './AuthContext';
 import { useLeagueConnection } from './LeagueConnectionContext';
 
 interface TourValue {
-  /** Open the tour on purpose. Never consults whether it has been seen. */
+  /** Replay the tour for the tab currently on screen. */
   start: () => void;
+  /**
+   * Always true now: start() falls back to the Hub's tour on a tab that has
+   * none, so the menu item always leads somewhere. Kept so a caller can stop
+   * relying on that without a signature change.
+   */
+  available: boolean;
   open: boolean;
 }
 
-const TourContext = createContext<TourValue>({ start: () => undefined, open: false });
+const TourContext = createContext<TourValue>({
+  start: () => undefined,
+  available: false,
+  open: false,
+});
 
 export function useTour() {
   return useContext(TourContext);
 }
 
 /**
- * Let the page settle before offering the tour.
+ * Let the page settle before offering a tour.
  *
- * The first stop points at a price that does not exist until pricing lands,
- * and the ring is measured from a live bounding box, so opening the instant a
- * league appears spotlights a rectangle that is about to move. This is also
- * simple courtesy: arriving somewhere and being immediately talked at is the
- * thing everybody hates about onboarding.
+ * Stops are measured from live bounding boxes and the first one usually
+ * points at a price that does not exist until pricing lands, so opening the
+ * instant a tab mounts spotlights a rectangle that is about to move. It is
+ * also simple courtesy: arriving somewhere and being immediately talked at is
+ * the thing everybody hates about onboarding.
  */
 const SETTLE_MS = 1_200;
 
-/** The tour walks the Hub, so the tour starts on the Hub. */
-const TOUR_HOME = '/matchup';
-
-/* Long enough for the Hub to mount and paint when the tour is started from
-   another tab. Shorter than SETTLE_MS because nothing is being fetched: the
+/* Long enough for a tab to mount when the tour is replayed from a tab that
+   has none. Shorter than SETTLE_MS because nothing is being fetched: the
    league is already loaded, this is one route change. */
 const ROUTE_SETTLE_MS = 400;
 
+/**
+ * One tour per tab, offered the first time you arrive on that tab.
+ *
+ * It used to be a single Hub tour that had to describe the other three tabs
+ * from a distance. Each tab now explains itself when you get there, which is
+ * both shorter and the only moment the explanation can point at anything.
+ */
 export function TourProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [offered, setOffered] = useState(false);
+  /* Replays and the fixture flag are explicit; the once-per-tab offer is not. */
+  const [explicit, setExplicit] = useState(false);
   const { session } = useAuth();
   const { bootstrap } = useLeagueConnection();
-  const navigate = useNavigate();
   const location = useLocation();
+  const navigate = useNavigate();
 
-  /* Starting from More or from the League tab has to land on the Hub first.
-     Every stop points at something the Hub renders, and a tour opened over a
-     page with none of them would go straight to its own empty state - which
-     is a replay button that appears not to work. */
+  /* ?tour=<id> names a tour outright, which is how the design fixtures reach
+     one: they live at /design/matchup, not /matchup, so resolving by route
+     finds nothing there. ?tour on its own means "whatever this tab has". */
+  const forcedId = new URLSearchParams(location.search).get('tour');
+  const forcedTour = forcedId ? tourById(forcedId) : null;
+  const routeTour = tourForPath(location.pathname);
+  const tour = forcedTour ?? routeTour;
+  const tourId = tour?.id ?? null;
+
+  /**
+   * Replay the tour for the tab on screen.
+   *
+   * On a tab with no tour of its own - More, Connect - it goes to the Hub and
+   * plays that one rather than doing nothing. A menu item that silently does
+   * nothing is the same dead end as the row that said "Tap to pick your team"
+   * and then did not.
+   */
   const start = useCallback(() => {
-    setOffered(true);
-    if (location.pathname === TOUR_HOME) {
+    setExplicit(true);
+    if (tour) {
       setOpen(true);
       return;
     }
-    navigate(TOUR_HOME);
+    const fallback = TOURS[0];
+    navigate(fallback.path);
+    /* The Hub has to mount before the tour can find anything on it. The
+       overlay then keeps looking for its stops for several seconds, so this
+       only has to cover the route change. */
     window.setTimeout(() => setOpen(true), ROUTE_SETTLE_MS);
-  }, [location.pathname, navigate]);
+  }, [navigate, tour]);
 
-  /* ?tour=1 forces it open, which is the only way to review or measure it.
-     Every other route to the tour needs a real session and a real league, and
-     the design fixtures have neither by design. Same convention as the other
-     fixture flags (?staleSeason, ?syncing, ?dynasty). */
+  /* Forcing it open is the only way to review or measure a tour. Every other
+     route in needs a real session and a real league, and the design fixtures
+     have neither by design. Same convention as the other fixture flags
+     (?staleSeason, ?syncing). */
   useEffect(() => {
-    if (!new URLSearchParams(location.search).has('tour')) return;
-    setOffered(true);
+    if (forcedId == null || !tourId) return;
+    setExplicit(true);
     setOpen(true);
-  }, [location.search]);
+  }, [forcedId, tourId]);
 
-  /* Offered once, and only to somebody who is signed in with a league behind
+  /* Offered once per tab, and only to somebody signed in with a league behind
      them. The signed-in check is doing real work beyond politeness: the
      design fixtures render the whole app without a session, and a tour that
      opened itself over them would break every rendered test in the suite by
      covering the thing under test. */
+  const offeredRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (offered || open) return undefined;
+    if (open || !tourId) return undefined;
     if (!session || !bootstrap) return undefined;
-    if (location.pathname !== TOUR_HOME) return undefined;
-    if (!shouldOfferTour()) return undefined;
+    if (offeredRef.current.has(tourId)) return undefined;
+    if (!shouldOfferTour(tourId)) return undefined;
 
     const timer = window.setTimeout(() => {
-      setOffered(true);
+      offeredRef.current.add(tourId);
+      setExplicit(false);
       setOpen(true);
     }, SETTLE_MS);
     return () => window.clearTimeout(timer);
-  }, [bootstrap, location.pathname, offered, open, session]);
+  }, [bootstrap, open, session, tourId]);
 
-  const value = useMemo(() => ({ start, open }), [open, start]);
+  /* Leaving the tab closes the tour, because every one of its stops points at
+     something on the page just left. Closing counts as skipping: they chose
+     to go somewhere else, and a tour that re-offered itself on every return
+     would follow somebody around the app. */
+  const openTourIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (open && tourId) openTourIdRef.current = tourId;
+  }, [open, tourId]);
+
+  useEffect(() => {
+    const active = openTourIdRef.current;
+    if (!open || !active || active === tourId) return;
+    markTourSkipped(active);
+    offeredRef.current.add(active);
+    setOpen(false);
+  }, [open, tourId]);
+
+  const value = useMemo(
+    () => ({ start, available: true, open }),
+    [open, start, tour],
+  );
 
   return (
     <TourContext.Provider value={value}>
       {children}
-      <ProductTour onClose={() => setOpen(false)} open={open} />
+      <ProductTour explicit={explicit} onClose={() => setOpen(false)} open={open} tour={tour} />
     </TourContext.Provider>
   );
 }

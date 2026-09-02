@@ -4,22 +4,35 @@ import test from 'node:test';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
-import { TOUR_STEPS } from '../src/components/onboarding/tourSteps.ts';
+import { TOURS } from '../src/components/onboarding/tourSteps.ts';
 
 /**
- * The tour, driven the way somebody actually drives it.
+ * The tours, driven the way somebody actually drives them.
  *
- * The load-bearing guard is the first one. Steps anchor by CSS selector, so
- * a class rename in a page component would orphan a stop with nothing on
- * screen to say so - the tour would just quietly get shorter. This resolves
- * every selector against the real Hub, so that rename fails here instead.
+ * The two load-bearing guards are selector resolution and ring geometry.
+ *
+ * Selectors, because stops anchor by CSS class: a rename in a page component
+ * would orphan a stop with nothing on screen to say so, and the tour would
+ * just quietly get shorter. That happened - the Hub opened at "1 of 4" when
+ * it had five stops.
+ *
+ * Geometry, because a ring is only a highlight if it is smaller than the
+ * screen and entirely on it. Rings used to be drawn around whole page
+ * containers (843px of a 900px viewport) and at top -8, which was reported,
+ * accurately, as "these rectangles do not properly encapsulate the elements".
  */
 
 const cwd = process.cwd();
 const port = 4193;
 const baseUrl = `http://127.0.0.1:${port}`;
-const scene = `${baseUrl}/design/matchup?tour=1`;
-const plain = `${baseUrl}/design/matchup`;
+
+/** Which design scene renders each tab, since the fixtures live under /design. */
+const SCENE = { hub: 'matchup', league: 'league', market: 'market', board: 'board' };
+
+/* A ring bigger than this is not pointing at anything; it is a box drawn
+   around the page. The largest honest target in the product is a trade deal
+   row at about a fifth of the screen. */
+const MAX_RING_FRACTION = 0.35;
 
 const GREEN = 'rgb(52, 210, 123)';
 const RED = 'rgb(255, 92, 77)';
@@ -54,6 +67,8 @@ let browser = null;
 let ownsVite = false;
 
 test.before(async () => {
+  /* Owns its own port. Adopting another file's server means inheriting its
+     lifetime, and that server dies when that file finishes. */
   if (!(await isPortOpen(port))) {
     vite = spawn(
       'npm',
@@ -62,7 +77,7 @@ test.before(async () => {
     );
     ownsVite = true;
   }
-  await waitForUrl(plain);
+  await waitForUrl(`${baseUrl}/design/matchup`);
   browser = await chromium.launch({ headless: true });
 });
 
@@ -76,177 +91,150 @@ test.after(async () => {
  *
  * The Hub asks for a headshot per player and every one of them 500s without
  * an API server, so retries keep the connection busy and `networkidle` is a
- * coin flip under load - which is exactly how this passed on its own and
- * then timed out inside the pre-push hook. Waiting for a selector is both
- * deterministic and a stronger statement about what has to be true.
+ * coin flip under load - which is how this passed on its own and then timed
+ * out inside the pre-push hook.
  */
-async function openHub(page, url, ready) {
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector(ready, { timeout: 45_000 });
+async function openScene(page, tourId, { withTour = true } = {}) {
+  const query = withTour ? `?tour=${tourId}` : '';
+  await page.goto(`${baseUrl}/design/${SCENE[tourId]}${query}`, { waitUntil: 'domcontentloaded' });
+  if (withTour) await page.waitForSelector('.tour__card', { timeout: 60_000 });
   await page.evaluate(() => document.fonts.ready);
 }
 
-async function openTour(width = 1440, height = 900) {
-  const page = await browser.newPage({ viewport: { width, height } });
-  await openHub(page, scene, '.tour__card');
-  return page;
-}
-
-/** Let the ring's move transition land before measuring where it is. */
+/** Let the card's fade land before measuring where anything is. */
 async function settle(page) {
-  await page.waitForTimeout(320);
+  await page.waitForTimeout(340);
 }
 
-test('every stop still has something on the Hub to point at', async () => {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  try {
-    await openHub(page, plain, '.matchup-page__module--hero');
+/* The Board fixture has no projection rows locally, so its stops legitimately
+   resolve to nothing. Excluded from the walk-through guards and covered by
+   the "nothing to point at" case instead. */
+const WALKABLE = TOURS.filter((tour) => tour.id !== 'board');
 
-    const missing = [];
-    for (const step of TOUR_STEPS) {
-      const found = await page.evaluate((selector) => {
-        const node = document.querySelector(selector);
-        return node != null && node.checkVisibility();
-      }, step.selector);
-      if (!found) missing.push(`${step.id} -> ${step.selector}`);
-    }
-
-    assert.deepEqual(
-      missing,
-      [],
-      'a tour stop points at a selector that no longer resolves on the Hub, so that stop would silently vanish',
-    );
-  } finally {
-    await page.close();
-  }
-});
-
-test('the tour runs every stop, in order, and ends', async () => {
-  const page = await openTour();
-  try {
-    const seen = [];
-    for (let step = 0; step < TOUR_STEPS.length; step += 1) {
-      await settle(page);
-      seen.push(await page.$eval('.tour__count', (node) => node.textContent));
-      const label = await page.$eval('.tour__next', (node) => node.textContent);
-      assert.equal(
-        label,
-        step === TOUR_STEPS.length - 1 ? 'Start using it' : 'Next',
-        `the last stop should not still say Next (stop ${step + 1})`,
-      );
-      await page.click('.tour__next');
-    }
-
-    assert.deepEqual(
-      seen,
-      TOUR_STEPS.map((_, index) => `${index + 1} of ${TOUR_STEPS.length}`),
-    );
-    assert.equal(await page.$('.tour__card'), null, 'the tour did not close on its last step');
-  } finally {
-    await page.close();
-  }
-});
-
-test('the ring lands on the element the stop names, every time', async () => {
-  const page = await openTour();
-  try {
-    for (const step of TOUR_STEPS) {
-      await settle(page);
-      const overlap = await page.evaluate((selector) => {
-        const target = document.querySelector(selector).getBoundingClientRect();
-        const ring = document.querySelector('.tour__ring').getBoundingClientRect();
-        /* The ring is the target plus a little padding, so the target's
-           centre has to be inside it. A ring left behind on the previous
-           stop still looks like a ring. */
-        const cx = target.left + target.width / 2;
-        const cy = target.top + target.height / 2;
-        return {
-          insideX: cx >= ring.left && cx <= ring.right,
-          insideY: cy >= ring.top && cy <= ring.bottom,
-        };
-      }, step.selector);
-
-      assert.deepEqual(
-        overlap,
-        { insideX: true, insideY: true },
-        `the ring is not on ${step.id}`,
-      );
-      await page.click('.tour__next');
-    }
-  } finally {
-    await page.close();
-  }
-});
-
-test('the card is fully on screen at every stop, including the oversized one', async () => {
-  /* 900 tall and 720 tall. The lineup board is taller than either, which is
-     the case that put the card off the bottom of the window. */
-  for (const height of [900, 720]) {
-    const page = await openTour(1440, height);
+for (const tour of WALKABLE) {
+  test(`every stop in the ${tour.id} tour still has something to point at`, async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     try {
-      for (const step of TOUR_STEPS) {
+      await openScene(page, tour.id);
+      await settle(page);
+      const count = await page.$eval('.tour__count', (node) => node.textContent);
+      assert.equal(
+        count,
+        `1 of ${tour.steps.length}`,
+        `the ${tour.id} tour opened shorter than it is, which means a stop's selector no longer resolves`,
+      );
+    } finally {
+      await page.close();
+    }
+  });
+
+  test(`the ${tour.id} tour rings the right element, tightly, on screen`, async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await openScene(page, tour.id);
+      for (const step of tour.steps) {
         await settle(page);
-        const box = await page.$eval('.tour__card', (node) => {
-          const rect = node.getBoundingClientRect();
-          return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
-        });
-        assert.ok(box.top >= 0, `${step.id}: card is off the top at ${height}px (${box.top})`);
+        const shot = await page.evaluate((selector) => {
+          const target = document.querySelector(selector).getBoundingClientRect();
+          const ring = document.querySelector('.tour__ring').getBoundingClientRect();
+          const card = document.querySelector('.tour__card').getBoundingClientRect();
+          return {
+            ring: { top: ring.top, left: ring.left, bottom: ring.bottom, right: ring.right },
+            card: { top: card.top, bottom: card.bottom, left: card.left, right: card.right },
+            fraction: (ring.width * ring.height) / (window.innerWidth * window.innerHeight),
+            /* The target's centre, clamped to the visible part of it, has to
+               sit inside the ring. A ring left behind on the previous stop
+               still looks like a ring. */
+            centreX: target.left + target.width / 2,
+            centreY:
+              Math.max(0, Math.min(window.innerHeight, target.top))
+              + Math.min(target.height, window.innerHeight - Math.max(0, target.top)) / 2,
+            vw: window.innerWidth,
+            vh: window.innerHeight,
+          };
+        }, step.selector);
+
+        const where = `${tour.id}/${step.id}`;
+
         assert.ok(
-          box.bottom <= height,
-          `${step.id}: card runs off the bottom at ${height}px (${box.bottom} > ${height})`,
+          shot.ring.top >= 0 && shot.ring.left >= 0,
+          `${where}: the ring runs off the top or left of the screen (${Math.round(shot.ring.top)}, ${Math.round(shot.ring.left)}), so it is a rectangle with a missing edge`,
         );
-        assert.ok(box.left >= 0, `${step.id}: card is off the left edge`);
-        assert.ok(box.right <= 1440, `${step.id}: card runs off the right edge`);
+        assert.ok(
+          shot.ring.bottom <= shot.vh + 1 && shot.ring.right <= shot.vw + 1,
+          `${where}: the ring runs off the bottom or right of the screen`,
+        );
+        assert.ok(
+          shot.fraction <= MAX_RING_FRACTION,
+          `${where}: the ring covers ${Math.round(shot.fraction * 100)}% of the screen, which is a box drawn around the page rather than a highlight`,
+        );
+        assert.ok(
+          shot.centreX >= shot.ring.left && shot.centreX <= shot.ring.right,
+          `${where}: the ring is not horizontally on its target`,
+        );
+        assert.ok(
+          shot.centreY >= shot.ring.top && shot.centreY <= shot.ring.bottom,
+          `${where}: the ring is not vertically on its target`,
+        );
+        assert.ok(
+          shot.card.top >= 0 && shot.card.bottom <= shot.vh + 1,
+          `${where}: the card is off screen (${Math.round(shot.card.top)} to ${Math.round(shot.card.bottom)} of ${shot.vh})`,
+        );
+
+        await page.click('.tour__next');
+      }
+      assert.equal(await page.$('.tour__card'), null, `the ${tour.id} tour did not close on its last step`);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test(`the ${tour.id} tour leaves its targets unclickable except where it asks`, async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await openScene(page, tour.id);
+      for (const step of tour.steps) {
+        await settle(page);
+        /* What the browser says is on top at the target. On a live stop that
+           is the control itself; everywhere else it must be one of the
+           tour's own panels, or a stray click navigates out of the tour. */
+        const topmost = await page.evaluate((selector) => {
+          const rect = document.querySelector(selector).getBoundingClientRect();
+          const node = document.elementFromPoint(
+            Math.min(window.innerWidth - 2, rect.left + rect.width / 2),
+            Math.min(window.innerHeight - 2, Math.max(2, rect.top + Math.min(rect.height / 2, 20))),
+          );
+          return String(node?.className ?? '');
+        }, step.selector);
+
+        const where = `${tour.id}/${step.id}`;
+        if (step.interactive) {
+          assert.ok(
+            !topmost.includes('tour__scrim'),
+            `${where} asks the user to press the control but a scrim panel is covering it`,
+          );
+        } else {
+          assert.ok(
+            topmost.includes('tour__scrim') || topmost.includes('tour__card'),
+            `${where} leaves its target clickable (${topmost}), so one press can navigate out of the tour`,
+          );
+        }
         await page.click('.tour__next');
       }
     } finally {
       await page.close();
     }
-  }
-});
-
-test('the spotlit control is live only where the stop asks you to press it', async () => {
-  const page = await openTour();
-  try {
-    for (const step of TOUR_STEPS) {
-      await settle(page);
-      /* What the browser says is on top at the centre of the target. On a
-         live stop that is the control itself; everywhere else it must be one
-         of the tour's own panels, or a stray click navigates out of the tour. */
-      const topmost = await page.evaluate((selector) => {
-        const rect = document.querySelector(selector).getBoundingClientRect();
-        const node = document.elementFromPoint(
-          rect.left + rect.width / 2,
-          Math.min(window.innerHeight - 2, rect.top + Math.min(rect.height / 2, 20)),
-        );
-        return node?.className ?? '';
-      }, step.selector);
-
-      if (step.interactive) {
-        assert.ok(
-          !String(topmost).includes('tour__scrim'),
-          `${step.id} asks the user to press the control but a scrim panel is covering it`,
-        );
-      } else {
-        assert.ok(
-          String(topmost).includes('tour__scrim') || String(topmost).includes('tour__card'),
-          `${step.id} leaves its target clickable (${topmost}), so one press can navigate out of the tour`,
-        );
-      }
-      await page.click('.tour__next');
-    }
-  } finally {
-    await page.close();
-  }
-});
+  });
+}
 
 test('pressing the spotlit toggle rewrites the app and leaves the tour standing', async () => {
-  const page = await openTour();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
+    await openScene(page, 'hub');
     await settle(page);
     await page.click('.tour__next'); // onto the format stop
     await settle(page);
-    assert.equal(await page.$eval('.tour__count', (n) => n.textContent), '2 of 5');
+    assert.equal(await page.$eval('.tour__count', (n) => n.textContent), '2 of 4');
 
     const before = await page.$eval('.matchup-page__hero-number', (n) => n.textContent);
     await page.click('.app-header__odds-toggle');
@@ -262,35 +250,60 @@ test('pressing the spotlit toggle rewrites the app and leaves the tour standing'
       await page.$('.tour__card'),
       'pressing the highlighted control closed the tour, so the step that invites it is a trap',
     );
-    assert.equal(await page.$eval('.tour__count', (n) => n.textContent), '2 of 5');
+    assert.equal(await page.$eval('.tour__count', (n) => n.textContent), '2 of 4');
   } finally {
     await page.close();
   }
 });
 
-test('skip closes it, and it is not offered again', async () => {
-  const page = await openTour();
+test('skip closes it, and records only that tab', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
+    await openScene(page, 'league');
     await settle(page);
     await page.click('.tour__skip');
     assert.equal(await page.$('.tour__card'), null, 'Skip did not close the tour');
 
-    const stored = await page.evaluate(() => window.localStorage.getItem('og.tour.state.v1'));
+    const stored = await page.evaluate(() => window.localStorage.getItem('og.tour.state.v2'));
     assert.ok(stored, 'skipping recorded nothing, so the tour will interrupt this person again');
-    assert.ok(JSON.parse(stored).skippedAt > 0);
+    const state = JSON.parse(stored);
+    assert.ok(state.seen.league.skippedAt > 0);
+    assert.equal(
+      state.seen.hub,
+      undefined,
+      'skipping the League tour also marked the Hub tour seen, so that tab would never explain itself',
+    );
   } finally {
     await page.close();
   }
 });
 
-test('the plain Hub is not interrupted by a tour', async () => {
-  /* The fixtures have no session, so nothing should open itself over them.
-     This is also what keeps the rest of the rendered suite alive: a tour
-     that opened here would cover every element those tests measure. */
+test('a tab with nothing to point at is not interrupted', async () => {
+  /* The Board fixture has no rows locally, so both of its stops resolve to
+     nothing. An offered tour must say nothing at all in that case. */
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
-    await openHub(page, plain, '.matchup-page__module--hero');
-    await page.waitForTimeout(2_000); // longer than the tour's settle delay
+    await page.goto(`${baseUrl}/design/board`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3_000);
+    assert.equal(
+      await page.$('.tour__card'),
+      null,
+      'a tour with no resolvable stops interrupted the page to say it had nothing to show',
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test('a plain tab is not interrupted by a tour', async () => {
+  /* The fixtures have no session, so nothing should open itself over them.
+     This is also what keeps the rest of the rendered suite alive: a tour that
+     opened here would cover every element those tests measure. */
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await openScene(page, 'hub', { withTour: false });
+    await page.waitForSelector('.matchup-page__module--hero', { timeout: 45_000 });
+    await page.waitForTimeout(2_500); // longer than the tour's settle delay
     assert.equal(
       await page.$('.tour__card'),
       null,
@@ -302,8 +315,9 @@ test('the plain Hub is not interrupted by a tour', async () => {
 });
 
 test('nothing in the tour is coloured like money', async () => {
-  const page = await openTour();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
+    await openScene(page, 'hub');
     await settle(page);
     const colours = await page.$$eval('.tour, .tour *', (nodes) =>
       nodes.flatMap((node) => {

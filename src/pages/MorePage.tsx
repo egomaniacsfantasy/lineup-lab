@@ -100,7 +100,7 @@ export function MorePage() {
       links: [
         {
           title: 'How this works',
-          body: 'Replay the five-stop walkthrough on the Hub.',
+          body: 'Replay the walkthrough for the tab you are on.',
           action: () => startTour(),
         },
       ],

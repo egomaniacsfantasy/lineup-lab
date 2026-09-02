@@ -489,33 +489,55 @@ and the connect screen consumes it on read.
   height is computed from leg count), each carrying the plug bar.
 - **Pricing curtain** — a themed loading state rotating through "Setting the
   line", "Balancing the book" and similar, shown once per session.
-- **The product tour** — five coach marks on the live Hub, offered once and
-  replayable forever from the account menu ("How this works") or More. It
-  teaches only what the screen cannot explain about itself: that a price is a
-  probability and no money moves, that the header toggle rewrites every number
-  in the app, that the lineup below is what produced the line above, what the
-  season band is, and what the other three tabs hold. Five is a deliberate
-  ceiling and `test/tourState.test.mjs` enforces it, because length is what
-  loses people.
+- **The product tour** — one short tour per tab, each offered the first time
+  you arrive on that tab and replayable forever from the account menu ("How
+  this works") or More. Hub is four stops, League three, Trades two, Board
+  two; four is a ceiling `test/tourState.test.mjs` enforces, because length is
+  what loses people. It teaches only what a screen cannot explain about
+  itself: that a price is a probability and no money moves, that the header
+  toggle rewrites every number, that the lineup board is what the line is made
+  of, what opening a game on the board gives you.
+
+  It started as five stops on the Hub alone, which meant the Hub carried a
+  stop describing the other three tabs from a distance - a tour about screens
+  you cannot see. Each tab now explains itself at the only moment the
+  explanation can point at anything. Seen-ness is recorded per tour, so
+  finishing the Hub does not spend the other three.
 
   Stops anchor by CSS selector rather than by `data-tour` attributes across
-  five page components, so every word and every target lives in one file;
-  `test/productTour.test.mjs` resolves all five against the real Hub so a
-  class rename fails there instead of silently shortening the tour. A stop
-  whose target is missing is dropped rather than spotlit empty, which is what
-  gives a cold or partial league a shorter tour instead of a broken one, and
-  the list is re-resolved for 1.5s after opening because the Hub is still
-  assembling when the tour is told to open.
+  the pages, so every word and every target lives in one file;
+  `test/productTour.test.mjs` resolves them against the real pages so a class
+  rename fails there instead of silently shortening a tour. A stop whose
+  target is missing is dropped rather than spotlit empty, and a tour with no
+  resolvable stops says nothing at all unless somebody asked for it by name.
+
+  **Ring geometry is a guarded invariant.** Rings were drawn around whole page
+  containers (843px of a 900px viewport) and at `top: -8`, which is not a
+  highlight but a box around the page with a missing edge. Stops now anchor
+  the smallest element that makes the point - one lineup card, not the whole
+  board - the rect is clamped to the viewport so an oversized target still
+  gets four visible edges, and the card is clamped so it can never leave the
+  screen. The test asserts every ring is on screen, is centred on its target,
+  and covers at most 35% of the viewport.
+
+  Presence and geometry are asked separately and at different times. Presence
+  is about the document, before the tour opens; the clamp is about the paint,
+  after it has scrolled the target into view. Conflating them dropped every
+  stop that happened to be below the fold, which is what left the Hub tour
+  claiming to be shorter than it is. The step list is also not shown until it
+  settles (up to 8s), because a card that says "1 of 3" and should have said
+  "1 of 4" has already misled somebody.
 
   The scrim is four panels around the target, not one sheet with a hole, so
   the spotlit control is genuinely pressable. That is opt-in per stop
   (`interactive`): on the format toggle it is the point of the stop, and
   everywhere else a fifth clear panel covers the target, because one press on
-  the spotlit nav would navigate away from the page the rest of the tour
-  points at. Skipping counts as seen. It is offered only to a signed-in
-  account with a league, on `/matchup`, which is also what keeps it off the
-  design fixtures the rendered suite measures. `?tour=1` forces it open for
-  review.
+  a spotlit nav or card would leave the page the tour is describing. Leaving
+  the tab closes the tour and counts as skipping it. Offered only to a
+  signed-in account with a league, which is also what keeps it off the design
+  fixtures the rendered suite measures. `?tour=<id>` forces one open for
+  review, naming the tour outright because the fixtures live at
+  `/design/matchup` rather than `/matchup`.
 
   It replaces the old static `WelcomeCard`, which was a wall of text behind
   the same two entry points.

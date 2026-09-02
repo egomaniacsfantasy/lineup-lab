@@ -1,11 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TOUR_STEPS, runnableSteps, type TourStep } from './tourSteps';
+import { runnableSteps, type Tour, type TourStep } from './tourSteps';
 import { markTourCompleted, markTourSkipped } from './tourStorage';
 import './ProductTour.css';
 
 interface ProductTourProps {
+  /** The tour for the tab currently on screen, or null if it has none. */
+  tour: Tour | null;
   open: boolean;
+  /**
+   * Whether somebody asked for this, as opposed to it offering itself.
+   *
+   * It decides what an empty tour does. Asked for, it owes an answer, even if
+   * the answer is "there is nothing here yet". Offering itself, it owes
+   * silence: interrupting a cold league to say it has nothing to show is the
+   * worst version of onboarding there is.
+   */
+  explicit: boolean;
   onClose: () => void;
 }
 
@@ -22,10 +33,16 @@ const CARD_WIDTH = 340;
 const CARD_GAP = 14;
 const EDGE = 12;
 
-/* How long to keep asking whether the missing stops have shown up. Comfortably
-   longer than a Hub render and shorter than anyone finishes reading card one,
-   so a full tour is assembled before it can matter. */
-const RESOLVE_MS = 1_500;
+/* How long to keep asking whether the missing stops have shown up.
+
+   This was 1.5s, which is longer than a warm render and shorter than a cold
+   one, so on a real account the Hub opened at "1 of 4" when it had five stops
+   - the lineup board simply had not painted yet. Nothing on screen said a
+   stop had been dropped; the tour was just quietly wrong about its own
+   length. Eight seconds is long enough for a slow league, and nothing is
+   shown until it settles, so the wait costs a beat rather than a wrong
+   count. */
+const RESOLVE_MS = 8_000;
 const RESOLVE_TICK_MS = 120;
 
 function rectFor(selector: string): Rect | null {
@@ -38,16 +55,47 @@ function rectFor(selector: string): Rect | null {
   if (!node.checkVisibility()) return null;
   const box = node.getBoundingClientRect();
   if (box.width === 0 && box.height === 0) return null;
-  return {
-    top: box.top - PAD,
-    left: box.left - PAD,
-    width: box.width + PAD * 2,
-    height: box.height + PAD * 2,
-  };
+
+  /* Clamped to what is actually on screen.
+   *
+   * Unclamped, a target taller than the viewport drew a ring with its top and
+   * bottom edges off the screen, which does not read as a highlight - it
+   * reads as a box around the whole page - and the header nav produced a ring
+   * at top -8, i.e. a rectangle with a missing top edge. Both were reported
+   * as "the rectangles do not encapsulate the elements", and both were the
+   * rectangle being honest about a target that does not fit.
+   *
+   * The scrim panels are built from the same rect, so clamping here keeps the
+   * lit hole and the ring agreeing with each other. For an oversized target
+   * the lit area becomes the visible part of it, which is the only part
+   * anybody can look at anyway.
+   */
+  const top = Math.max(EDGE, box.top - PAD);
+  const left = Math.max(EDGE, box.left - PAD);
+  const bottom = Math.min(window.innerHeight - EDGE, box.bottom + PAD);
+  const right = Math.min(window.innerWidth - EDGE, box.right + PAD);
+  if (bottom <= top || right <= left) return null;
+
+  return { top, left, width: right - left, height: bottom - top };
 }
 
+/**
+ * Whether a stop has something to point at.
+ *
+ * Deliberately NOT rectFor. rectFor clamps to the viewport, which is right
+ * for drawing and catastrophic for this: a lineup row two screens down has no
+ * intersection with the viewport, so a clamped rect is empty and the stop got
+ * dropped for being scrolled past. That is what left the Hub tour saying
+ * "1 of 3" when it has four stops. Presence is about the document; the clamp
+ * is about the paint, and they are asked at different times - this before the
+ * tour opens, that after it has scrolled the target into view.
+ */
 function isPresent(selector: string) {
-  return rectFor(selector) != null;
+  const node = document.querySelector(selector);
+  if (!node) return false;
+  if (!node.checkVisibility()) return false;
+  const box = node.getBoundingClientRect();
+  return box.width > 0 || box.height > 0;
 }
 
 /**
@@ -63,8 +111,12 @@ function isPresent(selector: string) {
  * control genuinely clickable while everything else stays blocked, so the
  * step that says "press it now if you like" can mean it.
  */
-export function ProductTour({ open, onClose }: ProductTourProps) {
+export function ProductTour({ tour, open, explicit, onClose }: ProductTourProps) {
   const [steps, setSteps] = useState<TourStep[]>([]);
+  /* Whether the step list is final. The card stays off screen until it is,
+     because a tour that says "1 of 4" and should have said "1 of 5" has
+     already misled somebody about how long it is. */
+  const [settled, setSettled] = useState(false);
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const [cardHeight, setCardHeight] = useState(0);
@@ -83,7 +135,7 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
      stops the moment anyone advances, so a short list someone has already
      started walking is never re-cut underneath them. */
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || !tour) return undefined;
 
     let timer = 0;
     let cancelled = false;
@@ -91,20 +143,24 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
 
     const attempt = (first: boolean) => {
       if (cancelled) return;
-      const found = runnableSteps(TOUR_STEPS, isPresent);
+      const found = runnableSteps(tour.steps, isPresent);
       setSteps(found);
       if (first) setIndex(0);
-      if (found.length < TOUR_STEPS.length && Date.now() < deadline) {
+      const complete = found.length === tour.steps.length;
+      if (!complete && Date.now() < deadline) {
         timer = window.setTimeout(() => attempt(false), RESOLVE_TICK_MS);
+        return;
       }
+      setSettled(true);
     };
 
+    setSettled(false);
     attempt(true);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open]);
+  }, [open, tour]);
 
   const step = steps[index] ?? null;
 
@@ -125,8 +181,20 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
     if (!open || !step) return undefined;
     const node = document.querySelector(step.selector);
     if (node) {
-      const tall = node.getBoundingClientRect().height > window.innerHeight * 0.6;
-      node.scrollIntoView({ block: tall ? 'start' : 'center', behavior: 'auto' });
+      const box = node.getBoundingClientRect();
+      const tall = box.height > window.innerHeight * 0.6;
+      if (tall) {
+        /* scrollIntoView('start') puts the target's top at the top of the
+           scrollport, which the fixed header then covers. Scroll by hand so
+           it lands just below the header instead. */
+        const header = Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue('--shell-header-height'),
+        );
+        const offset = Number.isFinite(header) ? header : 0;
+        window.scrollBy({ top: box.top - offset - PAD * 2, behavior: 'auto' });
+      } else {
+        node.scrollIntoView({ block: 'center', behavior: 'auto' });
+      }
     }
     const frame = window.requestAnimationFrame(measure);
     return () => window.cancelAnimationFrame(frame);
@@ -151,14 +219,14 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
   }, [measure, open]);
 
   const finish = useCallback(() => {
-    markTourCompleted();
+    if (tour) markTourCompleted(tour.id);
     onClose();
-  }, [onClose]);
+  }, [onClose, tour]);
 
   const skip = useCallback(() => {
-    markTourSkipped();
+    if (tour) markTourSkipped(tour.id);
     onClose();
-  }, [onClose]);
+  }, [onClose, tour]);
 
   const next = useCallback(() => {
     setIndex((current) => {
@@ -187,11 +255,15 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
     if (open && step) cardRef.current?.focus();
   }, [open, step]);
 
-  if (!open) return null;
+  if (!open || !tour) return null;
+  /* Still counting. Better a beat of nothing than a card that names a length
+     it is about to change its mind about. */
+  if (!settled) return null;
 
-  /* Nothing to point at. Rather than draw an empty tour, say so and get out
-     of the way: this is a cold league whose pricing has not landed, and the
-     honest move is to let them look at the app. */
+  /* Nothing to point at: a cold league whose pricing has not landed, or a
+     board with no rows yet. If nobody asked, say nothing at all. */
+  if (steps.length === 0 && !explicit) return null;
+
   if (steps.length === 0) {
     return createPortal(
       <div className="tour" role="dialog" aria-label="Product tour">
@@ -199,8 +271,8 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
         <div className="tour__card tour__card--centered" ref={cardRef} tabIndex={-1}>
           <p className="tour__title">Nothing to show yet</p>
           <p className="tour__body">
-            The tour walks through a priced week. Once your league finishes
-            syncing, replay it from your account menu.
+            This tab has nothing on it to walk through yet. Once your league
+            finishes syncing, replay it from your account menu.
           </p>
           <div className="tour__actions">
             <button className="tour__next" onClick={skip} type="button">
@@ -289,6 +361,9 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
       <div
         aria-hidden="true"
         className="tour__ring"
+        /* Keyed per stop so React replaces the node and the fade replays,
+           rather than reusing one element that animates across the page. */
+        key={step.id}
         style={{ top: rect.top, left: rect.left, width: rect.width, height: rect.height }}
       />
 
@@ -328,7 +403,7 @@ export function ProductTour({ open, onClose }: ProductTourProps) {
           </button>
         </div>
         {last ? (
-          <p className="tour__replay">Replay this any time from your account menu.</p>
+          <p className="tour__replay">Each tab has its own. Replay them from your account menu.</p>
         ) : null}
       </div>
     </div>,

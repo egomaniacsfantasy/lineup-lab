@@ -35,8 +35,20 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-glow-amber);
   pointer-events: none;
-  transition: top var(--transition-base), left var(--transition-base),
-    width var(--transition-base), height var(--transition-base);
+  /* Fades in where it belongs rather than sliding there from the last stop.
+     Animating the position meant that for a fifth of a second the ring was a
+     rectangle around neither element, which is what somebody screenshotting
+     the tour actually sees. */
+  animation: tour-ring-in var(--transition-base) ease-out;
+}
+
+@keyframes tour-ring-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .tour__card {
@@ -184,7 +196,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tour__ring {
-    transition: none;
+    animation: none;
   }
 }
 

@@ -1,60 +1,95 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { TOUR_STEPS, runnableSteps } from '../src/components/onboarding/tourSteps.ts';
+import { TOURS, runnableSteps, tourById, tourForPath } from '../src/components/onboarding/tourSteps.ts';
 
 /**
- * The tour's two pure decisions: which stops run, and whether to offer it.
+ * The tour's pure decisions: which tab gets which tour, which stops can run,
+ * and whether to offer one.
  *
- * Both matter more than they look. A tour that halts on a missing target is
- * a dead modal over the product, and a tour that re-offers itself to somebody
- * who already dismissed it is the exact behaviour that makes people hate
- * onboarding.
+ * All three matter more than they look. A tour that halts on a missing target
+ * is a dead modal over the product; a tour that re-offers itself to somebody
+ * who dismissed it is the exact behaviour that makes people hate onboarding;
+ * and a tour keyed to the whole app rather than per tab would spend the Hub's
+ * flag on everybody else.
  */
 
-test('the tour is short on purpose, and stays short', () => {
-  assert.ok(
-    TOUR_STEPS.length <= 5,
-    `the tour has grown to ${TOUR_STEPS.length} stops; length is the thing that loses people, so this ceiling is deliberate`,
-  );
-  assert.ok(TOUR_STEPS.length > 0);
-});
-
-test('every stop is distinct, aimed somewhere, and says something', () => {
-  const ids = new Set();
-  for (const step of TOUR_STEPS) {
-    assert.ok(!ids.has(step.id), `two stops share the id ${step.id}`);
-    ids.add(step.id);
-    assert.ok(step.selector.length > 0, `${step.id} points at nothing`);
-    assert.ok(step.title.length > 0 && step.body.length > 0, `${step.id} is empty`);
-    /* A card people actually read. Anything past this is a paragraph, and a
-       paragraph in a coach mark is a paragraph nobody reads. */
+test('each tour is short on purpose, and stays short', () => {
+  for (const tour of TOURS) {
     assert.ok(
-      step.body.length <= 240,
-      `${step.id} runs to ${step.body.length} characters, which is a wall of text in a tooltip`,
+      tour.steps.length > 0 && tour.steps.length <= 4,
+      `${tour.id} has ${tour.steps.length} stops; length is the thing that loses people, so this ceiling is deliberate`,
     );
   }
 });
 
-test('only the stop that asks you to press something leaves it pressable', () => {
-  const live = TOUR_STEPS.filter((step) => step.interactive);
-  assert.equal(live.length, 1, 'more than one stop is live, so a stray click can navigate out of the tour');
-  assert.equal(live[0].id, 'format');
+test('no two tours claim the same tab, or the same id', () => {
+  const paths = new Set();
+  const ids = new Set();
+  for (const tour of TOURS) {
+    assert.ok(!paths.has(tour.path), `two tours claim ${tour.path}`);
+    assert.ok(!ids.has(tour.id), `two tours share the id ${tour.id}`);
+    paths.add(tour.path);
+    ids.add(tour.id);
+  }
 });
 
-test('a stop whose target is missing is dropped, not stopped on', () => {
-  const present = new Set(['.matchup-page__module--hero', '.app-header__odds-toggle']);
-  const runnable = runnableSteps(TOUR_STEPS, (selector) => present.has(selector));
+test('every stop is distinct, aimed somewhere, and says something', () => {
+  for (const tour of TOURS) {
+    const ids = new Set();
+    for (const step of tour.steps) {
+      assert.ok(!ids.has(step.id), `${tour.id} has two stops called ${step.id}`);
+      ids.add(step.id);
+      assert.ok(step.selector.length > 0, `${tour.id}/${step.id} points at nothing`);
+      assert.ok(step.title.length > 0 && step.body.length > 0, `${tour.id}/${step.id} is empty`);
+      /* A card people actually read. Past this is a paragraph, and a
+         paragraph in a coach mark is a paragraph nobody reads. */
+      assert.ok(
+        step.body.length <= 240,
+        `${tour.id}/${step.id} runs to ${step.body.length} characters, which is a wall of text in a tooltip`,
+      );
+    }
+  }
+});
 
+test('only the stop that asks you to press something leaves it pressable', () => {
+  const live = TOURS.flatMap((tour) =>
+    tour.steps.filter((step) => step.interactive).map((step) => `${tour.id}/${step.id}`),
+  );
   assert.deepEqual(
-    runnable.map((step) => step.id),
-    ['price', 'format'],
-    'the filter is not dropping the stops whose targets are absent',
+    live,
+    ['hub/format'],
+    'a stop other than the format toggle is live, so a stray click can navigate out of the tour',
   );
 });
 
-test('a page with none of the targets yields no tour rather than an empty one', () => {
-  assert.deepEqual(runnableSteps(TOUR_STEPS, () => false), []);
+test('a tour is found for each real tab, and for nothing else', () => {
+  assert.equal(tourForPath('/matchup')?.id, 'hub');
+  assert.equal(tourForPath('/league')?.id, 'league');
+  assert.equal(tourForPath('/market')?.id, 'market');
+  assert.equal(tourForPath('/rankings')?.id, 'board');
+  assert.equal(tourForPath('/more'), null);
+  assert.equal(tourForPath('/connect'), null);
+
+  /* The design fixtures live under /design, so resolving by route finds
+     nothing there. That is why the fixture flag names a tour outright, and
+     why it once silently showed no tour at all. */
+  assert.equal(tourForPath('/design/matchup'), null);
+  assert.equal(tourById('hub')?.path, '/matchup');
+  assert.equal(tourById('nonsense'), null);
+});
+
+test('a stop whose target is missing is dropped, not stopped on', () => {
+  const hub = tourById('hub');
+  const present = new Set([hub.steps[0].selector, hub.steps[1].selector]);
+  const runnable = runnableSteps(hub.steps, (selector) => present.has(selector));
+
+  assert.deepEqual(
+    runnable.map((step) => step.id),
+    [hub.steps[0].id, hub.steps[1].id],
+    'the filter is not dropping the stops whose targets are absent',
+  );
+  assert.deepEqual(runnableSteps(hub.steps, () => false), []);
 });
 
 /* Storage runs against a stub, because node has no localStorage and the point
@@ -69,41 +104,74 @@ function withStorage(impl, run) {
   }
 }
 
+function memoryStorage(initial = null) {
+  let value = initial;
+  return {
+    getItem: () => value,
+    setItem: (_key, next) => {
+      value = next;
+    },
+    read: () => value,
+  };
+}
+
 async function freshStorageModule() {
-  /* A query suffix defeats the ESM cache, so each case gets a module that
-     has not already read a different stub. */
+  /* A query suffix defeats the ESM cache, so each case gets a module that has
+     not already read a different stub. */
   return import(`../src/components/onboarding/tourStorage.ts?case=${Math.random()}`);
 }
 
-test('a browser that has never seen the tour is offered it', async () => {
+test('a browser that has never seen a tour is offered every one of them', async () => {
   const mod = await freshStorageModule();
-  const result = withStorage(
-    { getItem: () => null, setItem: () => undefined },
-    () => mod.shouldOfferTour(),
-  );
-  assert.equal(result, true);
+  withStorage(memoryStorage(), () => {
+    for (const tour of TOURS) assert.equal(mod.shouldOfferTour(tour.id), true);
+  });
 });
 
-test('finishing it and skipping it both count as seen', async () => {
+test('finishing one tab does not spend the other tabs', async () => {
   const mod = await freshStorageModule();
-  for (const field of ['completedAt', 'skippedAt']) {
-    const stored = JSON.stringify({ version: mod.TOUR_VERSION, [field]: Date.now() });
-    const result = withStorage(
-      { getItem: () => stored, setItem: () => undefined },
-      () => mod.shouldOfferTour(),
+  const store = memoryStorage();
+  withStorage(store, () => {
+    mod.markTourCompleted('hub');
+    assert.equal(mod.shouldOfferTour('hub'), false, 'the finished tour is still being offered');
+    assert.equal(
+      mod.shouldOfferTour('league'),
+      true,
+      'finishing the Hub tour also spent the League tour, so that tab silently never explains itself',
     );
-    assert.equal(result, false, `a tour recorded as ${field} is being offered again`);
-  }
+    assert.equal(mod.shouldOfferTour('board'), true);
+  });
 });
 
-test('an older version of the tour is offered once more', async () => {
+test('recording one tab keeps what the others already recorded', async () => {
   const mod = await freshStorageModule();
-  const stored = JSON.stringify({ version: 0, completedAt: Date.now() });
-  const result = withStorage(
-    { getItem: () => stored, setItem: () => undefined },
-    () => mod.shouldOfferTour(),
-  );
-  assert.equal(result, true);
+  const store = memoryStorage();
+  withStorage(store, () => {
+    mod.markTourCompleted('hub');
+    mod.markTourSkipped('league');
+    mod.markTourCompleted('board');
+
+    assert.equal(mod.shouldOfferTour('hub'), false, 'the Hub was forgotten by a later write');
+    assert.equal(mod.shouldOfferTour('league'), false);
+    assert.equal(mod.shouldOfferTour('board'), false);
+    assert.equal(mod.shouldOfferTour('market'), true);
+  });
+});
+
+test('skipping counts as seen', async () => {
+  const mod = await freshStorageModule();
+  withStorage(memoryStorage(), () => {
+    mod.markTourSkipped('market');
+    assert.equal(mod.shouldOfferTour('market'), false);
+  });
+});
+
+test('an older version of the tours is offered once more', async () => {
+  const mod = await freshStorageModule();
+  const stored = JSON.stringify({ version: 0, seen: { hub: { completedAt: Date.now() } } });
+  withStorage(memoryStorage(stored), () => {
+    assert.equal(mod.shouldOfferTour('hub'), true);
+  });
 });
 
 test('storage that throws does not take the app down with it', async () => {
@@ -118,19 +186,19 @@ test('storage that throws does not take the app down with it', async () => {
   };
 
   withStorage(hostile, () => {
-    assert.equal(mod.shouldOfferTour(), true, 'a browser that blocks storage should still be offered the tour');
-    /* And recording the result must not throw either, or finishing the tour
-       crashes the page it was explaining. */
-    assert.doesNotThrow(() => mod.markTourCompleted());
-    assert.doesNotThrow(() => mod.markTourSkipped());
+    assert.equal(mod.shouldOfferTour('hub'), true, 'a browser that blocks storage should still be offered the tour');
+    /* Recording must not throw either, or finishing the tour crashes the page
+       it was explaining. */
+    assert.doesNotThrow(() => mod.markTourCompleted('hub'));
+    assert.doesNotThrow(() => mod.markTourSkipped('hub'));
   });
 });
 
 test('a corrupt stored value is treated as never seen rather than crashing', async () => {
   const mod = await freshStorageModule();
-  const result = withStorage(
-    { getItem: () => '{not json', setItem: () => undefined },
-    () => mod.shouldOfferTour(),
-  );
-  assert.equal(result, true);
+  for (const junk of ['{not json', '{"seen":"nope"}', '{"seen":{"hub":null}}', 'null']) {
+    withStorage(memoryStorage(junk), () => {
+      assert.equal(mod.shouldOfferTour('hub'), true, `${junk} was not handled`);
+    });
+  }
 });
