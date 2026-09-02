@@ -111,6 +111,24 @@
   border-color: var(--border-strong);
 }
 
+/* No hover lift on either lineup.
+ *
+ * On the Hub a starter card is a button - pressing it picks a player to
+ * compare - so it lifts and glows under the pointer. Here neither side is
+ * pressable: you cannot set another manager's lineup, and you cannot set your
+ * own from this dialog either. Inheriting the hover meant the left column
+ * promised something no click would deliver, and only the left column, which
+ * is also how it came to look like the left team was yours. */
+.matchup-modal__scroll .matchup-page__slot-card:hover {
+  border-color: color-mix(in srgb, var(--border-subtle) 82%, transparent);
+  transform: none;
+  box-shadow: none;
+}
+
+.matchup-modal__scroll .matchup-page__slot-card--opponent:hover {
+  border-color: color-mix(in srgb, var(--border-subtle) 55%, transparent);
+}
+
 .matchup-modal__empty {
   margin: 0;
   font-family: var(--font-ui);

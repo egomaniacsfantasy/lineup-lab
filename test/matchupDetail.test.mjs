@@ -362,3 +362,107 @@ for (const [width, height] of [[1440, 900], [1024, 800], [390, 844]]) {
     }
   });
 }
+
+/**
+ * Whose game is it.
+ *
+ * The Hub's card is built around "left is you": your price glows amber, your
+ * lineup cards lift under the pointer, and the opposite side is deliberately
+ * dimmed to reference material so the eye lands on yours first. Reusing that
+ * card here inherited all of it - but this board seats the FAVOURITE on the
+ * left, not you. On somebody else's game the entire left column was wearing
+ * the treatment that means "this one is yours", hover included.
+ */
+
+async function sidesOf(page) {
+  return page.evaluate(() => {
+    const scope = document.querySelector('.matchup-modal__scroll');
+    const read = (node) => {
+      const style = getComputedStyle(node);
+      return `${style.color}|${style.textShadow}`;
+    };
+    const card = (node) => {
+      const style = getComputedStyle(node);
+      const name = node.querySelector('.matchup-page__row-name');
+      return [
+        style.borderTopColor,
+        style.backgroundColor,
+        name ? getComputedStyle(name).color : '',
+      ].join('|');
+    };
+    const prices = [...scope.querySelectorAll('.matchup-page__hero-number')].map(read);
+    const cards = [...scope.querySelectorAll('.matchup-page__slot-card')].slice(0, 2).map(card);
+    return { prices, cards };
+  });
+}
+
+test('on a game that is not yours, the two sides are weighted the same', async () => {
+  const page = await openBoard();
+  try {
+    /* The fixture's second game has no user on either side. */
+    await openGame(page, 1);
+    const { prices, cards } = await sidesOf(page);
+
+    assert.equal(
+      prices[0],
+      prices[1],
+      'one side\'s price is styled differently from the other on a game neither team is yours, '
+        + 'which reads as "this one is mine"',
+    );
+    assert.equal(
+      cards[0],
+      cards[1],
+      'one lineup is dimmed against the other on a game neither team is yours',
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test('on your own game, your side still leads the way it does on the Hub', async () => {
+  const page = await openBoard();
+  try {
+    /* The fixture's first game is the user's. Equal weighting must not have
+       been bought by flattening the Hub's meaning everywhere. */
+    await openGame(page, 0);
+    const { prices, cards } = await sidesOf(page);
+
+    assert.notEqual(
+      prices[0],
+      prices[1],
+      'your price and theirs are identical, so the card no longer says which team is yours',
+    );
+    assert.notEqual(cards[0], cards[1], 'your lineup and theirs are weighted the same on your own game');
+    assert.match(prices[0], /rgb\(255, 128, 73\)/, 'your price is not the amber the Hub gives it');
+  } finally {
+    await page.close();
+  }
+});
+
+test('neither lineup lifts under the pointer, because neither is pressable', async () => {
+  const page = await openBoard();
+  try {
+    await openGame(page, 1);
+    const cards = await page.$$('.matchup-modal__scroll .matchup-page__slot-card');
+
+    for (const [index, card] of cards.slice(0, 2).entries()) {
+      const before = await card.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return `${style.transform}|${style.boxShadow}|${style.borderTopColor}`;
+      });
+      await card.hover();
+      await page.waitForTimeout(200); // the card's own transition
+      const after = await card.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return `${style.transform}|${style.boxShadow}|${style.borderTopColor}`;
+      });
+      assert.equal(
+        after,
+        before,
+        `lineup card ${index} changes under the pointer, which promises a press that does nothing`,
+      );
+    }
+  } finally {
+    await page.close();
+  }
+});

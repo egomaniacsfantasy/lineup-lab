@@ -107,6 +107,22 @@ export function MatchupDetail({
       ? pairLineups(leftStarters ?? [], rightStarters ?? [])
       : [];
 
+  /**
+   * Whether one of these teams is yours.
+   *
+   * The Hub's card is built around "left is you": your price glows amber,
+   * your lineup cards lift on hover, and the other side is deliberately
+   * dimmed to reference material so the eye lands on yours first. That is
+   * exactly right on the Hub and exactly wrong here, because the board seats
+   * the FAVOURITE on the left. On somebody else's game the whole left column
+   * was wearing the treatment that means "this one is yours".
+   *
+   * So emphasis keys off whose team it is, and only the layout - which side
+   * the crest sits on, which way the text runs - keys off the seat.
+   */
+  const yourGame = Boolean(left.isUser || right.isUser);
+  const dimmed = (side: BoardTeam) => yourGame && !side.isUser;
+
   /* One switch, both sides. The header's price/percent toggle governs every
      number in the app and this is not the screen to make an exception. */
   const priceText = (side: BoardTeam) =>
@@ -142,7 +158,7 @@ export function MatchupDetail({
       <span
         className={[
           'matchup-page__hero-number',
-          opponent ? 'matchup-page__hero-number--opp' : '',
+          dimmed(side) ? 'matchup-page__hero-number--opp' : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -324,7 +340,16 @@ export function MatchupDetail({
 
                   return (
                     <Fragment key={`${row.slot}-${index}`}>
-                      <div className="matchup-page__slot-card">{slotFace(row.left, false)}</div>
+                      <div
+                        className={[
+                          'matchup-page__slot-card',
+                          dimmed(left) ? 'matchup-page__slot-card--opponent' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        {slotFace(row.left, false)}
+                      </div>
 
                       <div className="matchup-page__slot-center">
                         <span className="matchup-page__slot-slot-label">{row.slot}</span>
@@ -351,7 +376,15 @@ export function MatchupDetail({
                         ) : null}
                       </div>
 
-                      <div className="matchup-page__slot-card matchup-page__slot-card--right matchup-page__slot-card--opponent">
+                      <div
+                        className={[
+                          'matchup-page__slot-card',
+                          'matchup-page__slot-card--right',
+                          dimmed(right) ? 'matchup-page__slot-card--opponent' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
                         {slotFace(row.right, true)}
                       </div>
                     </Fragment>

@@ -298,6 +298,19 @@ shared component. What it leaves out is the Hub's interaction - no compare, no
 bench swaps, no preview - because those price YOUR decisions and you cannot
 set another manager's lineup.
 
+**Emphasis keys off whose team it is, not which seat it is in.** The Hub's
+card is built around "left is you": your price glows amber, your lineup cards
+lift under the pointer, the other side is dimmed to reference material so the
+eye lands on yours first. This board seats the FAVOURITE on the left, so
+inheriting that put the whole left column in the treatment that means "this
+one is yours" on every game that was not. Layout still follows the seat -
+which side the crest sits on, which way the text runs - while colour, contrast
+and glow follow `isUser`. On your own game it reads exactly like the Hub; on
+anyone else's the two sides are weighted the same. Neither lineup lifts under
+the pointer either: on the Hub a starter card is a button that picks a player
+to compare, and here nothing is pressable, so the hover was a promise no click
+would keep.
+
 A dialog rather than a panel under the cards: the board is a grid two and
 three across, so an expanding block below pushed the rest of the week down the
 page and moved the card you had just pressed off screen. Escape, the close
