@@ -93,16 +93,41 @@ export function requestEspnSession(timeoutMs = 5000): Promise<EspnSession> {
   });
 }
 
-/** Chrome Web Store listing. Set once the listing is published. */
+/**
+ * The connector's Chrome Web Store listing.
+ *
+ * The published id is a constant, not configuration. It is public, it is in
+ * the extension's own manifest, and it does not change for the life of the
+ * listing - so it is the DEFAULT here rather than something an environment
+ * has to remember to supply.
+ *
+ * It was configuration, and that is exactly how it broke. The value lived in
+ * `render.yaml`, which manages staging only; production is configured in the
+ * Render dashboard and the frontend is a separately built CDN bundle. So the
+ * variable was "set" and the production bundle still carried an empty string,
+ * and the connect screen told every ESPN user the connector was unpublished
+ * while it sat published in the store. Twenty minutes of polling production
+ * returned the same bundle hash with the id absent from it: a build-time
+ * variable also needs a REBUILD after it is set, which is one more step than
+ * anyone remembers.
+ *
+ * A blank default is what made that silent. The failure mode of a missing
+ * variable is now "staging cannot be pointed at a test listing" instead of
+ * "the whole ESPN path is dead and says so politely".
+ */
+export const PUBLISHED_CONNECTOR_ID = 'hcjemdgdjdfdjcpjliffkfboolebbidn';
+
+const PUBLISHED_CONNECTOR_URL = `https://chromewebstore.google.com/detail/${PUBLISHED_CONNECTOR_ID}`;
+
+/* Read as the bare identifier: Vite substitutes the exact text and nothing
+   else, so `import.meta.env?.VITE_ESPN_EXTENSION_URL` was left as a live
+   optional chain against an object that is not there at runtime. */
 declare const __ESPN_EXTENSION_URL__: string | undefined;
 
-/* Was `import.meta.env?.VITE_ESPN_EXTENSION_URL`. Vite only substitutes the
-   exact text without the optional chain, so this read an empty object and the
-   store link was permanently blank — setting the env var on Render would have
-   changed nothing, and the connect screen would keep saying the connector is
-   unpublished after it had been published. */
 export const CONNECTOR_STORE_URL =
-  typeof __ESPN_EXTENSION_URL__ === 'string' ? __ESPN_EXTENSION_URL__ : '';
+  typeof __ESPN_EXTENSION_URL__ === 'string' && __ESPN_EXTENSION_URL__.length > 0
+    ? __ESPN_EXTENSION_URL__
+    : PUBLISHED_CONNECTOR_URL;
 
 /** Connecting needs a desktop browser that can run the connector. */
 export function connectorSupported() {

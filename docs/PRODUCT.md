@@ -285,11 +285,31 @@ modules, top to bottom:
 showing, per team, where their playoff odds land if they win versus if they
 lose. Then a matchup card per game carrying spread, total and moneyline on both
 sides, with movement arrows. A "week at a glance" summary (biggest favourite,
-closest line, highest total, biggest move). Selecting any card opens a detail
-panel with projected points, conditional playoff odds (now / if win / if lose),
-the line-movement chart, and a title-market before-and-after list. One game per
-week carries a **Game of the Week** ribbon — by definition, the game producing
-the largest league-wide change in championship and playoff odds.
+closest line, highest total, biggest move). One game per week carries a
+**Game of the Week** ribbon — by definition, the game producing the largest
+league-wide change in championship and playoff odds.
+
+Selecting any card **opens that game**, full width under the board: each side's
+spread, win probability, projected points and price, the game's over/under
+posted once, and then both starting lineups paired slot by slot with the
+engine's week projection on every player. It is the same lineup-versus-lineup
+read the Hub gives you for your own game, given for anyone else's — the answer
+to "why is that team favoured" is eleven names and eleven numbers, not a
+moneyline. The stronger side of each slot is marked by weight, never by colour:
+green and red mean money everywhere in this product and a projection edge is
+not money. Player names use the same short forms the Hub's rows use
+(`playerShortName`), team names wrap rather than truncate, and an unset
+starting slot or an unpriced starter prints `—` rather than a zero that would
+read as a projection nobody made. The lineups follow their teams across the
+board's favourite-on-the-left seating swap, which `boardSides.teamsFor` now
+carries for them.
+
+The rail beside the board keeps what is genuinely narrow: conditional playoff
+odds (now / if win / if lose), the line-movement chart, and a title-market
+before-and-after list.
+
+Lineups are present only on a connected league. The demo board has no rosters
+behind it, and the panel says so rather than inventing eighteen players.
 
 The **bet slip** lives here: prices on the cards are clickable, legs accumulate
 into a parlay priced at fair odds, and the slip exports as a share card. Legs
@@ -469,9 +489,41 @@ and the connect screen consumes it on read.
   height is computed from leg count), each carrying the plug bar.
 - **Pricing curtain** — a themed loading state rotating through "Setting the
   line", "Balancing the book" and similar, shown once per session.
+- **The product tour** — five coach marks on the live Hub, offered once and
+  replayable forever from the account menu ("How this works") or More. It
+  teaches only what the screen cannot explain about itself: that a price is a
+  probability and no money moves, that the header toggle rewrites every number
+  in the app, that the lineup below is what produced the line above, what the
+  season band is, and what the other three tabs hold. Five is a deliberate
+  ceiling and `test/tourState.test.mjs` enforces it, because length is what
+  loses people.
+
+  Stops anchor by CSS selector rather than by `data-tour` attributes across
+  five page components, so every word and every target lives in one file;
+  `test/productTour.test.mjs` resolves all five against the real Hub so a
+  class rename fails there instead of silently shortening the tour. A stop
+  whose target is missing is dropped rather than spotlit empty, which is what
+  gives a cold or partial league a shorter tour instead of a broken one, and
+  the list is re-resolved for 1.5s after opening because the Hub is still
+  assembling when the tour is told to open.
+
+  The scrim is four panels around the target, not one sheet with a hole, so
+  the spotlit control is genuinely pressable. That is opt-in per stop
+  (`interactive`): on the format toggle it is the point of the stop, and
+  everywhere else a fifth clear panel covers the target, because one press on
+  the spotlit nav would navigate away from the page the rest of the tour
+  points at. Skipping counts as seen. It is offered only to a signed-in
+  account with a league, on `/matchup`, which is also what keeps it off the
+  design fixtures the rendered suite measures. `?tour=1` forces it open for
+  review.
+
+  It replaces the old static `WelcomeCard`, which was a wall of text behind
+  the same two entry points.
 - **Design fixtures** — `/design/:scene` renders any real page against a fixed
   fixture league, so layout can be tested deterministically. This is what the
-  rendered test suite drives.
+  rendered test suite drives. Query flags: `?staleSeason`, `?notRolledOver`,
+  `?syncing`, `?dynasty`, `?multiLeague`, `?private`, `?slowForks`, `?tour`,
+  `?desktop=1|0`.
 
 ---
 
@@ -880,18 +932,52 @@ and adding before it is used.
     silently swapping in a form.
 17. **Not shipped:** App Store submission, and a `/parlay` engine endpoint for
     exact same-game pricing. The Chrome extension is published (unlisted).
-18. **The store URL is set in `render.yaml`, which manages STAGING only.**
-    Production is configured in the Render dashboard, and the frontend is served
-    from a CDN, so `VITE_ESPN_EXTENSION_URL` has to be set wherever the
-    production frontend is built or the connect screen keeps saying the
-    connector is unpublished.
+18. **The store URL was a build-time variable with a blank default.**
+    ~~Open.~~ **Fixed, and the fix was to stop it being configuration.** The
+    value lived in `render.yaml`, which manages staging only; production is
+    configured in the Render dashboard and the frontend is a separately built
+    CDN bundle, so the variable could be "set" while the shipped bundle still
+    carried an empty string. It did: production was polled for twenty minutes
+    and served the same bundle hash (`index-D910g9HW.js`) throughout with the
+    extension id absent, because a build-time variable also needs a **rebuild**
+    after it is set. Meanwhile the connect screen told every ESPN user the
+    connector was unpublished while it sat published in the store - a silent
+    failure that said something reassuring. The published id is a public
+    constant that does not change for the life of the listing, so it is now
+    the default in `src/utils/espnExtension.ts`; the environment variable
+    survives only as an override for pointing staging at a test listing. The
+    "not published yet" branch is gone from the connect screen, because it
+    could now only fire as a lie. `test/connectorStoreUrl.test.mjs` runs
+    against a default build with no variable set, which is the build that
+    broke, and welds `render.yaml` to the code so the two cannot drift.
 19. **The connector's fonts shipped as system stacks.** Only the colours were
     copied from the app's tokens; the two font tokens were left as
     `ui-sans-serif` and `ui-monospace`, so the one screen that exists to
     reassure somebody they installed the right thing looked like a stranger's.
-    Fixed in 1.0.1, which is packaged and NOT yet uploaded.
+    Fixed in 1.0.1, packaged by `npm run package-extension` and uploaded to
+    the store by Andre. Not independently verifiable from here: the store's
+    listing page is client-rendered and answers 200 for any id, real or not,
+    so a fetch proves nothing about whether a listing exists.
 20. **The rate limiter is per instance.** In memory, so the real ceiling is
     20/min x instances. Worth knowing rather than a reason to reach for a
     shared store on a service running one box.
-21. **Full dynasty support.** Pick and future-season valuation is the missing
+21. **The switcher named leagues after the manager.** ~~Open.~~ **Fixed.**
+    `leagueLabel` fell back to `displayName`, which is the account holder's
+    name and byte-identical on every row, so an account with fifteen leagues
+    showed "Andre Vla..." where the league name goes. It distinguished
+    nothing and read as a league actually called that. The row with no
+    `leagueName` yet is exactly the unconfirmed ESPN row, so the one row that
+    most needed identifying was the one guaranteed to wear somebody's name.
+    The fallback now carries the league id, which is ugly and is the only
+    thing to hand that differs between two unnamed leagues.
+22. **"Action needed" was a dead end.** ~~Open.~~ **Fixed.** Pressing an
+    unconfirmed ESPN row routed to a bare `/league#connect-espn`, which opens
+    the empty "Bring your ESPN league in" form and asks somebody to paste a
+    URL for a league the account is already showing them a row for. The route
+    now carries `espnLeagueId` and `espnSeason`, the League page hands them to
+    `EspnConnect`, and the connect screen looks the league up on arrival, so
+    the row lands on that league's team picker. Pre-filling alone was not
+    enough: a filled form with a button still asks someone to re-submit a
+    league they did not type.
+23. **Full dynasty support.** Pick and future-season valuation is the missing
     piece, and until it exists the note in 13 is the honest position.

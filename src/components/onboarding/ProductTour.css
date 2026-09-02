@@ -1,0 +1,195 @@
+/* The tour overlay.
+
+   Amber is the brand and the selection colour, so the ring is amber. Nothing
+   in here is green or red: those two mean money everywhere in this product
+   and a tour stop is not money. */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-tour);
+  pointer-events: none;
+}
+
+/* One of the four panels around the spotlight. The panels take clicks; the
+   gap between them does not exist, which is what leaves the spotlit control
+   live. */
+.tour__scrim {
+  position: fixed;
+  background: rgba(6, 7, 9, 0.72);
+  pointer-events: auto;
+}
+
+.tour__scrim--full {
+  inset: 0;
+}
+
+/* Covers the target without dimming it: visible, readable, and inert. */
+.tour__scrim--clear {
+  background: none;
+}
+
+.tour__ring {
+  position: fixed;
+  border: 1px solid var(--amber-bright);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-glow-amber);
+  pointer-events: none;
+  transition: top var(--transition-base), left var(--transition-base),
+    width var(--transition-base), height var(--transition-base);
+}
+
+.tour__card {
+  position: fixed;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  padding: var(--space-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-elevated);
+  pointer-events: auto;
+}
+
+.tour__card:focus {
+  outline: none;
+}
+
+.tour__card:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.tour__card--centered {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.tour__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xs);
+}
+
+.tour__count {
+  font-family: var(--font-num);
+  font-size: var(--type-caption);
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.tour__skip {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: var(--type-caption);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.tour__skip:hover {
+  color: var(--text-primary);
+}
+
+.tour__title {
+  margin: 0 0 var(--space-2xs);
+  font-family: var(--font-display);
+  font-size: var(--type-title-lg);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.tour__body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--type-body);
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.tour__progress {
+  display: flex;
+  gap: var(--space-2xs);
+  margin: var(--space-md) 0 var(--space-sm);
+}
+
+.tour__dot {
+  width: 100%;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+}
+
+.tour__dot--done {
+  background: var(--amber);
+}
+
+.tour__dot--current {
+  background: var(--amber-bright);
+}
+
+.tour__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
+.tour__back,
+.tour__next {
+  /* 16px is the floor that stops iOS zooming a tap target's page. */
+  min-height: 40px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tour__back {
+  border: 1px solid var(--border-subtle);
+  background: none;
+  color: var(--text-soft);
+}
+
+.tour__back:hover {
+  color: var(--text-primary);
+}
+
+.tour__next {
+  border: 1px solid var(--amber);
+  background: var(--amber);
+  color: var(--canvas-numeral);
+}
+
+.tour__next:hover {
+  background: var(--amber-mid);
+  border-color: var(--amber-mid);
+}
+
+.tour__replay {
+  margin: var(--space-xs) 0 0;
+  font-family: var(--font-ui);
+  font-size: var(--type-caption);
+  color: var(--text-muted);
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour__ring {
+    transition: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .tour__card {
+    width: calc(100vw - 24px);
+  }
+}

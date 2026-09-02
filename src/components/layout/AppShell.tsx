@@ -12,6 +12,7 @@ import { BottomTabBar } from './BottomTabBar';
 import { PricingCurtain } from './PricingCurtain';
 import { AppErrorBoundary } from '../support/AppErrorBoundary';
 import { BugReportProvider, useBugReport } from '../support/BugReportProvider';
+import { TourProvider } from '../../contexts/TourContext';
 import './AppShell.css';
 
 /* Crowdsourced ranking is parked: we will not have the voter volume to make
@@ -68,6 +69,7 @@ export function AppShell() {
 
   return (
     <BugReportProvider>
+      <TourProvider>
       <div className="app-shell">
         <a className="skip-link" href="#main-content">
           Skip to content
@@ -95,6 +97,7 @@ export function AppShell() {
         <PricingCurtain />
         <PlayerVotePrompt onClose={votePrompt.close} open={votePrompt.open} />
       </div>
+      </TourProvider>
     </BugReportProvider>
   );
 }

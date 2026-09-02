@@ -15,6 +15,8 @@ const TARGETS = [
   'src/pages/LeaguePage.css',
   'src/components/league/MatchupSlate.tsx',
   'src/components/league/MatchupSlate.css',
+  'src/components/league/MatchupDetail.tsx',
+  'src/components/league/MatchupDetail.css',
   'src/components/league/LeagueFutures.tsx',
   'src/components/league/LeagueFutures.css',
   'src/components/charts/OddsChart.tsx',

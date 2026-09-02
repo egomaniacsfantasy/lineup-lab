@@ -1,3 +1,4 @@
+import type { LineupSlotEntry } from '../utils/matchupLineups.ts';
 import type { LeagueConnection } from '../types';
 import { MOCK_MATCHUP } from './matchup';
 
@@ -46,6 +47,13 @@ export interface LeagueWeekMatchup {
   teamBProjection?: number;
   teamBIsUser?: boolean;
   isUserGame: boolean;
+  /**
+   * Both starting lineups, for the board's detail view. Present only on a
+   * connected league: the demo board has no rosters behind it, and inventing
+   * eleven of them to fill the panel would be drawing a lineup nobody set.
+   */
+  teamAStarters?: LineupSlotEntry[];
+  teamBStarters?: LineupSlotEntry[];
 }
 
 export const MOCK_LEAGUE: LeagueConnection = {

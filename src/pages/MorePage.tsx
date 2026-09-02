@@ -1,7 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { LeagueSettings } from '../components/league/LeagueSettings';
-import { WelcomeCard } from '../components/onboarding/WelcomeCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
@@ -22,6 +21,7 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
 
 import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { isAgreementAdmin } from '../utils/admin';
+import { useTour } from '../contexts/TourContext';
 
 declare const __BUILD_STAMP__: string | undefined;
 const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev';
@@ -30,9 +30,9 @@ export function MorePage() {
   const { bootstrap, stored, disconnect, refresh, isLoading, error } = useLeagueConnection();
   const { user, signOut } = useAuth();
   const { format, toggleFormat } = useOddsFormat();
-  const [isWelcomeOpen, setIsWelcomeOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate();
+  const { start: startTour } = useTour();
   const playerVotesEnabled = usePlayerVotesEnabled();
   /* The header's ADMIN pill and this link disagreed, so an account could be
      shown ADMIN in the chrome and still have no way to reach the projections
@@ -100,8 +100,8 @@ export function MorePage() {
       links: [
         {
           title: 'How this works',
-          body: 'Open the matchup walkthrough.',
-          action: () => setIsWelcomeOpen(true),
+          body: 'Replay the five-stop walkthrough on the Hub.',
+          action: () => startTour(),
         },
       ],
     },
@@ -263,7 +263,6 @@ export function MorePage() {
         {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
       </p>
 
-      <WelcomeCard isOpen={isWelcomeOpen} onDismiss={() => setIsWelcomeOpen(false)} />
     </div>
   );
 }

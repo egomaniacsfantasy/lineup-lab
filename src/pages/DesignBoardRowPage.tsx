@@ -4,16 +4,18 @@ import { BetSlip } from '../components/league/BetSlip';
 import { toggleLeg, removeLeg, type ParlayLeg } from '../utils/parlay';
 import { MatchupSlate } from '../components/league/MatchupSlate';
 import type { LeagueWeekMatchup } from '../mocks/league';
+import type { LineupSlotEntry } from '../utils/matchupLineups';
 import type { LineHistoryEntry } from '../services/leagueApi';
 
-type BoardRowVariant = 'collision' | 'truncation' | 'game-of-the-week' | 'slip';
+type BoardRowVariant = 'collision' | 'truncation' | 'game-of-the-week' | 'slip' | 'detail';
 
 function isVariant(value: string | undefined): value is BoardRowVariant {
   return (
     value === 'collision' ||
     value === 'truncation' ||
     value === 'game-of-the-week' ||
-    value === 'slip'
+    value === 'slip' ||
+    value === 'detail'
   );
 }
 
@@ -230,6 +232,94 @@ const DESIGN_FORKS = [
   },
 ] as unknown as import('../components/league/WeekFork').ForkPair[];
 
+/* Two full lineups for the detail panel, with the cases that break it: an
+   empty slot, a starter nobody priced, and a player carrying an injury tag.
+   Names are long enough on one side to test the truncation the columns
+   promise. */
+const detailLeftStarters: LineupSlotEntry[] = [
+  { slot: 'QB', playerId: 'p1', name: 'Jalen Hurts', position: 'QB', team: 'PHI', injuryStatus: null, projection: 22.4 },
+  { slot: 'RB', playerId: 'p2', name: 'Bijan Robinson', position: 'RB', team: 'ATL', injuryStatus: null, projection: 18.1 },
+  { slot: 'RB', playerId: 'p3', name: 'Kenneth Walker III', position: 'RB', team: 'SEA', injuryStatus: 'Questionable', projection: 12.6 },
+  { slot: 'WR', playerId: 'p4', name: 'Amon-Ra St. Brown', position: 'WR', team: 'DET', injuryStatus: null, projection: 17.9 },
+  { slot: 'WR', playerId: 'p5', name: 'Marvin Harrison Jr.', position: 'WR', team: 'ARI', injuryStatus: null, projection: 14.2 },
+  { slot: 'TE', playerId: 'p6', name: 'Trey McBride', position: 'TE', team: 'ARI', injuryStatus: null, projection: 11.8 },
+  { slot: 'FLEX', playerId: 'p7', name: 'Jaxon Smith-Njigba', position: 'WR', team: 'SEA', injuryStatus: null, projection: 13.0 },
+  { slot: 'K', playerId: 'p8', name: 'Brandon Aubrey', position: 'K', team: 'DAL', injuryStatus: null, projection: 9.4 },
+  { slot: 'DEF', playerId: 'p9', name: 'Baltimore Ravens', position: 'DEF', team: 'BAL', injuryStatus: null, projection: 8.0 },
+];
+
+const detailRightStarters: LineupSlotEntry[] = [
+  { slot: 'QB', playerId: 'q1', name: 'Josh Allen', position: 'QB', team: 'BUF', injuryStatus: null, projection: 23.7 },
+  { slot: 'RB', playerId: 'q2', name: 'Saquon Barkley', position: 'RB', team: 'PHI', injuryStatus: null, projection: 19.5 },
+  /* Nobody priced this one. The cell has to say so rather than print a zero
+     that reads as a projection of nothing. */
+  { slot: 'RB', playerId: 'q3', name: 'Tyrone Tracy Jr.', position: 'RB', team: 'NYG', injuryStatus: null, projection: null },
+  { slot: 'WR', playerId: 'q4', name: 'Ja\u2019Marr Chase', position: 'WR', team: 'CIN', injuryStatus: null, projection: 20.3 },
+  { slot: 'WR', playerId: 'q5', name: 'Nico Collins', position: 'WR', team: 'HOU', injuryStatus: 'Out', projection: 0 },
+  { slot: 'TE', playerId: 'q6', name: 'Brock Bowers', position: 'TE', team: 'LV', injuryStatus: null, projection: 13.4 },
+  /* An empty starting slot, which is a lineup nobody finished setting. */
+  { slot: 'FLEX', playerId: null, name: 'Empty', position: null, team: null, injuryStatus: null, projection: null },
+  { slot: 'K', playerId: 'q8', name: 'Chris Boswell', position: 'K', team: 'PIT', injuryStatus: null, projection: 8.8 },
+  { slot: 'DEF', playerId: 'q9', name: 'Denver Broncos', position: 'DEF', team: 'DEN', injuryStatus: null, projection: 7.6 },
+];
+
+const detailMatchups: LeagueWeekMatchup[] = [
+  {
+    matchupId: 901,
+    teamARosterId: 1,
+    teamA: "Andre's Death Dealers",
+    teamAOwnerName: 'AndreVL',
+    teamAAvatarUrl: null,
+    teamARecord: '7-5',
+    teamAOdds: 118,
+    teamAWinProb: 45.9,
+    teamAProjection: 127.4,
+    teamASpread: -4.5,
+    teamAIsUser: true,
+    teamAStarters: detailLeftStarters,
+    teamBRosterId: 2,
+    teamB: 'Gridiron Heretics',
+    teamBOwnerName: 'FantasyGodCasta',
+    teamBAvatarUrl: null,
+    teamBRecord: '9-3',
+    teamBOdds: -142,
+    teamBWinProb: 54.1,
+    teamBProjection: 131.9,
+    teamBSpread: 4.5,
+    teamBIsUser: false,
+    teamBStarters: detailRightStarters,
+    totalProjection: 259.3,
+    isUserGame: true,
+  },
+  {
+    matchupId: 902,
+    teamARosterId: 3,
+    teamA: 'Sunday Scaries',
+    teamAOwnerName: 'mmoser',
+    teamAAvatarUrl: null,
+    teamARecord: '6-6',
+    teamAOdds: 142,
+    teamAWinProb: 37.3,
+    teamAProjection: 127.7,
+    teamASpread: -7.1,
+    teamAIsUser: false,
+    teamAStarters: detailRightStarters,
+    teamBRosterId: 4,
+    teamB: 'Waiver Wire Wizards',
+    teamBOwnerName: 'jdoe',
+    teamBAvatarUrl: null,
+    teamBRecord: '5-7',
+    teamBOdds: -168,
+    teamBWinProb: 62.7,
+    teamBProjection: 134.8,
+    teamBSpread: 7.1,
+    teamBIsUser: false,
+    teamBStarters: detailLeftStarters,
+    totalProjection: 262.5,
+    isUserGame: false,
+  },
+];
+
 export function DesignBoardRowPage() {
   const { variant } = useParams<{ variant?: string }>();
   /* The slip scene drives the real component with real state, so a rendered
@@ -246,7 +336,9 @@ export function DesignBoardRowPage() {
       ? collisionMatchups
       : variant === 'truncation'
         ? truncationMatchups
-        : gameOfTheWeekMatchups;
+        : variant === 'detail'
+          ? detailMatchups
+          : gameOfTheWeekMatchups;
   const history = variant === 'collision' ? collisionHistory : null;
 
   return (

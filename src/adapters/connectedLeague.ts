@@ -7,6 +7,7 @@
  * sigma. They are flagged provisional in the UI and replaced wholesale by
  * the server engine in Phase B.
  */
+import { buildLineup } from '../utils/matchupLineups.ts';
 import type {
   ApiCatalogPlayer,
   ApiMatchup,
@@ -216,6 +217,8 @@ export function toWeekMatchups(
   pricing?: LeaguePricing | null,
 ): LeagueWeekMatchup[] {
   const teamsByRoster = new Map(bootstrap.teams.map((t) => [t.rosterId, t]));
+  const boardLabels = slotLabels(bootstrap.league.rosterPositions);
+  const playerMeans = pricing?.available ? (pricing.playerMeans ?? {}) : {};
   const pricedByMatchup = new Map(
     pricing?.available ? (pricing.lines ?? []).map((l) => [l.matchupId, l]) : [],
   );
@@ -239,6 +242,18 @@ export function toWeekMatchups(
 
     const priced = pricedByMatchup.get(a.matchupId);
     const line = provisionalLine(teamPpg(teamA), teamPpg(teamB));
+    /* Both lineups, so clicking a game on the board can open it the way a
+       box score opens: slot by slot, with the engine's week mean on every
+       player. The means cover every rostered player in the league, not just
+       yours, so an opponent's opponent is priced the same as your own. */
+    const buildSide = (m: ApiMatchup) =>
+      buildLineup({
+        starters: m.starters,
+        labels: boardLabels,
+        players: bootstrap.players,
+        means: playerMeans,
+        fallback: m.playersPoints,
+      });
     const pricedA = priced?.sides[String(a.rosterId)];
     const pricedB = priced?.sides[String(b.rosterId)];
     const oddsA = pricedA?.moneyline ?? line.yours.moneyline;
@@ -273,6 +288,8 @@ export function toWeekMatchups(
       teamBSpread: pricedB?.spread,
       teamBIsUser: teamB.isUser,
       isUserGame: teamA.isUser || teamB.isUser,
+      teamAStarters: buildSide(a),
+      teamBStarters: buildSide(b),
     });
   });
 

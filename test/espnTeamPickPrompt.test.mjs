@@ -33,7 +33,7 @@ test('an unconfirmed ESPN league is offered rather than ignored', async () => {
   );
   assert.match(
     context,
-    /if \(needsEspnTeamPick\(target\)\) \{[\s\S]*?navigate\('\/league#connect-espn'\)/,
+    /if \(needsEspnTeamPick\(target\)\) \{[\s\S]*?navigate\(`\/league\?\$\{params\.toString\(\)\}#connect-espn`\)/,
     'clicking an unconfirmed ESPN league no longer routes to the picker, which '
       + 'is what made it look like the league simply vanished',
   );
@@ -103,7 +103,7 @@ test('the pick prompt routes, rather than only setting a hash', async () => {
      nothing at all. That is worse than the silent failure it replaced. */
   assert.match(
     context,
-    /navigate\('\/league#connect-espn'\)/,
+    /navigate\(`\/league\?\$\{params\.toString\(\)\}#connect-espn`\)/,
     'the pick prompt is not routing to the League page, so it does nothing '
       + 'anywhere except on that page',
   );
@@ -111,5 +111,74 @@ test('the pick prompt routes, rather than only setting a hash', async () => {
     context,
     /window\.location\.hash = '#connect-espn'/,
     'the bare hash assignment is back',
+  );
+});
+
+/**
+ * The dead end.
+ *
+ * Routing to a bare #connect-espn opened the empty "Bring your ESPN league
+ * in" form, which asks somebody to paste a league URL for a league the
+ * account is already showing them a row for. Pressing "Action needed" and
+ * arriving at a blank form is not a picker; it is the same dead end the
+ * silent failure was, with more steps.
+ */
+test('the picker is opened ON the league that needs picking', async () => {
+  const context = await fs.readFile(path.resolve(CONTEXT), 'utf8');
+  const league = await fs.readFile(path.resolve('src/pages/LeaguePage.tsx'), 'utf8');
+  const connect = await fs.readFile(path.resolve('src/components/league/EspnConnect.tsx'), 'utf8');
+
+  assert.match(
+    context,
+    /espnLeagueId: String\(target\.leagueId\)/,
+    'the route to the picker does not carry the league, so it opens an empty form',
+  );
+  assert.match(context, /params\.set\('espnSeason', String\(target\.season\)\)/);
+
+  assert.match(
+    league,
+    /initialLeagueInput=\{searchParams\.get\('espnLeagueId'\) \?\? ''\}/,
+    'the League page drops the league id on the floor, so the picker opens empty anyway',
+  );
+  assert.match(league, /initialSeason=\{searchParams\.get\('espnSeason'\) \?\? ''\}/);
+
+  /* Pre-filling is not enough on its own: a filled form with a button still
+     asks somebody to re-submit a league they did not type. */
+  assert.match(
+    connect,
+    /if \(initialLeagueInput\.trim\(\)\.length === 0\) return;[\s\S]*?attemptConnect\(\)/,
+    'the connect screen does not look the league up on arrival, so being sent '
+      + 'there still lands on a form rather than on the team picker',
+  );
+});
+
+/**
+ * A league is never named after the person looking at it.
+ *
+ * `displayName` is the account holder's name and is byte-identical on every
+ * row, so using it as the league label put "Andre Vla..." where the league
+ * name goes, on fifteen rows, distinguishing nothing. Worse, it reads as a
+ * league actually called that. The row with no league name yet is exactly the
+ * unconfirmed ESPN row, so the one row that most needed identifying was the
+ * one guaranteed to be wearing somebody's name.
+ */
+test('the switcher never labels a league with the manager name', async () => {
+  const menu = await fs.readFile(path.resolve(MENU), 'utf8');
+  const body = menu.slice(
+    menu.indexOf('function leagueLabel('),
+    menu.indexOf('export function AccountMenu'),
+  );
+
+  assert.ok(body.length > 0, 'leagueLabel has moved or gone');
+  assert.doesNotMatch(
+    body,
+    /league\.displayName/,
+    'the league label falls back to the manager name again, which is the same '
+      + 'string on every row of the account',
+  );
+  assert.match(
+    body,
+    /league\.leagueId/,
+    'the fallback label carries nothing that tells two unnamed leagues apart',
   );
 });

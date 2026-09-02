@@ -4,16 +4,27 @@ import { useAuth } from '../../contexts/AuthContext';
 import { needsEspnTeamPick, useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import type { StoredConnection } from '../../contexts/LeagueConnectionContext';
 import { PROVIDER_LABEL } from '../../utils/provider';
+import { useTour } from '../../contexts/TourContext';
 import './AccountMenu.css';
-import { WelcomeCard } from '../onboarding/WelcomeCard';
 
+/**
+ * What to call a league in the switcher.
+ *
+ * Never the manager's name. `displayName` used to be the fallback, and it is
+ * the same string on every row of the account - so an account with fifteen
+ * leagues showed "Andre Vla..." where the league name goes, which identifies
+ * nothing and actively misleads: it reads as a league called that. An ESPN
+ * league linked before its team is picked is exactly the case with no
+ * `leagueName` yet, so the row that most needs identifying was the one row
+ * guaranteed to be wearing somebody's name.
+ *
+ * The fallback carries the league id instead. It is ugly, and it is the only
+ * thing to hand that is actually different between two unnamed leagues.
+ */
 function leagueLabel(league: StoredConnection, activeName?: string | null) {
-  return (
-    activeName ||
-    league.leagueName ||
-    league.displayName ||
-    `${PROVIDER_LABEL[league.provider]} league`
-  );
+  if (activeName) return activeName;
+  if (league.leagueName) return league.leagueName;
+  return `${PROVIDER_LABEL[league.provider]} league ${league.leagueId}`;
 }
 
 /**
@@ -27,6 +38,7 @@ export function AccountMenu() {
   const { leagues, stored, bootstrap, switchLeague, removeLeague, changeEspnTeam, refresh, isLoading, error } =
     useLeagueConnection();
   const navigate = useNavigate();
+  const { start: startTour } = useTour();
   const [open, setOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   /* Removing a league is destructive and one row away from switching to it, so
@@ -34,7 +46,6 @@ export function AccountMenu() {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   /* More is admin-only now, and the walkthrough was the one thing in it that a
      normal user might want. It follows the account rather than disappearing. */
-  const [showWelcome, setShowWelcome] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -287,7 +298,7 @@ export function AccountMenu() {
               className="account-menu__action"
               onClick={() => {
                 setOpen(false);
-                setShowWelcome(true);
+                startTour();
               }}
               role="menuitem"
               type="button"
@@ -309,7 +320,6 @@ export function AccountMenu() {
         </div>
       ) : null}
 
-      <WelcomeCard isOpen={showWelcome} onDismiss={() => setShowWelcome(false)} />
     </div>
   );
 }

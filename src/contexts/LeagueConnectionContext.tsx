@@ -1033,11 +1033,21 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
          resolve it, and which shows no roster until they choose. */
       if (needsEspnTeamPick(target)) {
         /* Route, do not just set a hash. Only the League page reads
-           location.hash to open the ESPN flow, so setting it from the Hub —
-           where the switcher usually is — changed the address bar and nothing
+           location.hash to open the ESPN flow, so setting it from the Hub -
+           where the switcher usually is - changed the address bar and nothing
            else. The row said "Tap to pick your team" and then did nothing,
-           which is worse than the silent failure it replaced. */
-        navigate('/league#connect-espn');
+           which is worse than the silent failure it replaced.
+
+           And carry the league. Routing to a bare #connect-espn opened the
+           empty "paste your ESPN league URL" form, which asks somebody to
+           re-enter a league they are already looking at a row for. That is
+           not a picker, it is a dead end wearing the picker's clothes. With
+           the id and season in the query the connect screen looks the league
+           up on arrival and lands on the team picker, which is the one screen
+           that can actually resolve the row. */
+        const params = new URLSearchParams({ espnLeagueId: String(target.leagueId) });
+        if (target.season) params.set('espnSeason', String(target.season));
+        navigate(`/league?${params.toString()}#connect-espn`);
         return;
       }
       activateLocal(target);

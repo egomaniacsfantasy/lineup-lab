@@ -15,6 +15,7 @@ import { leagueChartFlags } from '../../config/leagueChartFlags';
 import { marketMovement, weekMovement } from '../../utils/openAnchors';
 import { OddsChart, type OddsChartPoint } from '../charts/OddsChart';
 import type { ForkPair } from './WeekFork';
+import { MatchupDetail } from './MatchupDetail';
 import { TeamAvatar } from './TeamAvatar';
 import './MatchupSlate.css';
 
@@ -598,6 +599,24 @@ export function MatchupSlate({
             })}
           </div>
 
+          {/* The selected game, opened up, directly under the board.
+
+              It goes here rather than in the rail because it is two lineups
+              read against each other, and two columns of names and numbers
+              do not fit in 384px. The rail keeps what is genuinely narrow -
+              the conditioned branches and the line's movement - and the wide
+              thing gets the wide column. */}
+          {selectedRow ? (
+            <MatchupDetail
+              left={selectedRow.left}
+              leftStarters={selectedRow.left.starters}
+              right={selectedRow.right}
+              rightStarters={selectedRow.right.starters}
+              total={selectedRow.matchup.totalProjection}
+              week={currentWeek}
+            />
+          ) : null}
+
           {/* The week at a glance, under the board rather than beside it.
 
               In the aside it was a narrow card stacked under a chart, so the
@@ -679,12 +698,6 @@ export function MatchupSlate({
                 <span className="matchup-slate__detail-kicker">Selected matchup</span>
                 <strong>{selectedRow.left.name} vs {selectedRow.right.name}</strong>
               </div>
-              {(selectedRow.left.projection != null || selectedRow.right.projection != null) ? (
-                <div className="matchup-slate__detail-line">
-                  <span>Projected points</span>
-                  <span>{selectedRow.left.projection?.toFixed(1) ?? 'N/A'} · {selectedRow.right.projection?.toFixed(1) ?? 'N/A'}</span>
-                </div>
-              ) : null}
 
               {/* What the result is worth, which is the thing a selected game
                   most obviously wants to say and the rail was not saying.

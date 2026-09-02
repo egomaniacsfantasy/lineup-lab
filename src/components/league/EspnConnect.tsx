@@ -407,6 +407,23 @@ export function EspnConnect({
     void trackEspnConnectEvent('view', { hasCapture: Boolean(initialPaste) });
   }, [initialPaste]);
 
+  /* Arriving with a league already named means somebody was SENT here to
+     resolve that league, not to type one in. Looking it up on arrival is the
+     difference between landing on the team picker and landing on a form that
+     asks for a league the account is already showing a row for.
+
+     Once, on mount. attemptConnect clears privateLeagueId and fires a
+     network call, so re-running it whenever a dependency settles would fight
+     the user as they type. */
+  const autoLookupRef = useRef(false);
+  useEffect(() => {
+    if (autoLookupRef.current) return;
+    if (initialLeagueInput.trim().length === 0) return;
+    autoLookupRef.current = true;
+    attemptConnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLeagueInput]);
+
 
   return (
     <section aria-labelledby="espn-connect-title" className="espn-connect">
@@ -527,20 +544,20 @@ export function EspnConnect({
                     Five seconds, once, ever. Your ESPN password is never
                     involved.
                   </p>
-                  {CONNECTOR_STORE_URL ? (
-                    <a
-                      className="espn-connect__submit"
-                      href={CONNECTOR_STORE_URL}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Add the connector ↗︎
-                    </a>
-                  ) : (
-                    <p className="espn-connect__method-note">
-                      The connector is not published yet.
-                    </p>
-                  )}
+                  {/* One branch. The listing is live and its id is a constant
+                      in espnExtension, so there is no longer a state where
+                      this link is missing and the card has to apologise for
+                      it. That state only ever fired on a build that forgot an
+                      environment variable, which is exactly what took the
+                      ESPN path down while saying something reassuring. */}
+                  <a
+                    className="espn-connect__submit"
+                    href={CONNECTOR_STORE_URL}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Add the connector ↗︎
+                  </a>
                   <p className="espn-connect__method-note">
                     This page notices the moment it is installed. Nothing to
                     reload.

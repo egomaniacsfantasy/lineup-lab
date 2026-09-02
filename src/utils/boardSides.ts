@@ -1,5 +1,6 @@
 import { impliedProbability } from './formatOdds.ts';
 import type { LeagueWeekMatchup } from '../mocks/league.ts';
+import type { LineupSlotEntry } from './matchupLineups.ts';
 
 /**
  * Which team sits on which side of a card, and what each side's numbers are.
@@ -28,6 +29,12 @@ export type BoardTeam = {
   spread?: number;
   avatarUrl?: string | null;
   isUser?: boolean;
+  /* This side's starting lineup, carried through the seating swap with the
+     rest of its numbers. The whole point of this module is that a team's
+     figures follow it across the seat; a lineup read off matchup.teamA
+     after the seats were swapped would put one team's players under the
+     other team's name. */
+  starters?: LineupSlotEntry[];
 };
 
 export function teamsFor(matchup: LeagueWeekMatchup): { left: BoardTeam; right: BoardTeam } {
@@ -43,6 +50,7 @@ export function teamsFor(matchup: LeagueWeekMatchup): { left: BoardTeam; right: 
     spread: matchup.teamASpread,
     avatarUrl: matchup.teamAAvatarUrl,
     isUser: matchup.teamAIsUser,
+    starters: matchup.teamAStarters,
   };
   const teamB: BoardTeam = {
     side: 'b',
@@ -56,6 +64,7 @@ export function teamsFor(matchup: LeagueWeekMatchup): { left: BoardTeam; right: 
     spread: matchup.teamBSpread,
     avatarUrl: matchup.teamBAvatarUrl,
     isUser: matchup.teamBIsUser,
+    starters: matchup.teamBStarters,
   };
 
   /* Your game reads left to right the way you would say it out loud, whoever

@@ -573,6 +573,11 @@ export function LeaguePage() {
 
         {flow === 'espn' ? (
           <EspnConnect
+            /* Sent here by a switcher row that needs its team picked. The id
+               arrives in the query so this opens on that league rather than
+               on an empty form asking for a league the account already has. */
+            initialLeagueInput={searchParams.get('espnLeagueId') ?? ''}
+            initialSeason={searchParams.get('espnSeason') ?? ''}
             onConnected={(connection) => {
               connect(connection);
               setManualFlow('none');
