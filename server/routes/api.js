@@ -24,8 +24,10 @@ import {
 import { SEASON_ANCHORS, computeSeasonState, resolveFantasyWeek, isPreseason, resolvePricingWeek } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
 import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
+import { restOfSeasonPoints } from '../projections/restOfSeason.js';
 import {
   getFinalNflTeams,
+  getCurrentNflWeek,
   awaitFinalNflTeams,
   awaitNflGameState,
   getNflGameState,
@@ -246,25 +248,43 @@ apiRouter.get('/rankings', async (req, res, next) => {
       if (!byId.has(p.playerId)) byId.set(p.playerId, p);
     }
 
+    // Rest-of-season value: the board's headline points drop the weeks already
+    // played, per-team, so a player's value shrinks live as the season runs (see
+    // restOfSeason.js). Off-season (currentWeek null) => nothing elapsed =>
+    // rest-of-season == seasonTotal, so the board is unchanged until games post.
+    const currentWeek = getCurrentNflWeek();
+    const finalTeams = getFinalNflTeams();
+
     const limit = Math.min(Number(req.query.limit ?? 100), 800);
     const rankings = [...byId.values()]
       .sort((a, b) => b.mean - a.mean)
       .slice(0, limit)
-      .map((p, index) => ({
-        rank: index + 1,
-        playerId: p.playerId,
-        name: p.name,
-        position: p.position,
-        team: p.team,
-        mean: p.mean,
-        stdev: p.stdev ?? null,
-        floor: p.floor ?? null,
-        ceiling: p.ceiling ?? null,
-        seasonTotal: p.seasonTotal ?? null,
-        weekly: p.weekly ?? {},
-        tier: p.tier,
-        derived: p.derived,
-      }));
+      .map((p, index) => {
+        const full = p.seasonTotal ?? null;
+        const teamFinal = p.team ? finalTeams.has(normalizeTeam(p.team)) : false;
+        const ros = restOfSeasonPoints(full, p.weekly, currentWeek, teamFinal);
+        // Scale floor/ceiling by the same shrink so they stay consistent with the
+        // rest-of-season headline (ratio is 1 pre-season -> no change).
+        const ratio = full && full > 0 && ros != null ? ros / full : 1;
+        return {
+          rank: index + 1,
+          playerId: p.playerId,
+          name: p.name,
+          position: p.position,
+          team: p.team,
+          mean: p.mean,
+          stdev: p.stdev ?? null,
+          floor: p.floor != null ? Number((p.floor * ratio).toFixed(2)) : null,
+          ceiling: p.ceiling != null ? Number((p.ceiling * ratio).toFixed(2)) : null,
+          // seasonTotal carries REST-OF-SEASON points (what the board values +
+          // displays); seasonTotalFull keeps the untouched full-season figure.
+          seasonTotal: ros,
+          seasonTotalFull: full,
+          weekly: p.weekly ?? {},
+          tier: p.tier,
+          derived: p.derived,
+        };
+      });
 
     // Never let a browser serve a stale board (e.g. a raw-projection response
     // cached before the agreement-weighted set was live).

@@ -111,6 +111,14 @@ export function getNflGameState() {
   return _cache.teamState;
 }
 
+/** Current NFL regular-season week number (from the scoreboard), or null in the
+ *  off-season / before the scoreboard has been read. Non-blocking; used by the
+ *  rankings board to sum only a player's REMAINING weeks. */
+export function getCurrentNflWeek() {
+  if (Date.now() - _cache.at >= TTL_MS) refreshInBackground();
+  return _cache.week;
+}
+
 /** Force a fresh read (for the admin reprice / live-cycle trigger). Falls back to
  *  the cached state on error so a flaky scoreboard never breaks a cycle. */
 export async function awaitFinalNflTeams() {
