@@ -102,16 +102,13 @@ export const TOURS: readonly Tour[] = [
         id: 'card',
         title: 'The whole week, priced',
         body:
-          'Every game in your league gets a spread, a total and a price on both sides, the same three markets a book posts.',
+          'Every game gets a spread, a total and a price on both sides. Press one and it opens: both lineups, slot by slot, which is the part a price cannot tell you.',
+        /* One stop, not two. The second used to point at the opened game's
+           header, which only exists after somebody presses a card - so the
+           tour was pointing at something that was not on screen while it
+           spoke. Saying it here, over the thing you press, is both shorter
+           and true. */
         selector: '.matchup-slate__row-button',
-        placement: 'bottom',
-      },
-      {
-        id: 'detail',
-        title: 'Open any game',
-        body:
-          'Pressing a game opens it underneath: both sides priced, and both starting lineups slot by slot. It answers why a team is favoured, which the price alone cannot.',
-        selector: '.matchup-detail__head',
         placement: 'bottom',
       },
       {

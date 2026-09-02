@@ -139,6 +139,9 @@
   --z-dropdown: 50;
   /* Above the dropdown, because the tour spotlights the header controls that
      open them and has to sit over the result. */
+  /* Above the dropdown, below the tour: the tour has to be able to spotlight
+     something inside an opened game. */
+  --z-modal: 70;
   --z-tour: 80;
 
   /* ── Transitions ── */

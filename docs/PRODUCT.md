@@ -289,10 +289,22 @@ closest line, highest total, biggest move). One game per week carries a
 **Game of the Week** ribbon — by definition, the game producing the largest
 league-wide change in championship and playoff odds.
 
-Selecting any card **opens that game**, full width under the board: each side's
-spread, win probability, projected points and price, the game's over/under
-posted once, and then both starting lineups paired slot by slot with the
-engine's week projection on every player. It is the same lineup-versus-lineup
+Pressing any card **opens that game** as a dialog over a blurred board: the
+Hub's own head-to-head card, then the Hub's own lineup board with both
+starting lineups paired slot by slot, headshots and crests included. It is
+literally the same markup and the same stylesheet, not a second pair that
+resemble them, which is why `TeamCrest` was lifted out of MatchupPage into a
+shared component. What it leaves out is the Hub's interaction - no compare, no
+bench swaps, no preview - because those price YOUR decisions and you cannot
+set another manager's lineup.
+
+A dialog rather than a panel under the cards: the board is a grid two and
+three across, so an expanding block below pushed the rest of the week down the
+page and moved the card you had just pressed off screen. Escape, the close
+button and the scrim all dismiss it; the scrim only acts on a press that began
+on the scrim, or the press that opened the dialog dismisses it on its way up
+and a text selection dragged out of the panel closes it too. The page behind
+is scroll-locked while it is open. It is the same lineup-versus-lineup
 read the Hub gives you for your own game, given for anyone else's — the answer
 to "why is that team favoured" is eleven names and eleven numbers, not a
 moneyline. The stronger side of each slot is marked by weight, never by colour:

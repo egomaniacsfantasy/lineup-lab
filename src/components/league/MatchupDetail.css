@@ -1,364 +1,142 @@
-/* One game opened up, full width under the board.
+/* The opened-game dialog.
 
-   Two lineups read against each other, so the layout is symmetric about a
-   centre column of slot labels: numbers on the outside where the eye can run
-   down them, names on the inside where they sit next to the slot they fill.
-   The same shape ESPN and Sleeper use, for the same reason.
+   The board is a grid of cards two and three across, so an expanding panel
+   underneath pushed the rest of the week down the page and moved the card you
+   had just pressed off screen. A game you open is a thing you look at and
+   then close, which is a dialog.
 
-   No green or red anywhere in here. Those two colours mean money in this
-   product, and a per-slot projection edge is not money; the stronger side of
-   a slot is marked by weight instead. */
+   Everything INSIDE the panel is dressed by MatchupPage.css, on purpose: the
+   head-to-head card and the slot board are the Hub's, not copies of it. What
+   is here is only the container - the blur, the panel, the way out. */
 
-.matchup-detail {
-  margin-top: var(--space-md);
-  padding: var(--space-md);
+.matchup-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+}
+
+.matchup-modal__scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-overlay);
+  /* The blur is the point: the board stays legible enough to place the game
+     you opened, and far enough back to stop competing with it. */
+  backdrop-filter: blur(10px) saturate(0.85);
+  -webkit-backdrop-filter: blur(10px) saturate(0.85);
+}
+
+.matchup-modal__panel {
+  position: relative;
+  width: min(100%, 1120px);
+  max-height: calc(100vh - var(--space-2xl));
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--bg-surface);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-elevated);
+  animation: matchup-modal-in var(--transition-base) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.matchup-detail__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: var(--space-md);
-  /* Stretch, not start: a long team name wraps to two lines on one side and
-     not the other, and the two market strips have to stay on the same line
-     as each other or the panel reads as two unrelated cards. */
-  align-items: stretch;
-  padding-bottom: var(--space-md);
-  border-bottom: 1px solid var(--border-subtle);
+@keyframes matchup-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.matchup-detail__side {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  min-width: 0;
+.matchup-modal__panel:focus {
+  outline: none;
 }
 
-.matchup-detail__side--right {
-  align-items: flex-end;
+.matchup-modal__panel:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
-.matchup-detail__side-team {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  min-width: 0;
+.matchup-modal__scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-lg);
 }
 
-.matchup-detail__side--right .matchup-detail__side-team {
-  flex-direction: row-reverse;
+/* Block flow, deliberately, not grid or flex.
+ *
+ * As a height-constrained grid this compressed its own rows: with less room
+ * than the content needs, the auto rows shrink, and the head-to-head card -
+ * which clips its own overflow for the glow - collapsed from 280px to 70px
+ * and rendered as a sliver with the teams cut in half. A flex column does the
+ * same thing unless every child is told not to shrink. Block flow cannot do
+ * it at all, and this container's only job is to scroll. */
+.matchup-modal__scroll > * + * {
+  margin-top: var(--space-md);
 }
 
-.matchup-detail__side-names {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.matchup-detail__side--right .matchup-detail__side-names {
-  align-items: flex-end;
-  text-align: right;
-}
-
-/* Team names are whatever a manager typed, so this one wraps rather than
-   truncates. A clipped team name over a lineup is the panel failing at the
-   only job it has: saying whose players those are. */
-.matchup-detail__side-name {
-  font-family: var(--font-ui);
-  font-size: var(--type-title-md);
-  font-weight: 600;
-  color: var(--text-primary);
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-/* Amber is you, everywhere in the product. */
-.matchup-detail__side-name--user {
-  color: var(--text-amber);
-}
-
-.matchup-detail__side-record {
-  font-family: var(--font-num);
-  font-size: var(--type-caption);
-  color: var(--text-muted);
-}
-
-.matchup-detail__markets {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-xs);
+/* The Hub's modules carry their own frame because they sit on a page. Inside
+   the panel they are already framed, so the outer chrome comes off and the
+   two cards read as one sheet. */
+.matchup-modal__scroll .matchup-page__module {
   margin: 0;
-  width: 100%;
-  max-width: 380px;
 }
 
-.matchup-detail__market {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-2xs) var(--space-xs);
+.matchup-modal__close {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   background: var(--bg-inset);
-  min-width: 0;
-}
-
-.matchup-detail__market dt {
+  color: var(--text-soft);
   font-family: var(--font-ui);
-  font-size: var(--type-caption);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.matchup-detail__market dd {
+.matchup-modal__close:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.matchup-modal__empty {
   margin: 0;
-  font-family: var(--font-num);
-  font-size: var(--type-body);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-}
-
-.matchup-detail__center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2xs);
-  padding-top: var(--space-2xs);
-}
-
-.matchup-detail__kicker {
-  font-family: var(--font-ui);
-  font-size: var(--type-caption);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.matchup-detail__at {
-  font-family: var(--font-display);
-  font-size: var(--type-title-md);
-  color: var(--text-soft);
-}
-
-.matchup-detail__total-label {
-  font-family: var(--font-ui);
-  font-size: var(--type-caption);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.matchup-detail__total {
-  font-family: var(--font-num);
-  font-size: var(--type-stat);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-}
-
-.matchup-detail__lineups {
-  margin-top: var(--space-sm);
-}
-
-.matchup-detail__lineup-head,
-.matchup-detail__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr);
-  gap: var(--space-xs);
-  align-items: center;
-}
-
-/* A player and their number travel together, so the phone layout is the
-   desktop layout with less air in it rather than a different arrangement. */
-.matchup-detail__seat {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  min-width: 0;
-}
-
-.matchup-detail__seat--right {
-  justify-content: flex-end;
-}
-
-.matchup-detail__lineup-head {
-  padding: var(--space-2xs) 0;
-  font-family: var(--font-ui);
-  font-size: var(--type-caption);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.matchup-detail__lineup-head .matchup-detail__player {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
-}
-
-.matchup-detail__lineup-head .matchup-detail__seat--right .matchup-detail__player {
-  text-align: right;
-}
-
-.matchup-detail__row {
-  padding: var(--space-xs) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.matchup-detail__row:last-child {
-  border-bottom: none;
-}
-
-.matchup-detail__points {
-  flex: 0 0 auto;
-  min-width: 44px;
-  font-family: var(--font-num);
-  font-size: var(--type-body);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-soft);
-}
-
-.matchup-detail__seat--right .matchup-detail__points {
-  text-align: right;
-}
-
-/* The better projection in the slot. Weight, not colour. */
-.matchup-detail__points--edge {
-  color: var(--text-primary);
-  font-weight: 700;
-}
-
-.matchup-detail__player {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.matchup-detail__player--right {
-  align-items: flex-end;
-  text-align: right;
-}
-
-.matchup-detail__player-name {
-  font-family: var(--font-ui);
-  font-size: var(--type-body);
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-}
-
-.matchup-detail__player-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  font-family: var(--font-ui);
-  font-size: var(--type-caption);
-  color: var(--text-muted);
-}
-
-.matchup-detail__injury {
-  font-weight: 700;
-  color: var(--text-dim);
-}
-
-.matchup-detail__slot {
-  font-family: var(--font-ui);
-  font-size: var(--type-caption);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-align: center;
-  color: var(--text-muted);
-}
-
-.matchup-detail__empty {
-  margin: var(--space-md) 0 0;
   font-family: var(--font-ui);
   font-size: var(--type-body);
   color: var(--text-muted);
 }
 
-/* Narrow: the two market strips stack under their own team, and the lineup
-   drops its outside number columns onto the names so five columns become
-   three. The centre slot column stays, because it is the thing that makes
-   the two sides comparable. */
+@media (prefers-reduced-motion: reduce) {
+  .matchup-modal__panel {
+    animation: none;
+  }
+}
+
 @media (max-width: 720px) {
-  /* The two sides stay side by side and the game's own line moves above
-     them. Stacking the sides would put the left team's numbers above the
-     right team's, and nothing below would say which lineup column belonged
-     to which - which is the one thing this panel exists to make obvious. */
-  .matchup-detail__head {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas:
-      "center center"
-      "left right";
-    gap: var(--space-sm);
+  .matchup-modal {
+    padding: 0;
+    align-items: flex-end;
   }
 
-  .matchup-detail__side--left {
-    grid-area: left;
+  .matchup-modal__panel {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
   }
 
-  .matchup-detail__side--right {
-    grid-area: right;
-  }
-
-  .matchup-detail__center {
-    grid-area: center;
-    flex-direction: row;
-    align-items: baseline;
-    gap: var(--space-xs);
-    justify-content: flex-start;
-  }
-
-  /* Four markets across is 60px a cell on a phone, which is narrower than
-     the words. Two by two instead. */
-  .matchup-detail__markets {
-    max-width: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .matchup-detail__lineup-head,
-  .matchup-detail__row {
-    grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr);
-    gap: var(--space-2xs);
-  }
-
-  .matchup-detail__seat {
-    gap: var(--space-2xs);
-  }
-
-  .matchup-detail__points {
-    min-width: 34px;
-    font-size: var(--type-caption);
-  }
-
-  .matchup-detail__player-name {
-    font-size: 13px;
-  }
-
-  /* The position and pro team are the first thing to go: the slot column
-     already says what the player is for, and the names need the room. */
-  .matchup-detail__player-meta {
-    display: none;
-  }
-
-  /* The column headings repeat the two team names that now sit directly
-     above each column, so at this width they are a second copy taking room
-     the names themselves need. */
-  .matchup-detail__lineup-head .matchup-detail__player {
-    display: none;
-  }
-
-  .matchup-detail__side-name {
-    font-size: var(--type-body);
+  .matchup-modal__scroll {
+    padding: var(--space-md);
   }
 }

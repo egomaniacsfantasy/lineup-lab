@@ -408,7 +408,12 @@ test('clicking anywhere on a card selects that matchup', async () => {
 
     /* The separator between the two teams: as dead as dead space gets, and
        squarely inside the card. */
+    /* Pressing a card seats the rail AND opens the game as a dialog. This
+       test is about the rail, so it closes the dialog and carries on; the
+       seat it just took is what the assertions below are about. */
     await page.locator('.matchup-slate__row-button').nth(1).locator('.matchup-slate__at').click();
+    await page.waitForSelector('.matchup-modal__panel');
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(120);
     const after = await selected();
     assert.notEqual(after, before, 'clicking inside a card did not select it');
@@ -428,7 +433,12 @@ test('taking a price does not drag the selection onto that game', async () => {
       page.$eval('.matchup-slate__detail-head strong', (node) => node.textContent);
 
     /* Select the second card, then take a leg on the FIRST one. */
+    /* Pressing a card seats the rail AND opens the game as a dialog. This
+       test is about the rail, so it closes the dialog and carries on; the
+       seat it just took is what the assertions below are about. */
     await page.locator('.matchup-slate__row-button').nth(1).locator('.matchup-slate__at').click();
+    await page.waitForSelector('.matchup-modal__panel');
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(120);
     const parked = await selected();
 
@@ -445,6 +455,12 @@ test('taking a price does not drag the selection onto that game', async () => {
       await page.locator('.matchup-slate__cell--taken').count(),
       1,
       'the price did not go on the slip',
+    );
+    assert.equal(
+      await page.locator('.matchup-modal').count(),
+      0,
+      'taking a price opened the game over the board, so the slip cannot be '
+        + 'built without a dialog appearing on every leg',
     );
   } finally {
     await page.close();

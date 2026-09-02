@@ -1,10 +1,22 @@
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { NO_VALUE, formatAmericanOdds } from '../../utils/formatOdds';
 import { spreadLabel, type BoardTeam } from '../../utils/boardSides';
 import { pairLineups, type LineupSlotEntry } from '../../utils/matchupLineups.ts';
-import { playerShortName, shortInjuryStatus } from '../../utils/playerNames';
-import { leagueChartFlags } from '../../config/leagueChartFlags';
-import { TeamAvatar } from './TeamAvatar';
+import { managerLine } from '../../utils/managerLine';
+import { playerShortName } from '../../utils/playerNames';
+import { useOddsFormat } from '../../contexts/OddsFormatContext';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
+import { TeamCrest } from '../matchup/TeamCrest';
 import './MatchupDetail.css';
+/* The Hub's stylesheet, borrowed on purpose.
+ *
+ * This dialog is meant to BE the Hub's head-to-head card and lineup board,
+ * not a second pair that resemble them, so it renders the same class names
+ * and lets one stylesheet dress both. Importing it here says so out loud and
+ * survives anyone later code-splitting the pages, which would otherwise leave
+ * this screen unstyled on the League tab and nowhere else. */
+import '../../pages/MatchupPage.css';
 
 interface MatchupDetailProps {
   left: BoardTeam;
@@ -14,24 +26,30 @@ interface MatchupDetailProps {
   leftStarters?: readonly LineupSlotEntry[];
   rightStarters?: readonly LineupSlotEntry[];
   week: number;
+  onClose: () => void;
 }
 
 function pointsText(value: number | null | undefined) {
   return value == null ? NO_VALUE : value.toFixed(1);
 }
 
-function percentText(value: number | undefined) {
-  return value == null ? NO_VALUE : `${Math.round(value)}%`;
+function metaFor(entry: LineupSlotEntry) {
+  return [entry.position, entry.team].filter(Boolean).join(' · ');
 }
 
 /**
- * One game opened up: the market on both sides, then the two starting
- * lineups slot against slot.
+ * One game, opened over the board.
  *
- * The board's cards post a price. This is the thing behind the price - the
- * same view the Hub gives you for your own game, given for anyone else's,
- * because "why is that team favoured" is answered by eleven names and eleven
- * numbers and not by a moneyline.
+ * A dialog rather than a panel under the cards: the board is a grid two and
+ * three across, so an expanding block below it pushed the rest of the week
+ * down the page and put the thing you had just pressed off screen. A game you
+ * open is a thing you look at and then close.
+ *
+ * Everything inside it is the Hub's own markup - the head-to-head card, the
+ * crests, the slot board, the headshots - because "the same view for anyone
+ * else's game" is only true if it is literally the same view. What it leaves
+ * out is the Hub's interaction: no compare, no bench swaps, no preview. Those
+ * price YOUR decisions, and you cannot set another manager's lineup.
  */
 export function MatchupDetail({
   left,
@@ -40,162 +58,315 @@ export function MatchupDetail({
   leftStarters,
   rightStarters,
   week,
+  onClose,
 }: MatchupDetailProps) {
+  const { format } = useOddsFormat();
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  /* The scrim closes on a press that BEGAN on the scrim.
+   *
+   * On a plain onClick it closed the instant it opened: the press that opened
+   * the dialog finishes over the scrim that did not exist when the press
+   * started, and the tail of that same interaction dismissed it. The same
+   * guard stops a text selection dragged out of the panel from closing it,
+   * which is the version of this bug people hit later and cannot describe.
+   */
+  const [scrimArmed, setScrimArmed] = useState(false);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  /* The page behind must not scroll while this is over it, or dismissing the
+     dialog returns you somewhere other than where you opened it. */
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
+  /* preventScroll, and then explicitly at the top.
+   *
+   * Focusing the panel to catch Escape also asks the browser to bring the
+   * focused node into view, which scrolled the head-to-head card off the top
+   * of its own dialog: it opened part way down, on the lineup board, with the
+   * card the game is named after cut in half. */
+  useEffect(() => {
+    panelRef.current?.focus({ preventScroll: true });
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, []);
+
   const rows =
     leftStarters?.length || rightStarters?.length
       ? pairLineups(leftStarters ?? [], rightStarters ?? [])
       : [];
 
-  const sideHead = (side: BoardTeam, align: 'left' | 'right') => (
-    <div className={`matchup-detail__side matchup-detail__side--${align}`}>
-      <div className="matchup-detail__side-team">
-        {leagueChartFlags.avatars ? (
-          <TeamAvatar avatarUrl={side.avatarUrl} name={side.name} />
-        ) : null}
-        <div className="matchup-detail__side-names">
-          <span
-            className={[
-              'matchup-detail__side-name',
-              side.isUser ? 'matchup-detail__side-name--user' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            {side.name}
-          </span>
-          <span className="matchup-detail__side-record">{side.record}</span>
-        </div>
-      </div>
+  /* One switch, both sides. The header's price/percent toggle governs every
+     number in the app and this is not the screen to make an exception. */
+  const priceText = (side: BoardTeam) =>
+    format === 'percent' ? `${side.winProb.toFixed(1)}%` : formatAmericanOdds(side.odds);
 
-      <dl className="matchup-detail__markets">
-        <div className="matchup-detail__market">
-          <dt>Spread</dt>
-          <dd>{spreadLabel(side.spread) || NO_VALUE}</dd>
-        </div>
-        <div className="matchup-detail__market">
-          <dt>Win</dt>
-          <dd>{percentText(side.winProb)}</dd>
-        </div>
-        <div className="matchup-detail__market">
-          <dt>Proj</dt>
-          <dd>{pointsText(side.projection)}</dd>
-        </div>
-        <div className="matchup-detail__market">
-          <dt>Price</dt>
-          <dd>{formatAmericanOdds(side.odds)}</dd>
-        </div>
-      </dl>
-    </div>
-  );
-
-  return (
-    <section aria-label={`${left.name} vs ${right.name} detail`} className="matchup-detail">
-      <div className="matchup-detail__head">
-        {sideHead(left, 'left')}
-        <div className="matchup-detail__center">
-          <span className="matchup-detail__kicker">Week {week}</span>
-          <span aria-hidden="true" className="matchup-detail__at">vs</span>
-          {/* The over/under, posted once. It is a number about the game, and
-              printing it in both columns would read as two totals. */}
-          <span className="matchup-detail__total-label">Total</span>
-          <span className="matchup-detail__total">{pointsText(total)}</span>
-        </div>
-        {sideHead(right, 'right')}
-      </div>
-
-      {rows.length > 0 ? (
-        <div className="matchup-detail__lineups">
-          <div className="matchup-detail__lineup-head" aria-hidden="true">
-            <span className="matchup-detail__seat matchup-detail__seat--left">
-              <span className="matchup-detail__points">Proj</span>
-              <span className="matchup-detail__player">{left.name}</span>
-            </span>
-            <span className="matchup-detail__slot" />
-            <span className="matchup-detail__seat matchup-detail__seat--right">
-              <span className="matchup-detail__player">{right.name}</span>
-              <span className="matchup-detail__points">Proj</span>
-            </span>
-          </div>
-          {rows.map((row, index) => (
-            <div className="matchup-detail__row" key={`${row.slot}-${index}`}>
-              <Seat align="left" edge={row.edge === 'left'} entry={row.left} />
-              <span className="matchup-detail__slot">{row.slot}</span>
-              <Seat align="right" edge={row.edge === 'right'} entry={row.right} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="matchup-detail__empty">
-          Connect your league to see both lineups here.
-        </p>
-      )}
-    </section>
-  );
-}
-
-/**
- * One side of one slot: the player and their number, kept together.
- *
- * Together rather than in separate outer columns, because a five-column row
- * cannot hold two names and three fixed columns on a phone without
- * truncating the names - and a truncated player name is the one thing in a
- * lineup that has to survive.
- */
-function Seat({
-  entry,
-  align,
-  edge,
-}: {
-  entry: LineupSlotEntry | null;
-  align: 'left' | 'right';
-  edge: boolean;
-}) {
-  const points = (
-    <span
-      className={['matchup-detail__points', edge ? 'matchup-detail__points--edge' : '']
+  const identity = (side: BoardTeam, opponent: boolean) => (
+    <div
+      className={[
+        'matchup-page__faceoff-identity',
+        opponent ? 'matchup-page__faceoff-identity--opp' : '',
+      ]
         .filter(Boolean)
         .join(' ')}
     >
-      {pointsText(entry?.projection)}
-    </span>
+      <TeamCrest avatarUrl={side.avatarUrl} isUser={side.isUser} teamName={side.name} />
+      <div>
+        <p className="matchup-page__team-name">{side.name}</p>
+        <p className="matchup-page__meta-copy">{managerLine(side.ownerName, side.record)}</p>
+      </div>
+    </div>
   );
 
-  const player = <PlayerCell align={align} entry={entry} />;
-
-  return (
-    <span className={`matchup-detail__seat matchup-detail__seat--${align}`}>
-      {align === 'left' ? points : player}
-      {align === 'left' ? player : points}
-    </span>
-  );
-}
-
-function PlayerCell({
-  entry,
-  align,
-}: {
-  entry: LineupSlotEntry | null;
-  align: 'left' | 'right';
-}) {
-  if (!entry) {
-    return <span className={`matchup-detail__player matchup-detail__player--${align}`} />;
-  }
-
-  /* The same short forms the Hub's lineup uses. "Marvin Harrison Jr." does
-     not fit a half-width column and "Denver Broncos" is DEF beside a team,
-     so the row says what every fantasy product's row says. */
-  const name =
-    entry.playerId == null ? entry.name : playerShortName(entry.name, entry.position);
-  const injury = shortInjuryStatus(entry.injuryStatus);
-  const meta = [entry.position, entry.team].filter(Boolean).join(' \u00b7 ');
-
-  return (
-    <span className={`matchup-detail__player matchup-detail__player--${align}`}>
-      <span className="matchup-detail__player-name">{name}</span>
-      <span className="matchup-detail__player-meta">
-        {meta}
-        {injury ? <span className="matchup-detail__injury">{injury}</span> : null}
+  const heroSide = (side: BoardTeam, opponent: boolean) => (
+    <div
+      className={[
+        'matchup-page__faceoff-side',
+        opponent ? 'matchup-page__faceoff-side--opp' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {identity(side, opponent)}
+      <span
+        className={[
+          'matchup-page__hero-number',
+          opponent ? 'matchup-page__hero-number--opp' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {priceText(side)}
       </span>
-    </span>
+      <p className="matchup-page__meta-copy">
+        Proj <span className="matchup-page__inline-number">{pointsText(side.projection)}</span> pts
+      </p>
+    </div>
+  );
+
+  const slotFace = (entry: LineupSlotEntry | null, opponent: boolean) => {
+    if (!entry) return <span className="matchup-page__slot-empty">No starter</span>;
+    if (entry.playerId == null) return <span className="matchup-page__slot-empty">Empty slot</span>;
+
+    const headshot = (
+      <PlayerHeadshot
+        className={`matchup-page__slot-headshot matchup-page__slot-headshot--${opponent ? 'opp' : 'user'}`}
+        fallbackClassName="matchup-page__headshot-fallback"
+        imageClassName="matchup-page__headshot-image"
+        name={entry.name}
+        player={entry.player}
+        position={entry.position ?? undefined}
+      />
+    );
+    const copy = (
+      <span
+        className={[
+          'matchup-page__slot-copy',
+          opponent ? 'matchup-page__slot-copy--right' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {/* The same short form the Hub's rows use, computed here rather than
+            only read off a full player record: a row should not print
+            "Marvin Harrison Jr." on one screen and "M. Harrison Jr." on
+            another depending on how much of the record reached it. */}
+        <span className="matchup-page__row-name">
+          {entry.player?.shortName ?? playerShortName(entry.name, entry.position)}
+        </span>
+        <span className="matchup-page__row-secondary">
+          <span className="matchup-page__meta-full">{metaFor(entry)}</span>
+          {entry.injuryStatus ? (
+            <span className="matchup-page__slot-bench-cue">{entry.injuryStatus}</span>
+          ) : null}
+        </span>
+      </span>
+    );
+    const numbers = (
+      <span
+        className={[
+          'matchup-page__slot-numbers',
+          opponent ? 'matchup-page__slot-numbers--right' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        <span className="matchup-page__slot-projection">{pointsText(entry.projection)}</span>
+      </span>
+    );
+
+    return opponent ? (
+      <>
+        {numbers}
+        {copy}
+        {headshot}
+      </>
+    ) : (
+      <>
+        {headshot}
+        {copy}
+        {numbers}
+      </>
+    );
+  };
+
+  return createPortal(
+    <div className="matchup-modal" role="presentation">
+      <div
+        className="matchup-modal__scrim"
+        onMouseDown={() => setScrimArmed(true)}
+        onMouseUp={() => {
+          if (scrimArmed) onClose();
+          setScrimArmed(false);
+        }}
+        role="presentation"
+      />
+      <div
+        aria-label={`${left.name} versus ${right.name}`}
+        aria-modal="true"
+        className="matchup-modal__panel"
+        ref={panelRef}
+        role="dialog"
+        tabIndex={-1}
+      >
+        <button
+          aria-label="Close matchup"
+          className="matchup-modal__close"
+          onClick={onClose}
+          type="button"
+        >
+          ×
+        </button>
+
+        <div className="matchup-modal__scroll" ref={scrollRef}>
+          <section className="matchup-page__module matchup-page__module--hero">
+            <div className="matchup-page__module-row">
+              <span className="matchup-page__eyebrow">Week {week} · head-to-head</span>
+            </div>
+
+            <div className="matchup-page__faceoff">
+              {heroSide(left, false)}
+              <div aria-hidden="true" className="matchup-page__faceoff-vs">
+                VS
+              </div>
+              {heroSide(right, true)}
+            </div>
+
+            <div
+              aria-label={`Win probability ${left.winProb.toFixed(1)}%`}
+              className="matchup-page__winbar"
+            >
+              <span
+                className="matchup-page__winbar-fill"
+                style={{ width: `${left.winProb}%` }}
+              />
+            </div>
+            <div className="matchup-page__winbar-labels">
+              <span className="matchup-page__winbar-label matchup-page__winbar-label--user">
+                {left.winProb.toFixed(1)}%
+              </span>
+              <span className="matchup-page__winbar-label">{right.winProb.toFixed(1)}%</span>
+            </div>
+
+            <div className="matchup-page__hero-meta-row">
+              <span className="matchup-page__meta-copy">
+                Spread{' '}
+                <span className="matchup-page__inline-number">
+                  {spreadLabel(left.spread) || NO_VALUE}
+                </span>
+              </span>
+              <span className="matchup-page__meta-copy">
+                Total <span className="matchup-page__inline-number">{pointsText(total)}</span>
+              </span>
+            </div>
+          </section>
+
+          {rows.length > 0 ? (
+            <section className="matchup-page__module matchup-page__module--slot-board">
+              <div className="matchup-page__module-row matchup-page__module-row--lineup">
+                <div>
+                  <h2 className="matchup-page__module-title">Lineup vs lineup</h2>
+                </div>
+              </div>
+
+              <div className="matchup-page__slot-board-grid">
+                <div className="matchup-page__slot-board-head matchup-page__slot-board-head--left">
+                  {left.isUser ? (
+                    <span className="matchup-page__side-pill matchup-page__side-pill--you">You</span>
+                  ) : null}
+                  {left.name}
+                </div>
+                <div className="matchup-page__slot-board-head matchup-page__slot-board-head--center" />
+                <div className="matchup-page__slot-board-head matchup-page__slot-board-head--right">
+                  {right.name}
+                  {right.isUser ? (
+                    <span className="matchup-page__side-pill matchup-page__side-pill--you">You</span>
+                  ) : null}
+                </div>
+
+                {rows.map((row, index) => {
+                  const leftLeads = row.edge === 'left';
+                  const delta =
+                    row.left?.projection != null && row.right?.projection != null
+                      ? Math.abs(row.left.projection - row.right.projection)
+                      : 0;
+
+                  return (
+                    <Fragment key={`${row.slot}-${index}`}>
+                      <div className="matchup-page__slot-card">{slotFace(row.left, false)}</div>
+
+                      <div className="matchup-page__slot-center">
+                        <span className="matchup-page__slot-slot-label">{row.slot}</span>
+                        {delta > 0 ? (
+                          <span
+                            /* The Hub's green means "your side leads this
+                               slot". On somebody else's game neither side is
+                               you, so the leading team gets the neutral
+                               treatment rather than a colour that quietly
+                               claims a team is yours. */
+                            className={[
+                              'matchup-page__slot-margin',
+                              (leftLeads ? left.isUser : right.isUser)
+                                ? 'matchup-page__slot-margin--you'
+                                : 'matchup-page__slot-margin--them',
+                            ].join(' ')}
+                            title={`${leftLeads ? left.name : right.name} by ${delta.toFixed(1)}`}
+                          >
+                            <span aria-hidden="true" className="matchup-page__slot-margin-caret">
+                              {leftLeads ? '◀' : '▶'}
+                            </span>
+                            {delta.toFixed(1)}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="matchup-page__slot-card matchup-page__slot-card--right matchup-page__slot-card--opponent">
+                        {slotFace(row.right, true)}
+                      </div>
+                    </Fragment>
+                  );
+                })}
+              </div>
+            </section>
+          ) : (
+            <p className="matchup-modal__empty">
+              Connect your league to see both lineups here.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

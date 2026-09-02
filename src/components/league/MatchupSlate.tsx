@@ -295,6 +295,7 @@ export function MatchupSlate({
   );
 
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(rows[0]?.rowKey ?? null);
+  const [openedRowKey, setOpenedRowKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!rows.some((row) => row.rowKey === selectedRowKey)) {
@@ -303,6 +304,11 @@ export function MatchupSlate({
   }, [rows, selectedRowKey]);
 
   const selectedRow = rows.find((row) => row.rowKey === selectedRowKey) ?? rows[0] ?? null;
+  /* Separate from the rail's selection on purpose. Selecting a game fills the
+     rail beside the board; OPENING one puts a dialog over everything, and
+     conflating them meant arriving on the League tab with a dialog already
+     open over a board nobody had pressed yet. */
+  const openedRow = rows.find((row) => row.rowKey === openedRowKey) ?? null;
   const biggestFavorite = rows.reduce<typeof rows[number] | null>((current, row) => {
     if (!current || row.favorite.winProb > current.favorite.winProb) return row;
     return current;
@@ -554,7 +560,10 @@ export function MatchupSlate({
                      click from reaching here, so tapping a price takes a leg
                      without also moving the detail rail off the game you were
                      reading. */
-                  onClick={() => setSelectedRowKey(rowKey)}
+                  onClick={() => {
+                    setSelectedRowKey(rowKey);
+                    setOpenedRowKey(rowKey);
+                  }}
                   role="group"
                 >
                   {/* The ribbon rides the top edge of the card, above the
@@ -599,23 +608,6 @@ export function MatchupSlate({
             })}
           </div>
 
-          {/* The selected game, opened up, directly under the board.
-
-              It goes here rather than in the rail because it is two lineups
-              read against each other, and two columns of names and numbers
-              do not fit in 384px. The rail keeps what is genuinely narrow -
-              the conditioned branches and the line's movement - and the wide
-              thing gets the wide column. */}
-          {selectedRow ? (
-            <MatchupDetail
-              left={selectedRow.left}
-              leftStarters={selectedRow.left.starters}
-              right={selectedRow.right}
-              rightStarters={selectedRow.right.starters}
-              total={selectedRow.matchup.totalProjection}
-              week={currentWeek}
-            />
-          ) : null}
 
           {/* The week at a glance, under the board rather than beside it.
 
@@ -787,6 +779,23 @@ export function MatchupSlate({
 
         </aside>
       </div>
+
+      {/* The opened game, over the board rather than under it.
+
+          It was a panel below the cards, which pushed the rest of the week
+          down the page and moved the card you had just pressed off screen.
+          A game you open is a thing you look at and then close. */}
+      {openedRow ? (
+        <MatchupDetail
+          left={openedRow.left}
+          leftStarters={openedRow.left.starters}
+          onClose={() => setOpenedRowKey(null)}
+          right={openedRow.right}
+          rightStarters={openedRow.right.starters}
+          total={openedRow.matchup.totalProjection}
+          week={currentWeek}
+        />
+      ) : null}
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import type { SlotLabel } from '../types/player';
+import type { Player, SlotLabel } from '../types/player';
 
 /**
  * Two starting lineups, paired slot by slot, for the board's detail view.
@@ -37,6 +37,14 @@ export interface LineupSlotEntry {
    * when it only knows the first.
    */
   projection: number | null;
+  /**
+   * The full player record the shared row components render: headshot, team
+   * logo, short name. Built by the caller, because assembling one means
+   * knowing about the image proxy and this module is deliberately a leaf that
+   * the node tests can import directly. Absent in those tests, which is fine:
+   * nothing in the pairing logic reads it.
+   */
+  player?: Player;
 }
 
 export interface LineupPairRow {
@@ -60,6 +68,8 @@ export interface BuildLineupInput {
   means: Readonly<Record<string, MeanEntry>>;
   /** The provider's own points for this matchup, used only as a fallback. */
   fallback?: Readonly<Record<string, number>>;
+  /** Builds the record the headshot components render. See LineupSlotEntry. */
+  resolvePlayer?: (id: string) => Player;
 }
 
 /**
@@ -75,6 +85,7 @@ export function buildLineup({
   players,
   means,
   fallback,
+  resolvePlayer,
 }: BuildLineupInput): LineupSlotEntry[] {
   return starters.map((id, index) => {
     const slot = labels[index] ?? 'FLEX';
@@ -102,6 +113,7 @@ export function buildLineup({
       team: entry?.team ?? null,
       injuryStatus: entry?.injuryStatus ?? null,
       projection: projection == null ? null : Number(projection.toFixed(1)),
+      player: resolvePlayer?.(id),
     };
   });
 }

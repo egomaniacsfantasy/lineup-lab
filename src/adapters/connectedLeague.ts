@@ -253,6 +253,7 @@ export function toWeekMatchups(
         players: bootstrap.players,
         means: playerMeans,
         fallback: m.playersPoints,
+        resolvePlayer: (id) => toPlayer(id, bootstrap.players),
       });
     const pricedA = priced?.sides[String(a.rosterId)];
     const pricedB = priced?.sides[String(b.rosterId)];
