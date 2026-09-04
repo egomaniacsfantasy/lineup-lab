@@ -9,6 +9,11 @@ what exists, front end and back, the substantiated-claims table, and a numbered
 "known drift" list of everything open. Keep it current as part of the change,
 not afterwards.
 
+`DESIGN_RATIONALE.md` at the root is the other half: the market read (Sleeper,
+the sportsbooks, Apple Sports, Bracket Lab) and the seven design principles the
+UI is held to. Read it before changing how anything looks. It is where the
+colour rules below come from.
+
 ## Where things are
 
 - This repo is the only live copy: `~/dev/lineup-lab`. Copies under
