@@ -15,6 +15,7 @@
 import { loadProjections } from './loadFromRepo.js';
 import { getActiveProjections } from './store.js';
 import { normalizeName } from './importer.js';
+import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { getSupabaseAdmin } from '../services/supabaseAdmin.js';
 import { tiltFromConsensus, adjustFP, scaleBound } from './agreementTilt.js';
 
@@ -79,22 +80,49 @@ async function loadConsensusCached() {
 }
 
 /**
- * Reuse the last import's identity join: normalized name + position -> provider
- * id (and DEF team code -> id). Returns null if no import has ever run (the
- * engine then falls back to the raw snapshot).
+ * Name+position -> Sleeper id (and DEF team code -> id). Built PRIMARILY from the
+ * full Sleeper player catalog so EVERY pushed combine player resolves — not just
+ * whoever the last manual import happened to cover (that was silently dropping the
+ * long tail: deep TE3s, extra RBs/WRs, etc.). The active import's confirmed matches
+ * are layered on top so any hand-curated match still wins.
  */
-function buildProviderIndex() {
-  const active = getActiveProjections();
-  if (!active || !Array.isArray(active.projections) || active.projections.length === 0) {
-    return null;
-  }
+async function buildProviderIndex() {
   const byNamePos = new Map();
   const byTeamDef = new Map();
-  for (const p of active.projections) {
-    if (p.position === 'DEF' && p.team) byTeamDef.set(String(p.team).toUpperCase(), p.playerId);
-    if (p.name) byNamePos.set(`${normalizeName(p.name)}|${p.position}`, p.playerId);
+
+  // Primary: the full Sleeper catalog (every ACTIVE NFL player). Skip retired /
+  // free agents (no team) so a current player never resolves to an old namesake.
+  try {
+    const catalog = await sleeperProvider.getPlayerCatalog();
+    for (const id of Object.keys(catalog || {})) {
+      const c = catalog[id];
+      if (!c || !c.name) continue;
+      if (c.position === 'DEF') {
+        if (c.team) byTeamDef.set(String(c.team).toUpperCase(), id);
+        continue;
+      }
+      if (!c.team) continue;
+      const norm = normalizeName(c.name);
+      const positions = new Set([c.position, ...(c.fantasyPositions || [])].filter(Boolean));
+      for (const pos of positions) {
+        const key = `${norm}|${pos}`;
+        if (!byNamePos.has(key)) byNamePos.set(key, id); // first active wins
+      }
+    }
+  } catch {
+    // Catalog unavailable -> the import-only fallback below preserves old behavior.
   }
-  return { byNamePos, byTeamDef, version: active.version ?? 'unknown' };
+
+  // Overrides: the active import's confirmed matches always win over the catalog.
+  const active = getActiveProjections();
+  if (active && Array.isArray(active.projections)) {
+    for (const p of active.projections) {
+      if (p.position === 'DEF' && p.team) byTeamDef.set(String(p.team).toUpperCase(), p.playerId);
+      if (p.name && p.playerId) byNamePos.set(`${normalizeName(p.name)}|${p.position}`, p.playerId);
+    }
+  }
+
+  return { byNamePos, byTeamDef, version: active?.version ?? 'catalog' };
 }
 
 /**
@@ -220,7 +248,7 @@ function ceilCol(pos, suf) {
 async function _computeAdjusted(withConsensus, suf = '') {
   const dataset = loadProjections();
   const consensus = withConsensus ? await loadConsensusCached() : {};
-  const idx = buildProviderIndex();
+  const idx = await buildProviderIndex();
 
   const projections = [];
   let matched = 0;
@@ -274,7 +302,11 @@ async function _computeAdjusted(withConsensus, suf = '') {
         ? idx.byTeamDef.get(String(p.team).toUpperCase()) ?? null
         : idx.byNamePos.get(`${normalizeName(p.name)}|${pos}`) ?? null;
     }
-    if (!playerId) continue; // not on this provider's catalog -> not priceable
+    // Not resolvable to a Sleeper id (rare now that we match the full catalog --
+    // e.g. a non-Sleeper practice-squad name). Keep them on the board with a stable
+    // synthetic id so NO combine player is dropped; they simply won't link to a
+    // Sleeper roster (they can't be rostered there anyway).
+    if (!playerId) playerId = `repo::${pos}::${normalizeName(p.name)}`;
     matched += 1;
 
     projections.push({
