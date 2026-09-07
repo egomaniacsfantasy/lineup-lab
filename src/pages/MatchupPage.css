@@ -6,11 +6,6 @@
   gap: 16px;
 }
 
-.matchup-page__story {
-  display: grid;
-  gap: 12px;
-}
-
 .matchup-page__module {
   border: 1px solid var(--border-subtle);
   border-radius: 18px;
@@ -1230,10 +1225,6 @@
   cursor: default;
 }
 
-.matchup-page__lineup-hitbox--skeleton {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-}
-
 .matchup-page__slot-tag {
   display: inline-grid;
   place-items: center;
@@ -1291,11 +1282,14 @@
 .matchup-page__skeleton-hero {
   grid-template-columns: 1fr 42px 1fr;
   align-items: center;
-  min-height: 112px;
+  /* The loaded hero measures 279px; this plus the card's own padding and
+     header row lands just under it. */
+  min-height: 170px;
 }
 
 .matchup-page__skeleton-hero span,
-.matchup-page__skeleton-chip,
+.matchup-page__skeleton-line,
+.matchup-page__skeleton-block,
 .matchup-page__skeleton-copy span {
   display: block;
   border-radius: 999px;
@@ -1313,11 +1307,6 @@
   opacity: 0.5;
 }
 
-.matchup-page__skeleton-chip {
-  width: 38px;
-  height: 38px;
-}
-
 .matchup-page__skeleton-copy span:first-child {
   width: min(220px, 70%);
   height: 13px;
@@ -1327,6 +1316,47 @@
   width: min(300px, 88%);
   height: 11px;
   opacity: 0.62;
+}
+
+/* The wait, said once and said quietly.
+
+   It was a .matchup-page__live-chip, which is the amber pill a live price
+   wears, so the one element on screen that was NOT a number was dressed as
+   the loudest kind of number. Mono and muted instead: the reader can tell at
+   a glance that the page is working rather than reporting. */
+.matchup-page__cold-status {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+/* One slot row of the arriving lineup board, drawn into the real
+   .matchup-page__slot-board-grid so the columns are the board's own.
+
+   65 and 33 are measured off the loaded board (.matchup-page__slot-card and
+   .matchup-page__slot-center), not chosen to look right. A skeleton row that
+   is shorter than the row replacing it makes the page grow under the reader
+   at the exact moment they have started reading it. */
+.matchup-page__skeleton-line {
+  height: 65px;
+  border-radius: 12px;
+}
+
+.matchup-page__skeleton-line--slot {
+  height: 33px;
+  border-radius: 999px;
+  opacity: 0.5;
+}
+
+/* Stands in for the line-movement chart, which is the tallest thing the rail
+   carries and therefore the one worth reserving room for. */
+.matchup-page__skeleton-block {
+  height: 380px;
+  margin-top: 12px;
+  border-radius: 14px;
+  opacity: 0.55;
 }
 
 @keyframes matchup-skeleton {
@@ -1341,7 +1371,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .matchup-page__skeleton-hero span,
-  .matchup-page__skeleton-chip,
+  .matchup-page__skeleton-line,
+  .matchup-page__skeleton-block,
   .matchup-page__skeleton-copy span {
     animation: none;
   }
@@ -1684,33 +1715,6 @@
 }
 
 @media (min-width: 1024px) {
-
-  /* Pin the two columns explicitly: the page renders a visually-hidden
-     h1 sibling, and grid auto-placement would otherwise shove the story
-     into the 400px rail column (story right, lineup wrapped below). */
-  .matchup-page--cold .matchup-page__story {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .matchup-page--cold .matchup-page__module--lineup-rail {
-    grid-column: 2;
-    grid-row: 1;
-    position: sticky;
-    /* the app's <main> is the scrollport and already sits below the
-       header — a header-sized offset here pushes the lineup module out of
-       alignment with the story column even before any scroll */
-    top: 16px;
-    align-self: start;
-  }
-
-  /* only the cold-loading skeleton keeps the legacy two-column root; the
-     loaded page's single split lives on .matchup-page__frame */
-  .matchup-page--cold {
-    grid-template-columns: minmax(0, 1fr) 400px;
-    align-items: start;
-    gap: 20px;
-  }
 
   .matchup-page {
     padding: 24px 24px 32px;

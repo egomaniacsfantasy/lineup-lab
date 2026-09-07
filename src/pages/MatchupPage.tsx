@@ -973,46 +973,98 @@ interface MatchupLiveProps {
   onDismissMover?: ((signature: string) => void) | null;
 }
 
+/* How many slot rows the arriving lineup board is drawn with. Nine is the
+   common starting lineup and the board is the tallest thing in the main
+   column, so getting this roughly right is what stops the page growing under
+   the reader when the real one lands. */
+const COLD_SLOT_ROWS = 9;
+
+/**
+ * The Hub while a league is arriving.
+ *
+ * This is not only a first load. Switching leagues clears bootstrap outright
+ * (`activateLocal` in LeagueConnectionContext), so this screen is what every
+ * switch goes through, which is the thing it has to be good at.
+ *
+ * Two rules follow, and the old version broke both.
+ *
+ * IT OCCUPIES THE LOADED PAGE'S FRAME. It used to carry a two-column root grid
+ * of its own, at a different breakpoint and a different rail width than the
+ * page it precedes: 1024px against 1200px, 400px against 384px. Between those
+ * two breakpoints it drew a rail beside the hero that the real Hub stacks a
+ * thousand pixels further down, so the league did not fill the skeleton, it
+ * rearranged the page. Above 1200px it still moved every column by a dozen
+ * pixels. Using `matchup-page__frame` means there is no second geometry to
+ * keep in step.
+ *
+ * IT SKELETONS WHAT ACTUALLY ARRIVES. The card on the right was "Your lineup",
+ * a module the Hub stopped having when the lineup became "Lineup vs lineup" in
+ * the main column. A placeholder for a surface nobody is going to get is worse
+ * than no placeholder: it spends the wait teaching the wrong shape.
+ *
+ * And it says one thing once. The header already carries a SYNCING chip, so
+ * the card said "Pricing your league" a second and third time, once as a chip
+ * styled like a live price and once as a caption. The chip is gone and the
+ * line is dimmed mono rather than the display face, which is the same
+ * treatment the pricing placeholder settled on: a wait should not be dressed
+ * as a number.
+ */
 function MatchupColdLoading({ label }: { label: string }) {
   return (
     <div className="matchup-page matchup-page--cold">
       <h1 className="visually-hidden">Matchup</h1>
-      <section className="matchup-page__story">
-        <section className="matchup-page__module matchup-page__module--hero matchup-page__module--skeleton">
-          <div className="matchup-page__module-row">
-            <span className="matchup-page__eyebrow">{label}</span>
-            <span className="matchup-page__live-chip">Pricing your league…</span>
-          </div>
-          <div className="matchup-page__skeleton-hero" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-          <p className="matchup-page__meta-copy">Pricing your league…</p>
-        </section>
-      </section>
-      <section className="matchup-page__module matchup-page__module--lineup matchup-page__module--lineup-rail">
-        <div className="matchup-page__module-row matchup-page__module-row--lineup">
-          <div>
-            <h2 className="matchup-page__module-title">Your lineup</h2>
-            <p className="matchup-page__lineup-hint">Tap two players to compare</p>
-          </div>
-        </div>
-        <div className="matchup-page__lineup-list" aria-hidden="true">
-          {Array.from({ length: 8 }, (_, index) => (
-            <div className="matchup-page__lineup-row" key={`skeleton-${index}`}>
-              <div className="matchup-page__lineup-hitbox matchup-page__lineup-hitbox--skeleton">
-                <span className="matchup-page__skeleton-chip" />
-                <span className="matchup-page__skeleton-copy">
-                  <span />
-                  <span />
-                </span>
-                <span className="matchup-page__projection">—</span>
-              </div>
+      <div className="matchup-page__frame">
+        <section className="matchup-page__main">
+          <section className="matchup-page__module matchup-page__module--hero matchup-page__module--skeleton">
+            <div className="matchup-page__module-row">
+              <span className="matchup-page__eyebrow">{label}</span>
+              <span className="matchup-page__cold-status" role="status">
+                Pricing your league…
+              </span>
             </div>
-          ))}
-        </div>
-      </section>
+            <div className="matchup-page__skeleton-hero" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </section>
+
+          <section className="matchup-page__module matchup-page__module--slot-board matchup-page__module--skeleton">
+            <div className="matchup-page__module-row matchup-page__module-row--lineup">
+              {/* No "tap two players to compare" here. It is the real board's
+                  hint and it is true there; over eight rows that are not
+                  buttons yet it is an instruction the screen cannot honour. */}
+              <h2 className="matchup-page__module-title">Lineup vs lineup</h2>
+            </div>
+            <div className="matchup-page__slot-board-grid" aria-hidden="true">
+              {Array.from({ length: COLD_SLOT_ROWS }, (_, index) => (
+                <Fragment key={`cold-slot-${index}`}>
+                  <span className="matchup-page__skeleton-line" />
+                  <span className="matchup-page__skeleton-line matchup-page__skeleton-line--slot" />
+                  <span className="matchup-page__skeleton-line" />
+                </Fragment>
+              ))}
+            </div>
+          </section>
+        </section>
+
+        <aside className="matchup-page__rail">
+          {/* Untitled on purpose. What lands here is the start/sit call, and
+              which of its three shapes it takes depends on the league, so a
+              heading would be a promise about an answer nobody has yet. */}
+          <section className="matchup-page__module matchup-page__module--skeleton">
+            <div className="matchup-page__skeleton-copy" aria-hidden="true">
+              <span />
+              <span />
+            </div>
+          </section>
+
+          <section className="matchup-page__module matchup-page__module--skeleton">
+            <span className="matchup-page__eyebrow">Line movement</span>
+            <div className="matchup-page__skeleton-block" aria-hidden="true" />
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

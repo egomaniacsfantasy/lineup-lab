@@ -968,6 +968,27 @@ and adding before it is used.
     look), and the league link is shown as the thing it looks like in the
     address bar.
 
+24. **The Hub's loading state was a different page from the Hub.** Switching
+    leagues clears bootstrap outright, so this screen is what every switch
+    passes through, and it had drifted from the page it precedes in two ways
+    at once. It carried its own two-column root grid at 1024px and 400px
+    against the loaded page's 1200px and 384px, so between those breakpoints
+    the skeleton drew a rail beside the hero that the real Hub stacks below
+    the main column: measured, the rail moved 1265px down the page when the
+    league landed, and even on a wide desktop every column shifted. And the
+    card it drew on the right was "Your lineup", a module the Hub stopped
+    having when the lineup became "Lineup vs lineup" in the main column, so
+    the wait was spent learning a shape that was not coming. It now renders
+    inside `matchup-page__frame`, the loaded page's own layout, and skeletons
+    the modules that actually arrive at the heights they actually have (65px
+    slot rows, read off the real board). It also said "Pricing your league"
+    three times at once, once as an amber chip styled exactly like a live
+    price, beneath a header already carrying a SYNCING chip; the page says it
+    once now, dimmed and in mono, which is the treatment the pricing
+    placeholder settled on in 14. `test/hubColdFrame.test.mjs` measures the
+    two states of one page load against each other, which is the only way
+    either fault is visible: both states look fine on their own.
+
 ## Still open
 
 15. **`server/engine/leverage.js` is not wired to a route.** The file documents
