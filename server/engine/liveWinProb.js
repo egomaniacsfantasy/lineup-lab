@@ -21,15 +21,31 @@ export function normalCdf(z) {
  * One player's LIVE score distribution.
  *  - f = fraction of THAT player's game remaining (1 = not started, 0 = final),
  *    from the game clock. Different players have different f (staggered games).
- *  - mean = points so far + pregame projection × f  (trusts the pregame rate for
- *    the rest of the game; doesn't overreact to a hot/cold start).
  *  - variance shrinks with time left: σ = pregame_σ × √f → variance = pregame_var × f.
+ *
+ * Two mean models, because "points so far" means different things by position:
+ *  - SKILL players (default, isDefense=false): points ACCUMULATE FROM ZERO, so
+ *    points_so_far is a growing subtotal. mean = points_so_far + pregame × f
+ *    ("what you've banked" + "what you're still expected to earn"). At kickoff
+ *    points_so_far = 0 → mean = pregame. Correct.
+ *  - DEFENSES (isDefense=true): both ESPN and Sleeper score D/ST live, and the
+ *    score STARTS AT ITS CEILING and decays — 0 points allowed at kickoff sits in
+ *    the top points-allowed bracket (~10), then drifts down as the opponent
+ *    scores. So points_so_far is NOT a from-zero subtotal; it's a provisional
+ *    estimate of the FINAL. Adding pregame on top double-counts (a defense
+ *    projected 9.1 would read ~19.1 at kickoff). Instead blend pregame → live as
+ *    the clock runs: mean = pregame × f + points_so_far × (1 − f). At kickoff
+ *    (f=1) = pregame; at final (f=0) = actual; in between it trusts the decaying
+ *    live number more as time runs out. Both formulas converge to the actual
+ *    final at f=0, so applyLiveLocks (final = actual) is unaffected.
  */
-export function livePlayerScore(pregameMean, pregameSigma, pointsSoFar, fracRemaining) {
+export function livePlayerScore(pregameMean, pregameSigma, pointsSoFar, fracRemaining, isDefense = false) {
   const f = Math.max(0, Math.min(1, Number(fracRemaining)));
   const sig = Number(pregameSigma) || 0;
+  const mean = Number(pregameMean) || 0;
+  const pts = Number(pointsSoFar) || 0;
   return {
-    mean: (Number(pointsSoFar) || 0) + (Number(pregameMean) || 0) * f,
+    mean: isDefense ? mean * f + pts * (1 - f) : pts + mean * f,
     variance: sig * sig * f,
   };
 }
@@ -50,12 +66,14 @@ export function teamLiveDistribution(playerLives) {
  *  - pregameFor(id) -> {mean, sigma|stdev} (this week's pregame projection)
  *  - pointsFor(id)  -> points scored so far (0 if not started)
  *  - fFor(id)       -> fraction of the player's game remaining (0..1; 1 = pregame)
+ *  - defFor(id)     -> true for a team defense (D/ST); switches to the blend mean
+ *                      (see livePlayerScore). Defaults to non-defense.
  */
-export function buildLiveTeamDistribution(starterIds, pregameFor, pointsFor, fFor) {
+export function buildLiveTeamDistribution(starterIds, pregameFor, pointsFor, fFor, defFor = () => false) {
   const lives = (starterIds ?? []).map((id) => {
     const pg = pregameFor(id) || {};
     const f = fFor(id);
-    return livePlayerScore(pg.mean, pg.sigma ?? pg.stdev, pointsFor(id), f == null ? 1 : f);
+    return livePlayerScore(pg.mean, pg.sigma ?? pg.stdev, pointsFor(id), f == null ? 1 : f, defFor(id) === true);
   });
   return teamLiveDistribution(lives);
 }

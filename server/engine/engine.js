@@ -1950,6 +1950,10 @@ export function priceLiveOverlay(ctx, inputs, live, baseline) {
         (id) => playerDistribution(id, projectionMap, catalog[id], week),
         (id) => pointsForPlayer(id),
         (id) => fForPlayer(id),
+        // D/ST are scored live from a decaying ceiling (0 pts allowed ≈ top
+        // bracket at kickoff), so they use the blend mean, not additive — both
+        // ESPN and Sleeper normalize a team defense to position 'DEF'.
+        (id) => catalog[id]?.position === 'DEF',
       ),
     );
   }
