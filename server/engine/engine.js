@@ -17,7 +17,7 @@
 import crypto from 'node:crypto';
 import { getActiveProjections } from '../projections/store.js';
 import { cached } from '../cache.js';
-import { closedFormWinProb, buildLiveTeamDistribution } from './liveWinProb.js';
+import { closedFormWinProb, buildLivePlayerScores } from './liveWinProb.js';
 
 export const SEASON_SIMS = 10_000; // player-level season Monte Carlo — Futures and movers
 const MATCHUP_SIMS = 10_000; // seeded player-level sims for the headline matchup win%
@@ -1940,22 +1940,36 @@ export function priceLiveOverlay(ctx, inputs, live, baseline) {
   const pointsForPlayer = live.pointsForPlayer ?? (() => 0);
   const fForPlayer = live.fForPlayer ?? (() => 1);
 
-  // Live {mean, variance} per roster (variance shrinks as games finish).
+  // Per-player live scores { current, projected, variance, f }, then the team
+  // {mean, variance} as their sum. Computed once and reused for BOTH the matchup
+  // math and the per-player row UI (`players`), so they can never drift.
+  // D/ST use the blend mean, not additive (they're scored live from a decaying
+  // ceiling — 0 pts allowed ≈ top bracket at kickoff); both ESPN and Sleeper
+  // normalize a team defense to position 'DEF'.
+  const isDef = (id) => catalog[id]?.position === 'DEF';
   const liveDistByRoster = new Map();
+  const players = {};
   for (const t of teams) {
-    liveDistByRoster.set(
-      t.rosterId,
-      buildLiveTeamDistribution(
-        t.starters,
-        (id) => playerDistribution(id, projectionMap, catalog[id], week),
-        (id) => pointsForPlayer(id),
-        (id) => fForPlayer(id),
-        // D/ST are scored live from a decaying ceiling (0 pts allowed ≈ top
-        // bracket at kickoff), so they use the blend mean, not additive — both
-        // ESPN and Sleeper normalize a team defense to position 'DEF'.
-        (id) => catalog[id]?.position === 'DEF',
-      ),
+    const scores = buildLivePlayerScores(
+      t.starters,
+      (id) => playerDistribution(id, projectionMap, catalog[id], week),
+      (id) => pointsForPlayer(id),
+      (id) => fForPlayer(id),
+      isDef,
     );
+    let mean = 0;
+    let variance = 0;
+    for (const [id, s] of Object.entries(scores)) {
+      mean += s.projected;
+      variance += s.variance;
+      // Rounded to 1dp for the client; `current` = points scored so far,
+      // `projected` = live projected final total (position-aware mean).
+      players[id] = {
+        current: Number(s.current.toFixed(1)),
+        projected: Number(s.projected.toFixed(1)),
+      };
+    }
+    liveDistByRoster.set(t.rosterId, { mean, variance });
   }
 
   const byMatchup = new Map();
@@ -1983,7 +1997,7 @@ export function priceLiveOverlay(ctx, inputs, live, baseline) {
   });
 
   const futures = baseline ? simulateSeasonLive(baseline, liveDistByRoster) : null;
-  return { at: Date.now(), week, sides, futures };
+  return { at: Date.now(), week, sides, futures, players };
 }
 
 /**

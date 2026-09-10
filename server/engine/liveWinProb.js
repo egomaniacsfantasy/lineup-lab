@@ -62,20 +62,40 @@ export function teamLiveDistribution(playerLives) {
 }
 
 /**
- * A team's LIVE distribution from its starters. Resolvers keep it pure/testable:
+ * Per-player LIVE scores for a set of starters, keyed by id. Resolvers keep it
+ * pure/testable:
  *  - pregameFor(id) -> {mean, sigma|stdev} (this week's pregame projection)
  *  - pointsFor(id)  -> points scored so far (0 if not started)
  *  - fFor(id)       -> fraction of the player's game remaining (0..1; 1 = pregame)
  *  - defFor(id)     -> true for a team defense (D/ST); switches to the blend mean
  *                      (see livePlayerScore). Defaults to non-defense.
+ * Each value = { current, projected, variance, f }: `current` is points scored so
+ * far, `projected` is the live projected FINAL total (the position-aware mean).
+ * This is the single source both the team distribution and the per-player row UI
+ * read from, so they never drift.
+ */
+export function buildLivePlayerScores(starterIds, pregameFor, pointsFor, fFor, defFor = () => false) {
+  const out = {};
+  for (const id of starterIds ?? []) {
+    const pg = pregameFor(id) || {};
+    const rawF = fFor(id);
+    const f = rawF == null ? 1 : Math.max(0, Math.min(1, Number(rawF)));
+    const current = Number(pointsFor(id)) || 0;
+    const s = livePlayerScore(pg.mean, pg.sigma ?? pg.stdev, current, f, defFor(id) === true);
+    out[id] = { current, projected: s.mean, variance: s.variance, f };
+  }
+  return out;
+}
+
+/**
+ * A team's LIVE distribution from its starters — the sum of its players' live
+ * means and variances. Same resolvers as buildLivePlayerScores.
  */
 export function buildLiveTeamDistribution(starterIds, pregameFor, pointsFor, fFor, defFor = () => false) {
-  const lives = (starterIds ?? []).map((id) => {
-    const pg = pregameFor(id) || {};
-    const f = fFor(id);
-    return livePlayerScore(pg.mean, pg.sigma ?? pg.stdev, pointsFor(id), f == null ? 1 : f, defFor(id) === true);
-  });
-  return teamLiveDistribution(lives);
+  const scores = buildLivePlayerScores(starterIds, pregameFor, pointsFor, fFor, defFor);
+  return teamLiveDistribution(
+    Object.values(scores).map((s) => ({ mean: s.projected, variance: s.variance })),
+  );
 }
 
 /** Closed-form P(team A beats team B) from each team's normal {mean, variance}. */

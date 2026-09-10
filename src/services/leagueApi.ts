@@ -190,6 +190,12 @@ export interface LeaguePricing {
   lines?: PricedLine[];
   userSwaps?: UserSwap[];
   playerMeans?: Record<string, { mean: number; stdev: number; unpriced: boolean; zeroed: boolean; derived: boolean }>;
+  /** Present only while live mode is on: per-player live points + projected final.
+   *  `current` = points scored so far; `projected` = live projected final total
+   *  (position-aware, blend for D/ST). Keyed by the same playerId as the lineup. */
+  livePlayers?: Record<string, { current: number; projected: number }> | null;
+  /** Set by the server's live overlay merge while live mode is on. */
+  live?: { at: number; week?: number } | null;
   futures?: PricedFuture[];
   draftWrapped?: DraftWrappedReal | null;
   movers?: MarketMover[];

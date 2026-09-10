@@ -66,7 +66,9 @@ export function getBaseline(leagueId, sig, factory) {
 /**
  * Merge a live overlay onto a static priced object for the RESPONSE only (the
  * stamped line history stays on the static/6h price). Overwrites each matchup
- * side's numeric line fields and swaps in the live futures; preserves histograms,
+ * side's numeric line fields, swaps in the live futures, and attaches the
+ * per-player live block (livePlayers: id -> {current, projected}) so the lineup
+ * rows can show current points + live projected final; preserves histograms,
  * unpriced/zeroed flags, and everything else.
  */
 export function mergeLiveOverlay(pricing, overlay) {
@@ -84,6 +86,7 @@ export function mergeLiveOverlay(pricing, overlay) {
     ...pricing,
     lines,
     futures: overlay.futures ?? pricing.futures,
+    livePlayers: overlay.players ?? null,
     live: { at: overlay.at, week: overlay.week },
   };
 }

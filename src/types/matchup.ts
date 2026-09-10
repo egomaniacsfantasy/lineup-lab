@@ -74,6 +74,10 @@ export interface RosterSlot {
   ceiling: number;
   isDecisionSlot: boolean;
   alternatives: PlayerAlternative[];
+  /** Present only during a live game (live mode on + this player's game started):
+   *  `current` = points scored so far, `projected` = live projected final total.
+   *  When set, the lineup row shows both instead of the static pregame projection. */
+  live?: { current: number; projected: number };
 }
 
 export interface PlayerAlternative {

@@ -333,8 +333,12 @@ type MirroredSlotRow = {
   slotLabel: string;
   yourSlot: RosterSlot | null;
   opponentSlot: RosterSlot | null;
+  /** The headline number for the side. Live: projected final total; else pregame. */
   yourProjection: number;
   opponentProjection: number;
+  /** Points scored so far, present only during a live game (else null). */
+  yourCurrent: number | null;
+  opponentCurrent: number | null;
   edgeDelta: number;
 };
 
@@ -387,8 +391,10 @@ function buildMirroredSlotRows(
     const yourSlot = yourRoster[index] ?? null;
     const opponentSlot = opponentRoster[index] ?? null;
     const slotLabel = normalizeSlotLabel(yourSlot?.slotLabel ?? opponentSlot?.slotLabel ?? 'BN');
-    const yourProjection = yourSlot?.projection ?? 0;
-    const opponentProjection = opponentSlot?.projection ?? 0;
+    // During a live game the headline number is the live projected FINAL total;
+    // pregame (no `live`) it stays the static projection. The edge follows suit.
+    const yourProjection = yourSlot?.live?.projected ?? yourSlot?.projection ?? 0;
+    const opponentProjection = opponentSlot?.live?.projected ?? opponentSlot?.projection ?? 0;
     rows.push({
       key: `${slotLabel}-${yourSlot?.starter.id ?? 'open'}-${opponentSlot?.starter.id ?? 'open'}-${index}`,
       slotLabel,
@@ -396,6 +402,8 @@ function buildMirroredSlotRows(
       opponentSlot,
       yourProjection,
       opponentProjection,
+      yourCurrent: yourSlot?.live?.current ?? null,
+      opponentCurrent: opponentSlot?.live?.current ?? null,
       edgeDelta: roundTo(yourProjection - opponentProjection),
     });
   }
@@ -2236,6 +2244,11 @@ function MatchupLive({
                             </span>
                             <span className="matchup-page__slot-numbers">
                               <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection, isPriced)}</span>
+                              {row.yourCurrent != null ? (
+                                <span className="matchup-page__slot-live-current" title="Points scored so far">
+                                  {row.yourCurrent.toFixed(1)} now
+                                </span>
+                              ) : null}
                             </span>
                           </>
                         ) : (
@@ -2275,6 +2288,11 @@ function MatchupLive({
                           <>
                             <span className="matchup-page__slot-numbers matchup-page__slot-numbers--right">
                               <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection, isPriced)}</span>
+                              {row.opponentCurrent != null ? (
+                                <span className="matchup-page__slot-live-current" title="Points scored so far">
+                                  {row.opponentCurrent.toFixed(1)} now
+                                </span>
+                              ) : null}
                             </span>
                             <span className="matchup-page__slot-copy matchup-page__slot-copy--right">
                               <span className="matchup-page__row-name">{row.opponentSlot.starter.shortName}</span>

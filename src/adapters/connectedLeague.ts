@@ -345,6 +345,9 @@ export function toMatchupData(
   const priced = pricing?.available ? pricing : null;
   const pricedLine = priced?.lines?.find((l) => l.matchupId === userMatchup.matchupId);
   const playerMeans = priced?.playerMeans ?? {};
+  // Present only while live mode is on: per-player {current, projected}. When set
+  // for a player, their lineup row shows live points + projected final.
+  const livePlayers = priced?.livePlayers ?? null;
   const swapsBySlot = new Map<number, NonNullable<LeaguePricing['userSwaps']>>();
   (priced?.userSwaps ?? []).forEach((swap) => {
     const list = swapsBySlot.get(swap.slotIndex) ?? [];
@@ -380,6 +383,8 @@ export function toMatchupData(
         };
       });
 
+      const live = livePlayers?.[playerId] ?? null;
+
       return {
         slotLabel: labels[index] ?? 'FLEX',
         starter: toPlayer(playerId, bootstrap.players),
@@ -388,6 +393,7 @@ export function toMatchupData(
         ceiling: Number((projection * 1.45).toFixed(1)),
         isDecisionSlot: alternatives.length > 0,
         alternatives,
+        ...(live ? { live } : {}),
       };
     });
 
