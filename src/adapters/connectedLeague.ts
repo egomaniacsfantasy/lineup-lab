@@ -219,6 +219,9 @@ export function toWeekMatchups(
   const teamsByRoster = new Map(bootstrap.teams.map((t) => [t.rosterId, t]));
   const boardLabels = slotLabels(bootstrap.league.rosterPositions);
   const playerMeans = pricing?.available ? (pricing.playerMeans ?? {}) : {};
+  // Present only while live mode is on (covers every rostered player league-wide,
+  // like playerMeans), so any matchup's rows can show live points + projected final.
+  const livePlayers = pricing?.available ? (pricing.livePlayers ?? null) : null;
   const pricedByMatchup = new Map(
     pricing?.available ? (pricing.lines ?? []).map((l) => [l.matchupId, l]) : [],
   );
@@ -253,6 +256,7 @@ export function toWeekMatchups(
         players: bootstrap.players,
         means: playerMeans,
         fallback: m.playersPoints,
+        live: livePlayers,
         resolvePlayer: (id) => toPlayer(id, bootstrap.players),
       });
     const pricedA = priced?.sides[String(a.rosterId)];

@@ -38,6 +38,13 @@ export interface LineupSlotEntry {
    */
   projection: number | null;
   /**
+   * Points scored so far, present only during a live game (else null/absent).
+   * When set, `projection` is the live projected FINAL total and the row shows
+   * both. Optional so hand-written fixtures/mocks needn't supply it; buildLineup
+   * always sets it.
+   */
+  current?: number | null;
+  /**
    * The full player record the shared row components render: headshot, team
    * logo, short name. Built by the caller, because assembling one means
    * knowing about the image proxy and this module is deliberately a leaf that
@@ -68,6 +75,12 @@ export interface BuildLineupInput {
   means: Readonly<Record<string, MeanEntry>>;
   /** The provider's own points for this matchup, used only as a fallback. */
   fallback?: Readonly<Record<string, number>>;
+  /**
+   * Per-player live block (only while live mode is on): id -> {current, projected}.
+   * When a player has an entry, their row shows the live projected FINAL total as
+   * the projection plus the current points scored so far. Absent = pregame.
+   */
+  live?: Readonly<Record<string, { current: number; projected: number }>> | null;
   /** Builds the record the headshot components render. See LineupSlotEntry. */
   resolvePlayer?: (id: string) => Player;
 }
@@ -85,6 +98,7 @@ export function buildLineup({
   players,
   means,
   fallback,
+  live,
   resolvePlayer,
 }: BuildLineupInput): LineupSlotEntry[] {
   return starters.map((id, index) => {
@@ -98,12 +112,16 @@ export function buildLineup({
         team: null,
         injuryStatus: null,
         projection: null,
+        current: null,
       };
     }
 
     const entry = players[id];
+    // Live game: the row shows the live projected FINAL total, with points so far
+    // beneath it. Pregame (no live entry): the engine week mean as before.
+    const lv = live?.[id] ?? null;
     const mean = means[id]?.mean;
-    const projection = mean ?? fallback?.[id] ?? null;
+    const projection = lv ? lv.projected : (mean ?? fallback?.[id] ?? null);
 
     return {
       slot,
@@ -113,6 +131,7 @@ export function buildLineup({
       team: entry?.team ?? null,
       injuryStatus: entry?.injuryStatus ?? null,
       projection: projection == null ? null : Number(projection.toFixed(1)),
+      current: lv ? Number(lv.current.toFixed(1)) : null,
       player: resolvePlayer?.(id),
     };
   });

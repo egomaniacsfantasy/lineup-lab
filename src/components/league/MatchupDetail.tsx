@@ -219,6 +219,11 @@ export function MatchupDetail({
           .join(' ')}
       >
         <span className="matchup-page__slot-projection">{pointsText(entry.projection)}</span>
+        {entry.current != null ? (
+          <span className="matchup-page__slot-live-current" title="Points scored so far">
+            {entry.current.toFixed(1)} now
+          </span>
+        ) : null}
       </span>
     );
 
