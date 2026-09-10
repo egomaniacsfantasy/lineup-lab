@@ -667,7 +667,10 @@ export async function computeLeagueLiveOverlay(provider, leagueId, userId, gameS
 
   // Baseline signature: recomputes when projections, week, any lineup, or playoff
   // settings change. Stable while a game plays, so it's reused every 30s cycle.
-  const rosterSig = ctx.teams.map((t) => `${t.rosterId}:${(t.starters ?? []).join('-')}`).join('|');
+  // .sort() so the baseline cache key is independent of the provider's team order
+  // (matches the seed hash, which is now order-independent) — otherwise the cache
+  // misses every cycle and re-simulates the season.
+  const rosterSig = ctx.teams.map((t) => `${t.rosterId}:${(t.starters ?? []).join('-')}`).sort().join('|');
   const sig = `${inputs.version}:${ctx.week}:${rosterSig}:${playoffSettingsSignature(leagueId)}`;
   const baseline = getBaseline(leagueId, sig, () =>
     computeSeasonBaseline({

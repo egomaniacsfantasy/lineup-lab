@@ -569,11 +569,22 @@ function lineFromDistributions(a, b, winProb) {
   };
 }
 
+// Order-independent [rosterId, starters] list for the hashes below. The providers
+// do NOT guarantee a stable team order across fetches, and an unsorted list would
+// reshuffle both the cache key AND the seed hash on every live cycle — reseeding
+// the whole season Monte Carlo and drifting the futures (playoff/title odds) on
+// every toggle, even with a static game. Sorting by rosterId holds it fixed.
+function _seedStarters(teams) {
+  return [...teams]
+    .sort((a, b) => String(a.rosterId).localeCompare(String(b.rosterId)))
+    .map((t) => [t.rosterId, t.starters]);
+}
+
 export function computeInputsHash({ projectionVersion, teams, week, overlay }) {
   const payload = JSON.stringify({
     projectionVersion,
     week,
-    starters: teams.map((t) => [t.rosterId, t.starters]),
+    starters: _seedStarters(teams),
     // A user's projection overlay is part of the inputs: their adjusted lines
     // must cache and seed independently of the house line.
     overlay: overlay ?? null,
@@ -594,7 +605,7 @@ export function computeInputsHash({ projectionVersion, teams, week, overlay }) {
 export function computeSeedHash({ teams, week, overlay }) {
   const payload = JSON.stringify({
     week,
-    starters: teams.map((t) => [t.rosterId, t.starters]),
+    starters: _seedStarters(teams),
     overlay: overlay ?? null,
   });
   return crypto.createHash('sha1').update(payload).digest('hex').slice(0, 16);
@@ -1452,7 +1463,7 @@ function standardBracketSeeds(size) {
 // Iteration count for the LIVE season engine (fewer than SEASON_SIMS: the live
 // number refreshes every ~30s, so ±1% Monte-Carlo noise is fine and it keeps the
 // per-cycle cost + baseline memory low at scale).
-export const LIVE_SIMS = 2500;
+export const LIVE_SIMS = 5000;
 
 /** Shared season setup used by simulateSeason, computeSeasonBaseline and the
  *  live engine — so seeding/bracket/params logic never drifts between them. */
