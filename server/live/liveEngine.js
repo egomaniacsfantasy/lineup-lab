@@ -20,6 +20,7 @@ const CYCLE_MS = 90_000;
 const state = {
   on: false,
   timer: null,
+  running: false, // a cycle is in flight — prevents overlapping cycles (see tick)
   at: 0, // last successful cycle
   overlays: new Map(), // leagueId -> overlay {at, week, sides, futures}
   baselines: new Map(), // leagueId -> { sig, baseline }
@@ -92,11 +93,19 @@ export function mergeLiveOverlay(pricing, overlay) {
 }
 
 async function tick() {
-  if (!state.on || !runCycleFn) return;
+  // Re-entrancy guard: a full cycle can take LONGER than CYCLE_MS (many leagues),
+  // and the interval fires regardless — so without this a new cycle would launch on
+  // top of the still-running one, and the overlap compounds until the instance runs
+  // out of memory / blocks the health check and RESTARTS (wiping live mode). Skip the
+  // tick while one is in flight; the next interval fire starts a fresh one.
+  if (!state.on || !runCycleFn || state.running) return;
+  state.running = true;
   try {
     await runCycleFn();
   } catch (err) {
     console.error('[live] cycle failed:', err?.message ?? err);
+  } finally {
+    state.running = false;
   }
 }
 
