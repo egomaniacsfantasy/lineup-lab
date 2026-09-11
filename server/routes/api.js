@@ -1,6 +1,6 @@
 /**
  * Provider-agnostic API surface for the client.
- * The client only ever talks to these routes — never to provider APIs.
+ * The client only ever talks to these routes - never to provider APIs.
  */
 import crypto from 'node:crypto';
 import { Router } from 'express';
@@ -241,7 +241,7 @@ apiRouter.get('/rankings', async (req, res, next) => {
       return;
     }
 
-    // Dedupe by playerId — a player can land in the sheet twice (depth-chart
+    // Dedupe by playerId - a player can land in the sheet twice (depth-chart
     // quirks); the rankings board must show each exactly once or React key
     // collisions glitch the list.
     const byId = new Map();
@@ -365,7 +365,7 @@ async function resolveConnect(provider, username) {
     // back to the previous season when the current is empty. In the off-season
     // Sleeper's "current" season can lag the season a freshly-created/-joined
     // league is filed under, so a league you just joined could sit in the other
-    // season while you already have leagues in this one — and never show. Each
+    // season while you already have leagues in this one - and never show. Each
     // league carries its own season, so the picker connects to the right one.
     const seasons = [season, state.previousSeason].filter(Boolean);
     const byId = new Map();
@@ -393,7 +393,7 @@ async function resolveConnect(provider, username) {
 /**
  * ESPN connect: there's no username lookup, so the user supplies their league
  * id (from the league URL). We return the league + its teams so they can pick
- * which one is theirs. A private league answers 401/403 — we say so plainly so
+ * which one is theirs. A private league answers 401/403 - we say so plainly so
  * the UI can escalate to the ESPN-site connector and retry.
  */
 apiRouter.get('/espn/connect/:leagueId', async (req, res, next) => {
@@ -540,7 +540,7 @@ async function loadLeagueContext(provider, leagueId, userId, weekOverride = null
       /* `?? 'Unmanaged team'` collapsed two different facts into one label. A
          team can have an owner whose name we cannot honestly print (ESPN hands
          back a machine handle for accounts that never set a display name), and
-         that team is managed — it just has nobody to name. Only a team with no
+         that team is managed - it just has nobody to name. Only a team with no
          owner record at all is unmanaged. */
       ownerName: owner ? owner.ownerName ?? null : 'Unmanaged team',
       teamName: owner?.teamName ?? `Roster ${r.rosterId}`,
@@ -637,7 +637,7 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
   // Resolve the fantasy week UP FRONT (both reads are provider-cached, so this is
   // cheap) and fold it into the cache key AND the built context. Without the week
   // in the key, a preseason week-1 price and a rollover-lag lastScoredWeek price
-  // could share one cache slot and be served interchangeably — the title-odds flip
+  // could share one cache slot and be served interchangeably - the title-odds flip
   // (~12% <-> ~6%, from a remaining week being dropped from the sim).
   let week = null;
   try {
@@ -669,7 +669,7 @@ export async function computeLeagueLiveOverlay(provider, leagueId, userId, gameS
   // Baseline signature: recomputes when projections, week, any lineup, or playoff
   // settings change. Stable while a game plays, so it's reused every 30s cycle.
   // .sort() so the baseline cache key is independent of the provider's team order
-  // (matches the seed hash, which is now order-independent) — otherwise the cache
+  // (matches the seed hash, which is now order-independent) - otherwise the cache
   // misses every cycle and re-simulates the season.
   const rosterSig = ctx.teams.map((t) => `${t.rosterId}:${(t.starters ?? []).join('-')}`).sort().join('|');
   const sig = `${inputs.version}:${ctx.week}:${rosterSig}:${playoffSettingsSignature(leagueId)}`;
@@ -689,7 +689,7 @@ export async function computeLeagueLiveOverlay(provider, leagueId, userId, gameS
   const fFor = (id) => {
     const p = ctx.catalog?.[id];
     // Ruled OUT -> f = 0, which makes livePlayerScore lock the player to their
-    // current points with ZERO variance — identical to a finished game, but for
+    // current points with ZERO variance - identical to a finished game, but for
     // one player. So their score is a fixed constant in the matchup line AND in
     // every futures sim (buildLiveTeamDistribution sums per-player mean/variance;
     // a 0-variance player never varies across the thousands of iterations).
@@ -1250,7 +1250,7 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
  * Predictor: condition the season on user-chosen results and re-price playoff/title
  * odds for every team. Body: { userId, picks: [{week, matchupId, winnerRosterId,
  * winnerPoints?, loserPoints?}], fast? }. Runs PREDICTOR_SIMS (4k, not the pricing 10k)
- * every time: the seed is constant per league (CRN), so there is no fast-then-refine —
+ * every time: the seed is constant per league (CRN), so there is no fast-then-refine -
  * an identical pick set quotes identically and changing one pick leaves every other
  * game's draws untouched. `fast` is accepted for client compatibility but ignored.
  * pickSetHash echoes the picks the run used so the client can drop a stale response.
@@ -1271,7 +1271,7 @@ apiRouter.post('/league/:leagueId/predictor', async (req, res, next) => {
  * Week forks: both branches of every matchup in a week (each side's playoff prob now /
  * if-it-wins / if-it-loses) plus each matchup's 0-100 importance and the game of the week.
  * Drives the "This week" fork graphic. Query: userId, week? (defaults to the resolved week).
- * Cached per league/user/week/build/playoff-settings — same inputs as pricing, so an
+ * Cached per league/user/week/build/playoff-settings - same inputs as pricing, so an
  * override edit or a new deploy busts it.
  */
 apiRouter.get('/league/:leagueId/forks', async (req, res, next) => {
@@ -1291,7 +1291,7 @@ apiRouter.get('/league/:leagueId/forks', async (req, res, next) => {
 });
 
 /**
- * Each team's projected points per remaining week (no Monte Carlo — distribution
+ * Each team's projected points per remaining week (no Monte Carlo - distribution
  * means). Drives the Predictor's per-matchup projection + the override-box default.
  * Query: userId. Cached 5m per league/user/build.
  */

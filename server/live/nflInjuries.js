@@ -1,11 +1,11 @@
 /**
  * Live in-game injury status from ESPN's public injuries feed, used to LOCK a
- * player who is RULED OUT to their current points in the live sim — the same
+ * player who is RULED OUT to their current points in the live sim - the same
  * treatment a finished game gets (f = 0 -> mean = points so far, variance = 0),
  * but for a SINGLE player instead of the whole team.
  *
  * ESPN updates this feed in real time: a player ruled out DURING a game shows
- * status "Out" within a cycle (verified live). Only status "Out" locks a player —
+ * status "Out" within a cycle (verified live). Only status "Out" locks a player -
  * "Questionable"/"Doubtful" may still play, so they keep projecting normally. It
  * also covers a player ruled out AFTER the last projection run (pregame): their
  * current points are 0, so they lock to 0 in live mode.
@@ -27,7 +27,7 @@ const _SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v']);
  *  suffixes. Mirrors the Python injury_loader's _norm. */
 export function normalizePlayerName(name) {
   if (!name) return '';
-  // Strip combining diacritical marks (U+0300–U+036F) after NFD decomposition.
+  // Strip combining diacritical marks (U+0300-U+036F) after NFD decomposition.
   let s = String(name).normalize('NFD').replace(/[̀-ͯ]/g, '');
   s = s.toLowerCase().trim().replace(/[.']/g, '');
   const parts = s.split(/\s+/).filter(Boolean);
@@ -51,7 +51,7 @@ async function fetchInjuries() {
   for (const grp of data?.injuries ?? []) {
     for (const inj of grp?.injuries ?? []) {
       // ONLY a definitive "Out" locks the player. Questionable/Doubtful/Active do
-      // not — those players may still produce, so they project as normal.
+      // not - those players may still produce, so they project as normal.
       if (inj?.status !== 'Out') continue;
       const ath = inj?.athlete ?? {};
       const nm = ath?.displayName;
@@ -75,7 +75,7 @@ function refreshInBackground() {
     });
 }
 
-/** Set of "normName|team" keys for players currently ruled OUT. Never blocks —
+/** Set of "normName|team" keys for players currently ruled OUT. Never blocks -
  *  returns the last known set and refreshes in the background. */
 export function getRuledOut() {
   if (Date.now() - _cache.at >= TTL_MS) refreshInBackground();
