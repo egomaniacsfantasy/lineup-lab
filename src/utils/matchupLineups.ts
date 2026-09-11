@@ -122,6 +122,11 @@ export function buildLineup({
     const lv = live?.[id] ?? null;
     const mean = means[id]?.mean;
     const projection = lv ? lv.projected : (mean ?? fallback?.[id] ?? null);
+    // Points scored so far — from the live overlay when live mode is on, else the
+    // provider feed (playersPoints, `fallback`), so it's available regardless of
+    // live mode. Null when 0/absent (pregame) so pregame shows nothing.
+    const curRaw = lv ? lv.current : fallback?.[id];
+    const current = typeof curRaw === 'number' && curRaw > 0 ? Number(curRaw.toFixed(1)) : null;
 
     return {
       slot,
@@ -131,7 +136,7 @@ export function buildLineup({
       team: entry?.team ?? null,
       injuryStatus: entry?.injuryStatus ?? null,
       projection: projection == null ? null : Number(projection.toFixed(1)),
-      current: lv ? Number(lv.current.toFixed(1)) : null,
+      current,
       player: resolvePlayer?.(id),
     };
   });

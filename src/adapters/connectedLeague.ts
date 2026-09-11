@@ -388,6 +388,11 @@ export function toMatchupData(
       });
 
       const live = livePlayers?.[playerId] ?? null;
+      // Points scored so far from the provider feed — available regardless of live
+      // mode. Null when 0/absent (pregame). Drives the team's "current score" total.
+      const scored = matchup.playersPoints?.[playerId];
+      const currentPoints =
+        typeof scored === 'number' && scored > 0 ? Number(scored.toFixed(1)) : null;
 
       return {
         slotLabel: labels[index] ?? 'FLEX',
@@ -398,6 +403,7 @@ export function toMatchupData(
         isDecisionSlot: alternatives.length > 0,
         alternatives,
         ...(live ? { live } : {}),
+        ...(currentPoints != null ? { currentPoints } : {}),
       };
     });
 

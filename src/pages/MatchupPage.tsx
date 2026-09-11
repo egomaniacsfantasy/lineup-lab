@@ -402,8 +402,8 @@ function buildMirroredSlotRows(
       opponentSlot,
       yourProjection,
       opponentProjection,
-      yourCurrent: yourSlot?.live?.current ?? null,
-      opponentCurrent: opponentSlot?.live?.current ?? null,
+      yourCurrent: yourSlot?.currentPoints ?? yourSlot?.live?.current ?? null,
+      opponentCurrent: opponentSlot?.currentPoints ?? opponentSlot?.live?.current ?? null,
       edgeDelta: roundTo(yourProjection - opponentProjection),
     });
   }
@@ -1587,12 +1587,13 @@ function MatchupLive({
     [engine.roster, matchup.opponentTeam.roster],
   );
 
-  // Live "current score" per team = sum of the starters' points scored so far
-  // (the same live feed ESPN/Sleeper add up). Null when no starter has live data
-  // yet (pregame / live mode off), so the headline shows only the projection then.
+  // Team "current score" = sum of the starters' points scored so far (the same
+  // feed ESPN/Sleeper add up). Sourced from `currentPoints` (provider feed), so it
+  // shows REGARDLESS of live mode. Null when no starter has scored (pregame), so
+  // the headline shows only the projection then.
   const sumLiveCurrent = (roster: RosterSlot[]): number | null => {
     const vals = roster
-      .map((s) => s.live?.current)
+      .map((s) => s.currentPoints)
       .filter((v): v is number => typeof v === 'number');
     return vals.length ? Number(vals.reduce((a, b) => a + b, 0).toFixed(1)) : null;
   };

@@ -78,6 +78,10 @@ export interface RosterSlot {
    *  `current` = points scored so far, `projected` = live projected final total.
    *  When set, the lineup row shows both instead of the static pregame projection. */
   live?: { current: number; projected: number };
+  /** Points scored so far from the provider feed (playersPoints) — available
+   *  REGARDLESS of live mode. Null when 0/absent (pregame). Used for the team's
+   *  live "current score" total, which should show even with live mode off. */
+  currentPoints?: number | null;
 }
 
 export interface PlayerAlternative {
