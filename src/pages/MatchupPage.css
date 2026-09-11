@@ -2422,6 +2422,15 @@
   letter-spacing: 0.02em;
 }
 
+/* Live team "current score" beside the projected total (headline + detail). */
+.matchup-page__live-current-total {
+  color: var(--amber-bright, #f5a623);
+  font-family: var(--font-num);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .matchup-page__rail-stat strong {
   color: var(--amber-bright);
   font-family: var(--font-num);

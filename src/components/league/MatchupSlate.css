@@ -268,6 +268,17 @@
   white-space: nowrap;
 }
 
+/* Live "current score" for a team on the board card (only during a live game). */
+.matchup-slate__team-current {
+  display: block;
+  color: var(--amber-bright, #f5a623);
+  font-family: var(--font-num, inherit);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .matchup-slate__team-move {
   flex: 0 0 auto;
   color: rgba(244, 245, 242, 0.62);

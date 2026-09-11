@@ -197,6 +197,18 @@ function boardDisplayName(name: string) {
   return name;
 }
 
+/** Live "current score" for a team = sum of its starters' points so far, or null
+ *  when no starter has live data (pregame / live mode off). Same feed ESPN/Sleeper
+ *  add up into the team total. */
+function startersCurrentTotal(
+  starters?: readonly { current?: number | null }[],
+): number | null {
+  const vals = (starters ?? [])
+    .map((s) => s.current)
+    .filter((v): v is number => typeof v === 'number');
+  return vals.length ? Number(vals.reduce((a, b) => a + b, 0).toFixed(1)) : null;
+}
+
 
 function formatPercent(value: number) {
   if (value < 1) return '<1%';
@@ -485,6 +497,11 @@ export function MatchupSlate({
                             league. It was competing with the team name directly
                             above it for the same strip of space. */}
                         <span className="matchup-slate__team-meta">{side.record}</span>
+                        {startersCurrentTotal(side.starters) != null ? (
+                          <span className="matchup-slate__team-current" title="Points scored so far">
+                            {startersCurrentTotal(side.starters)!.toFixed(1)} pts now
+                          </span>
+                        ) : null}
                       </span>
                       {/* Each side still owns its own movement figure. Stacked
                           rather than facing each other, there is no rail to

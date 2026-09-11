@@ -1587,6 +1587,18 @@ function MatchupLive({
     [engine.roster, matchup.opponentTeam.roster],
   );
 
+  // Live "current score" per team = sum of the starters' points scored so far
+  // (the same live feed ESPN/Sleeper add up). Null when no starter has live data
+  // yet (pregame / live mode off), so the headline shows only the projection then.
+  const sumLiveCurrent = (roster: RosterSlot[]): number | null => {
+    const vals = roster
+      .map((s) => s.live?.current)
+      .filter((v): v is number => typeof v === 'number');
+    return vals.length ? Number(vals.reduce((a, b) => a + b, 0).toFixed(1)) : null;
+  };
+  const yourCurrentTotal = sumLiveCurrent(engine.roster);
+  const opponentCurrentTotal = sumLiveCurrent(matchup.opponentTeam.roster);
+
   /* Your win probability over time.
      This used to match history entries on `matchupId`, which changes every
      week, so the panel only ever saw the handful of reprices inside the
@@ -2007,6 +2019,11 @@ function MatchupLive({
                   {formatProjection(engine.activeLine.yours.projection, isPriced)}
                 </span>{' '}
                 pts
+                {yourCurrentTotal != null ? (
+                  <span className="matchup-page__live-current-total" title="Points scored so far">
+                    {' · '}{yourCurrentTotal.toFixed(1)} now
+                  </span>
+                ) : null}
               </p>
             </div>
 
@@ -2081,6 +2098,11 @@ function MatchupLive({
                   {formatProjection(engine.activeLine.opponent.projection, isPriced)}
                 </span>{' '}
                 pts
+                {opponentCurrentTotal != null ? (
+                  <span className="matchup-page__live-current-total" title="Points scored so far">
+                    {' · '}{opponentCurrentTotal.toFixed(1)} now
+                  </span>
+                ) : null}
               </p>
             </div>
           </div>
