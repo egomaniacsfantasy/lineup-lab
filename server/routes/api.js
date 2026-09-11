@@ -710,6 +710,12 @@ async function runLiveCycle() {
     } catch (err) {
       console.error(`[live] ${leagueId} overlay failed:`, err?.message ?? err);
     }
+    // Yield to the event loop between leagues. Each league's season sim is
+    // synchronous; pricing many leagues back-to-back blocks the loop long enough
+    // that the platform health check can time out and RESTART the instance (which
+    // silently wipes live mode). setImmediate lets health checks + client requests
+    // be served between leagues, so a big batch degrades to "slower" not "crash".
+    await new Promise((resolve) => setImmediate(resolve));
   }
 }
 registerCycle(runLiveCycle);
