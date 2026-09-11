@@ -35,6 +35,7 @@ import {
   buildLiveLocks,
   normalizeTeam,
 } from '../live/nflGameStatus.js';
+import { awaitNflInjuries, getRuledOut, isRuledOut } from '../live/nflInjuries.js';
 import {
   readPlayoffSettings,
   writePlayoffSettings,
@@ -684,8 +685,16 @@ export async function computeLeagueLiveOverlay(provider, leagueId, userId, gameS
   // (from the player's NFL team's live game state; default 1 = not started).
   const pointsByPlayer = {};
   for (const m of ctx.matchups ?? []) Object.assign(pointsByPlayer, m.playersPoints ?? {});
+  const ruledOut = getRuledOut();
   const fFor = (id) => {
-    const team = normalizeTeam(ctx.catalog?.[id]?.team);
+    const p = ctx.catalog?.[id];
+    // Ruled OUT -> f = 0, which makes livePlayerScore lock the player to their
+    // current points with ZERO variance — identical to a finished game, but for
+    // one player. So their score is a fixed constant in the matchup line AND in
+    // every futures sim (buildLiveTeamDistribution sums per-player mean/variance;
+    // a 0-variance player never varies across the thousands of iterations).
+    if (p && isRuledOut(p.name, p.team, ruledOut)) return 0;
+    const team = normalizeTeam(p?.team);
     const st = team ? gameState.get(team) : null;
     return st ? st.f : 1;
   };
@@ -698,7 +707,9 @@ export async function computeLeagueLiveOverlay(provider, leagueId, userId, gameS
  * scoreboard read, then recompute + store an overlay for every registered league.
  */
 async function runLiveCycle() {
-  await awaitNflGameState(); // one shared scrape for the whole batch
+  // One shared scoreboard read (game clock/final teams) + one shared injuries read
+  // (ruled-out players) for the whole batch, in parallel.
+  await Promise.all([awaitNflGameState(), awaitNflInjuries()]);
   const gameState = getNflGameState();
   const registry = readRegistry();
   for (const leagueId of Object.keys(registry)) {
