@@ -259,6 +259,21 @@ export function toWeekMatchups(
         live: livePlayers,
         resolvePlayer: (id) => toPlayer(id, bootstrap.players),
       });
+    /* Each side's bench too, so the detail view can list who is sitting, the
+       same way the Hub does. buildLineup turns any id array into slot rows;
+       the bench ids are the roster minus the starters. Labels are left empty
+       (the bench view prints no slot label), so each entry falls to FLEX
+       internally, which is never shown. */
+    const buildBench = (team: ApiTeam, m: ApiMatchup) =>
+      buildLineup({
+        starters: team.players.filter((id) => !m.starters.includes(id)),
+        labels: [],
+        players: bootstrap.players,
+        means: playerMeans,
+        fallback: m.playersPoints,
+        live: livePlayers,
+        resolvePlayer: (id) => toPlayer(id, bootstrap.players),
+      });
     const pricedA = priced?.sides[String(a.rosterId)];
     const pricedB = priced?.sides[String(b.rosterId)];
     const oddsA = pricedA?.moneyline ?? line.yours.moneyline;
@@ -295,6 +310,8 @@ export function toWeekMatchups(
       isUserGame: teamA.isUser || teamB.isUser,
       teamAStarters: buildSide(a),
       teamBStarters: buildSide(b),
+      teamABench: buildBench(teamA, a),
+      teamBBench: buildBench(teamB, b),
     });
   });
 

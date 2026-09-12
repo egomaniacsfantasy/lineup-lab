@@ -54,6 +54,10 @@ export interface LeagueWeekMatchup {
    */
   teamAStarters?: LineupSlotEntry[];
   teamBStarters?: LineupSlotEntry[];
+  /** Both benches, for the detail view's bench drawer. Same provenance and
+      caveat as the starters above: present only on a connected league. */
+  teamABench?: LineupSlotEntry[];
+  teamBBench?: LineupSlotEntry[];
 }
 
 export const MOCK_LEAGUE: LeagueConnection = {

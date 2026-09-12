@@ -25,6 +25,8 @@ interface MatchupDetailProps {
   total?: number;
   leftStarters?: readonly LineupSlotEntry[];
   rightStarters?: readonly LineupSlotEntry[];
+  leftBench?: readonly LineupSlotEntry[];
+  rightBench?: readonly LineupSlotEntry[];
   week: number;
   onClose: () => void;
 }
@@ -57,6 +59,8 @@ export function MatchupDetail({
   total,
   leftStarters,
   rightStarters,
+  leftBench,
+  rightBench,
   week,
   onClose,
 }: MatchupDetailProps) {
@@ -420,6 +424,54 @@ export function MatchupDetail({
               Connect your league to see both lineups here.
             </p>
           )}
+
+          {/* Both benches, the same static rows the Hub uses for a bench it
+              does not price. Two columns, team on the left and team on the
+              right, so it reads like the slot board above it. */}
+          {leftBench?.length || rightBench?.length ? (
+            <details className="matchup-page__bench-drawer matchup-detail__bench">
+              <summary className="matchup-page__bench-summary">
+                Benches · {leftBench?.length ?? 0} vs {rightBench?.length ?? 0}
+              </summary>
+              <div className="matchup-detail__bench-grid">
+                <div className="matchup-detail__bench-col">
+                  <div className="matchup-detail__bench-head">{left.name}</div>
+                  {(leftBench ?? []).map((entry, index) => (
+                    <div
+                      key={`lb-${entry.playerId ?? index}`}
+                      className={[
+                        'matchup-page__slot-card',
+                        dimmed(left) ? 'matchup-page__slot-card--opponent' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {slotFace(entry, false)}
+                    </div>
+                  ))}
+                </div>
+                <div className="matchup-detail__bench-col">
+                  <div className="matchup-detail__bench-head matchup-detail__bench-head--right">
+                    {right.name}
+                  </div>
+                  {(rightBench ?? []).map((entry, index) => (
+                    <div
+                      key={`rb-${entry.playerId ?? index}`}
+                      className={[
+                        'matchup-page__slot-card',
+                        'matchup-page__slot-card--right',
+                        dimmed(right) ? 'matchup-page__slot-card--opponent' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {slotFace(entry, true)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
+          ) : null}
         </div>
       </div>
     </div>,

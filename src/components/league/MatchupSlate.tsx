@@ -806,9 +806,11 @@ export function MatchupSlate({
         <MatchupDetail
           left={openedRow.left}
           leftStarters={openedRow.left.starters}
+          leftBench={openedRow.left.bench}
           onClose={() => setOpenedRowKey(null)}
           right={openedRow.right}
           rightStarters={openedRow.right.starters}
+          rightBench={openedRow.right.bench}
           total={openedRow.matchup.totalProjection}
           week={currentWeek}
         />

@@ -35,6 +35,8 @@ export type BoardTeam = {
      after the seats were swapped would put one team's players under the
      other team's name. */
   starters?: LineupSlotEntry[];
+  /* This side's bench, carried across the seating swap with the starters. */
+  bench?: LineupSlotEntry[];
 };
 
 export function teamsFor(matchup: LeagueWeekMatchup): { left: BoardTeam; right: BoardTeam } {
@@ -51,6 +53,7 @@ export function teamsFor(matchup: LeagueWeekMatchup): { left: BoardTeam; right: 
     avatarUrl: matchup.teamAAvatarUrl,
     isUser: matchup.teamAIsUser,
     starters: matchup.teamAStarters,
+    bench: matchup.teamABench,
   };
   const teamB: BoardTeam = {
     side: 'b',
@@ -65,6 +68,7 @@ export function teamsFor(matchup: LeagueWeekMatchup): { left: BoardTeam; right: 
     avatarUrl: matchup.teamBAvatarUrl,
     isUser: matchup.teamBIsUser,
     starters: matchup.teamBStarters,
+    bench: matchup.teamBBench,
   };
 
   /* Your game reads left to right the way you would say it out loud, whoever
