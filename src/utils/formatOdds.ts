@@ -92,8 +92,17 @@ export function formatAmericanOdds(odds: number): string {
 
   /* A backstop, not the main defence: callers with a probability to hand
      should use formatProbOrOdds, which says the same thing from the number
-     the engine actually trusts. This catches the ones that cannot. */
-  if (Math.abs(value) >= OFF_THE_BOARD) return currentFormat === 'percent' ? '0%' : '—';
+     the engine actually trusts. This catches the ones that cannot.
+
+     Split by SIGN, matching formatProbOrOdds: a huge NEGATIVE line is a
+     near-certain FAVORITE (clinched, ~100%), a huge POSITIVE line is an
+     all-but-eliminated underdog (~0%). The old code keyed on Math.abs and
+     returned the eliminated display for BOTH, so once a matchup decided, the
+     WINNER's off-the-board moneyline printed 0% on the board instead of 100%. */
+  if (Math.abs(value) >= OFF_THE_BOARD) {
+    if (currentFormat === 'percent') return value < 0 ? '100%' : '0%';
+    return value < 0 ? '✓' : NO_VALUE;
+  }
 
   if (currentFormat === 'percent') {
     return `${impliedProbability(value).toFixed(1)}%`;
