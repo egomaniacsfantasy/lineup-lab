@@ -83,10 +83,22 @@ export function mergeLiveOverlay(pricing, overlay) {
     }
     return { ...line, sides };
   });
+  /* The overlay is computed once per league, for the single userId the registry
+     holds, so its futures carry `isUser` for THAT person. Every request for the
+     league shares it. Taken as-is, it told every other manager that the
+     registrant's team was theirs, in the title odds and across the League tab.
+     The live numbers are the same for everybody; who "you" are comes from this
+     request's own pricing, which was built for the user asking. */
+  const requesterRosterIds = new Set(
+    (pricing.futures ?? []).filter((row) => row.isUser).map((row) => String(row.rosterId)),
+  );
+  const futures = overlay.futures
+    ? overlay.futures.map((row) => ({ ...row, isUser: requesterRosterIds.has(String(row.rosterId)) }))
+    : pricing.futures;
   return {
     ...pricing,
     lines,
-    futures: overlay.futures ?? pricing.futures,
+    futures,
     livePlayers: overlay.players ?? null,
     live: { at: overlay.at, week: overlay.week },
   };
