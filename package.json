@@ -17,8 +17,8 @@
     "copy-scan": "node test/copyScan.test.mjs",
     "lint": "node scripts/lint.mjs && npm run copy-scan",
     "preview": "vite preview",
-    "server": "node server/index.js",
-    "start": "node server/index.js",
+    "server": "node --max-old-space-size=400 server/index.js",
+    "start": "node --max-old-space-size=400 server/index.js",
     "test": "node --experimental-strip-types --test test/*.test.mjs",
     "package-extension": "node scripts/package-extension.mjs"
   },
