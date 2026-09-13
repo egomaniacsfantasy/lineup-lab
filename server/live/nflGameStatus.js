@@ -58,30 +58,40 @@ export function fractionRemaining(status) {
 let _cache = { at: 0, week: null, finalTeams: new Set(), teamState: new Map(), refreshing: false };
 
 async function fetchGameState() {
-  const res = await fetch(SCOREBOARD);
-  if (!res.ok) throw new Error(`scoreboard ${res.status}`);
-  const data = await res.json();
-  const finalTeams = new Set();
-  // team abbrev -> { state: 'pre'|'in'|'post', f } for the LIVE projection layer.
-  const teamState = new Map();
-  const week = data?.week?.number ?? null;
-  for (const ev of data?.events ?? []) {
-    // Regular season only (2). Preseason (1) / postseason (3) never drive a fantasy
-    // regular-season week.
-    if ((ev?.season?.type ?? data?.season?.type) !== 2) continue;
-    const comp = ev?.competitions?.[0];
-    const status = comp?.status;
-    const state = status?.type?.state; // 'pre' | 'in' | 'post'
-    if (!state) continue;
-    const f = fractionRemaining(status);
-    for (const c of comp?.competitors ?? []) {
-      const abbr = normalizeTeam(c?.team?.abbreviation);
-      if (!abbr) continue;
-      teamState.set(abbr, { state, f });
-      if (state === 'post') finalTeams.add(abbr);
+  // Hard cap on the scoreboard read. Without it a stalled ESPN response (common at
+  // the 1pm Sunday kickoff spike) never resolves, hanging the whole live cycle and
+  // silently freezing live mode. AbortController turns a stall into a rejection the
+  // callers already handle by keeping the last cached state.
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 15_000);
+  try {
+    const res = await fetch(SCOREBOARD, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`scoreboard ${res.status}`);
+    const data = await res.json();
+    const finalTeams = new Set();
+    // team abbrev -> { state: 'pre'|'in'|'post', f } for the LIVE projection layer.
+    const teamState = new Map();
+    const week = data?.week?.number ?? null;
+    for (const ev of data?.events ?? []) {
+      // Regular season only (2). Preseason (1) / postseason (3) never drive a fantasy
+      // regular-season week.
+      if ((ev?.season?.type ?? data?.season?.type) !== 2) continue;
+      const comp = ev?.competitions?.[0];
+      const status = comp?.status;
+      const state = status?.type?.state; // 'pre' | 'in' | 'post'
+      if (!state) continue;
+      const f = fractionRemaining(status);
+      for (const c of comp?.competitors ?? []) {
+        const abbr = normalizeTeam(c?.team?.abbreviation);
+        if (!abbr) continue;
+        teamState.set(abbr, { state, f });
+        if (state === 'post') finalTeams.add(abbr);
+      }
     }
+    return { week, finalTeams, teamState };
+  } finally {
+    clearTimeout(to);
   }
-  return { week, finalTeams, teamState };
 }
 
 function refreshInBackground() {

@@ -44,22 +44,30 @@ function keyOf(name, team) {
 let _cache = { at: 0, out: new Set(), refreshing: false };
 
 async function fetchInjuries() {
-  const res = await fetch(INJURIES_URL);
-  if (!res.ok) throw new Error(`injuries ${res.status}`);
-  const data = await res.json();
-  const out = new Set();
-  for (const grp of data?.injuries ?? []) {
-    for (const inj of grp?.injuries ?? []) {
-      // ONLY a definitive "Out" locks the player. Questionable/Doubtful/Active do
-      // not - those players may still produce, so they project as normal.
-      if (inj?.status !== 'Out') continue;
-      const ath = inj?.athlete ?? {};
-      const nm = ath?.displayName;
-      const tm = ath?.team?.abbreviation;
-      if (nm) out.add(keyOf(nm, tm));
+  // Same hard cap as the scoreboard read: a stalled ESPN injuries response must not
+  // hang the live cycle. On abort/error the caller keeps the last cached set.
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 15_000);
+  try {
+    const res = await fetch(INJURIES_URL, { signal: ctrl.signal });
+    if (!res.ok) throw new Error(`injuries ${res.status}`);
+    const data = await res.json();
+    const out = new Set();
+    for (const grp of data?.injuries ?? []) {
+      for (const inj of grp?.injuries ?? []) {
+        // ONLY a definitive "Out" locks the player. Questionable/Doubtful/Active do
+        // not - those players may still produce, so they project as normal.
+        if (inj?.status !== 'Out') continue;
+        const ath = inj?.athlete ?? {};
+        const nm = ath?.displayName;
+        const tm = ath?.team?.abbreviation;
+        if (nm) out.add(keyOf(nm, tm));
+      }
     }
+    return out;
+  } finally {
+    clearTimeout(to);
   }
-  return out;
 }
 
 function refreshInBackground() {

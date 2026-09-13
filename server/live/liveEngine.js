@@ -17,6 +17,13 @@
 // scales (see LIVE_MATCHUP_TTL_MS in gameWindows.js, sized just under this).
 const CYCLE_MS = 90_000;
 
+// Hard ceiling on a single cycle. A cycle that runs longer than this is abandoned
+// (its promise is left to settle on its own) so state.running is freed and the loop
+// recovers. This is the guarantee that live mode can NEVER permanently freeze, even
+// if an upstream call hangs past its own timeout. Set well above a normal
+// high-volume cycle so only a true hang trips it.
+const CYCLE_TIMEOUT_MS = 120_000;
+
 const state = {
   on: false,
   timer: null,
@@ -112,11 +119,28 @@ async function tick() {
   // tick while one is in flight; the next interval fire starts a fresh one.
   if (!state.on || !runCycleFn || state.running) return;
   state.running = true;
+  // Watchdog: even with per-fetch timeouts, a cycle must NEVER be able to hang forever
+  // (a wedged provider call, an unforeseen stall). If it did, state.running would stay
+  // true and every future tick would be skipped, silently freezing live mode -- the bug
+  // we kept hitting. Race the cycle against a hard cap so state.running is ALWAYS
+  // released and the next tick starts fresh. A cycle abandoned here keeps running in the
+  // background to completion; its late settle is swallowed so it cannot crash the
+  // process, and the re-entrancy guard still blocks overlap until this one frees.
+  const work = Promise.resolve().then(() => runCycleFn());
+  work.catch(() => {}); // a late rejection after a timeout must not become unhandled
+  let watchdog;
   try {
-    await runCycleFn();
+    await Promise.race([
+      work,
+      new Promise((_, reject) => {
+        watchdog = setTimeout(() => reject(new Error(`cycle exceeded ${CYCLE_TIMEOUT_MS}ms`)), CYCLE_TIMEOUT_MS);
+        watchdog.unref?.();
+      }),
+    ]);
   } catch (err) {
     console.error('[live] cycle failed:', err?.message ?? err);
   } finally {
+    clearTimeout(watchdog);
     state.running = false;
   }
 }
