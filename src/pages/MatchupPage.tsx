@@ -33,8 +33,9 @@ import {
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints, impliedProbability } from '../utils/formatOdds';
-import { scoreModeFor, scorelineFor, teamScored, type Scoreline } from '../utils/liveScoreline';
-import { SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
+import { anyStarted, scorelineFor, teamScored, type Scoreline } from '../utils/liveScoreline';
+import { GameTag, SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
+import { useNflGameState } from '../hooks/useNflGameState';
 import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
 import { formatSignedDisplayedDeltaValue } from '../utils/displayDelta';
@@ -1593,10 +1594,13 @@ function MatchupLive({
     return () => window.clearInterval(timer);
   }, []);
 
-  /* Every starter's scoreline, and the one mode the whole matchup follows.
-     See utils/liveScoreline.ts for why the mode is per matchup rather than per
-     row. Points come from `currentPoints`, the provider feed, so this works
-     whether or not live mode is on. */
+  /* Where each NFL game is (not started, live, final), from the scoreboard. */
+  const gameStates = useNflGameState(isConnected);
+  const gameOf = (player: Player) => gameStates[player.team?.toUpperCase() ?? ''] ?? null;
+
+  /* Every starter's scoreline. Each player follows his own game; see
+     utils/liveScoreline.ts. Points come from `currentPoints`, which is the live
+     overlay in live mode and the provider feed otherwise. */
   const scorelineOf = (slot: RosterSlot | null): Scoreline | null => {
     if (!slot) return null;
     const context = getPlayerContext(slot.starter, gameContextSource);
@@ -1605,6 +1609,7 @@ function MatchupLive({
         kickoffIso: context.contextAvailable ? context.kickoffIso : null,
         bye: context.contextAvailable ? context.bye : false,
         currentPoints: slot.currentPoints ?? slot.live?.current ?? null,
+        game: gameOf(slot.starter),
       },
       scoreClock,
     );
@@ -1613,9 +1618,9 @@ function MatchupLive({
   const opponentScorelines = matchup.opponentTeam.roster
     .map(scorelineOf)
     .filter((line): line is Scoreline => line != null);
-  const scoreMode = isConnected ? scoreModeFor([...yourScorelines, ...opponentScorelines]) : 'projection';
-  const yourScoredTotal = teamScored(yourScorelines, scoreMode);
-  const opponentScoredTotal = teamScored(opponentScorelines, scoreMode);
+  const matchupStarted = isConnected && anyStarted([...yourScorelines, ...opponentScorelines]);
+  const yourScoredTotal = teamScored(yourScorelines, matchupStarted);
+  const opponentScoredTotal = teamScored(opponentScorelines, matchupStarted);
 
   /* Your win probability over time.
      This used to match history entries on `matchupId`, which changes every
@@ -1715,18 +1720,26 @@ function MatchupLive({
      because those are the two things that change a start-or-sit. */
   const lineupMetaFor = (player: Player, extra?: string | null, compact = false) => {
     const context = getPlayerContext(player, gameContextSource);
-    /* Once the game is under way its kickoff time is history, and a row
-       reading "Sun 1:00 PM" beside a live score looks like the score is
-       waiting for a game that is already being played. */
-    const kickedOff = context.contextAvailable && context.kickoffIso
-      ? Date.parse(context.kickoffIso) <= scoreClock
+    /* Once the game is under way its kickoff time is history, and the row's
+       GameTag takes that spot instead: the clock while it runs, Final after. */
+    const kickedOff = context.contextAvailable
+      ? scorelineFor(
+        { kickoffIso: context.kickoffIso, bye: context.bye, currentPoints: null, game: gameOf(player) },
+        scoreClock,
+      ).started
       : false;
+    /* On a phone, a started game's tag takes the opponent's place too. The
+       short line is about 100px, and with both in it the ellipsis cut the tag,
+       leaving a live game as a bare dot. Before kickoff the opponent is the
+       useful fact; once the game is on, the clock is. */
     const gameMeta = context.contextAvailable
       ? context.bye
         ? 'BYE'
-        : compact || kickedOff
-          ? context.matchup
-          : `${context.matchup} · ${context.kickoff}`
+        : compact
+          ? kickedOff ? null : context.matchup
+          : kickedOff
+            ? context.matchup
+            : `${context.matchup} · ${context.kickoff}`
       : null;
     const status =
       player.injuryStatus && !['active', 'healthy'].includes(player.injuryStatus.toLowerCase())
@@ -2255,9 +2268,15 @@ function MatchupLive({
                               <span className="matchup-page__row-secondary">
                                 <span className="matchup-page__meta-full">
                                   {lineupMetaFor(row.yourSlot.starter)}
+                                  <GameTag game={gameOf(row.yourSlot.starter)} phase={scorelineOf(row.yourSlot)?.phase ?? null} />
                                 </span>
                                 <span className="matchup-page__meta-compact">
                                   {lineupMetaFor(row.yourSlot.starter, null, true)}
+                                  <GameTag
+                                    game={gameOf(row.yourSlot.starter)}
+                                    lead={lineupMetaFor(row.yourSlot.starter, null, true) !== ''}
+                                    phase={scorelineOf(row.yourSlot)?.phase ?? null}
+                                  />
                                 </span>
                                 {/* The arrow already says "swap"; spelling out
                                     "on the bench" beside every starter turned a
@@ -2273,7 +2292,7 @@ function MatchupLive({
                               </span>
                             </span>
                             <SlotNumbers
-                              mode={scoreMode}
+                              finalProjection={formatProjection(row.yourSlot.projection, isPriced)}
                               projection={formatProjection(row.yourProjection, isPriced)}
                               scoreline={scorelineOf(row.yourSlot)}
                             />
@@ -2315,7 +2334,7 @@ function MatchupLive({
                           <>
                             <SlotNumbers
                               align="right"
-                              mode={scoreMode}
+                              finalProjection={formatProjection(row.opponentSlot.projection, isPriced)}
                               projection={formatProjection(row.opponentProjection, isPriced)}
                               scoreline={scorelineOf(row.opponentSlot)}
                             />
@@ -2324,9 +2343,15 @@ function MatchupLive({
                               <span className="matchup-page__row-secondary">
                                 <span className="matchup-page__meta-full">
                                   {lineupMetaFor(row.opponentSlot.starter)}
+                                  <GameTag game={gameOf(row.opponentSlot.starter)} phase={scorelineOf(row.opponentSlot)?.phase ?? null} />
                                 </span>
                                 <span className="matchup-page__meta-compact">
                                   {lineupMetaFor(row.opponentSlot.starter, null, true)}
+                                  <GameTag
+                                    game={gameOf(row.opponentSlot.starter)}
+                                    lead={lineupMetaFor(row.opponentSlot.starter, null, true) !== ''}
+                                    phase={scorelineOf(row.opponentSlot)?.phase ?? null}
+                                  />
                                 </span>
                               </span>
                             </span>

@@ -1,33 +1,38 @@
-import { NO_VALUE } from '../../utils/formatOdds';
-import type { ScoreMode, Scoreline } from '../../utils/liveScoreline';
+import type { GamePhase, Scoreline, TeamGameState } from '../../utils/liveScoreline';
+import { gameTagFor, primaryNumber } from '../../utils/liveScoreline';
 
 /**
- * A lineup row's numbers.
+ * A lineup row's numbers. See utils/liveScoreline.ts for the rule.
  *
- * Projection mode is the Hub as it always was: one number. Scoreboard mode
- * leads with points scored and carries the projection beneath it with a word
- * on it, because two unlabelled one-decimal numbers stacked in the same face
- * are a guessing game, and "20.9 / 0.1 now" was read as twenty points scored.
+ * Before his game: one number, the projection, as the Hub has always shown.
+ * Once it starts: points scored take the big number, and the projection moves
+ * underneath with a word on it. Two unlabelled one-decimal numbers stacked in
+ * the same face are a guessing game, and "20.9 / 0.1 now" was read as twenty
+ * points scored.
  *
- * A player who has not kicked off gets a dash, not 0.0: a zero is a score.
+ * `finalProjection` is what a FINAL row compares against. A live projection
+ * converges on the actual score as the clock runs out, so by the final whistle
+ * "proj" would just repeat the score. The pregame number is the one worth
+ * reading beside a result.
  */
 export function SlotNumbers({
-  mode,
   projection,
+  finalProjection = null,
   scoreline,
   align = 'left',
 }: {
-  mode: ScoreMode;
   projection: string;
+  finalProjection?: string | null;
   scoreline: Scoreline | null;
   align?: 'left' | 'right';
 }) {
   const className = [
     'matchup-page__slot-numbers',
     align === 'right' ? 'matchup-page__slot-numbers--right' : '',
+    scoreline?.started ? `matchup-page__slot-numbers--${scoreline.phase}` : '',
   ].filter(Boolean).join(' ');
 
-  if (mode === 'projection') {
+  if (!scoreline?.started) {
     return (
       <span className={className}>
         <span className="matchup-page__slot-projection">{projection}</span>
@@ -35,21 +40,54 @@ export function SlotNumbers({
     );
   }
 
-  const scored = scoreline?.scored ?? null;
+  const isFinal = scoreline.phase === 'final';
+  const reference = isFinal ? finalProjection ?? projection : projection;
   return (
-    <span className={`${className} matchup-page__slot-numbers--scoreboard`}>
+    <span className={className}>
+      <span className="matchup-page__slot-scored" title={isFinal ? 'Final points' : 'Points scored'}>
+        {primaryNumber(scoreline, projection)}
+      </span>
       <span
-        className={[
-          'matchup-page__slot-scored',
-          scored == null ? 'matchup-page__slot-scored--pending' : '',
-        ].filter(Boolean).join(' ')}
-        title={scored == null ? 'Game not started' : 'Points scored'}
+        className="matchup-page__slot-proj-label"
+        title={isFinal ? 'Projected before kickoff' : 'Projected final'}
       >
-        {scored == null ? NO_VALUE : scored.toFixed(1)}
+        proj {reference}
       </span>
-      <span className="matchup-page__slot-proj-label" title="Projected final">
-        proj {projection}
-      </span>
+    </span>
+  );
+}
+
+/**
+ * Where the player's game is: the clock while it runs, FINAL once it ends.
+ *
+ * It sits in the meta line where the kickoff time was, so that one spot always
+ * answers "when": when it starts, where it is, that it is over. Live is the only
+ * state with colour, cyan, which is the product's colour for live system state
+ * and nothing else. Final is deliberately quiet: a settled result is not news.
+ */
+export function GameTag({
+  phase,
+  game,
+  lead = true,
+}: {
+  phase: GamePhase | null;
+  game?: TeamGameState | null;
+  /** False when nothing precedes the tag on its line, so it sits flush. */
+  lead?: boolean;
+}) {
+  if (!phase || phase === 'upcoming') return null;
+  const label = gameTagFor(phase, game);
+  if (!label) return null;
+  return (
+    <span
+      className={[
+        'matchup-page__game-tag',
+        `matchup-page__game-tag--${phase}`,
+        lead ? '' : 'matchup-page__game-tag--flush',
+      ].filter(Boolean).join(' ')}
+    >
+      {phase === 'live' ? <span aria-hidden="true" className="matchup-page__game-tag-dot" /> : null}
+      {label}
     </span>
   );
 }

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { scoreModeFor, scorelineFor, teamScored, type ScoreMode } from '../../utils/liveScoreline';
+import { anyStarted, scorelineFor, teamScored } from '../../utils/liveScoreline';
 import { americanOddsValue, formatAmericanOdds } from '../../utils/formatOdds';
 import {
   legKey,
@@ -204,9 +204,9 @@ function boardDisplayName(name: string) {
  *  other side's score is up. */
 function sideScored(
   starters: readonly { current?: number | null }[] | undefined,
-  mode: ScoreMode,
+  matchupStarted: boolean,
 ): number | null {
-  return teamScored(scorelinesOf(starters), mode);
+  return teamScored(scorelinesOf(starters), matchupStarted);
 }
 
 function scorelinesOf(starters?: readonly { current?: number | null }[]) {
@@ -461,11 +461,11 @@ export function MatchupSlate({
                 );
               };
 
-              const scoreMode = scoreModeFor([...scorelinesOf(left.starters), ...scorelinesOf(right.starters)]);
+              const matchupStarted = anyStarted([...scorelinesOf(left.starters), ...scorelinesOf(right.starters)]);
 
               const sideRow = (side: typeof left, overUnder: 'O' | 'U', move: number | null) => {
                 const other = side.side === left.side ? right : left;
-                const scored = sideScored(side.starters, scoreMode);
+                const scored = sideScored(side.starters, matchupStarted);
                 /* Every leg needs a game to belong to: the slip holds at most
                    one leg per game, and a game with no id cannot hold a slot. */
                 const bettable = onToggleLeg != null && matchup.matchupId != null;

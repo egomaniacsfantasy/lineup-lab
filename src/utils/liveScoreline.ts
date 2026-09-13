@@ -1,44 +1,61 @@
 /**
  * What a lineup row's numbers mean once games are being played.
  *
- * Before any kickoff a row carries one number, the projection, and there is
- * nothing to confuse it with. The moment a game starts there are two: points
- * scored and the projected final. They are both one-decimal fantasy points in
- * the same face, so the reader cannot tell them apart by looking, and a row
- * that shows "20.9" over "0.1 now" reads as twenty points scored. On a Sunday
- * that is the only question anybody opens the Hub to answer.
+ * Each player follows his OWN game, in three phases:
  *
- * So a matchup is in one of two modes, and every row in it follows the mode:
+ *  - UPCOMING. His game has not kicked off. The big number is the projection,
+ *    exactly as the Hub has always shown it, and the meta line keeps the kickoff
+ *    time.
  *
- *  - PROJECTION, before anybody on either roster has kicked off. One number
- *    per row, the projection, exactly as the Hub has always shown it.
+ *  - LIVE. His game is under way. The big number becomes points scored, the
+ *    projected final moves underneath it labelled "proj", and a live tag carries
+ *    the quarter and clock.
  *
- *  - SCOREBOARD, from the first kickoff on. The big number is points scored
- *    and the projection moves underneath it, labelled. A player whose game has
- *    not started yet shows a dash as the big number rather than 0.0, because
- *    0.0 is a score and he has not had the chance to make one.
+ *  - FINAL. His game is over. The big number is his final score, "proj" shows
+ *    what he was projected to score before kickoff so the row reads as a result
+ *    against expectation, and a FINAL tag closes it.
  *
- * The mode is per matchup, not per row, so a column never mixes the two
- * meanings. That is the whole point: the big number in a column must always be
- * the same kind of number, or the column cannot be scanned.
+ * Why per player rather than one mode for the whole matchup: a Sunday lineup is
+ * always a mix, 1pm players final while the 8:20 player has not started, and the
+ * useful read of "the rest of my week" is the projection for the players who
+ * have not played. Mixing scores and projections in one column is only safe
+ * because every row that shows a score says so with its tag. The tag is what
+ * makes this work; do not ship one without the other.
+ *
+ * Game state comes from the NFL scoreboard (/api/nfl/game-state). When that has
+ * not loaded, the kickoff time and the points feed stand in: a passed kickoff or
+ * any points mean the game has started, though not whether it is still going.
  */
 
-export type ScoreMode = 'projection' | 'scoreboard';
+import { NO_VALUE } from './formatOdds.ts';
+
+export type GamePhase = 'upcoming' | 'live' | 'final' | 'started';
+
+/** One NFL team's game, as /api/nfl/game-state reports it. */
+export interface TeamGameState {
+  state: 'pre' | 'in' | 'post';
+  period: number | null;
+  clock: string | null;
+  detail: string | null;
+}
 
 export interface ScorelineInput {
   /** Kickoff of this player's NFL game, when the schedule is known. */
   kickoffIso: string | null;
   /** True when this player's team is on bye. */
   bye: boolean;
-  /** Points scored so far from the provider feed. Null when 0 or absent. */
+  /** Points scored so far. Null when 0 or absent. */
   currentPoints: number | null;
+  /** This player's team's game from the scoreboard, when it has loaded. */
+  game?: TeamGameState | null;
 }
 
 export interface Scoreline {
-  /** Points scored, or null when the player has not played yet. */
-  scored: number | null;
+  phase: GamePhase;
   /** Whether this player's game has kicked off. */
   started: boolean;
+  /** Points scored, or null when the player has not played yet. */
+  scored: number | null;
 }
 
 export function hasKickedOff(kickoffIso: string | null, now: number): boolean {
@@ -47,31 +64,62 @@ export function hasKickedOff(kickoffIso: string | null, now: number): boolean {
   return Number.isFinite(kickoff) && kickoff <= now;
 }
 
-/**
- * A player has started if his game has kicked off, or if the feed already
- * credits him with points. The second clause matters when the schedule failed
- * to load: points on the board are proof of a game, and hiding them because a
- * different request failed would be the scoreboard losing to its own plumbing.
- */
 export function scorelineFor(input: ScorelineInput, now: number): Scoreline {
-  const started = input.currentPoints != null || (!input.bye && hasKickedOff(input.kickoffIso, now));
-  /* The feed reports a player who has played and scored nothing as 0, and the
-     adapter folds 0 into null to keep pregame rows clean. Once his game is
-     under way, null means zero, and zero is a real score worth printing. */
-  return { started, scored: started ? input.currentPoints ?? 0 : null };
+  const phase = phaseFor(input, now);
+  const started = phase !== 'upcoming';
+  /* The adapter folds a feed value of 0 into null to keep pregame rows clean.
+     Once his game is under way that null is a real zero, and zero is a score
+     worth printing. */
+  return { phase, started, scored: started ? input.currentPoints ?? 0 : null };
 }
 
-/** Scoreboard as soon as any player in the matchup has started. */
-export function scoreModeFor(lines: Scoreline[]): ScoreMode {
-  return lines.some((line) => line.started) ? 'scoreboard' : 'projection';
+function phaseFor(input: ScorelineInput, now: number): GamePhase {
+  if (input.bye) return 'upcoming';
+  const state = input.game?.state;
+  if (state === 'post') return 'final';
+  if (state === 'in') return 'live';
+  /* The scoreboard says pre, but the feed already credits points: trust the
+     points. A stale scoreboard read must not hide a score that is on the board. */
+  if (state === 'pre') return input.currentPoints != null ? 'started' : 'upcoming';
+  if (input.currentPoints != null || hasKickedOff(input.kickoffIso, now)) return 'started';
+  return 'upcoming';
 }
 
 /**
- * A team's points scored, summed from rows that have started. Null in
- * projection mode, where there is no score yet to report.
+ * The tag a started row carries. Built from period and clock rather than the
+ * scoreboard's own text, which is "4:29 - 1st" and "2:00 - OT" and reads
+ * backwards in a narrow cell.
  */
-export function teamScored(lines: Scoreline[], mode: ScoreMode): number | null {
-  if (mode !== 'scoreboard') return null;
+export function gameTagFor(phase: GamePhase, game?: TeamGameState | null): string | null {
+  if (phase === 'final') return (game?.period ?? 0) >= 5 ? 'Final/OT' : 'Final';
+  if (phase === 'started') return 'Started';
+  if (phase !== 'live') return null;
+  const detail = game?.detail ?? '';
+  if (/halftime/i.test(detail)) return 'Half';
+  const period = game?.period ?? null;
+  if (/^end of/i.test(detail) && period) return period >= 5 ? 'End OT' : `End Q${period}`;
+  const clock = game?.clock && game.clock !== '0:00' ? ` ${game.clock}` : '';
+  if (period == null) return 'Live';
+  return period >= 5 ? `OT${clock}` : `Q${period}${clock}`;
+}
+
+/** Scoreboard as soon as anyone in the matchup has started. Team totals only. */
+export function anyStarted(lines: Scoreline[]): boolean {
+  return lines.some((line) => line.started);
+}
+
+/**
+ * A team's points scored, summed across its rows. Null until somebody in the
+ * matchup has started, since before that there is no score to report.
+ */
+export function teamScored(lines: Scoreline[], matchupStarted: boolean): number | null {
+  if (!matchupStarted) return null;
   const total = lines.reduce((sum, line) => sum + (line.scored ?? 0), 0);
   return Number(total.toFixed(1));
+}
+
+/** The big number a row shows: a score once started, the projection before. */
+export function primaryNumber(line: Scoreline | null, projection: string): string {
+  if (!line || !line.started) return projection;
+  return line.scored == null ? NO_VALUE : line.scored.toFixed(1);
 }

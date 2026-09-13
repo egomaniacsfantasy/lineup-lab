@@ -2426,13 +2426,6 @@
   white-space: nowrap;
 }
 
-/* Not kicked off. A dash, dimmed, so an unplayed slot does not read as a
-   player who has played and scored nothing. */
-.matchup-page__slot-scored--pending {
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
 .matchup-page__slot-proj-label {
   color: var(--text-muted);
   font-family: var(--font-num);
@@ -2450,9 +2443,66 @@
   font-weight: 700;
 }
 
-.matchup-page__slot-card--opponent .matchup-page__slot-scored--pending {
+/* Where a player's game is, in the spot his kickoff time held: the clock while
+   it runs, FINAL once it ends. See GameTag in components/matchup/Scoreline.tsx.
+
+   Live is cyan, the colour DESIGN_RATIONALE.md reserves for live system state.
+   The fallback is its documented value, because the palette never defined the
+   token. Green would say money and amber would say you; neither is true of a
+   game clock. Final is quiet on purpose. */
+.matchup-page__game-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
   color: var(--text-muted);
-  font-weight: 600;
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+.matchup-page__game-tag--flush {
+  margin-left: 0;
+}
+
+.matchup-page__game-tag--live {
+  border-color: color-mix(in srgb, var(--cyan, #6dc8ff) 45%, transparent);
+  background: color-mix(in srgb, var(--cyan, #6dc8ff) 10%, transparent);
+  color: var(--cyan, #6dc8ff);
+}
+
+.matchup-page__game-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan, #6dc8ff);
+  animation: matchup-game-tag-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes matchup-game-tag-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matchup-page__game-tag-dot {
+    animation: none;
+  }
+}
+
+/* A finished player's score is settled, so it keeps full weight but the row
+   stops competing with the games still being played. */
+.matchup-page__slot-numbers--final .matchup-page__slot-scored {
+  color: var(--text-soft);
 }
 
 .matchup-page__team-scoreline {

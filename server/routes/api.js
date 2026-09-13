@@ -31,6 +31,7 @@ import {
   awaitFinalNflTeams,
   awaitNflGameState,
   getNflGameState,
+  getNflGameStateSnapshot,
   finalTeamsSignature,
   buildLiveLocks,
   normalizeTeam,
@@ -197,6 +198,15 @@ apiRouter.get('/state', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+/* Whether each NFL team's game is not started, live or final, with the quarter
+   and clock. Drives the per-player game tag on lineup rows. Served from the
+   scoreboard cache the live cycle already keeps warm, and cached briefly at the
+   edge because every open Hub polls it. */
+apiRouter.get('/nfl/game-state', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=30');
+  res.json(getNflGameStateSnapshot());
 });
 
 apiRouter.get('/nfl/schedule', async (req, res) => {

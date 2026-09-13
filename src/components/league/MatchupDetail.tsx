@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { SlotNumbers, TeamScoreline } from '../matchup/Scoreline';
-import { scoreModeFor, scorelineFor, teamScored } from '../../utils/liveScoreline';
+import { GameTag, SlotNumbers, TeamScoreline } from '../matchup/Scoreline';
+import { anyStarted, scorelineFor, teamScored } from '../../utils/liveScoreline';
+import { useNflGameState } from '../../hooks/useNflGameState';
 import { createPortal } from 'react-dom';
 import { NO_VALUE, formatAmericanOdds } from '../../utils/formatOdds';
 import { spreadLabel, type BoardTeam } from '../../utils/boardSides';
@@ -129,16 +130,20 @@ export function MatchupDetail({
   const yourGame = Boolean(left.isUser || right.isUser);
   const dimmed = (side: BoardTeam) => yourGame && !side.isUser;
 
-  /* The same scoreboard rule the Hub follows (utils/liveScoreline.ts), one mode
-     for the whole game. The board carries no kickoff times, so a player counts
-     as started once the feed credits him with points. */
-  const scorelinesOf = (starters?: readonly LineupSlotEntry[]) =>
-    (starters ?? []).map((entry) => scorelineFor({ kickoffIso: null, bye: false, currentPoints: entry.current ?? null }, 0));
+  /* The same per-player rule the Hub follows (utils/liveScoreline.ts), with game
+     state from the scoreboard by each player's NFL team. The board carries no
+     kickoff times, so without a scoreboard read a player counts as started once
+     the feed credits him with points. */
+  const gameStates = useNflGameState();
+  const gameOf = (entry: LineupSlotEntry) => gameStates[entry.team?.toUpperCase() ?? ''] ?? null;
+  const scorelineOf = (entry: LineupSlotEntry) =>
+    scorelineFor({ kickoffIso: null, bye: false, currentPoints: entry.current ?? null, game: gameOf(entry) }, 0);
+  const scorelinesOf = (starters?: readonly LineupSlotEntry[]) => (starters ?? []).map(scorelineOf);
   const leftScorelines = scorelinesOf(leftStarters);
   const rightScorelines = scorelinesOf(rightStarters);
-  const scoreMode = scoreModeFor([...leftScorelines, ...rightScorelines]);
-  const leftScored = teamScored(leftScorelines, scoreMode);
-  const rightScored = teamScored(rightScorelines, scoreMode);
+  const matchupStarted = anyStarted([...leftScorelines, ...rightScorelines]);
+  const leftScored = teamScored(leftScorelines, matchupStarted);
+  const rightScored = teamScored(rightScorelines, matchupStarted);
 
   /* One switch, both sides. The header's price/percent toggle governs every
      number in the app and this is not the screen to make an exception. */
@@ -220,7 +225,10 @@ export function MatchupDetail({
           {entry.player?.shortName ?? playerShortName(entry.name, entry.position)}
         </span>
         <span className="matchup-page__row-secondary">
-          <span className="matchup-page__meta-full">{metaFor(entry)}</span>
+          <span className="matchup-page__meta-full">
+            {metaFor(entry)}
+            <GameTag game={gameOf(entry)} phase={scorelineOf(entry).phase} />
+          </span>
           {entry.injuryStatus ? (
             <span className="matchup-page__slot-bench-cue">{entry.injuryStatus}</span>
           ) : null}
@@ -230,9 +238,9 @@ export function MatchupDetail({
     const numbers = (
       <SlotNumbers
         align={opponent ? 'right' : 'left'}
-        mode={scoreMode}
+        finalProjection={entry.pregameProjection == null ? null : pointsText(entry.pregameProjection)}
         projection={pointsText(entry.projection)}
-        scoreline={scorelineFor({ kickoffIso: null, bye: false, currentPoints: entry.current ?? null }, 0)}
+        scoreline={scorelineOf(entry)}
       />
     );
 

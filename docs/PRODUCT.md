@@ -505,18 +505,25 @@ and the connect screen consumes it on read.
 
 ## 4.10 Cross-cutting UI systems
 
-- **Live scoring** follows one rule on the Hub, the League board and the game
-  dialog (`src/utils/liveScoreline.ts`). Before anybody in a matchup kicks off,
-  a lineup row carries one number, the projection. From the first kickoff the
-  whole matchup switches to scoreboard: the big number is points scored and the
-  projection moves underneath it, labelled `proj`. A player whose game has not
-  started shows a dash rather than 0.0, because a zero is a score. The mode is
-  per matchup, never per row, so a column never mixes the two meanings. It
-  replaced a projected final over a small "X now", which in the same face was
-  read as the projection being the score. Kickoff times leave the meta line once
-  a game is under way. The board carries no kickoff times, so there a player
-  counts as started once the feed credits him with points, which means a player
-  under way on zero shows a dash until he scores.
+- **Live scoring** follows one rule on the Hub rows, the League board and the
+  game dialog (`src/utils/liveScoreline.ts`). Each player follows his own game.
+  Before kickoff the big number is his projection and the meta line carries the
+  kickoff time. Once his game is live, points scored take the big number, the
+  projected final sits beneath it labelled `proj`, and a cyan tag with a pulsing
+  dot carries the quarter and clock (`Q3 4:12`, `Half`, `OT 2:00`). Once it is
+  over, a quiet `FINAL` tag replaces the clock and `proj` shows the pregame
+  projection, since the live one converges on the score and would only repeat
+  it. Scores and projections share a column only because every row showing a
+  score is tagged; the two ship together or not at all.
+
+  Game state comes from `GET /api/nfl/game-state`, served from the scoreboard
+  cache the live cycle already keeps and polled once a minute by an open page.
+  Without it, a passed kickoff or points on the board mark a row `Started`
+  without claiming live or final. On a phone the tag replaces the opponent in
+  the short meta line once a game starts, because the line cannot hold both.
+  Cyan is `var(--cyan, #6dc8ff)`: DESIGN_RATIONALE.md reserves it for live
+  state, but the palette never defined the token.
+
 - **Odds format** is global and exclusive: American odds or percentages, never
   both on screen at once.
 - **Colour semantics** are enforced: amber is you, brand, CTA and selection;

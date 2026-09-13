@@ -84,7 +84,16 @@ async function fetchGameState() {
       for (const c of comp?.competitors ?? []) {
         const abbr = normalizeTeam(c?.team?.abbreviation);
         if (!abbr) continue;
-        teamState.set(abbr, { state, f });
+        /* period and displayClock ride along for DISPLAY only: the per-player game
+           tag the lineup rows show ("Q3 4:12", "Half", "Final"). f and state are
+           unchanged, so nothing that prices reads anything new. */
+        teamState.set(abbr, {
+          state,
+          f,
+          period: Number(status?.period) || null,
+          displayClock: status?.displayClock ?? null,
+          detail: status?.type?.shortDetail ?? null,
+        });
         if (state === 'post') finalTeams.add(abbr);
       }
     }
@@ -145,6 +154,29 @@ export async function awaitFinalNflTeams() {
 export async function awaitNflGameState() {
   await awaitFinalNflTeams();
   return _cache.teamState;
+}
+
+/**
+ * Per-team game state for the browser: whether each NFL team's game this week is
+ * not started, in progress or final, plus the quarter and clock to print. Plain
+ * JSON, non-blocking, served from the same 90s cache the live cycle reads, so a
+ * page polling it adds no scoreboard traffic of its own.
+ *
+ * `at` is 0 until the scoreboard has been read once. The client treats that as
+ * "unknown" and falls back to kickoff times rather than calling everything pre.
+ */
+export function getNflGameStateSnapshot() {
+  if (Date.now() - _cache.at >= TTL_MS) refreshInBackground();
+  const teams = {};
+  for (const [team, value] of _cache.teamState) {
+    teams[team] = {
+      state: value.state,
+      period: value.period ?? null,
+      clock: value.displayClock ?? null,
+      detail: value.detail ?? null,
+    };
+  }
+  return { at: _cache.at, week: _cache.week, teams };
 }
 
 /** Stable signature of the current final-team set, for cache-busting pricing. */

@@ -45,6 +45,12 @@ export interface LineupSlotEntry {
    */
   current?: number | null;
   /**
+   * The projection as it stood before kickoff. `projection` becomes the live
+   * projected final during a game and converges on the actual score, so a FINAL
+   * row compares against this instead. Optional for the same reason as `current`.
+   */
+  pregameProjection?: number | null;
+  /**
    * The full player record the shared row components render: headshot, team
    * logo, short name. Built by the caller, because assembling one means
    * knowing about the image proxy and this module is deliberately a leaf that
@@ -113,6 +119,7 @@ export function buildLineup({
         injuryStatus: null,
         projection: null,
         current: null,
+        pregameProjection: null,
       };
     }
 
@@ -137,6 +144,7 @@ export function buildLineup({
       injuryStatus: entry?.injuryStatus ?? null,
       projection: projection == null ? null : Number(projection.toFixed(1)),
       current,
+      pregameProjection: mean == null ? null : Number(mean.toFixed(1)),
       player: resolvePlayer?.(id),
     };
   });
