@@ -1824,22 +1824,36 @@ export function computeSeasonBaseline(ctx) {
   const paramsFor = (id, wk) => paramsBy.get(id)?.get(wk);
   const futureWeeks = remaining.filter((w) => w.week !== week);
 
-  const futures = [];
+  // Futures are stored as FLAT TYPED ARRAYS, not an array of `sims` Maps of
+  // {wins,pf} per roster. The old shape cached ~sims*R tiny objects PER LEAGUE and,
+  // held across every cached baseline, dominated live-mode heap (and OOM'd the box
+  // at scale). Same values, indexed [sim*R + rosterIndex]; wins are small ints,
+  // pf stays float64 so standings/tiebreaks are bit-identical to before.
+  const R = rosterIds.length;
+  const idIndex = new Map(rosterIds.map((id, i) => [id, i]));
+  const futWins = new Int16Array(sims * R);
+  const futPf = new Float64Array(sims * R);
+  const _w = new Float64Array(R);
+  const _p = new Float64Array(R);
   for (let sim = 0; sim < sims; sim += 1) {
-    const wins = new Map(rosterIds.map((id) => [id, 0]));
-    const pf = new Map(rosterIds.map((id) => [id, 0]));
+    _w.fill(0);
+    _p.fill(0);
     for (const weekEntry of futureWeeks) {
       for (const [aId, bId] of weekPairs(weekEntry)) {
+        const ai = idIndex.get(aId);
+        const bi = idIndex.get(bId);
         const sa = drawTeamScoreCRN(paramsFor(aId, weekEntry.week), seed, sim, weekEntry.week, aId);
         const sb = drawTeamScoreCRN(paramsFor(bId, weekEntry.week), seed, sim, weekEntry.week, bId);
-        pf.set(aId, pf.get(aId) + sa);
-        pf.set(bId, pf.get(bId) + sb);
-        if (sa > sb) wins.set(aId, wins.get(aId) + 1);
-        else if (sb > sa) wins.set(bId, wins.get(bId) + 1);
+        _p[ai] += sa;
+        _p[bi] += sb;
+        if (sa > sb) _w[ai] += 1;
+        else if (sb > sa) _w[bi] += 1;
       }
     }
-    futures.push(new Map(rosterIds.map((id) => [id, { wins: wins.get(id), pf: pf.get(id) }])));
+    const off = sim * R;
+    for (let ri = 0; ri < R; ri += 1) { futWins[off + ri] = _w[ri]; futPf[off + ri] = _p[ri]; }
   }
+  const futures = { wins: futWins, pf: futPf, R };
 
   const currentEntry = remaining.find((w) => w.week === week) ?? null;
   const playoffParamsBy = new Map(
@@ -1891,10 +1905,11 @@ export function simulateSeasonLive(baseline, liveDists) {
       else if (sb > sa) { wins.set(bId, wins.get(bId) + 1); currentWeekWins.set(bId, currentWeekWins.get(bId) + 1); }
     }
 
-    const fut = futures[sim];
-    for (const id of rosterIds) {
-      wins.set(id, wins.get(id) + fut.get(id).wins);
-      pf.set(id, pf.get(id) + fut.get(id).pf);
+    const off = sim * futures.R;
+    for (let ri = 0; ri < rosterIds.length; ri += 1) {
+      const id = rosterIds[ri];
+      wins.set(id, wins.get(id) + futures.wins[off + ri]);
+      pf.set(id, pf.get(id) + futures.pf[off + ri]);
     }
 
     rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + wins.get(id)));
