@@ -2410,25 +2410,74 @@
   white-space: nowrap;
 }
 
-/* Live-game only: points scored so far, shown under the projected final total.
-   Muted + smaller so the projection stays the primary number. */
-.matchup-page__slot-live-current {
-  color: rgba(244, 245, 242, 0.55);
-  font-family: var(--font-num);
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  letter-spacing: 0.02em;
-}
+/* Scoreboard mode: points scored lead, the projection follows with a word on it.
 
-/* Live team "current score" beside the projected total (headline + detail). */
-.matchup-page__live-current-total {
-  color: var(--amber-bright, #f5a623);
+   Scored takes the projection's exact size and weight, because it takes the
+   projection's place: the big number in a column is whichever one the matchup
+   is currently about. The projection underneath is small, muted and labelled,
+   so it cannot be mistaken for a score. No colour on either. Green and red are
+   money, amber is you, and a score is neither. */
+.matchup-page__slot-scored {
+  color: var(--text-primary);
   font-family: var(--font-num);
+  font-size: 17px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Not kicked off. A dash, dimmed, so an unplayed slot does not read as a
+   player who has played and scored nothing. */
+.matchup-page__slot-scored--pending {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.matchup-page__slot-proj-label {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* The opponent's side is reference material on the Hub, same as its
+   projection always was. Emphasis follows whose team it is. */
+.matchup-page__slot-card--opponent .matchup-page__slot-scored {
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.matchup-page__slot-card--opponent .matchup-page__slot-scored--pending {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.matchup-page__team-scoreline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 6px;
+}
+
+.matchup-page__team-scored {
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-page__team-scored-unit {
+  color: var(--text-muted);
+}
+
+.matchup-page__team-proj {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
 }
 
 .matchup-page__rail-stat strong {

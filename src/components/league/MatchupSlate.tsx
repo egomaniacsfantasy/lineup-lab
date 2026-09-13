@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { scoreModeFor, scorelineFor, teamScored, type ScoreMode } from '../../utils/liveScoreline';
 import { americanOddsValue, formatAmericanOdds } from '../../utils/formatOdds';
 import {
   legKey,
@@ -197,16 +198,20 @@ function boardDisplayName(name: string) {
   return name;
 }
 
-/** Live "current score" for a team = sum of its starters' points so far, or null
- *  when no starter has live data (pregame / live mode off). Same feed ESPN/Sleeper
- *  add up into the team total. */
-function startersCurrentTotal(
-  starters?: readonly { current?: number | null }[],
+/** Points scored for one side of a card, or null before anybody in the game
+ *  has played. Scoreboard mode is decided across BOTH sides, so a team whose
+ *  players have not kicked off yet reads 0.0 rather than vanishing while the
+ *  other side's score is up. */
+function sideScored(
+  starters: readonly { current?: number | null }[] | undefined,
+  mode: ScoreMode,
 ): number | null {
-  const vals = (starters ?? [])
-    .map((s) => s.current)
-    .filter((v): v is number => typeof v === 'number');
-  return vals.length ? Number(vals.reduce((a, b) => a + b, 0).toFixed(1)) : null;
+  return teamScored(scorelinesOf(starters), mode);
+}
+
+function scorelinesOf(starters?: readonly { current?: number | null }[]) {
+  return (starters ?? []).map((entry) =>
+    scorelineFor({ kickoffIso: null, bye: false, currentPoints: entry.current ?? null }, 0));
 }
 
 
@@ -456,8 +461,11 @@ export function MatchupSlate({
                 );
               };
 
+              const scoreMode = scoreModeFor([...scorelinesOf(left.starters), ...scorelinesOf(right.starters)]);
+
               const sideRow = (side: typeof left, overUnder: 'O' | 'U', move: number | null) => {
                 const other = side.side === left.side ? right : left;
+                const scored = sideScored(side.starters, scoreMode);
                 /* Every leg needs a game to belong to: the slip holds at most
                    one leg per game, and a game with no id cannot hold a slot. */
                 const bettable = onToggleLeg != null && matchup.matchupId != null;
@@ -497,9 +505,9 @@ export function MatchupSlate({
                             league. It was competing with the team name directly
                             above it for the same strip of space. */}
                         <span className="matchup-slate__team-meta">{side.record}</span>
-                        {startersCurrentTotal(side.starters) != null ? (
-                          <span className="matchup-slate__team-current" title="Points scored so far">
-                            {startersCurrentTotal(side.starters)!.toFixed(1)} pts now
+                        {scored != null ? (
+                          <span className="matchup-slate__team-current" title="Points scored">
+                            {scored.toFixed(1)} <span className="matchup-slate__team-current-unit">pts</span>
                           </span>
                         ) : null}
                       </span>

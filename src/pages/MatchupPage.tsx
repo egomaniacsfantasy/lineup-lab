@@ -33,6 +33,8 @@ import {
 import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints, impliedProbability } from '../utils/formatOdds';
+import { scoreModeFor, scorelineFor, teamScored, type Scoreline } from '../utils/liveScoreline';
+import { SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
 import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
 import { formatSignedDisplayedDeltaValue } from '../utils/displayDelta';
@@ -337,8 +339,6 @@ type MirroredSlotRow = {
   yourProjection: number;
   opponentProjection: number;
   /** Points scored so far, present only during a live game (else null). */
-  yourCurrent: number | null;
-  opponentCurrent: number | null;
   edgeDelta: number;
 };
 
@@ -402,8 +402,6 @@ function buildMirroredSlotRows(
       opponentSlot,
       yourProjection,
       opponentProjection,
-      yourCurrent: yourSlot?.currentPoints ?? yourSlot?.live?.current ?? null,
-      opponentCurrent: opponentSlot?.currentPoints ?? opponentSlot?.live?.current ?? null,
       edgeDelta: roundTo(yourProjection - opponentProjection),
     });
   }
@@ -1587,18 +1585,37 @@ function MatchupLive({
     [engine.roster, matchup.opponentTeam.roster],
   );
 
-  // Team "current score" = sum of the starters' points scored so far (the same
-  // feed ESPN/Sleeper add up). Sourced from `currentPoints` (provider feed), so it
-  // shows REGARDLESS of live mode. Null when no starter has scored (pregame), so
-  // the headline shows only the projection then.
-  const sumLiveCurrent = (roster: RosterSlot[]): number | null => {
-    const vals = roster
-      .map((s) => s.currentPoints)
-      .filter((v): v is number => typeof v === 'number');
-    return vals.length ? Number(vals.reduce((a, b) => a + b, 0).toFixed(1)) : null;
+  /* Kickoffs pass while the page is open, so the rows need a clock that moves.
+     A minute is the resolution a kickoff time is printed at. */
+  const [scoreClock, setScoreClock] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setScoreClock(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  /* Every starter's scoreline, and the one mode the whole matchup follows.
+     See utils/liveScoreline.ts for why the mode is per matchup rather than per
+     row. Points come from `currentPoints`, the provider feed, so this works
+     whether or not live mode is on. */
+  const scorelineOf = (slot: RosterSlot | null): Scoreline | null => {
+    if (!slot) return null;
+    const context = getPlayerContext(slot.starter, gameContextSource);
+    return scorelineFor(
+      {
+        kickoffIso: context.contextAvailable ? context.kickoffIso : null,
+        bye: context.contextAvailable ? context.bye : false,
+        currentPoints: slot.currentPoints ?? slot.live?.current ?? null,
+      },
+      scoreClock,
+    );
   };
-  const yourCurrentTotal = sumLiveCurrent(engine.roster);
-  const opponentCurrentTotal = sumLiveCurrent(matchup.opponentTeam.roster);
+  const yourScorelines = engine.roster.map(scorelineOf).filter((line): line is Scoreline => line != null);
+  const opponentScorelines = matchup.opponentTeam.roster
+    .map(scorelineOf)
+    .filter((line): line is Scoreline => line != null);
+  const scoreMode = isConnected ? scoreModeFor([...yourScorelines, ...opponentScorelines]) : 'projection';
+  const yourScoredTotal = teamScored(yourScorelines, scoreMode);
+  const opponentScoredTotal = teamScored(opponentScorelines, scoreMode);
 
   /* Your win probability over time.
      This used to match history entries on `matchupId`, which changes every
@@ -1698,10 +1715,16 @@ function MatchupLive({
      because those are the two things that change a start-or-sit. */
   const lineupMetaFor = (player: Player, extra?: string | null, compact = false) => {
     const context = getPlayerContext(player, gameContextSource);
+    /* Once the game is under way its kickoff time is history, and a row
+       reading "Sun 1:00 PM" beside a live score looks like the score is
+       waiting for a game that is already being played. */
+    const kickedOff = context.contextAvailable && context.kickoffIso
+      ? Date.parse(context.kickoffIso) <= scoreClock
+      : false;
     const gameMeta = context.contextAvailable
       ? context.bye
         ? 'BYE'
-        : compact
+        : compact || kickedOff
           ? context.matchup
           : `${context.matchup} · ${context.kickoff}`
       : null;
@@ -2014,18 +2037,10 @@ function MatchupLive({
                   <PricingOdds percent={oddsFormat === 'percent'} />
                 )}
               </span>
-              <p className="matchup-page__meta-copy">
-                Proj{' '}
-                <span className="matchup-page__inline-number">
-                  {formatProjection(engine.activeLine.yours.projection, isPriced)}
-                </span>{' '}
-                pts
-                {yourCurrentTotal != null ? (
-                  <span className="matchup-page__live-current-total" title="Points scored so far">
-                    {' · '}{yourCurrentTotal.toFixed(1)} now
-                  </span>
-                ) : null}
-              </p>
+              <TeamScoreline
+                projection={formatProjection(engine.activeLine.yours.projection, isPriced)}
+                scored={yourScoredTotal}
+              />
             </div>
 
             <div className="matchup-page__faceoff-vs" aria-hidden="true">
@@ -2093,18 +2108,10 @@ function MatchupLive({
                   <PricingOdds percent={oddsFormat === 'percent'} />
                 )}
               </span>
-              <p className="matchup-page__meta-copy">
-                Proj{' '}
-                <span className="matchup-page__inline-number">
-                  {formatProjection(engine.activeLine.opponent.projection, isPriced)}
-                </span>{' '}
-                pts
-                {opponentCurrentTotal != null ? (
-                  <span className="matchup-page__live-current-total" title="Points scored so far">
-                    {' · '}{opponentCurrentTotal.toFixed(1)} now
-                  </span>
-                ) : null}
-              </p>
+              <TeamScoreline
+                projection={formatProjection(engine.activeLine.opponent.projection, isPriced)}
+                scored={opponentScoredTotal}
+              />
             </div>
           </div>
 
@@ -2265,14 +2272,11 @@ function MatchupLive({
                                 ) : null}
                               </span>
                             </span>
-                            <span className="matchup-page__slot-numbers">
-                              <span className="matchup-page__slot-projection">{formatProjection(row.yourProjection, isPriced)}</span>
-                              {row.yourCurrent != null ? (
-                                <span className="matchup-page__slot-live-current" title="Points scored so far">
-                                  {row.yourCurrent.toFixed(1)} now
-                                </span>
-                              ) : null}
-                            </span>
+                            <SlotNumbers
+                              mode={scoreMode}
+                              projection={formatProjection(row.yourProjection, isPriced)}
+                              scoreline={scorelineOf(row.yourSlot)}
+                            />
                           </>
                         ) : (
                           <span className="matchup-page__slot-empty">No starter</span>
@@ -2309,14 +2313,12 @@ function MatchupLive({
                       >
                         {row.opponentSlot ? (
                           <>
-                            <span className="matchup-page__slot-numbers matchup-page__slot-numbers--right">
-                              <span className="matchup-page__slot-projection">{formatProjection(row.opponentProjection, isPriced)}</span>
-                              {row.opponentCurrent != null ? (
-                                <span className="matchup-page__slot-live-current" title="Points scored so far">
-                                  {row.opponentCurrent.toFixed(1)} now
-                                </span>
-                              ) : null}
-                            </span>
+                            <SlotNumbers
+                              align="right"
+                              mode={scoreMode}
+                              projection={formatProjection(row.opponentProjection, isPriced)}
+                              scoreline={scorelineOf(row.opponentSlot)}
+                            />
                             <span className="matchup-page__slot-copy matchup-page__slot-copy--right">
                               <span className="matchup-page__row-name">{row.opponentSlot.starter.shortName}</span>
                               <span className="matchup-page__row-secondary">

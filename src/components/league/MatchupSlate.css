@@ -269,14 +269,21 @@
 }
 
 /* Live "current score" for a team on the board card (only during a live game). */
+/* Points scored in a live game. Neutral, not amber: amber marks YOUR team,
+   and this line sits on every card on the board, strangers' included. */
 .matchup-slate__team-current {
   display: block;
-  color: var(--amber-bright, #f5a623);
+  color: var(--text-primary);
   font-family: var(--font-num, inherit);
   font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.matchup-slate__team-current-unit {
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 .matchup-slate__team-move {

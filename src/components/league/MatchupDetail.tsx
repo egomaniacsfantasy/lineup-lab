@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { SlotNumbers, TeamScoreline } from '../matchup/Scoreline';
+import { scoreModeFor, scorelineFor, teamScored } from '../../utils/liveScoreline';
 import { createPortal } from 'react-dom';
 import { NO_VALUE, formatAmericanOdds } from '../../utils/formatOdds';
 import { spreadLabel, type BoardTeam } from '../../utils/boardSides';
@@ -127,17 +129,16 @@ export function MatchupDetail({
   const yourGame = Boolean(left.isUser || right.isUser);
   const dimmed = (side: BoardTeam) => yourGame && !side.isUser;
 
-  // Live "current score" per team = sum of its starters' points so far. Null when
-  // no starter has live data (pregame / live mode off) — the header then shows the
-  // projection alone.
-  const sumCurrent = (starters?: readonly LineupSlotEntry[]): number | null => {
-    const vals = (starters ?? [])
-      .map((s) => s.current)
-      .filter((v): v is number => typeof v === 'number');
-    return vals.length ? Number(vals.reduce((a, b) => a + b, 0).toFixed(1)) : null;
-  };
-  const leftCurrentTotal = sumCurrent(leftStarters);
-  const rightCurrentTotal = sumCurrent(rightStarters);
+  /* The same scoreboard rule the Hub follows (utils/liveScoreline.ts), one mode
+     for the whole game. The board carries no kickoff times, so a player counts
+     as started once the feed credits him with points. */
+  const scorelinesOf = (starters?: readonly LineupSlotEntry[]) =>
+    (starters ?? []).map((entry) => scorelineFor({ kickoffIso: null, bye: false, currentPoints: entry.current ?? null }, 0));
+  const leftScorelines = scorelinesOf(leftStarters);
+  const rightScorelines = scorelinesOf(rightStarters);
+  const scoreMode = scoreModeFor([...leftScorelines, ...rightScorelines]);
+  const leftScored = teamScored(leftScorelines, scoreMode);
+  const rightScored = teamScored(rightScorelines, scoreMode);
 
   /* One switch, both sides. The header's price/percent toggle governs every
      number in the app and this is not the screen to make an exception. */
@@ -181,15 +182,10 @@ export function MatchupDetail({
       >
         {priceText(side)}
       </span>
-      <p className="matchup-page__meta-copy">
-        Proj <span className="matchup-page__inline-number">{pointsText(side.projection)}</span> pts
-        {(side === left ? leftCurrentTotal : rightCurrentTotal) != null ? (
-          <span className="matchup-page__live-current-total" title="Points scored so far">
-            {' · '}
-            {(side === left ? leftCurrentTotal : rightCurrentTotal)!.toFixed(1)} now
-          </span>
-        ) : null}
-      </p>
+      <TeamScoreline
+        projection={pointsText(side.projection)}
+        scored={side === left ? leftScored : rightScored}
+      />
     </div>
   );
 
@@ -232,21 +228,12 @@ export function MatchupDetail({
       </span>
     );
     const numbers = (
-      <span
-        className={[
-          'matchup-page__slot-numbers',
-          opponent ? 'matchup-page__slot-numbers--right' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        <span className="matchup-page__slot-projection">{pointsText(entry.projection)}</span>
-        {entry.current != null ? (
-          <span className="matchup-page__slot-live-current" title="Points scored so far">
-            {entry.current.toFixed(1)} now
-          </span>
-        ) : null}
-      </span>
+      <SlotNumbers
+        align={opponent ? 'right' : 'left'}
+        mode={scoreMode}
+        projection={pointsText(entry.projection)}
+        scoreline={scorelineFor({ kickoffIso: null, bye: false, currentPoints: entry.current ?? null }, 0)}
+      />
     );
 
     return opponent ? (

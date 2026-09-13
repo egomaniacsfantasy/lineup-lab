@@ -505,6 +505,18 @@ and the connect screen consumes it on read.
 
 ## 4.10 Cross-cutting UI systems
 
+- **Live scoring** follows one rule on the Hub, the League board and the game
+  dialog (`src/utils/liveScoreline.ts`). Before anybody in a matchup kicks off,
+  a lineup row carries one number, the projection. From the first kickoff the
+  whole matchup switches to scoreboard: the big number is points scored and the
+  projection moves underneath it, labelled `proj`. A player whose game has not
+  started shows a dash rather than 0.0, because a zero is a score. The mode is
+  per matchup, never per row, so a column never mixes the two meanings. It
+  replaced a projected final over a small "X now", which in the same face was
+  read as the projection being the score. Kickoff times leave the meta line once
+  a game is under way. The board carries no kickoff times, so there a player
+  counts as started once the feed credits him with points, which means a player
+  under way on zero shows a dash until he scores.
 - **Odds format** is global and exclusive: American odds or percentages, never
   both on screen at once.
 - **Colour semantics** are enforced: amber is you, brand, CTA and selection;
