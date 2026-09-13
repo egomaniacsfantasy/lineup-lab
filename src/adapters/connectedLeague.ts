@@ -405,9 +405,13 @@ export function toMatchupData(
       });
 
       const live = livePlayers?.[playerId] ?? null;
-      // Points scored so far from the provider feed — available regardless of live
-      // mode. Null when 0/absent (pregame). Drives the team's "current score" total.
-      const scored = matchup.playersPoints?.[playerId];
+      // Points scored so far. In live mode take it from the live overlay
+      // (livePlayers, re-fetched every poll) so the row updates in-game WITHOUT a
+      // manual refresh; the bootstrap feed's playersPoints is fetched once and goes
+      // stale, which is why the win% moved but the player points did not. Fall back
+      // to the provider feed when there is no live overlay (pregame / live off).
+      // Null when 0/absent (pregame). Drives the team's "current score" total.
+      const scored = live ? live.current : matchup.playersPoints?.[playerId];
       const currentPoints =
         typeof scored === 'number' && scored > 0 ? Number(scored.toFixed(1)) : null;
 

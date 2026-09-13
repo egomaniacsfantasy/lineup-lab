@@ -1996,6 +1996,27 @@ export function priceLiveOverlay(ctx, inputs, live, baseline) {
       };
     }
     liveDistByRoster.set(t.rosterId, { mean, variance });
+
+    // Bench players get a DISPLAY-only live score, added to `players` for the
+    // per-player rows but NOT summed into the team distribution above -- so the
+    // win% and futures sim are completely unaffected (bench never counts). Without
+    // this a benched player whose game is over or who is ruled OUT shows a stale 0
+    // projection next to his real current points; here his f=0 gives him a
+    // projected final = current points, exactly like a locked starter.
+    const benchIds = (t.players ?? []).filter((id) => !(t.starters ?? []).includes(id));
+    const benchScores = buildLivePlayerScores(
+      benchIds,
+      (id) => playerDistribution(id, projectionMap, catalog[id], week),
+      (id) => pointsForPlayer(id),
+      (id) => fForPlayer(id),
+      isDef,
+    );
+    for (const [id, s] of Object.entries(benchScores)) {
+      players[id] = {
+        current: Number(s.current.toFixed(1)),
+        projected: Number(s.projected.toFixed(1)),
+      };
+    }
   }
 
   const byMatchup = new Map();
