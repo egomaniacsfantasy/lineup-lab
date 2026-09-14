@@ -107,11 +107,11 @@ function playerDistribution(playerId, projectionMap, catalogEntry, week = null) 
   }
 
   // Per-week LOCK: a game that has already finished has a known score, so that one
-  // week is pinned to the actual points with ZERO variance. Unlike applyLiveLocks
-  // (which zeroes the player's global stdev and would flatten his FUTURE weeks too),
-  // this is scoped to the single locked week — every other week falls through to the
-  // normal grid logic below with full variance. Set by the trade analyzer from the
-  // live matchup feed for players whose team is done for the current week.
+  // week is pinned to the actual points with ZERO variance. Scoped to the single
+  // locked week ONLY — every other (future) week falls through to the normal grid
+  // logic below with full variance, so a finished player still projects normally for
+  // the rest of the season. Set from the live matchup feed by both applyLiveLocks
+  // (the shared Hub/League pricing path) and the trade analyzer.
   if (week != null && projection.lockedWeekly) {
     const lp = projection.lockedWeekly[week] ?? projection.lockedWeekly[String(week)];
     if (lp != null) return { mean: Number(lp), stdev: 0, unpriced: false, zeroed: false };
@@ -643,15 +643,19 @@ export function applyLiveLocks(projectionMap, liveLocks, week) {
     if (!Number.isFinite(pts)) continue;
     const proj = projectionMap.get(playerId);
     if (!proj) continue;
+    // Lock ONLY the current week to the actual score (zero variance), via the per-week
+    // lock read at the top of playerDistribution. Do NOT touch the global stdev or the
+    // future weeks: a finished player still projects normally, with full variance, for
+    // weeks 2..n. The previous version set stdev:0 GLOBALLY, which zeroed every finished
+    // player's rest-of-season variance -- and since nearly everyone has played by the
+    // time a week is scored, that made the whole season sim near-deterministic and
+    // inflated the stronger teams' playoff/title odds across the entire league (a team
+    // could even see its title odds RISE after losing, because variance that would let
+    // weaker teams catch it was gone). Per-week locking fixes that while still pinning
+    // the current week to reality.
     projectionMap.set(playerId, {
       ...proj,
-      stdev: 0,
-      weekly: { ...(proj.weekly ?? {}), [week]: pts, [String(week)]: pts },
-      weeklyCI: {
-        ...(proj.weeklyCI ?? {}),
-        [week]: { floor: pts, ceiling: pts },
-        [String(week)]: { floor: pts, ceiling: pts },
-      },
+      lockedWeekly: { ...(proj.lockedWeekly ?? {}), [week]: pts, [String(week)]: pts },
     });
   }
   return projectionMap;
