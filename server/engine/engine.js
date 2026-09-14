@@ -661,6 +661,44 @@ export function applyLiveLocks(projectionMap, liveLocks, week) {
   return projectionMap;
 }
 
+/**
+ * Pin every already-played player's CURRENT week to his actual score (zero variance)
+ * from the league matchup feed -- INDEPENDENT of the live scoreboard, so the current
+ * week resolves on real results whether or not live mode is on, and immediately after a
+ * redeploy (when the scoreboard-derived finalTeams set is still empty). This is the fix
+ * for the current week being simulated on projections that ignore banked points: an
+ * already-decided matchup (you're down 80) was showing you as a favorite because the
+ * played players contributed 0.
+ *
+ * "Played" is read from the projection grid, which the pipeline trims per team by
+ * kickoff: a player whose current-week row is ABSENT from a populated grid has played
+ * (his combine row was dropped) -- or is on bye, which correctly locks him to his 0 --
+ * while a player whose current week is still PRESENT has not played yet and keeps his
+ * normal projection variance. We pin to the actual points from the matchup feed via the
+ * per-week lockedWeekly that playerDistribution reads, so FUTURE weeks are untouched.
+ */
+export function pinPlayedCurrentWeek(projectionMap, matchups, week) {
+  if (week == null || !Array.isArray(matchups)) return projectionMap;
+  const pts = {};
+  for (const m of matchups) Object.assign(pts, m?.playersPoints ?? {});
+  for (const [pidStr, val] of Object.entries(pts)) {
+    let key = pidStr;
+    let proj = projectionMap.get(pidStr);
+    if (!proj) {
+      const n = Number(pidStr);
+      if (!Number.isNaN(n) && projectionMap.has(n)) { key = n; proj = projectionMap.get(n); }
+    }
+    if (!proj) continue;
+    const weekly = proj.weekly ?? {};
+    if (Object.keys(weekly).length === 0) continue;                       // no grid -> can't infer
+    if (weekly[week] != null || weekly[String(week)] != null) continue;   // still to play -> keep variance
+    const num = Number(val);
+    if (!Number.isFinite(num)) continue;
+    projectionMap.set(key, { ...proj, lockedWeekly: { ...(proj.lockedWeekly ?? {}), [week]: num, [String(week)]: num } });
+  }
+  return projectionMap;
+}
+
 export function applyOverlay(projectionMap, overlay) {
   if (!overlay || typeof overlay !== 'object') return projectionMap;
   for (const [playerId, ov] of Object.entries(overlay)) {
@@ -714,7 +752,8 @@ export function prepareLeagueCtx(ctx) {
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   applyOverlay(projectionMap, overlay);               // user's numbers on top of Franco
-  applyLiveLocks(projectionMap, ctx.liveLocks, week); // lock finished players (no-op until live)
+  applyLiveLocks(projectionMap, ctx.liveLocks, week); // scoreboard-driven locks (only when live)
+  pinPlayedCurrentWeek(projectionMap, ctx.matchups, week); // pin played players to actuals (works off-live too)
   // Stable seed from rosters + week + overlay only (NOT record/schedule), so conditioning
   // a season on a pick reuses the identical random draws (common random numbers).
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
@@ -2237,30 +2276,11 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   applyOverlay(projectionMap, overlay);
 
-  // Pin already-played players' CURRENT week to their real score (zero variance) so the
-  // in-progress week resolves on actual results, not a re-simulated projection. The
-  // pipeline drops a played team's current-week row from the grid, so "grid missing the
-  // current week" == that game is done (or a bye, which correctly locks to 0). We read
-  // the actual points from the league's current-week matchup feed. This sharpens the
-  // ABSOLUTE win%/playoff% shown for every team; the trade DELTA is unchanged because
-  // both the before and after sims share these locks under CRN. Future weeks keep full
-  // variance — the lock is per-week (see playerDistribution), never the global stdev.
-  const currentPts = {};
-  for (const m of ctx.matchups ?? []) Object.assign(currentPts, m.playersPoints ?? {});
-  for (const [pidStr, pts] of Object.entries(currentPts)) {
-    let key = pidStr;
-    let proj = projectionMap.get(pidStr);
-    if (!proj) {
-      const n = Number(pidStr);
-      if (!Number.isNaN(n) && projectionMap.has(n)) { key = n; proj = projectionMap.get(n); }
-    }
-    if (!proj) continue;
-    const wkly = proj.weekly ?? {};
-    if (wkly[week] != null || wkly[String(week)] != null) continue; // not played -> keep variance
-    const val = Number(pts);
-    if (!Number.isFinite(val)) continue;
-    projectionMap.set(key, { ...proj, lockedWeekly: { ...(proj.lockedWeekly ?? {}), [week]: val, [String(week)]: val } });
-  }
+  // Pin already-played players' current week to their real score (see pinPlayedCurrentWeek):
+  // the in-progress week resolves on actual results, so the absolute win%/playoff% are right.
+  // The trade DELTA is unchanged -- both the before and after sims share these locks under
+  // CRN -- and future weeks keep full variance (the lock is per-week).
+  pinPlayedCurrentWeek(projectionMap, ctx.matchups, week);
 
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
