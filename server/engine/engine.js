@@ -1535,8 +1535,29 @@ function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalo
   //     otherwise sit in `remaining` and get RE-ROLLED with random draws every sim —
   //     which is exactly what kept clinched teams off 100% and eliminated teams off 0%.
   const displayWeek = Number.isFinite(week) ? week : 1;
+  // Simulate exactly the weeks NOT already in the standings. The record (wins+losses+ties)
+  // is the SAME source the sim seeds each team's wins/pointsFor from, so deriving the start
+  // week from it keeps the sim self-consistent: a week is either IN the record (counted
+  // once, via the seed) or SIMULATED (counted once) -- never both, never neither.
+  //
+  // We used to start at max(displayWeek, lastScoredWeek+1). But lastScoredWeek can DESYNC
+  // from the record: Sleeper advances last_scored_leg to the in-progress week the moment its
+  // games start scoring, while it doesn't settle the win/loss record until ~a day later.
+  // In that window startWeek jumped PAST the current week even though the record was still
+  // 0-0, so the current-week result was neither recorded nor simulated -- it vanished, and
+  // a team's title/playoff odds could RISE right after it had actually lost. Tying startWeek
+  // to games-recorded removes that gap (and still skips genuinely-decided weeks, since those
+  // ARE in the record). Falls back to the old logic only if no team carries a usable record.
+  const gamesRecorded = Math.max(0, ...teams.map((t) => {
+    const r = t.record;
+    if (!r) return NaN;
+    const g = (r.wins ?? 0) + (r.losses ?? 0) + (r.ties ?? 0);
+    return Number.isFinite(g) ? g : NaN;
+  }));
   const lastScored = Number.isFinite(league.lastScoredWeek) ? league.lastScoredWeek : (week - 1);
-  const startWeek = Math.max(displayWeek, (lastScored ?? (week - 1)) + 1);
+  const startWeek = Number.isFinite(gamesRecorded)
+    ? gamesRecorded + 1
+    : Math.max(displayWeek, (lastScored ?? (week - 1)) + 1);
   const remaining = (scheduleWeeks ?? []).filter((w) => w.week >= startWeek && w.week <= regularWeeks);
 
   const bracketSize = nextPow2(Math.max(1, playoffTeams));
