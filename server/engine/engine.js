@@ -106,6 +106,17 @@ function playerDistribution(playerId, projectionMap, catalogEntry, week = null) 
     return { mean: 0, stdev: 0, unpriced: true, zeroed: false };
   }
 
+  // Per-week LOCK: a game that has already finished has a known score, so that one
+  // week is pinned to the actual points with ZERO variance. Unlike applyLiveLocks
+  // (which zeroes the player's global stdev and would flatten his FUTURE weeks too),
+  // this is scoped to the single locked week — every other week falls through to the
+  // normal grid logic below with full variance. Set by the trade analyzer from the
+  // live matchup feed for players whose team is done for the current week.
+  if (week != null && projection.lockedWeekly) {
+    const lp = projection.lockedWeekly[week] ?? projection.lockedWeekly[String(week)];
+    if (lp != null) return { mean: Number(lp), stdev: 0, unpriced: false, zeroed: false };
+  }
+
   let { mean, stdev } = projection;
 
   // Week-specific projection from the import's game-level grid (already
@@ -1503,15 +1514,26 @@ function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalo
   const paramsBy = new Map();
   for (const t of teams) {
     const m = new Map();
+    // A pending trade does not process until `tradeEffectiveWeek` (a player already
+    // done with his current game holds the whole deal until next week — see
+    // analyzeTrade/priceTrade). Weeks BEFORE that use the team's PRE-trade roster and
+    // starters (`playersBefore`/`startersBefore`), because the traded players are still
+    // on their old teams until the swap goes live; weeks AT/AFTER use the post-trade
+    // roster already in `players`/`starters`. Teams with no pending trade leave
+    // tradeEffectiveWeek unset and behave exactly as before (fully backward-compatible).
+    const teWk = Number.isFinite(t.tradeEffectiveWeek) ? t.tradeEffectiveWeek : null;
     for (const wk of weeksNeeded) {
+      const preTrade = teWk != null && wk < teWk;
+      const players = preTrade ? (t.playersBefore ?? t.players) : t.players;
+      const starters = preTrade ? (t.startersBefore ?? t.starters) : t.starters;
       // Current (ongoing) week: the team's ACTUAL set starters — the user controls
       // this week, so an empty slot scores 0. Every future/playoff week: the optimal
       // lineup with byes/empty slots filled at replacement level. This is the same
       // current-vs-future split the weekly lines make, so per-game odds, Futures and
       // the Predictor all price a week the same way.
       m.set(wk, wk === week
-        ? starterParams(t.starters, projectionMap, catalog, wk)
-        : streamedLineupParams(t.players, slotLabels, projectionMap, catalog, wk, replacementFor));
+        ? starterParams(starters, projectionMap, catalog, wk)
+        : streamedLineupParams(players, slotLabels, projectionMap, catalog, wk, replacementFor));
     }
     paramsBy.set(t.rosterId, m);
   }
@@ -2152,12 +2174,89 @@ function weekWinProbDelta(after, before) {
   return Number((after.weekWinProb - before.weekWinProb).toFixed(1));
 }
 
+/**
+ * The week a trade takes effect. Real leagues hold a trade until every player in it
+ * has finished his current-week game, so the swap can only go live once the
+ * furthest-along player's week is done — and by then that week is dead for the WHOLE
+ * deal (nobody's current-week points can move to a new team). We read this straight
+ * from the projection grid, which the pipeline trims per team by kickoff (the played
+ * team's current-week row is dropped the morning after its game). So a traded player
+ * who still HAS the current week in his grid has not played (his side can go this
+ * week), and one whose current week is gone has played (his side waits to next week).
+ * target_start = max over all traded players of that per-player next-startable week —
+ * every player in the deal is then valued from the same week, so a Thursday player
+ * (already done) and a Monday player (yet to play) are never on mismatched bases.
+ * NOTE: a player on his NFL bye this week also lacks the current-week key, so a trade
+ * made DURING a traded player's bye is conservatively pushed to next week. Rare, and
+ * only ever under-credits by one week; the scoreboard could disambiguate if needed.
+ */
+export function tradeEffectiveWeek(tradedIds, projectionMap, week) {
+  let ts = week;
+  for (const id of tradedIds) {
+    const proj = projectionMap.get(id) ?? projectionMap.get(String(id));
+    const weekly = proj?.weekly ?? {};
+    // Only a POPULATED grid can tell us a player already played (his current-week row
+    // was trimmed). An empty/absent grid (snapshot fallback, synthetic tests) tells us
+    // nothing, so we assume not-yet-played and leave the trade effective this week.
+    const hasGrid = Object.keys(weekly).length > 0;
+    const hasCurrent = weekly[week] != null || weekly[String(week)] != null;
+    const startable = hasGrid && !hasCurrent ? week + 1 : week;
+    if (startable > ts) ts = startable;
+  }
+  return ts;
+}
+
+/**
+ * Sum a player's per-week projection from `fromWeek` onward. The weekly grid is in the
+ * same scoring basis as seasonTotal (weekly summed == seasonTotal), so this is the
+ * player's remaining-season value measured from a chosen week — used to value both
+ * sides of a trade on the SAME window (weeks >= targetStart), which seasonTotal alone
+ * cannot do because it is already trimmed to each player's own remaining weeks (a
+ * Thursday player's played week is gone; a Monday player's is still in). Falls back to
+ * seasonTotal when a grid is unavailable.
+ */
+export function seasonTotalFrom(proj, fromWeek) {
+  const weekly = proj?.weekly;
+  if (!weekly || typeof weekly !== 'object') return proj?.seasonTotal ?? 0;
+  let s = 0;
+  let any = false;
+  for (const [k, v] of Object.entries(weekly)) {
+    if (Number(k) >= fromWeek) { s += Number(v) || 0; any = true; }
+  }
+  return any ? s : 0;
+}
+
 export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDrops = null }) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   applyOverlay(projectionMap, overlay);
+
+  // Pin already-played players' CURRENT week to their real score (zero variance) so the
+  // in-progress week resolves on actual results, not a re-simulated projection. The
+  // pipeline drops a played team's current-week row from the grid, so "grid missing the
+  // current week" == that game is done (or a bye, which correctly locks to 0). We read
+  // the actual points from the league's current-week matchup feed. This sharpens the
+  // ABSOLUTE win%/playoff% shown for every team; the trade DELTA is unchanged because
+  // both the before and after sims share these locks under CRN. Future weeks keep full
+  // variance — the lock is per-week (see playerDistribution), never the global stdev.
+  const currentPts = {};
+  for (const m of ctx.matchups ?? []) Object.assign(currentPts, m.playersPoints ?? {});
+  for (const [pidStr, pts] of Object.entries(currentPts)) {
+    let key = pidStr;
+    let proj = projectionMap.get(pidStr);
+    if (!proj) {
+      const n = Number(pidStr);
+      if (!Number.isNaN(n) && projectionMap.has(n)) { key = n; proj = projectionMap.get(n); }
+    }
+    if (!proj) continue;
+    const wkly = proj.weekly ?? {};
+    if (wkly[week] != null || wkly[String(week)] != null) continue; // not played -> keep variance
+    const val = Number(pts);
+    if (!Number.isFinite(val)) continue;
+    projectionMap.set(key, { ...proj, lockedWeekly: { ...(proj.lockedWeekly ?? {}), [week]: val, [String(week)]: val } });
+  }
 
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
@@ -2170,8 +2269,14 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
   const bracketSize = nextPow2(Math.max(1, Math.min(league.playoffTeams ?? 6, teams.length)));
   const rounds = Math.max(1, Math.round(Math.log2(bracketSize)));
+
+  // The trade takes effect at target_start (>= current week). Everything the trade
+  // touches — the roster swap and the drop valuation — is measured from that week, so
+  // both sides are valued on identical weeks even mid-week when one player has played
+  // and another has not.
+  const targetStart = tradeEffectiveWeek([...give, ...get], projectionMap, week);
   const dropWeeks = [];
-  for (let w = week; w <= regularWeeks; w += 1) dropWeeks.push(w);
+  for (let w = targetStart; w <= regularWeeks; w += 1) dropWeeks.push(w);
   for (let r = 0; r < rounds; r += 1) dropWeeks.push(playoffWeekStart + r);
 
   const giveSet = new Set(give.map(String));
@@ -2219,11 +2324,25 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
     optimalAssign(playerIds, slotLabels, projectionMap, catalog, week)
       .map((a) => a.playerId)
       .filter(Boolean);
+  // The swap goes live at targetStart. Weeks before it keep the PRE-trade roster and
+  // starters (carried as playersBefore/startersBefore), so a still-in-progress week is
+  // played out on today's rosters — the traded-away player still scores for his old
+  // team, the traded-in player still sits on his old team — and only weeks >= targetStart
+  // use the post-trade roster. When targetStart == week (nobody has played yet) this is
+  // identical to swapping immediately, so the normal case is unchanged.
+  const tradeSwap = (t, finalPlayers) => ({
+    ...t,
+    players: finalPlayers,
+    starters: optimalStarters(finalPlayers),
+    playersBefore: t.players,
+    startersBefore: t.starters,
+    tradeEffectiveWeek: targetStart,
+  });
   const tradedTeams = teams.map((t) =>
     t.rosterId === userTeam.rosterId
-      ? { ...t, players: userFinal, starters: optimalStarters(userFinal) }
+      ? tradeSwap(t, userFinal)
       : t.rosterId === partnerTeam.rosterId
-        ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal) }
+        ? tradeSwap(t, partnerFinal)
         : t,
   );
   const after = simulateSeason({ ...base, teams: tradedTeams, sims: TRADE_SIMS });
@@ -2317,9 +2436,16 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
     const pSet = new Set(pDrops.map(String));
     const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
     const partnerFinal = partnerAfter.filter((id) => !pSet.has(String(id)));
+    // The swap goes live at targetStart (a player already done for the week holds the
+    // deal to next week); weeks before it keep the pre-trade roster/starters, so mid-week
+    // both sides are valued from the same week.
+    const targetStart = tradeEffectiveWeek([...giveList, ...getList], projectionMap, week);
     const tradedTeams = teams.map((t) =>
-      t.rosterId === userTeam.rosterId ? { ...t, players: userFinal, starters: optimalStarters(userFinal) }
-        : t.rosterId === partnerTeam.rosterId ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal) } : t);
+      t.rosterId === userTeam.rosterId
+        ? { ...t, players: userFinal, starters: optimalStarters(userFinal), playersBefore: t.players, startersBefore: t.starters, tradeEffectiveWeek: targetStart }
+        : t.rosterId === partnerTeam.rosterId
+          ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal), playersBefore: t.players, startersBefore: t.starters, tradeEffectiveWeek: targetStart }
+          : t);
     const after = simulateSeason({ ...base, teams: tradedTeams, sims });
     const bu = baseline.find((f) => f.rosterId === userTeam.rosterId);
     const bp = baseline.find((f) => f.rosterId === partnerTeam.rosterId);
@@ -2453,9 +2579,16 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const pSet = new Set(pDrops.map(String));
     const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
     const partnerFinal = partnerAfter.filter((id) => !pSet.has(String(id)));
+    // The swap goes live at targetStart (a player already done for the week holds the
+    // deal to next week); weeks before it keep the pre-trade roster/starters, so mid-week
+    // both sides are valued from the same week.
+    const targetStart = tradeEffectiveWeek([...giveList, ...getList], projectionMap, week);
     const tradedTeams = teams.map((t) =>
-      t.rosterId === userTeam.rosterId ? { ...t, players: userFinal, starters: optimalStarters(userFinal) }
-        : t.rosterId === partnerTeam.rosterId ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal) } : t);
+      t.rosterId === userTeam.rosterId
+        ? { ...t, players: userFinal, starters: optimalStarters(userFinal), playersBefore: t.players, startersBefore: t.starters, tradeEffectiveWeek: targetStart }
+        : t.rosterId === partnerTeam.rosterId
+          ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal), playersBefore: t.players, startersBefore: t.starters, tradeEffectiveWeek: targetStart }
+          : t);
     const after = simulateSeason({ ...base, teams: tradedTeams, sims });
     const bu = baseline.find((f) => f.rosterId === userTeam.rosterId);
     const bp = baseline.find((f) => f.rosterId === partnerTeam.rosterId);
@@ -2807,6 +2940,11 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     return { available: false, reason: 'empty_side' };
   }
 
+  // The trade takes effect at targetStart (>= current week). Both the futures sim and
+  // the value gap below are measured from this week, so the two sides are valued on the
+  // same window even mid-week when one player has already played and another has not.
+  const targetStart = tradeEffectiveWeek([...give, ...get], projectionMap, week);
+
   // One seed per inputs state (shared with priceLeague's futures sim when the
   // caller passes it), so before/after cancel common variance (CRN).
   const seed = seedOverride ?? parseInt(
@@ -2837,11 +2975,14 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   // so the always-on lanes don't re-sim the pre-trade league once per lane.
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
   const futuresBefore = baseline ?? simulateSeason({ ...base, sims });
+  // Swap goes live at targetStart: weeks before it keep the pre-trade pool (carried as
+  // playersBefore), weeks at/after use the post-trade pool. targetStart == week is the
+  // normal immediate swap.
   const tradedTeams = teams.map((t) =>
     t.rosterId === userRosterId
-      ? { ...t, players: userPoolAfter }
+      ? { ...t, players: userPoolAfter, playersBefore: t.players, tradeEffectiveWeek: targetStart }
       : t.rosterId === partnerRosterId
-        ? { ...t, players: partnerPoolAfter }
+        ? { ...t, players: partnerPoolAfter, playersBefore: t.players, tradeEffectiveWeek: targetStart }
         : t,
   );
   const futuresAfter = simulateSeason({ ...base, teams: tradedTeams, sims });
@@ -2874,12 +3015,16 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
     return ded + flex / 3; // flex shared among RB/WR/TE
   };
   const TRADE_POS_W = { QB: 1.4, RB: 0.85, WR: 1.25, TE: 1.1, DEF: 0.25, K: 0.2 };
+  // Both the player values and the replacement reference are summed over weeks >=
+  // targetStart (not the raw seasonTotal), so a mid-week trade values both sides on the
+  // same window. When targetStart == week this equals seasonTotal exactly (past weeks
+  // are already trimmed out of every grid), so preseason/normal pricing is unchanged.
   const replByPos = {};
   const replacementTotal = (pos) => {
     if (replByPos[pos] === undefined) {
       const totals = active.projections
         .filter((p) => p.position === pos)
-        .map((p) => p.seasonTotal ?? 0)
+        .map((p) => seasonTotalFrom(p, targetStart))
         .sort((a, b) => b - a);
       const rank = Math.max(0, Math.round(12 * Math.max(1, startersPerTeam(pos))) - 1);
       replByPos[pos] = totals[Math.min(totals.length - 1, rank)] ?? 0;
@@ -2889,7 +3034,7 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   const valueOf = (id) => {
     const p = projectionMap.get(id);
     if (!p) return 0;
-    const vor = (p.seasonTotal ?? 0) - replacementTotal(p.position);
+    const vor = seasonTotalFrom(p, targetStart) - replacementTotal(p.position);
     return vor * (TRADE_POS_W[p.position] ?? 1);
   };
   const sumValue = (ids) => ids.reduce((s, id) => s + Math.max(0, valueOf(id)), 0);
