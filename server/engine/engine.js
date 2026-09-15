@@ -96,7 +96,21 @@ function gaussian(rng) {
 function playerDistribution(playerId, projectionMap, catalogEntry, week = null) {
   const projection = projectionMap.get(playerId);
 
-  // OUT/IR starters cost projection zero (surfaced via flags).
+  // Per-week LOCK: a game that has already finished has a KNOWN score, so that one
+  // week is pinned to the actual points with ZERO variance. This is checked FIRST --
+  // before the OUT/IR zero below -- because a final score is ground truth: a player who
+  // was hurt mid-game and is now flagged OUT (e.g. Zay Flowers scoring 26 then leaving)
+  // still banked those points, and the current week must count them, not zero him. The
+  // lock is scoped to the single locked week ONLY -- every other (future) week falls
+  // through to the normal grid logic below with full variance, so a since-injured player
+  // still projects zero for the weeks he'll actually miss (those aren't locked). Set from
+  // the live matchup feed by applyLiveLocks/pinPlayedCurrentWeek and the trade analyzer.
+  if (week != null && projection?.lockedWeekly) {
+    const lp = projection.lockedWeekly[week] ?? projection.lockedWeekly[String(week)];
+    if (lp != null) return { mean: Number(lp), stdev: 0, unpriced: false, zeroed: false };
+  }
+
+  // OUT/IR starters cost projection zero (surfaced via flags) -- for the weeks they miss.
   const status = (catalogEntry?.injuryStatus ?? '').toLowerCase();
   if (status === 'out' || status === 'ir' || catalogEntry?.status === 'Inactive') {
     return { mean: 0, stdev: 0, unpriced: false, zeroed: true };
@@ -104,17 +118,6 @@ function playerDistribution(playerId, projectionMap, catalogEntry, week = null) 
 
   if (!projection) {
     return { mean: 0, stdev: 0, unpriced: true, zeroed: false };
-  }
-
-  // Per-week LOCK: a game that has already finished has a known score, so that one
-  // week is pinned to the actual points with ZERO variance. Scoped to the single
-  // locked week ONLY — every other (future) week falls through to the normal grid
-  // logic below with full variance, so a finished player still projects normally for
-  // the rest of the season. Set from the live matchup feed by both applyLiveLocks
-  // (the shared Hub/League pricing path) and the trade analyzer.
-  if (week != null && projection.lockedWeekly) {
-    const lp = projection.lockedWeekly[week] ?? projection.lockedWeekly[String(week)];
-    if (lp != null) return { mean: Number(lp), stdev: 0, unpriced: false, zeroed: false };
   }
 
   let { mean, stdev } = projection;
