@@ -37,7 +37,7 @@ import {
   buildLiveLocks,
   normalizeTeam,
 } from '../live/nflGameStatus.js';
-import { awaitNflInjuries, getRuledOut, isRuledOut } from '../live/nflInjuries.js';
+import { awaitNflInjuries, getRuledOut, isRuledOut, getInjuryStatus, getInjuryStatuses } from '../live/nflInjuries.js';
 import {
   readPlayoffSettings,
   writePlayoffSettings,
@@ -640,22 +640,27 @@ export function buildHeadlessProvider(providerKind, season) {
   return sleeperProvider;
 }
 
-// Reconcile a roster catalog's injury flags (from the league DB, often stale and
-// PERSISTS a week-1 injury into later weeks -- the "Zay Flowers projects 0.0 in week
-// 2 though he's due back 9/20" bug) against the FRESH ESPN ruled-out set.
-// playerDistribution() blanket-zeroes any player flagged out/ir for EVERY week, so a
-// stale flag silently kills a returning player's whole rest-of-season. If the current
-// ESPN report does NOT rule a flagged player out, clear the stale flag so the
-// (injury-aware) projection grid drives instead -- it already zeroes the weeks he'll
-// actually miss and projects the weeks he returns. Only reconcile when ruledOut has
-// data, so a failed/empty scrape never wholesale-clears real out flags (players
-// genuinely out this week stay in ruledOut and keep their flag). Mutates in place.
-export function reconcileInjuryFlags(players, ruledOut) {
-  if (!players || !ruledOut || ruledOut.size === 0) return players;
+// Replace a roster catalog's injury flag (from the league DB, which is stale and
+// PERSISTS a week-1 injury into later weeks) with the FRESH ESPN injury designation,
+// so the badge shows the player's TRUE current status (Zay Flowers "Questionable",
+// A.J. Brown "IR") and the projection stays honest. For each player:
+//   - on the current ESPN report -> use that designation (Out/Questionable/Doubtful/IR/PUP)
+//   - not on the report          -> clear a stale out/ir flag (he's active again)
+//                                   (leave a non-out/ir stale value alone as a fallback)
+// playerDistribution now defers its out/ir zero to the injury-aware weekly grid, so a
+// returning player (grid: 0 while out, real once back) is never stranded at 0.0 by the
+// designation. Only reconcile when the scrape returned data, so a failed/empty scrape
+// never wholesale-rewrites real flags. `statuses` is the fresh ESPN designation map.
+// Mutates in place.
+export function reconcileInjuryFlags(players, statuses) {
+  if (!players || !statuses || statuses.size === 0) return players;
   for (const p of Object.values(players)) {
-    const st = (p?.injuryStatus ?? '').toLowerCase();
-    if ((st === 'out' || st === 'ir') && !isRuledOut(p.name, p.team, ruledOut)) {
-      p.injuryStatus = null;
+    const fresh = getInjuryStatus(p.name, p.team, statuses);
+    if (fresh != null) {
+      p.injuryStatus = fresh;
+    } else {
+      const stale = (p?.injuryStatus ?? '').toLowerCase();
+      if (stale === 'out' || stale === 'ir') p.injuryStatus = null;
     }
   }
   return players;
@@ -710,7 +715,7 @@ async function assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams
   // out flags (players genuinely out this week stay in ruledOut and keep their flag).
   try {
     await awaitNflInjuries();
-    reconcileInjuryFlags(ctx.players, getRuledOut());
+    reconcileInjuryFlags(ctx.players, getInjuryStatuses());
   } catch (err) {
     console.error('[pricing] injury reconciliation failed; using catalog flags', err);
   }

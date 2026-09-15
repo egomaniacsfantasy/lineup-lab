@@ -110,9 +110,18 @@ function playerDistribution(playerId, projectionMap, catalogEntry, week = null) 
     if (lp != null) return { mean: Number(lp), stdev: 0, unpriced: false, zeroed: false };
   }
 
-  // OUT/IR starters cost projection zero (surfaced via flags) -- for the weeks they miss.
+  // OUT/IR starters cost projection zero -- but only as a FALLBACK. When the player
+  // has an injury-aware weekly grid for THIS week, the grid is authoritative and wins
+  // (the pipeline already zeroes the weeks he misses and projects the weeks he returns,
+  // e.g. an IR player due back week 8). Blanket-zeroing every week off the designation
+  // is what stranded a returning player -- Zay Flowers, A.J. Brown -- at 0.0 all season.
+  // So zero here only when there is NO week-specific grid value to trust (a genuinely
+  // unpriced out/inactive player). The badge still shows the designation regardless.
   const status = (catalogEntry?.injuryStatus ?? '').toLowerCase();
-  if (status === 'out' || status === 'ir' || catalogEntry?.status === 'Inactive') {
+  const isOutFlag = status === 'out' || status === 'ir' || catalogEntry?.status === 'Inactive';
+  const grid = projection?.weekly ?? {};
+  const hasWeekGrid = week != null && (grid[week] ?? grid[String(week)]) != null;
+  if (isOutFlag && !hasWeekGrid) {
     return { mean: 0, stdev: 0, unpriced: false, zeroed: true };
   }
 

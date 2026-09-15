@@ -41,7 +41,19 @@ function keyOf(name, team) {
   return `${normalizePlayerName(name)}|${normalizeTeam(team) ?? ''}`;
 }
 
-let _cache = { at: 0, out: new Set(), refreshing: false };
+let _cache = { at: 0, out: new Set(), statuses: new Map(), refreshing: false };
+
+/** Normalize ESPN's status wording to the short designation the UI shows and the
+ *  engine understands: "Injured Reserve"/"...Designated to Return" -> "IR",
+ *  "Physically Unable to Perform" -> "PUP". Out/Questionable/Doubtful pass through.
+ *  "Active" (listed but cleared) is treated as no designation by the caller. */
+function normalizeDesignation(status) {
+  if (!status) return null;
+  const s = String(status).trim();
+  if (/reserve/i.test(s)) return 'IR';
+  if (/unable to perform|^pup$/i.test(s)) return 'PUP';
+  return s;
+}
 
 async function fetchInjuries() {
   // Same hard cap as the scoreboard read: a stalled ESPN injuries response must not
@@ -52,19 +64,27 @@ async function fetchInjuries() {
     const res = await fetch(INJURIES_URL, { signal: ctrl.signal });
     if (!res.ok) throw new Error(`injuries ${res.status}`);
     const data = await res.json();
-    const out = new Set();
+    const out = new Set();          // status exactly "Out" -> live-locks the player
+    const statuses = new Map();     // key -> display designation (for the injury badge)
     for (const grp of data?.injuries ?? []) {
       for (const inj of grp?.injuries ?? []) {
-        // ONLY a definitive "Out" locks the player. Questionable/Doubtful/Active do
-        // not - those players may still produce, so they project as normal.
-        if (inj?.status !== 'Out') continue;
         const ath = inj?.athlete ?? {};
         const nm = ath?.displayName;
         const tm = ath?.team?.abbreviation;
-        if (nm) out.add(keyOf(nm, tm));
+        if (!nm) continue;
+        const key = keyOf(nm, tm);
+        // ONLY a definitive "Out" locks the player in the LIVE sim. Questionable/
+        // Doubtful/Active do not - those players may still produce.
+        if (inj?.status === 'Out') out.add(key);
+        // The badge shows every real designation EXCEPT "Active" (listed but cleared,
+        // which is not an injury worth surfacing).
+        if (inj?.status && inj.status !== 'Active') {
+          const d = normalizeDesignation(inj.status);
+          if (d) statuses.set(key, d);
+        }
       }
     }
-    return out;
+    return { out, statuses };
   } finally {
     clearTimeout(to);
   }
@@ -74,8 +94,8 @@ function refreshInBackground() {
   if (_cache.refreshing) return;
   _cache.refreshing = true;
   fetchInjuries()
-    .then((out) => {
-      _cache = { at: Date.now(), out, refreshing: false };
+    .then(({ out, statuses }) => {
+      _cache = { at: Date.now(), out, statuses, refreshing: false };
     })
     .catch((err) => {
       _cache.refreshing = false;
@@ -90,12 +110,25 @@ export function getRuledOut() {
   return _cache.out;
 }
 
+/** Map of "normName|team" -> display designation (Out/Questionable/Doubtful/IR/PUP)
+ *  for every currently-injured player. Never blocks. Powers the injury badge. */
+export function getInjuryStatuses() {
+  if (Date.now() - _cache.at >= TTL_MS) refreshInBackground();
+  return _cache.statuses;
+}
+
+/** This player's current injury designation, or null when not on the report. */
+export function getInjuryStatus(name, team, statuses = _cache.statuses) {
+  if (!name || !statuses || statuses.size === 0) return null;
+  return statuses.get(keyOf(name, team)) ?? null;
+}
+
 /** Fresh read for the live cycle (one shared scrape per cycle, worth the wait).
  *  Returns the ruled-out set. */
 export async function awaitNflInjuries() {
   try {
-    const out = await fetchInjuries();
-    _cache = { at: Date.now(), out, refreshing: false };
+    const { out, statuses } = await fetchInjuries();
+    _cache = { at: Date.now(), out, statuses, refreshing: false };
   } catch (err) {
     console.error('[nflInjuries] await failed:', err?.message ?? err);
   }
