@@ -12,7 +12,6 @@ import { isGameWindow } from '../gameWindows.js';
 import {
   getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
   computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
-  priceLeague, prepareLeagueCtx,
 } from '../engine/engine.js';
 import { predictSeason, weekForks, weekProjections, PREDICTOR_SIMS } from '../engine/leverage.js';
 import { findSuccessorLeague } from '../leagueSuccession.js';
@@ -665,81 +664,6 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
     `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${playoffSettingsSignature(leagueId)}:w${week ?? '-'}`,
   );
 }
-
-// TEMP DIAGNOSTIC: dump the exact season-sim inputs + outputs for a league so we can
-// see why an 0-1 team's title odds look wrong. Read-only. Remove after debugging.
-apiRouter.get('/league/:leagueId/debug-sim', async (req, res, next) => {
-  try {
-    const provider = getProvider(req);
-    const { leagueId } = req.params;
-    const userId = req.query.userId ?? null;
-    const finalTeams = getFinalNflTeams();
-    let week = null;
-    try {
-      const [lg, st] = await Promise.all([provider.getLeague(leagueId), provider.getSeasonState()]);
-      if (lg && st) week = resolvePricingWeek(lg, st);
-    } catch {}
-    const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, finalTeams, week);
-    const teams = ctx.teams ?? [];
-    const regularWeeks = ctx.league?.regularSeasonWeeks ?? 14;
-    const gamesRecorded = Math.max(0, ...teams.map((t) => {
-      const r = t.record; if (!r) return NaN;
-      const g = (r.wins ?? 0) + (r.losses ?? 0) + (r.ties ?? 0);
-      return Number.isFinite(g) ? g : NaN;
-    }));
-    const startWeek = Number.isFinite(gamesRecorded)
-      ? gamesRecorded + 1
-      : Math.max(ctx.week ?? 1, (ctx.league?.lastScoredWeek ?? (ctx.week - 1)) + 1);
-    const remaining = (ctx.scheduleWeeks ?? [])
-      .filter((w) => w.week >= startWeek && w.week <= regularWeeks).map((w) => w.week);
-
-    const pricing = priceLeague(ctx);
-    const prepared = prepareLeagueCtx(ctx);
-    const pm = prepared?.projectionMap ?? new Map();
-    const wk = ctx.week;
-    const getP = (id) => pm.get(id) ?? pm.get(String(id)) ?? pm.get(Number(id));
-    const userTeam = teams.find((t) => t.isUser)
-      ?? (req.query.rosterId ? teams.find((t) => String(t.rosterId) === String(req.query.rosterId)) : null);
-    const starterDump = (t) => (t?.starters ?? []).map((id) => {
-      const p = getP(id);
-      const lw = p?.lockedWeekly;
-      const locked = lw && (lw[wk] != null || lw[String(wk)] != null);
-      const wkly = p?.weekly ?? {};
-      return {
-        id, name: ctx.catalog?.[id]?.name ?? ctx.players?.[id]?.name ?? String(id),
-        team: ctx.catalog?.[id]?.team ?? null,
-        currentWeekLocked: !!locked,
-        lockedActual: locked ? (lw[wk] ?? lw[String(wk)]) : null,
-        currentWeekProjInGrid: (wkly[wk] ?? wkly[String(wk)] ?? null),
-      };
-    });
-    // current-week matchup feed points (what the pin reads)
-    const feedPts = {};
-    for (const m of ctx.matchups ?? []) Object.assign(feedPts, m?.playersPoints ?? {});
-
-    res.json({
-      week: wk,
-      lastScoredWeek: ctx.league?.lastScoredWeek ?? null,
-      regularWeeks,
-      gamesRecordedMax: gamesRecorded,
-      startWeek,
-      currentWeekInSim: remaining.includes(wk),
-      remainingWeeks: remaining,
-      finalTeams: [...finalTeams],
-      matchupFeedPlayerCount: Object.keys(feedPts).length,
-      teams: teams.map((t) => ({
-        rosterId: t.rosterId, teamName: t.teamName, isUser: !!t.isUser,
-        record: t.record ?? null, pointsFor: t.pointsFor ?? null,
-      })),
-      futures: (pricing?.futures ?? []).map((f) => ({
-        rosterId: f.rosterId, teamName: f.teamName, isUser: f.isUser,
-        titleProb: f.titleProb, playoffProb: f.playoffProb,
-        expWins: f.expWins, avgSeed: f.avgSeed, weekWinProb: f.weekWinProb,
-      })),
-      userStarters: starterDump(userTeam),
-    });
-  } catch (error) { next(error); }
-});
 
 /**
  * Compute ONE league's live overlay for the current game state: each team's live
