@@ -2,6 +2,9 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { GameTag, SlotNumbers, TeamScoreline } from '../matchup/Scoreline';
 import { anyStarted, scorelineFor, teamScored } from '../../utils/liveScoreline';
 import { useNflGameStateForWeek } from '../../hooks/useNflGameState';
+import { useNflSchedule } from '../../hooks/useNflSchedule';
+import { getGameContextSource, getPlayerContext } from '../../utils/playerGameContext';
+import type { Player } from '../../types';
 import { createPortal } from 'react-dom';
 import { NO_VALUE, formatAmericanOdds } from '../../utils/formatOdds';
 import { spreadLabel, type BoardTeam } from '../../utils/boardSides';
@@ -31,6 +34,9 @@ interface MatchupDetailProps {
   leftBench?: readonly LineupSlotEntry[];
   rightBench?: readonly LineupSlotEntry[];
   week: number;
+  /** League season, for the NFL schedule lookup that puts a kickoff time on each
+   *  row (as the Hub does). Absent in design fixtures, where times are simply omitted. */
+  season?: number | null;
   onClose: () => void;
 }
 
@@ -65,6 +71,7 @@ export function MatchupDetail({
   leftBench,
   rightBench,
   week,
+  season = null,
   onClose,
 }: MatchupDetailProps) {
   const { format } = useOddsFormat();
@@ -136,9 +143,36 @@ export function MatchupDetail({
      the feed credits him with points. */
   const gameStates = useNflGameStateForWeek(week);
   const gameOf = (entry: LineupSlotEntry) => gameStates[entry.team?.toUpperCase() ?? ''] ?? null;
-  const scorelineOf = (entry: LineupSlotEntry) =>
-    scorelineFor({ kickoffIso: null, bye: false, currentPoints: entry.current ?? null, game: gameOf(entry) }, 0);
+  // NFL schedule for the week -> a kickoff time + opponent per NFL team, so each row
+  // reads like the Hub's ("@ PHI · Sun 1:00 PM") before its game starts. Keyed by the
+  // row's team; nothing here re-prices anything.
+  const nflSchedule = useNflSchedule(season, week);
+  const gameSource = getGameContextSource('live', nflSchedule);
+  const contextOf = (entry: LineupSlotEntry) =>
+    entry.team ? getPlayerContext({ team: entry.team } as Player, gameSource) : null;
+  const scorelineOf = (entry: LineupSlotEntry) => {
+    const ctx = contextOf(entry);
+    return scorelineFor(
+      {
+        kickoffIso: ctx?.contextAvailable ? ctx.kickoffIso : null,
+        bye: ctx?.contextAvailable ? ctx.bye : false,
+        currentPoints: entry.current ?? null,
+        game: gameOf(entry),
+      },
+      Date.now(),
+    );
+  };
   const scorelinesOf = (starters?: readonly LineupSlotEntry[]) => (starters ?? []).map(scorelineOf);
+  // The row's meta line: position + team normally, but before a game kicks off it
+  // reads like the Hub -- position, opponent, kickoff time ("WR · @ PHI · Sun 1:00 PM").
+  // Once the game is live/final the kickoff is history and the GameTag carries state.
+  const metaWithKickoff = (entry: LineupSlotEntry) => {
+    const ctx = contextOf(entry);
+    if (!ctx?.contextAvailable) return metaFor(entry);
+    if (ctx.bye) return [entry.position, 'BYE'].filter(Boolean).join(' · ');
+    if (scorelineOf(entry).phase !== 'upcoming') return metaFor(entry);
+    return [entry.position, ctx.matchup, ctx.kickoff].filter(Boolean).join(' · ');
+  };
   const leftScorelines = scorelinesOf(leftStarters);
   const rightScorelines = scorelinesOf(rightStarters);
   const matchupStarted = anyStarted([...leftScorelines, ...rightScorelines]);
@@ -226,7 +260,7 @@ export function MatchupDetail({
         </span>
         <span className="matchup-page__row-secondary">
           <span className="matchup-page__meta-full">
-            {metaFor(entry)}
+            {metaWithKickoff(entry)}
             <GameTag game={gameOf(entry)} phase={scorelineOf(entry).phase} />
           </span>
           {entry.injuryStatus ? (

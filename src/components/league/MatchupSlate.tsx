@@ -23,6 +23,8 @@ import './MatchupSlate.css';
 interface MatchupSlateProps {
   matchups: LeagueWeekMatchup[];
   currentWeek: number;
+  /** League season, forwarded to the opened game so its rows can show kickoff times. */
+  season?: number | null;
   history?: LineHistoryEntry[] | null;
   /** Rendered directly under the board's own heading. */
   intro?: ReactNode;
@@ -239,6 +241,7 @@ function moveLabel(value: number) {
 export function MatchupSlate({
   matchups,
   currentWeek,
+  season = null,
   history = null,
   intro = null,
   gameOfTheWeek = null,
@@ -819,6 +822,7 @@ export function MatchupSlate({
           right={openedRow.right}
           rightStarters={openedRow.right.starters}
           rightBench={openedRow.right.bench}
+          season={season}
           total={openedRow.matchup.totalProjection}
           week={currentWeek}
         />

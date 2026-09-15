@@ -691,6 +691,7 @@ export function LeaguePage() {
           {slate.length > 0 ? (
             <MatchupSlate
               currentWeek={connection.currentWeek}
+              season={bootstrap?.league.season ? Number(bootstrap.league.season) : null}
               intro={
                 bootstrap ? (
                   <WeekFork
