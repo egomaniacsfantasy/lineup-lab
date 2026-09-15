@@ -632,6 +632,27 @@ export function buildHeadlessProvider(providerKind, season) {
   return sleeperProvider;
 }
 
+// Reconcile a roster catalog's injury flags (from the league DB, often stale and
+// PERSISTS a week-1 injury into later weeks -- the "Zay Flowers projects 0.0 in week
+// 2 though he's due back 9/20" bug) against the FRESH ESPN ruled-out set.
+// playerDistribution() blanket-zeroes any player flagged out/ir for EVERY week, so a
+// stale flag silently kills a returning player's whole rest-of-season. If the current
+// ESPN report does NOT rule a flagged player out, clear the stale flag so the
+// (injury-aware) projection grid drives instead -- it already zeroes the weeks he'll
+// actually miss and projects the weeks he returns. Only reconcile when ruledOut has
+// data, so a failed/empty scrape never wholesale-clears real out flags (players
+// genuinely out this week stay in ruledOut and keep their flag). Mutates in place.
+export function reconcileInjuryFlags(players, ruledOut) {
+  if (!players || !ruledOut || ruledOut.size === 0) return players;
+  for (const p of Object.values(players)) {
+    const st = (p?.injuryStatus ?? '').toLowerCase();
+    if ((st === 'out' || st === 'ir') && !isRuledOut(p.name, p.team, ruledOut)) {
+      p.injuryStatus = null;
+    }
+  }
+  return players;
+}
+
 // Build + price a league's lines (shared by the /lines route and the 6h
 // scheduler). getLeaguePricing caches 60s, so the scheduler always recomputes.
 // Assemble the full pricing context (league + rosters + schedule + adjusted
@@ -668,6 +689,24 @@ async function assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams
   const liveLocks = (sbWeek == null || sbWeek === ctx.week)
     ? buildLiveLocks(ctx.matchups, ctx.players, finalTeams)
     : {};
+
+  // Reconcile the roster catalog's injury flag (from the league DB, which is often
+  // stale and PERSISTS a week-1 injury into later weeks -- the "Zay Flowers projects
+  // 0.0 in week 2 though he's due back 9/20" bug) against the FRESH ESPN injury
+  // report. playerDistribution() blanket-zeroes any player flagged out/ir for EVERY
+  // week, so a stale flag silently kills a returning player's whole rest-of-season.
+  // If the current ESPN report does NOT rule a flagged player out, clear the stale
+  // flag so the (injury-aware) projection grid drives instead -- it already zeroes the
+  // weeks he'll actually miss and projects the weeks he returns. Only reconcile when
+  // the scrape returned data, so a failed/empty scrape never wholesale-clears real
+  // out flags (players genuinely out this week stay in ruledOut and keep their flag).
+  try {
+    await awaitNflInjuries();
+    reconcileInjuryFlags(ctx.players, getRuledOut());
+  } catch (err) {
+    console.error('[pricing] injury reconciliation failed; using catalog flags', err);
+  }
+
   return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections, liveLocks };
 }
 
