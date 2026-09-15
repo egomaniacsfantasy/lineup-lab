@@ -746,6 +746,59 @@ apiRouter.get('/league/:leagueId/debug-week', async (req, res, next) => {
   } catch (error) { res.status(500).json({ error: String(error?.message ?? error) }); }
 });
 
+// TEMP DIAGNOSTIC (no params): auto-discovers every registered league from the server's
+// own registry and dumps the current-week diagnostic for each. Just open the URL.
+apiRouter.get('/debug-week-all', async (_req, res) => {
+  try {
+    const registry = readRegistry();
+    const ids = Object.keys(registry);
+    const snap = getNflGameStateSnapshot();
+    const out = [];
+    for (const leagueId of ids) {
+      const { userId, provider, season } = registry[leagueId] ?? {};
+      try {
+        const providerObj = buildHeadlessProvider(provider, season);
+        let providerWeek = null, state = null, league = null;
+        try {
+          [league, state] = await Promise.all([providerObj.getLeague(leagueId), providerObj.getSeasonState()]);
+          if (league && state) providerWeek = resolvePricingWeek(league, state);
+        } catch { /* */ }
+        const advanced = providerWeek != null ? advanceWeekIfComplete(providerWeek) : null;
+        const finalTeams = getFinalNflTeams();
+        const ctx = await assembleLeagueCtx(providerObj, leagueId, userId ?? null, null, finalTeams, advanced ?? undefined);
+        const prepared = prepareLeagueCtx(ctx);
+        const pm = prepared?.projectionMap ?? new Map();
+        const wk = ctx.week;
+        const userTeam = ctx.teams.find((t) => t.isUser) ?? ctx.teams[0];
+        const getP = (id) => pm.get(id) ?? pm.get(String(id)) ?? pm.get(Number(id));
+        const starters = (userTeam?.starters ?? []).slice(0, 10).map((id) => {
+          const p = getP(id); const wkly = p?.weekly ?? {}; const lw = p?.lockedWeekly ?? {};
+          return {
+            name: ctx.players?.[id]?.name ?? String(id),
+            team: ctx.players?.[id]?.team ?? null,
+            injuryStatus: ctx.players?.[id]?.injuryStatus ?? null,
+            inMap: !!p,
+            gridHasWk: wkly[wk] != null || wkly[String(wk)] != null,
+            gridVal: (wkly[wk] ?? wkly[String(wk)] ?? null),
+            lockedVal: (lw[wk] ?? lw[String(wk)] ?? null),
+            keys: Object.keys(wkly).slice(0, 5),
+          };
+        });
+        out.push({
+          leagueId, provider, userId: userId ?? null,
+          providerWeek, advancedWeek: advanced, ctxWeek: wk,
+          seasonType: state?.seasonType ?? state?.season_type ?? null,
+          projVersion: ctx.projections?.version ?? null,
+          projCount: (ctx.projections?.projections ?? []).length,
+          userTeam: userTeam?.teamName ?? null,
+          starters,
+        });
+      } catch (e) { out.push({ leagueId, error: String(e?.message ?? e) }); }
+    }
+    res.json({ scoreboard: { at: snap?.at, week: snap?.week, teams: Object.keys(snap?.teams ?? {}).length }, leagues: out });
+  } catch (error) { res.status(500).json({ error: String(error?.message ?? error) }); }
+});
+
 /**
  * Compute ONE league's live overlay for the current game state: each team's live
  * distribution from the game clock + points so far, closed-form matchup win%, and
