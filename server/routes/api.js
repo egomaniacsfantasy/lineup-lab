@@ -12,7 +12,6 @@ import { isGameWindow } from '../gameWindows.js';
 import {
   getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
   computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
-  priceLeague, prepareLeagueCtx,
 } from '../engine/engine.js';
 import { predictSeason, weekForks, weekProjections, PREDICTOR_SIMS } from '../engine/leverage.js';
 import { findSuccessorLeague } from '../leagueSuccession.js';
@@ -658,7 +657,17 @@ async function assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams
   } catch (err) {
     console.error('[pricing] adjusted projections failed; using snapshot', err);
   }
-  const liveLocks = buildLiveLocks(ctx.matchups, ctx.players, finalTeams);
+  // Only apply the scoreboard's "game final" locks when the scoreboard is on the SAME
+  // week we're pricing. After a week rolls over, the priced week advances to the next
+  // week while the scoreboard still shows the prior week's games as final -- applying
+  // those "final" flags to the new week's matchup feed (which has 0 points, unplayed)
+  // would lock EVERY player to 0 (the "everyone shows 0.0 / FINAL in week 2" bug). When
+  // the weeks disagree, skip these locks; the projection grid + pinPlayedCurrentWeek +
+  // priorFinalMatchups already handle the played/unplayed split correctly.
+  const sbWeek = getCurrentNflWeek();
+  const liveLocks = (sbWeek == null || sbWeek === ctx.week)
+    ? buildLiveLocks(ctx.matchups, ctx.players, finalTeams)
+    : {};
   return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections, liveLocks };
 }
 
@@ -688,116 +697,6 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
     `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${playoffSettingsSignature(leagueId)}:w${week ?? '-'}`,
   );
 }
-
-// TEMP DIAGNOSTIC: why does the Hub show 0 for every player in the current week?
-// Dumps the priced week, the scoreboard/advance inputs, the loaded projection version,
-// and a per-starter projection lookup. Read-only. Remove after debugging.
-apiRouter.get('/league/:leagueId/debug-week', async (req, res, next) => {
-  try {
-    const provider = getProvider(req);
-    const { leagueId } = req.params;
-    const userId = req.query.userId ?? null;
-    let providerWeek = null, state = null, league = null;
-    try {
-      [league, state] = await Promise.all([provider.getLeague(leagueId), provider.getSeasonState()]);
-      if (league && state) providerWeek = resolvePricingWeek(league, state);
-    } catch (e) { /* */ }
-    const snap = getNflGameStateSnapshot();
-    const advanced = providerWeek != null ? advanceWeekIfComplete(providerWeek) : null;
-
-    const finalTeams = getFinalNflTeams();
-    const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, finalTeams, advanced ?? undefined);
-    const prepared = prepareLeagueCtx(ctx);
-    const pm = prepared?.projectionMap ?? new Map();
-    const wk = ctx.week;
-    const userTeam = ctx.teams.find((t) => t.isUser) ?? ctx.teams[0];
-    const getP = (id) => pm.get(id) ?? pm.get(String(id)) ?? pm.get(Number(id));
-    const starterDump = (userTeam?.starters ?? []).slice(0, 12).map((id) => {
-      const p = getP(id);
-      const wkly = p?.weekly ?? {};
-      const lw = p?.lockedWeekly ?? {};
-      return {
-        name: ctx.players?.[id]?.name ?? ctx.catalog?.[id]?.name ?? String(id),
-        team: ctx.players?.[id]?.team ?? ctx.catalog?.[id]?.team ?? null,
-        injuryStatus: ctx.players?.[id]?.injuryStatus ?? null,
-        inProjMap: !!p,
-        gridHasWeek: wkly[wk] != null || wkly[String(wk)] != null,
-        gridWeekVal: (wkly[wk] ?? wkly[String(wk)] ?? null),
-        lockedWeekVal: (lw[wk] ?? lw[String(wk)] ?? null),
-        weeklyKeys: Object.keys(wkly).slice(0, 6),
-      };
-    });
-    // matchup feed for the current week: does it carry points?
-    const feed = {};
-    for (const m of ctx.matchups ?? []) Object.assign(feed, m?.playersPoints ?? {});
-    res.json({
-      providerWeek,
-      advancedWeek: advanced,
-      ctxWeek: wk,
-      seasonType: state?.seasonType ?? state?.season_type ?? null,
-      scoreboard: { at: snap?.at, week: snap?.week, teamCount: Object.keys(snap?.teams ?? {}).length,
-        sampleStates: Object.entries(snap?.teams ?? {}).slice(0, 6).map(([t, v]) => `${t}:${v.state}`) },
-      projections: { version: ctx.projections?.version ?? null, count: (ctx.projections?.projections ?? []).length },
-      currentWeekFeedPlayerCount: Object.keys(feed).length,
-      currentWeekFeedNonZero: Object.values(feed).filter((v) => Number(v) > 0).length,
-      userTeam: userTeam?.teamName ?? null,
-      userStarters: starterDump,
-    });
-  } catch (error) { res.status(500).json({ error: String(error?.message ?? error) }); }
-});
-
-// TEMP DIAGNOSTIC (no params): auto-discovers every registered league from the server's
-// own registry and dumps the current-week diagnostic for each. Just open the URL.
-apiRouter.get('/debug-week-all', async (_req, res) => {
-  try {
-    const registry = readRegistry();
-    const ids = Object.keys(registry);
-    const snap = getNflGameStateSnapshot();
-    const out = [];
-    for (const leagueId of ids) {
-      const { userId, provider, season } = registry[leagueId] ?? {};
-      try {
-        const providerObj = buildHeadlessProvider(provider, season);
-        let providerWeek = null, state = null, league = null;
-        try {
-          [league, state] = await Promise.all([providerObj.getLeague(leagueId), providerObj.getSeasonState()]);
-          if (league && state) providerWeek = resolvePricingWeek(league, state);
-        } catch { /* */ }
-        const advanced = providerWeek != null ? advanceWeekIfComplete(providerWeek) : null;
-        const finalTeams = getFinalNflTeams();
-        const ctx = await assembleLeagueCtx(providerObj, leagueId, userId ?? null, null, finalTeams, advanced ?? undefined);
-        const prepared = prepareLeagueCtx(ctx);
-        const pm = prepared?.projectionMap ?? new Map();
-        const wk = ctx.week;
-        const userTeam = ctx.teams.find((t) => t.isUser) ?? ctx.teams[0];
-        const getP = (id) => pm.get(id) ?? pm.get(String(id)) ?? pm.get(Number(id));
-        const starters = (userTeam?.starters ?? []).slice(0, 10).map((id) => {
-          const p = getP(id); const wkly = p?.weekly ?? {}; const lw = p?.lockedWeekly ?? {};
-          return {
-            name: ctx.players?.[id]?.name ?? String(id),
-            team: ctx.players?.[id]?.team ?? null,
-            injuryStatus: ctx.players?.[id]?.injuryStatus ?? null,
-            inMap: !!p,
-            gridHasWk: wkly[wk] != null || wkly[String(wk)] != null,
-            gridVal: (wkly[wk] ?? wkly[String(wk)] ?? null),
-            lockedVal: (lw[wk] ?? lw[String(wk)] ?? null),
-            keys: Object.keys(wkly).slice(0, 5),
-          };
-        });
-        out.push({
-          leagueId, provider, userId: userId ?? null,
-          providerWeek, advancedWeek: advanced, ctxWeek: wk,
-          seasonType: state?.seasonType ?? state?.season_type ?? null,
-          projVersion: ctx.projections?.version ?? null,
-          projCount: (ctx.projections?.projections ?? []).length,
-          userTeam: userTeam?.teamName ?? null,
-          starters,
-        });
-      } catch (e) { out.push({ leagueId, error: String(e?.message ?? e) }); }
-    }
-    res.json({ scoreboard: { at: snap?.at, week: snap?.week, teams: Object.keys(snap?.teams ?? {}).length }, leagues: out });
-  } catch (error) { res.status(500).json({ error: String(error?.message ?? error) }); }
-});
 
 /**
  * Compute ONE league's live overlay for the current game state: each team's live
