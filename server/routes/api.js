@@ -191,8 +191,16 @@ apiRouter.get('/state', async (req, res, next) => {
       seasonState: computeSeasonState(state),
       /* The NFL's week is not the fantasy week. In August Sleeper answers
          preseason week 2, and using that to index a league's schedule prices a
-         week that has not happened. */
-      displayWeek: resolveFantasyWeek(state),
+         week that has not happened.
+
+         advanceWeekIfComplete rolls the badge to the next week the moment the
+         current week's games are all final -- the SAME advance the pricing path
+         applies (loadLeagueContext) -- so the header week never disagrees with
+         the week the matchup is actually priced for. Without it, in the Tue-after
+         window the provider reports week=N+1 but display_week=N, so the badge sat
+         on the finished week (showing "WEEK 1" with 0-1 records and week-2 zeros)
+         while the matchup priced N+1. */
+      displayWeek: advanceWeekIfComplete(resolveFantasyWeek(state)),
       isPreseason: isPreseason(state),
       serverTime: Date.now(),
     });
