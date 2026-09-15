@@ -138,6 +138,36 @@ export function getCurrentNflWeek() {
   return _cache.week;
 }
 
+/**
+ * Pure week-advance decision, split out for testing. Given the provider's week and a
+ * scoreboard snapshot, return the week to actually price. Sleeper/ESPN keep state.week
+ * on the just-finished week until ~Tuesday, so without this the site prices a week that
+ * is already over (every remaining-season grid has that week trimmed -> all zeros).
+ * We advance by EXACTLY ONE when either (a) the scoreboard is on baseWeek and every
+ * one of its games is final, or (b) the scoreboard has itself ticked to baseWeek+1.
+ * Cold start / no scoreboard read yet -> trust the provider week (no advance).
+ */
+export function _effectiveWeek(baseWeek, { week: sbWeek, states, at }) {
+  if (!Number.isFinite(baseWeek)) return baseWeek;
+  if (!at || sbWeek == null || !Array.isArray(states) || states.length === 0) return baseWeek;
+  const allFinal = states.every((s) => s === 'post');
+  if (sbWeek === baseWeek + 1) return Math.min(baseWeek + 1, 18);
+  if (sbWeek === baseWeek && allFinal) return Math.min(baseWeek + 1, 18);
+  return baseWeek;
+}
+
+/** The week to PRICE: the provider's week, advanced one when the current week's games
+ *  are all final (so the site rolls to the next week the moment MNF ends, instead of
+ *  waiting ~a day for Sleeper/ESPN to bump state.week). Non-blocking; refreshes stale. */
+export function advanceWeekIfComplete(baseWeek) {
+  if (Date.now() - _cache.at >= TTL_MS) refreshInBackground();
+  return _effectiveWeek(baseWeek, {
+    week: _cache.week,
+    states: [..._cache.teamState.values()].map((v) => v.state),
+    at: _cache.at,
+  });
+}
+
 /** Force a fresh read (for the admin reprice / live-cycle trigger). Falls back to
  *  the cached state on error so a flaky scoreboard never breaks a cycle. */
 export async function awaitFinalNflTeams() {

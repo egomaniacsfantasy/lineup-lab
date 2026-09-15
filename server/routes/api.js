@@ -28,6 +28,7 @@ import { restOfSeasonPoints } from '../projections/restOfSeason.js';
 import {
   getFinalNflTeams,
   getCurrentNflWeek,
+  advanceWeekIfComplete,
   awaitFinalNflTeams,
   awaitNflGameState,
   getNflGameState,
@@ -564,9 +565,30 @@ async function loadLeagueContext(provider, leagueId, userId, weekOverride = null
 
   // Use the week the caller already resolved (so the pricing cache key and this
   // context can never disagree about which week to sim); otherwise resolve it here.
-  const week = weekOverride ?? resolvePricingWeek(league, state);
+  // advanceWeekIfComplete rolls to the next week the moment the current week's games
+  // are all final, instead of waiting ~a day for Sleeper/ESPN to bump state.week.
+  const week = weekOverride ?? advanceWeekIfComplete(resolvePricingWeek(league, state));
 
   const matchups = await provider.getMatchups(leagueId, week);
+
+  // If we've rolled past a week the provider hasn't settled into the win/loss record
+  // yet (the Mon-night -> Tue window: week done, records still 0-0, state.week not yet
+  // bumped), that week is still in the sim's "remaining" set but has no grid rows. Fetch
+  // its final matchups so its actual points can be PINNED, keeping the standings correct
+  // (otherwise it would score as zeros and re-inflate playoff odds). Usually one week.
+  const gamesRecorded = Math.max(0, ...teams.map((t) => {
+    const r = t.record;
+    if (!r) return NaN;
+    const g = (r.wins ?? 0) + (r.losses ?? 0) + (r.ties ?? 0);
+    return Number.isFinite(g) ? g : NaN;
+  }));
+  const priorFinalMatchups = {};
+  if (Number.isFinite(gamesRecorded)) {
+    for (let w = gamesRecorded + 1; w < week; w += 1) {
+      try { priorFinalMatchups[w] = await provider.getMatchups(leagueId, w); } catch { /* skip */ }
+    }
+  }
+
   const rosteredIds = [...new Set(teams.flatMap((t) => t.players))];
   const players = await provider.getPlayerCatalog(rosteredIds);
 
@@ -587,6 +609,7 @@ async function loadLeagueContext(provider, leagueId, userId, weekOverride = null
     teams,
     week,
     matchups,
+    priorFinalMatchups,
     players,
     state,
     draftPicks,
@@ -655,7 +678,7 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
       provider.getLeague(leagueId),
       provider.getSeasonState(),
     ]);
-    if (league && state) week = resolvePricingWeek(league, state);
+    if (league && state) week = advanceWeekIfComplete(resolvePricingWeek(league, state));
   } catch {
     // Fall back to letting the context resolve the week itself (key omits it).
   }

@@ -757,6 +757,13 @@ export function prepareLeagueCtx(ctx) {
   applyOverlay(projectionMap, overlay);               // user's numbers on top of Franco
   applyLiveLocks(projectionMap, ctx.liveLocks, week); // scoreboard-driven locks (only when live)
   pinPlayedCurrentWeek(projectionMap, ctx.matchups, week); // pin played players to actuals (works off-live too)
+  // Pin any completed-but-unsettled PRIOR weeks (rolled past by advanceWeekIfComplete
+  // before the provider settled the win/loss record). Those weeks are still simulated
+  // (record-based startWeek keeps them in `remaining`), so pin each from its final
+  // matchups -- otherwise they'd score as zeros and re-inflate the standings.
+  for (const [w, ms] of Object.entries(ctx.priorFinalMatchups ?? {})) {
+    pinPlayedCurrentWeek(projectionMap, ms, Number(w));
+  }
   // Stable seed from rosters + week + overlay only (NOT record/schedule), so conditioning
   // a season on a pick reuses the identical random draws (common random numbers).
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
