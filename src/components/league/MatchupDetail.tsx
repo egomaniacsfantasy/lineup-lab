@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { GameTag, SlotNumbers, TeamScoreline } from '../matchup/Scoreline';
 import { anyStarted, scorelineFor, teamScored } from '../../utils/liveScoreline';
-import { useNflGameState } from '../../hooks/useNflGameState';
+import { useNflGameStateForWeek } from '../../hooks/useNflGameState';
 import { createPortal } from 'react-dom';
 import { NO_VALUE, formatAmericanOdds } from '../../utils/formatOdds';
 import { spreadLabel, type BoardTeam } from '../../utils/boardSides';
@@ -134,7 +134,7 @@ export function MatchupDetail({
      state from the scoreboard by each player's NFL team. The board carries no
      kickoff times, so without a scoreboard read a player counts as started once
      the feed credits him with points. */
-  const gameStates = useNflGameState();
+  const gameStates = useNflGameStateForWeek(week);
   const gameOf = (entry: LineupSlotEntry) => gameStates[entry.team?.toUpperCase() ?? ''] ?? null;
   const scorelineOf = (entry: LineupSlotEntry) =>
     scorelineFor({ kickoffIso: null, bye: false, currentPoints: entry.current ?? null, game: gameOf(entry) }, 0);

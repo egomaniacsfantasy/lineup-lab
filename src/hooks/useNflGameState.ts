@@ -32,7 +32,14 @@ function designGameStates(): GameStateMap | null {
 /* Shared across every component on the page: the Hub and an open game dialog
    should not each run their own clock and disagree about whether a game is over. */
 let latest: GameStateMap = {};
-const listeners = new Set<(map: GameStateMap) => void>();
+/* The NFL week the scoreboard read above belongs to. Null until the first answer.
+   Callers that show a specific fantasy week gate on this: after a week rolls over,
+   the scoreboard still reports LAST week's games as final for a day or two, and
+   stamping those "Final" tags onto the new week's (unplayed) rows is the "every
+   game shows FINAL / 0.0 in week 2" bug. When the weeks disagree, the row must
+   fall back to its kickoff time and read as upcoming. */
+let latestWeek: number | null = null;
+const listeners = new Set<() => void>();
 let timer: number | undefined;
 let inFlight = false;
 
@@ -43,12 +50,15 @@ async function poll() {
   try {
     const response = await fetch(apiUrl('/api/nfl/game-state'));
     if (!response.ok) return;
-    const body = (await response.json()) as { at?: number; teams?: Record<string, TeamGameState> };
+    const body = (await response.json()) as {
+      at?: number; week?: number | null; teams?: Record<string, TeamGameState>;
+    };
     /* at 0 means the server has not read the scoreboard yet. Keep what we have
        rather than announce that every game in the league is unknown. */
     if (!body.at || !body.teams) return;
     latest = body.teams;
-    listeners.forEach((listener) => listener(latest));
+    latestWeek = body.week ?? null;
+    listeners.forEach((listener) => listener());
   } catch {
     // a missed poll keeps the last known state; the next one tries again
   } finally {
@@ -63,17 +73,18 @@ async function poll() {
  */
 export function useNflGameState(enabled = true): GameStateMap {
   const design = designGameStates();
-  const [map, setMap] = useState<GameStateMap>(latest);
+  const [, force] = useState(0);
 
   useEffect(() => {
     if (!enabled || design || typeof window === 'undefined') return undefined;
-    listeners.add(setMap);
+    const listener = () => force((n) => n + 1);
+    listeners.add(listener);
     if (listeners.size === 1) {
       void poll();
       timer = window.setInterval(() => void poll(), POLL_MS);
     }
     return () => {
-      listeners.delete(setMap);
+      listeners.delete(listener);
       if (listeners.size === 0) {
         window.clearInterval(timer);
         timer = undefined;
@@ -81,5 +92,21 @@ export function useNflGameState(enabled = true): GameStateMap {
     };
   }, [enabled, design]);
 
-  return design ?? map;
+  return design ?? latest;
+}
+
+/**
+ * The scoreboard game states, but ONLY when the scoreboard's NFL week matches the
+ * fantasy week being shown (or the week is unknown). After a week rolls over, the
+ * scoreboard still reports the prior week's finals for a day or two; applying those
+ * to the new week's rows stamps every player "Final" over a 0.0 score. When the
+ * weeks disagree, this returns an empty map so each row falls back to its kickoff
+ * time and reads as upcoming (opponent + game time), which is what week 2 should show
+ * before its games kick off. Design fixtures are returned as-is (no live scoreboard).
+ */
+export function useNflGameStateForWeek(fantasyWeek: number | null, enabled = true): GameStateMap {
+  const map = useNflGameState(enabled);
+  if (designGameStates()) return map;
+  if (fantasyWeek == null || latestWeek == null || latestWeek === fantasyWeek) return map;
+  return NO_GAMES;
 }

@@ -35,7 +35,7 @@ import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints, impliedProbability } from '../utils/formatOdds';
 import { anyStarted, scorelineFor, teamScored, type Scoreline } from '../utils/liveScoreline';
 import { GameTag, SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
-import { useNflGameState } from '../hooks/useNflGameState';
+import { useNflGameStateForWeek } from '../hooks/useNflGameState';
 import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
 import { formatSignedDisplayedDeltaValue } from '../utils/displayDelta';
@@ -1595,7 +1595,7 @@ function MatchupLive({
   }, []);
 
   /* Where each NFL game is (not started, live, final), from the scoreboard. */
-  const gameStates = useNflGameState(isConnected);
+  const gameStates = useNflGameStateForWeek(matchup.week, isConnected);
   const gameOf = (player: Player) => gameStates[player.team?.toUpperCase() ?? ''] ?? null;
 
   /* Every starter's scoreline. Each player follows his own game; see
