@@ -1635,7 +1635,15 @@ function MatchupLive({
     const activeMatchup = bootstrap.matchups.find((item) => item.rosterId === userRosterId);
     const byTime = new Map<number, OddsChartPoint>();
 
+    // THIS WEEK only. The chart is a "how did my line for THIS matchup move" read, so it
+    // must reset at the week rollover -- otherwise it keeps last week's (settled) line and
+    // shows my week-2 odds as a continuation of week 1. The per-matchup lines below are
+    // already current-week (matchupId changes weekly), but the roster-keyed snapshots span
+    // the whole season, so scope them to the current fantasy week explicitly.
+    const currentWeek = matchup.week;
+
     for (const entry of lineHistory) {
+      if (entry.week !== currentWeek) continue;
       const line = activeMatchup
         ? entry.lines.find((candidate: LineHistoryEntry['lines'][number]) => candidate.matchupId === activeMatchup.matchupId)
         : undefined;
@@ -1650,6 +1658,7 @@ function MatchupLive({
     }
 
     for (const entry of lineHistory) {
+      if (entry.week !== currentWeek) continue;
       const snapshot = entry.teamSnapshots?.find((row) => row.rosterId === userRosterId);
       if (snapshot?.winProbThisWeek == null) continue;
       const at = snapshot.computedAt ?? entry.computedAt;
@@ -1661,7 +1670,7 @@ function MatchupLive({
     }
 
     return [...byTime.values()].sort((left, right) => left.x - right.x);
-  }, [bootstrap, lineHistory, userRosterId]);
+  }, [bootstrap, lineHistory, userRosterId, matchup.week]);
 
   /* Your starters carrying an injury tag, straight from the payload's
      injuryStatus. Display only: nothing here re-weights a projection. */
@@ -2651,6 +2660,10 @@ function MatchupLive({
                   caption="Held values between updates. Tap players below to compare."
                   className="matchup-page__rail-chart"
                   defaultRangeId="week"
+                  /* The series is already scoped to the current fantasy week, so the range
+                     is "This week", not the default "Season" -- otherwise the delta read
+                     says "+X% THIS SEASON" over what is really one week of movement. */
+                  rangeOptions={[{ id: 'week', label: 'This week' }]}
                   deltaFormatter={probabilityDeltaRead}
                   displayValueForDelta={(value) => Math.round(Math.max(0, Math.min(100, value)))}
                   footer={
