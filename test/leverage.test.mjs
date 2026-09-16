@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bookDistance, forceResult, weekLeverage } from '../server/engine/leverage.js';
+import { bookDistance, forceResult, weekLeverage, weekForks } from '../server/engine/leverage.js';
 
 /**
  * Leverage conditions the season on each outcome of a game and measures how far
@@ -141,4 +141,42 @@ test('leverage ranks a week and the top game scores 100', () => {
 
 test('a week that does not exist scores nothing rather than throwing', () => {
   assert.deepEqual(weekLeverage(buildFixture(), 99), []);
+});
+
+// The Playoff Swing board is impossible to read when "now" falls outside [loss, win]
+// -- the bug where BOTH a win and a loss raised a team's playoff odds above its current
+// number, because "now" was a 10k-sim baseline while the branches were raw 800-sim
+// absolute probs. weekForks now layers each branch as a swing on the exact "now" number,
+// floored at 0, so a win never displays below now and a loss never above it.
+function rawForkCtx(teamCount = 4) {
+  const f = buildFixture(teamCount);
+  const projections = [...f.projectionMap.values()];
+  return {
+    ...f,
+    projections: { version: 1, projections },
+    players: f.catalog,
+    matchups: [],
+    liveLocks: {},
+    priorFinalMatchups: {},
+  };
+}
+
+test('playoff swing: now always sits between win and loss for every side', async () => {
+  const res = await weekForks(rawForkCtx(6), 1);
+  assert.ok(res.available && res.forks.length > 0, 'expected forks for week 1');
+  for (const fork of res.forks) {
+    for (const side of fork.sides) {
+      assert.ok(
+        side.winProb >= side.nowProb - 1e-9,
+        `win ${side.winProb} must be >= now ${side.nowProb}`,
+      );
+      assert.ok(
+        side.nowProb >= side.lossProb - 1e-9,
+        `now ${side.nowProb} must be >= loss ${side.lossProb}`,
+      );
+      for (const v of [side.nowProb, side.winProb, side.lossProb]) {
+        assert.ok(v >= 0 && v <= 100, `prob ${v} out of [0,100]`);
+      }
+    }
+  }
 });

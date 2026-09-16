@@ -403,6 +403,18 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
     simulateSeason({ ...prepared, sims: SEASON_SIMS }).map((r) => [String(r.rosterId), r.playoffProb]),
   );
 
+  // Baseline at the BRANCH sim count (same seed as the forced branches). The win/loss
+  // swings must be measured against a baseline on the SAME measure as the branches, then
+  // LAYERED on the exact 10k "now" number above. Reporting the raw 800-sim branch probs
+  // against the 10k "now" made "now" fall OUTSIDE [loss, win] -- both branches above now,
+  // the impossible board where losing raised your playoff odds. With CRN, forcing a win
+  // can only help vs this baseline and forcing a loss can only hurt, so every swingUp >= 0
+  // and swingDown >= 0 -> win >= now >= loss by construction.
+  const nowBase = new Map(
+    simulateSeason({ ...prepared, sims }).map((r) => [String(r.rosterId), r.playoffProb]),
+  );
+  const clampPct = (x) => Math.max(0, Math.min(100, x));
+
   const rostersByMatchup = new Map();
   for (const m of entry.matchups ?? []) {
     rostersByMatchup.set(m.matchupId, [...(rostersByMatchup.get(m.matchupId) ?? []), m.rosterId]);
@@ -434,8 +446,21 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
       // equal-weighted `distance` that orders the playoff-swing forks below).
       swing: leagueSwing(aWins, bWins),
       sides: [
-        { rosterId: ka, nowProb: nowByRoster.get(ka) ?? 0, winProb: aWinsBy.get(ka) ?? 0, lossProb: bWinsBy.get(ka) ?? 0 },
-        { rosterId: kb, nowProb: nowByRoster.get(kb) ?? 0, winProb: bWinsBy.get(kb) ?? 0, lossProb: aWinsBy.get(kb) ?? 0 },
+        {
+          rosterId: ka,
+          nowProb: nowByRoster.get(ka) ?? 0,
+          // now + causal swing (branch - branch-baseline, same 800-sim CRN measure). The
+          // swings are floored at 0 so a win can never DISPLAY below "now" nor a loss above
+          // it (a rare points-for tiebreaker quirk aside) -> win >= now >= loss always.
+          winProb: clampPct((nowByRoster.get(ka) ?? 0) + Math.max(0, (aWinsBy.get(ka) ?? 0) - (nowBase.get(ka) ?? 0))),
+          lossProb: clampPct((nowByRoster.get(ka) ?? 0) - Math.max(0, (nowBase.get(ka) ?? 0) - (bWinsBy.get(ka) ?? 0))),
+        },
+        {
+          rosterId: kb,
+          nowProb: nowByRoster.get(kb) ?? 0,
+          winProb: clampPct((nowByRoster.get(kb) ?? 0) + Math.max(0, (bWinsBy.get(kb) ?? 0) - (nowBase.get(kb) ?? 0))),
+          lossProb: clampPct((nowByRoster.get(kb) ?? 0) - Math.max(0, (nowBase.get(kb) ?? 0) - (aWinsBy.get(kb) ?? 0))),
+        },
       ],
     });
   }
