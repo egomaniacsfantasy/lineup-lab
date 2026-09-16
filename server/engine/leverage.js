@@ -43,6 +43,7 @@ import {
   teamWeekProjection,
   replacementLevels,
   playoffBracket,
+  seasonStartWeek,
   SEASON_SIMS,
 } from './engine.js';
 
@@ -197,13 +198,16 @@ export function weekLeverage(ctx, week, projectedPoints = () => 0) {
     const aPoints = projectedPoints(a, week);
     const bPoints = projectedPoints(b, week);
 
+    const startWeek = seasonStartWeek(ctx);
     const aWins = simulateSeason({
       ...forceResult(ctx, { week, winnerId: a, loserId: b, winnerPoints: aPoints, loserPoints: bPoints }),
       sims: LEVERAGE_SIMS,
+      startWeek,
     });
     const bWins = simulateSeason({
       ...forceResult(ctx, { week, winnerId: b, loserId: a, winnerPoints: bPoints, loserPoints: aPoints }),
       sims: LEVERAGE_SIMS,
+      startWeek,
     });
 
     raw.push({ matchupId, rosterIds: [a, b], distance: bookDistance(aWins, bWins) });
@@ -314,7 +318,9 @@ export function predictSeason(ctx, { picks = [], bracketPicks = [], sims = SEASO
     return n + ids.size;
   }, 0);
 
-  const result = simulateSeason({ ...conditioned, sims });
+  // Pin to the UNFORCED start week: a pick credits a win, which must not push the sim's
+  // start week past the current week (that would drop the rest of this week from the book).
+  const result = simulateSeason({ ...conditioned, sims, startWeek: seasonStartWeek(prepared) });
   // record + pointsFor reflect the CONDITIONED standings (base + the forced picks),
   // so the Record / PF columns move as you call games — a picked win shows up as a
   // win here, and forced points land in PF (the seeding tiebreaker).
@@ -399,8 +405,15 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
   // drift). The win/loss BRANCHES below stay at the lighter `sims` — forking every
   // game at 10k would time out (the earlier "cannot reach the simulator") — so a
   // branch swing is a directional read layered on the exact current number.
+  // Pin every sim below to the UNFORCED start week. Forcing a result credits a win, which
+  // would otherwise push that team's games-recorded (and the sim's start week) a week
+  // ahead of the rest of the league -- dropping the current week from the conditioned book,
+  // so a win and a loss both landed back at the pre-week odds ("losing keeps my week-2 odds
+  // flat"). Same value for the baseline, so all four sims share one start week.
+  const startWeek = seasonStartWeek(prepared);
+
   const nowByRoster = new Map(
-    simulateSeason({ ...prepared, sims: SEASON_SIMS }).map((r) => [String(r.rosterId), r.playoffProb]),
+    simulateSeason({ ...prepared, sims: SEASON_SIMS, startWeek }).map((r) => [String(r.rosterId), r.playoffProb]),
   );
 
   // Baseline at the BRANCH sim count (same seed as the forced branches). The win/loss
@@ -411,7 +424,7 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
   // can only help vs this baseline and forcing a loss can only hurt, so every swingUp >= 0
   // and swingDown >= 0 -> win >= now >= loss by construction.
   const nowBase = new Map(
-    simulateSeason({ ...prepared, sims }).map((r) => [String(r.rosterId), r.playoffProb]),
+    simulateSeason({ ...prepared, sims, startWeek }).map((r) => [String(r.rosterId), r.playoffProb]),
   );
   const clampPct = (x) => Math.max(0, Math.min(100, x));
 
@@ -429,11 +442,13 @@ export async function weekForks(ctx, week, { sims = FORK_SIMS } = {}) {
     const aWins = simulateSeason({
       ...forceResult(prepared, { week: targetWeek, winnerId: a, loserId: b, winnerPoints: Math.max(aProj, bProj + 1), loserPoints: bProj }),
       sims,
+      startWeek,
     });
     await yieldToLoop();
     const bWins = simulateSeason({
       ...forceResult(prepared, { week: targetWeek, winnerId: b, loserId: a, winnerPoints: Math.max(bProj, aProj + 1), loserPoints: aProj }),
       sims,
+      startWeek,
     });
     const aWinsBy = new Map(aWins.map((r) => [String(r.rosterId), r.playoffProb]));
     const bWinsBy = new Map(bWins.map((r) => [String(r.rosterId), r.playoffProb]));

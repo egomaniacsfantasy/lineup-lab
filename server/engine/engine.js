@@ -1552,45 +1552,43 @@ function standardBracketSeeds(size) {
 // per-cycle cost + baseline memory low at scale).
 export const LIVE_SIMS = 2500;
 
-/** Shared season setup used by simulateSeason, computeSeasonBaseline and the
- *  live engine — so seeding/bracket/params logic never drifts between them. */
-function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, forcedBracket }) {
-  const regularWeeks = league.regularSeasonWeeks ?? 14;
-  const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
-  const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
-  const rosterIds = teams.map((t) => t.rosterId);
-  // Which weeks are still UNDECIDED and must be simulated. Two floors, both needed:
-  //   - after the last SCORED week (avoids double-counting a finalized-but-unadvanced
-  //     week that is already in the records), and
-  //   - at or after the current display week. Weeks BELOW the display week are already
-  //     played and counted in each team's record/pointsFor; if lastScoredWeek lags the
-  //     live week (ESPN's latestScoringPeriod trails), those decided weeks would
-  //     otherwise sit in `remaining` and get RE-ROLLED with random draws every sim —
-  //     which is exactly what kept clinched teams off 100% and eliminated teams off 0%.
+/**
+ * The first week the sim must simulate: everything below it is already in each team's
+ * record (counted once via the seed), everything at/above it is undecided. Derived from
+ * games-recorded (see the long note in seasonSetup) so a week is never both recorded AND
+ * re-simulated. Exported so a CONDITIONED sim can pin it to the UNFORCED baseline: forcing
+ * a result (leverage/predictor) increments one team's record, which would otherwise push
+ * gamesRecorded -- and startWeek -- a week forward and silently drop the rest of the
+ * current week from the conditioned book (the "losing keeps my odds flat in week 2" bug).
+ */
+export function seasonStartWeek({ teams, week, league }) {
   const displayWeek = Number.isFinite(week) ? week : 1;
-  // Simulate exactly the weeks NOT already in the standings. The record (wins+losses+ties)
-  // is the SAME source the sim seeds each team's wins/pointsFor from, so deriving the start
-  // week from it keeps the sim self-consistent: a week is either IN the record (counted
-  // once, via the seed) or SIMULATED (counted once) -- never both, never neither.
-  //
-  // We used to start at max(displayWeek, lastScoredWeek+1). But lastScoredWeek can DESYNC
-  // from the record: Sleeper advances last_scored_leg to the in-progress week the moment its
-  // games start scoring, while it doesn't settle the win/loss record until ~a day later.
-  // In that window startWeek jumped PAST the current week even though the record was still
-  // 0-0, so the current-week result was neither recorded nor simulated -- it vanished, and
-  // a team's title/playoff odds could RISE right after it had actually lost. Tying startWeek
-  // to games-recorded removes that gap (and still skips genuinely-decided weeks, since those
-  // ARE in the record). Falls back to the old logic only if no team carries a usable record.
-  const gamesRecorded = Math.max(0, ...teams.map((t) => {
+  const gamesRecorded = Math.max(0, ...(teams ?? []).map((t) => {
     const r = t.record;
     if (!r) return NaN;
     const g = (r.wins ?? 0) + (r.losses ?? 0) + (r.ties ?? 0);
     return Number.isFinite(g) ? g : NaN;
   }));
-  const lastScored = Number.isFinite(league.lastScoredWeek) ? league.lastScoredWeek : (week - 1);
-  const startWeek = Number.isFinite(gamesRecorded)
+  const lastScored = Number.isFinite(league?.lastScoredWeek) ? league.lastScoredWeek : (week - 1);
+  return Number.isFinite(gamesRecorded)
     ? gamesRecorded + 1
     : Math.max(displayWeek, (lastScored ?? (week - 1)) + 1);
+}
+
+/** Shared season setup used by simulateSeason, computeSeasonBaseline and the
+ *  live engine — so seeding/bracket/params logic never drifts between them. */
+function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, forcedBracket, startWeek: startWeekOverride }) {
+  const regularWeeks = league.regularSeasonWeeks ?? 14;
+  const playoffTeams = Math.min(league.playoffTeams ?? 6, teams.length);
+  const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
+  const rosterIds = teams.map((t) => t.rosterId);
+  // First undecided week (see seasonStartWeek). A CONDITIONED sim pins it to the UNFORCED
+  // baseline via startWeekOverride, so crediting a forced win doesn't push this team's
+  // record -- and the start week -- a week ahead of everyone else, which would drop the
+  // rest of the current week from the conditioned book.
+  const startWeek = Number.isFinite(startWeekOverride)
+    ? startWeekOverride
+    : seasonStartWeek({ teams, week, league });
   const remaining = (scheduleWeeks ?? []).filter((w) => w.week >= startWeek && w.week <= regularWeeks);
 
   const bracketSize = nextPow2(Math.max(1, playoffTeams));

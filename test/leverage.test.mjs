@@ -180,3 +180,47 @@ test('playoff swing: now always sits between win and loss for every side', async
     }
   }
 });
+
+// Week 2 bug: forcing a result credits a win, which pushed the FORCED team's
+// games-recorded (hence the sim's start week) a week ahead of the league, so the
+// conditioned sim skipped the current week entirely -- a loss and a win both landed
+// back at the pre-week odds. seasonStartWeek is now pinned to the UNFORCED baseline for
+// every conditioned sim. This works in week 1 by luck (0-0 -> start week 1 either way);
+// the regression only shows once records exist.
+import { seasonStartWeek } from '../server/engine/engine.js';
+
+function week2Ctx() {
+  const f = buildFixture(6);
+  // Week 1 played: alternate 1-0 / 0-1 so every team has exactly one game recorded.
+  f.teams.forEach((t, i) => { t.record = i % 2 === 0 ? { wins: 1, losses: 0, ties: 0 } : { wins: 0, losses: 1, ties: 0 }; });
+  f.week = 2;
+  const projections = [...f.projectionMap.values()];
+  return { ...f, projections: { version: 1, projections }, players: f.catalog, matchups: [], liveLocks: {}, priorFinalMatchups: {} };
+}
+
+test('forcing a result does not shift the sim start week (pinned to the baseline)', () => {
+  const ctx = week2Ctx();
+  assert.equal(seasonStartWeek(ctx), 2, 'baseline: 1 game recorded -> start week 2');
+  // Use an ACTUAL week-2 pairing (forceResult refuses a pair that does not play).
+  const w2 = ctx.scheduleWeeks.find((w) => w.week === 2);
+  const pair = new Map();
+  for (const m of w2.matchups) pair.set(m.matchupId, [...(pair.get(m.matchupId) ?? []), m.rosterId]);
+  const [[, [winnerId, loserId]]] = [...pair.entries()];
+  // Credit that week-2 win -> the winner's record shows 2 games. Left un-pinned, its
+  // gamesRecorded (max) would make the conditioned sim start at week 3 and drop week 2.
+  const forced = forceResult(ctx, { week: 2, winnerId, loserId, winnerPoints: 120, loserPoints: 100 });
+  assert.equal(seasonStartWeek(forced), 3, 'forced record inflates games-recorded (why the override exists)');
+});
+
+test('week-2 playoff swing actually moves on a loss (current week is simulated in the book)', async () => {
+  const res = await weekForks(week2Ctx(), 2);
+  assert.ok(res.available && res.forks.length > 0);
+  // With the current week dropped from the conditioned book, EVERY side would read
+  // loss == now. Pinned, at least one contested side must lose ground on a loss.
+  const anyRealLossSwing = res.forks.some((fk) => fk.sides.some((s) => s.nowProb - s.lossProb > 0.5));
+  assert.ok(anyRealLossSwing, 'a week-2 loss must lower at least one team\'s playoff odds');
+  // Invariant still holds.
+  for (const fk of res.forks) for (const s of fk.sides) {
+    assert.ok(s.winProb >= s.nowProb - 1e-9 && s.nowProb >= s.lossProb - 1e-9);
+  }
+});
