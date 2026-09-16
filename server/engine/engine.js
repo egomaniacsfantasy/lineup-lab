@@ -1373,7 +1373,21 @@ export function computeMovers(ctx) {
   // (Season title odds are the wrong metric here — over a full year any single
   // add is fungible, e.g. a specific kicker ~ the one you'd stream, so it always
   // read ~0%.)
-  const weekMeanOf = (id) => playerDistribution(id, projectionMap, catalog[id], week).mean;
+  // A candidate's projected points THIS week. If he has a week grid that does NOT
+  // include this week, he is NOT playing this week -> 0. Do not fall back to his
+  // season mean, which would let a player whose only grid entry is an ELAPSED week
+  // (e.g. a wk1 emergency starter no longer in the lineup) spike a future-week claim
+  // -- the "add Cooper Rush -> ~100% to win this week" bug. No grid at all (snapshot
+  // fallback) -> the plain season mean, as before.
+  const weekMeanOf = (id) => {
+    const proj = projectionMap.get(id);
+    const weekly = proj?.weekly ?? {};
+    if (Object.keys(weekly).length > 0) {
+      const v = weekly[week] ?? weekly[String(week)];
+      return v != null ? Number(v) : 0;
+    }
+    return playerDistribution(id, projectionMap, catalog[id], week).mean;
+  };
 
   // Your opponent this week (or the league-median team in the preseason). Use
   // the ACTUAL set lineups the matchup tab prices — no replacement fill, so an
