@@ -130,10 +130,13 @@ async function buildProviderIndex() {
  * { playerId, name, position, team, mean, stdev, weekly:{week:pts},
  *   weeklyCI:{week:{floor,ceiling}}, floor, ceiling, seasonTotal, depthRank }.
  */
-// Live consensus tilt is ON. The Supabase fetch is kept entirely OFF the pricing
-// request path (see getAdjustedProjections): consensus only ever loads in the
-// background, so a slow/hung DB call can never stall league pricing.
-const CONSENSUS_ENABLED = true;
+// Consensus (agreement) tilt for pricing/sims/futures is env-gated. It defaults to
+// OFF -> pricing runs on the PURE MODEL numbers (identical to the board's model-only
+// view). Set ODDS_CONSENSUS=1 in the environment to bring the agreement tilt back on.
+// The Supabase fetch is kept entirely OFF the pricing request path (see
+// getAdjustedProjections): consensus only ever loads in the background, so a slow or
+// hung DB call can never stall league pricing.
+const CONSENSUS_ENABLED = process.env.ODDS_CONSENSUS === '1';
 
 // One cache per scoring format: '' = PPR, '_half' = half-PPR, '_nonppr' = standard.
 export const SCORING_SUFFIXES = ['', '_half', '_nonppr'];
