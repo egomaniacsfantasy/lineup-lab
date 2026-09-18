@@ -96,9 +96,13 @@ test('odds past the point of being a price are taken off the board', async () =>
   const { formatAmericanOdds, setOddsFormat } = await import('../src/utils/formatOdds.ts');
   setOddsFormat('american');
 
-  /* What the engine emits for a probability of zero. */
+  /* What the engine emits for a probability of zero: an eliminated underdog. */
   assert.equal(formatAmericanOdds(99_999_999_900), '—');
-  assert.equal(formatAmericanOdds(-99_999_999_900), '—');
+  /* And its mirror, a probability of one. Not a dash: a decided game's winner
+     is the one number on the board that is certain, and before 25ec97e it
+     printed exactly like the loser (0% on the board). Split by sign, the same
+     way formatProbOrOdds already was. */
+  assert.equal(formatAmericanOdds(-99_999_999_900), '✓');
 
   /* And nothing a real market produces is touched. A genuine long shot in a
      twelve-team league still prints. */
