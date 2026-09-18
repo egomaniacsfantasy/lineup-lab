@@ -495,9 +495,16 @@ export function MyBoardPage() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
   const isAdmin = isAgreementAdmin(user?.email);
-  // Non-admins always see Consensus. Admins can flip to the pure model.
+  // Whether the agreement tilt is live server-side (mirrors ODDS_CONSENSUS, from the board
+  // payload). Assume OFF until it loads so non-admins default to the pure model (the book's mode).
+  const [consensusEnabled, setConsensusEnabled] = useState(false);
+  // Admins can flip Consensus/Model; non-admins follow the server flag: Consensus only when it's on.
   const [boardView, setBoardView] = useState<BoardValueView>('consensus');
-  const effectiveView: BoardValueView = isAdmin ? boardView : 'consensus';
+  const effectiveView: BoardValueView = isAdmin
+    ? boardView
+    : consensusEnabled
+      ? 'consensus'
+      : 'model';
   const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
   const [saveMessages, setSaveMessages] = useState<Record<string, string>>({});
@@ -537,6 +544,7 @@ export function MyBoardPage() {
           return;
         }
         setUnavailable(false);
+        setConsensusEnabled(payload.consensusEnabled ?? false);
         setBoard(payload.rankings);
       })
       .catch((err) => {

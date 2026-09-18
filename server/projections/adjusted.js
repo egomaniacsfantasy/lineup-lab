@@ -138,6 +138,12 @@ async function buildProviderIndex() {
 // hung DB call can never stall league pricing.
 const CONSENSUS_ENABLED = process.env.ODDS_CONSENSUS === '1';
 
+/** Whether the agreement/consensus tilt is active for pricing (and, via the board's
+ *  consensusEnabled flag, the board's non-admin view). Mirrors ODDS_CONSENSUS. */
+export function isConsensusEnabled() {
+  return CONSENSUS_ENABLED;
+}
+
 // One cache per scoring format: '' = PPR, '_half' = half-PPR, '_nonppr' = standard.
 export const SCORING_SUFFIXES = ['', '_half', '_nonppr'];
 const _caches = new Map(); // suf -> { at, data, refreshing }

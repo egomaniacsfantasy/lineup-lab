@@ -23,7 +23,7 @@ import {
 } from '../live/liveEngine.js';
 import { SEASON_ANCHORS, computeSeasonState, resolveFantasyWeek, isPreseason, resolvePricingWeek } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
-import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
+import { getAdjustedProjections, getModelProjections, isConsensusEnabled } from '../projections/adjusted.js';
 import { restOfSeasonPoints } from '../projections/restOfSeason.js';
 import {
   getFinalNflTeams,
@@ -309,7 +309,9 @@ apiRouter.get('/rankings', async (req, res, next) => {
     // Never let a browser serve a stale board (e.g. a raw-projection response
     // cached before the agreement-weighted set was live).
     res.set('Cache-Control', 'no-store');
-    res.json({ available: true, source, version: active.version, rankings });
+    // consensusEnabled drives the board's non-admin view: when the agreement tilt is
+    // off (ODDS_CONSENSUS != 1), non-admins see the pure model, matching how the book prices.
+    res.json({ available: true, source, version: active.version, consensusEnabled: isConsensusEnabled(), rankings });
   } catch (error) {
     next(error);
   }
