@@ -2259,6 +2259,7 @@ function MatchupLive({
                           optionCount > 0 ? 'matchup-page__slot-card--decision' : '',
                           isSelected ? 'matchup-page__slot-card--picked' : '',
                           isMuted ? 'matchup-page__slot-card--muted' : '',
+                          scorelineOf(row.yourSlot)?.phase === 'live' ? 'matchup-page__slot-card--live' : '',
                         ].filter(Boolean).join(' ')}
                         disabled={!isPickable}
                         onClick={() => starter && handleComparePick(starter, row.slotLabel)}
@@ -2337,6 +2338,7 @@ function MatchupLive({
                           'matchup-page__slot-card--right',
                           'matchup-page__slot-card--opponent',
                           activePick ? 'matchup-page__slot-card--muted' : '',
+                          scorelineOf(row.opponentSlot)?.phase === 'live' ? 'matchup-page__slot-card--live' : '',
                         ].filter(Boolean).join(' ')}
                       >
                         {row.opponentSlot ? (

@@ -163,6 +163,9 @@ export function MatchupDetail({
     );
   };
   const scorelinesOf = (starters?: readonly LineupSlotEntry[]) => (starters ?? []).map(scorelineOf);
+  /* Starters only. A bench player's live game is not scoring for anybody. */
+  const isLive = (entry: LineupSlotEntry | null) =>
+    entry?.playerId != null && scorelineOf(entry).phase === 'live';
   // The row's meta line: position + team normally, but before a game kicks off it
   // reads like the Hub -- position, opponent, kickoff time ("WR · @ PHI · Sun 1:00 PM").
   // Once the game is live/final the kickoff is history and the GameTag carries state.
@@ -400,6 +403,7 @@ export function MatchupDetail({
                         className={[
                           'matchup-page__slot-card',
                           dimmed(left) ? 'matchup-page__slot-card--opponent' : '',
+                          isLive(row.left) ? 'matchup-page__slot-card--live' : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}
@@ -437,6 +441,7 @@ export function MatchupDetail({
                           'matchup-page__slot-card',
                           'matchup-page__slot-card--right',
                           dimmed(right) ? 'matchup-page__slot-card--opponent' : '',
+                          isLive(row.right) ? 'matchup-page__slot-card--live' : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}

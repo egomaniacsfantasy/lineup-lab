@@ -516,6 +516,13 @@ and the connect screen consumes it on read.
   it. Scores and projections share a column only because every row showing a
   score is tagged; the two ship together or not at all.
 
+  A starter whose game is live is also outlined in cyan (a cyan bar on the
+  row's outer edge on a phone, where rows have no border), so the rows that are
+  moving are found before any tag is read. Final and unplayed rows are never
+  outlined. Zero points are not evidence a game has started: in live mode every
+  player carries a live block, and one with `current: 0` for a Monday player
+  once turned a whole Thursday lineup into STARTED over 0.0.
+
   Game state comes from `GET /api/nfl/game-state`, served from the scoreboard
   cache the live cycle already keeps and polled once a minute by an open page.
   Without it, a passed kickoff or points on the board mark a row `Started`

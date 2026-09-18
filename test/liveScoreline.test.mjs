@@ -94,6 +94,33 @@ test('a stale "pre" read does not hide points that are on the board', () => {
   assert.equal(line({ game: PRE, currentPoints: 3.0 }).started, true);
 });
 
+test('zero points do not start a game that has not kicked off', () => {
+  /* The Thursday night defect. In live mode every player carries a live block,
+     and a Monday player's says current: 0. Only Gibbs was playing, yet every
+     other starter read STARTED over 0.0 instead of showing his projection. */
+  const THURSDAY = Date.parse('2026-09-17T23:30:00Z');
+  const monday = scorelineFor(
+    { kickoffIso: '2026-09-22T00:15:00Z', bye: false, currentPoints: 0, game: null },
+    THURSDAY,
+  );
+  assert.equal(monday.phase, 'upcoming', 'a zero from the live block was read as a game in progress');
+  assert.equal(primaryNumber(monday, '17.3'), '17.3', 'his projection must stay the big number');
+
+  const scoreboardSaysPre = scorelineFor(
+    { kickoffIso: null, bye: false, currentPoints: 0, game: PRE },
+    THURSDAY,
+  );
+  assert.equal(scoreboardSaysPre.phase, 'upcoming');
+});
+
+test('a live player on zero is still live', () => {
+  /* The other side of the same rule: zero is not evidence of a game, but it is
+     a real score once the scoreboard says the game is on. */
+  const live = line({ game: Q1, currentPoints: 0 });
+  assert.equal(live.phase, 'live');
+  assert.equal(primaryNumber(live, '20.9'), '0.0');
+});
+
 test('a bye never kicks off', () => {
   const bye = line({ bye: true, game: FINAL });
   assert.equal(bye.started, false);

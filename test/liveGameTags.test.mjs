@@ -84,6 +84,7 @@ const READ_ROWS = () =>
           leadsWithScore: Boolean(card.querySelector('.matchup-page__slot-scored')),
           leadsWithProjection: Boolean(card.querySelector('.matchup-page__slot-projection')),
           projLabel: card.querySelector('.matchup-page__slot-proj-label')?.textContent ?? null,
+          outlined: card.classList.contains('matchup-page__slot-card--live'),
         }];
       })
       .filter(Boolean),
@@ -111,6 +112,21 @@ test('a live player leads with points and carries the quarter and clock', async 
 
   assert.equal(rows['J. Gibbs']?.tag, 'OT 2:00');
   assert.equal(rows['T. McLaurin']?.tag, 'Half');
+});
+
+test('only rows whose game is live are outlined', async () => {
+  /* The outline is how the eye finds the moving rows before reading a tag, so
+     it must mark exactly those rows: a final or unplayed row outlined as live
+     is a false alarm on the one screen people watch on a Sunday. */
+  const rows = await rowsAt('/design/matchup?liveGames');
+  const outlined = Object.entries(rows).filter(([, row]) => row.outlined).map(([name]) => name).sort();
+  const live = Object.entries(rows)
+    .filter(([, row]) => row.tagPhase === 'matchup-page__game-tag--live')
+    .map(([name]) => name)
+    .sort();
+  assert.ok(live.length > 0, 'the ?liveGames fixture has no live rows to check');
+  assert.deepEqual(outlined, live);
+  assert.equal(rows['D. Henry']?.outlined, false, 'a final row must not be outlined');
 });
 
 test('a finished player says FINAL', async () => {

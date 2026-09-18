@@ -78,10 +78,17 @@ function phaseFor(input: ScorelineInput, now: number): GamePhase {
   const state = input.game?.state;
   if (state === 'post') return 'final';
   if (state === 'in') return 'live';
+  /* Points count as proof of a game only when there ARE points. In live mode the
+     server sends every player a live block, and a player whose game is days away
+     carries current: 0 in it. Reading any non-null value as "his game started"
+     turned a whole Thursday lineup into STARTED over 0.0, when only one of them
+     was playing. Zero says nothing about whether a game has begun; the scoreboard
+     and the kickoff time do. */
+  const hasPoints = input.currentPoints != null && input.currentPoints > 0;
   /* The scoreboard says pre, but the feed already credits points: trust the
      points. A stale scoreboard read must not hide a score that is on the board. */
-  if (state === 'pre') return input.currentPoints != null ? 'started' : 'upcoming';
-  if (input.currentPoints != null || hasKickedOff(input.kickoffIso, now)) return 'started';
+  if (state === 'pre') return hasPoints ? 'started' : 'upcoming';
+  if (hasPoints || hasKickedOff(input.kickoffIso, now)) return 'started';
   return 'upcoming';
 }
 

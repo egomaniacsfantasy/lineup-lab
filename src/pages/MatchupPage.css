@@ -2499,6 +2499,24 @@
   }
 }
 
+/* A starter whose game is being played right now. The tag in the meta line says
+   where the game is; the outline says which rows are moving, so the eye finds
+   them before reading a word. Cyan, the live colour, never amber (that is you)
+   or green (money). Drawn with an inset shadow on top of the existing border so
+   the card does not change size when a game kicks off. A picked card keeps its
+   own treatment: a selection you are acting on outranks a game you are
+   watching. */
+.matchup-page__slot-card--live:not(.matchup-page__slot-card--picked) {
+  border-color: color-mix(in srgb, var(--cyan, #6dc8ff) 55%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--cyan, #6dc8ff) 22%, transparent),
+    0 0 18px color-mix(in srgb, var(--cyan, #6dc8ff) 10%, transparent);
+}
+
+.matchup-page__slot-card--live .matchup-page__slot-scored {
+  color: var(--text-primary);
+}
+
 /* A finished player's score is settled, so it keeps full weight but the row
    stops competing with the games still being played. */
 .matchup-page__slot-numbers--final .matchup-page__slot-scored {
@@ -3198,6 +3216,20 @@
 
   .matchup-page__slot-board-grid {
     gap: 0 8px;
+  }
+
+  /* No box to outline on a phone, so a live row gets a cyan bar on its outer
+     edge instead: left for the left team, right for the right. Inset, so the
+     row does not move when a game kicks off. */
+  .matchup-page__slot-card--live:not(.matchup-page__slot-card--picked) {
+    padding-left: 8px;
+    box-shadow: inset 2px 0 0 var(--cyan, #6dc8ff);
+  }
+
+  .matchup-page__slot-card--right.matchup-page__slot-card--live:not(.matchup-page__slot-card--picked) {
+    padding-left: 2px;
+    padding-right: 8px;
+    box-shadow: inset -2px 0 0 var(--cyan, #6dc8ff);
   }
 }
 
