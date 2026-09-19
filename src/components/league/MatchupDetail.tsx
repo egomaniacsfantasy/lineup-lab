@@ -504,10 +504,20 @@ export function MatchupDetail({
                       key={`lb-${entry.playerId ?? index}`}
                       className={[
                         'matchup-page__slot-card',
+                        entry.playerId != null ? 'matchup-page__slot-card--tap' : '',
                         dimmed(left) ? 'matchup-page__slot-card--opponent' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
+                      role={entry.playerId != null ? 'button' : undefined}
+                      tabIndex={entry.playerId != null ? 0 : undefined}
+                      onClick={() => openDist(entry)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openDist(entry);
+                        }
+                      }}
                     >
                       {slotFace(entry, false)}
                     </div>
@@ -523,10 +533,20 @@ export function MatchupDetail({
                       className={[
                         'matchup-page__slot-card',
                         'matchup-page__slot-card--right',
+                        entry.playerId != null ? 'matchup-page__slot-card--tap' : '',
                         dimmed(right) ? 'matchup-page__slot-card--opponent' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
+                      role={entry.playerId != null ? 'button' : undefined}
+                      tabIndex={entry.playerId != null ? 0 : undefined}
+                      onClick={() => openDist(entry)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openDist(entry);
+                        }
+                      }}
                     >
                       {slotFace(entry, true)}
                     </div>

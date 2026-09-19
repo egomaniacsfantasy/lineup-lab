@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
+import { useOddsFormat } from '../../contexts/OddsFormatContext';
+import { formatProbOrOdds } from '../../utils/formatOdds';
 import {
   fetchPlayerDistribution,
   type PlayerDistribution as Dist,
@@ -24,6 +26,7 @@ type LoadState = 'loading' | 'ready' | 'error';
  */
 export function PlayerDistribution({ playerId, week, name, onClose }: PlayerDistributionProps) {
   const { stored } = useLeagueConnection();
+  const { format } = useOddsFormat(); // subscribe so the ladder re-renders on the %/odds toggle
   const [dist, setDist] = useState<Dist | null>(null);
   const [state, setState] = useState<LoadState>('loading');
 
@@ -126,7 +129,7 @@ export function PlayerDistribution({ playerId, week, name, onClose }: PlayerDist
             </div>
 
             <div className="player-dist__ladder-wrap">
-              <table className="player-dist__ladder">
+              <table className="player-dist__ladder" data-odds-format={format}>
                 <thead>
                   <tr>
                     <th>Line</th>
@@ -141,8 +144,8 @@ export function PlayerDistribution({ playerId, week, name, onClose }: PlayerDist
                     return (
                       <tr key={r.line} className={nearProj ? 'player-dist__row--proj' : ''}>
                         <td>{r.line.toFixed(1)}</td>
-                        <td className="player-dist__over">{(r.over * 100).toFixed(0)}%</td>
-                        <td className="player-dist__under">{(r.under * 100).toFixed(0)}%</td>
+                        <td className="player-dist__over">{formatProbOrOdds(r.over * 100)}</td>
+                        <td className="player-dist__under">{formatProbOrOdds(r.under * 100)}</td>
                       </tr>
                     );
                   })}
