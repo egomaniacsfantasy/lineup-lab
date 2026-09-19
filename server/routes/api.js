@@ -12,6 +12,7 @@ import { isGameWindow } from '../gameWindows.js';
 import {
   getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
   computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
+  prepareLeagueCtx, playerScoreDistribution,
 } from '../engine/engine.js';
 import { predictSeason, weekForks, weekProjections, PREDICTOR_SIMS } from '../engine/leverage.js';
 import { findSuccessorLeague } from '../leagueSuccession.js';
@@ -995,6 +996,35 @@ apiRouter.get('/league/:leagueId/bootstrap', leagueLimit, async (req, res, next)
         }
       });
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Per-player scoring distribution for a week: an over/under ladder (floor->ceiling in
+// 0.5-pt rungs, each with P(exceeds)/P(falls short)) plus a probability histogram, all
+// off the SAME split-normal the matchup sims draw from. Powers the League tab's
+// "click a player -> see his lines" panel. week defaults to the league's priced week.
+apiRouter.get('/league/:leagueId/player/:playerId/distribution', leagueLimit, async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const finalTeams = getFinalNflTeams();
+    const ctx = await assembleLeagueCtx(provider, req.params.leagueId, req.query.userId ?? null, null, finalTeams);
+    if (!ctx) {
+      res.status(404).json({ available: false, reason: 'league_not_found' });
+      return;
+    }
+    const prepared = prepareLeagueCtx(ctx);
+    if (!prepared) {
+      res.json({ available: false, reason: 'no_projections' });
+      return;
+    }
+    const { projectionMap, catalog, week } = prepared;
+    const wk = Number.isFinite(Number(req.query.week)) ? Number(req.query.week) : week;
+    const playerId = String(req.params.playerId);
+    const dist = playerScoreDistribution(playerId, projectionMap, catalog?.[playerId], wk);
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...dist, week: wk, playerId, name: catalog?.[playerId]?.name ?? playerId });
   } catch (error) {
     next(error);
   }

@@ -14,6 +14,7 @@ import { playerShortName } from '../../utils/playerNames';
 import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import { TeamCrest } from '../matchup/TeamCrest';
+import { PlayerDistribution } from './PlayerDistribution';
 import './MatchupDetail.css';
 /* The Hub's stylesheet, borrowed on purpose.
  *
@@ -86,6 +87,14 @@ export function MatchupDetail({
    * which is the version of this bug people hit later and cannot describe.
    */
   const [scrimArmed, setScrimArmed] = useState(false);
+
+  // Click a starter to open its per-week over/under distribution.
+  const [distPlayer, setDistPlayer] = useState<{ playerId: string; name: string } | null>(null);
+  const openDist = (entry: LineupSlotEntry | null) => {
+    if (entry?.playerId != null) {
+      setDistPlayer({ playerId: String(entry.playerId), name: entry.name });
+    }
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -402,11 +411,21 @@ export function MatchupDetail({
                       <div
                         className={[
                           'matchup-page__slot-card',
+                          row.left?.playerId != null ? 'matchup-page__slot-card--tap' : '',
                           dimmed(left) ? 'matchup-page__slot-card--opponent' : '',
                           isLive(row.left) ? 'matchup-page__slot-card--live' : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}
+                        role={row.left?.playerId != null ? 'button' : undefined}
+                        tabIndex={row.left?.playerId != null ? 0 : undefined}
+                        onClick={() => openDist(row.left)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openDist(row.left);
+                          }
+                        }}
                       >
                         {slotFace(row.left, false)}
                       </div>
@@ -440,11 +459,21 @@ export function MatchupDetail({
                         className={[
                           'matchup-page__slot-card',
                           'matchup-page__slot-card--right',
+                          row.right?.playerId != null ? 'matchup-page__slot-card--tap' : '',
                           dimmed(right) ? 'matchup-page__slot-card--opponent' : '',
                           isLive(row.right) ? 'matchup-page__slot-card--live' : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}
+                        role={row.right?.playerId != null ? 'button' : undefined}
+                        tabIndex={row.right?.playerId != null ? 0 : undefined}
+                        onClick={() => openDist(row.right)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openDist(row.right);
+                          }
+                        }}
                       >
                         {slotFace(row.right, true)}
                       </div>
@@ -508,6 +537,14 @@ export function MatchupDetail({
           ) : null}
         </div>
       </div>
+      {distPlayer ? (
+        <PlayerDistribution
+          playerId={distPlayer.playerId}
+          week={week}
+          name={distPlayer.name}
+          onClose={() => setDistPlayer(null)}
+        />
+      ) : null}
     </div>,
     document.body,
   );

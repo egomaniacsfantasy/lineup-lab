@@ -332,6 +332,36 @@ export function fetchLineHistory(leagueId: string) {
   return get<{ history: LineHistoryEntry[] }>(`/api/league/${leagueId}/line-history`);
 }
 
+export interface PlayerDistribution {
+  available: boolean;
+  reason?: string;
+  week?: number;
+  playerId?: string;
+  name?: string;
+  mean?: number;
+  floor?: number;
+  ceiling?: number;
+  sigmaDown?: number;
+  sigmaUp?: number;
+  step?: number;
+  ladder?: { line: number; over: number; under: number }[];
+  histogram?: { lo: number; hi: number; mid: number; prob: number }[];
+}
+
+/** Over/under ladder + probability histogram for one player's week (same split-normal
+ *  the matchup sims use). week defaults server-side to the league's priced week. */
+export function fetchPlayerDistribution(
+  leagueId: string,
+  playerId: string,
+  week: number,
+  userId?: string | null,
+) {
+  const u = userId ? `&userId=${encodeURIComponent(userId)}` : '';
+  return get<PlayerDistribution>(
+    `/api/league/${leagueId}/player/${encodeURIComponent(playerId)}/distribution?week=${week}${u}`,
+  );
+}
+
 function authHeaders(ownerUserId?: string | null) {
   const headers: Record<string, string> = {};
   if (ownerUserId) headers['x-owner-user-id'] = ownerUserId;

@@ -189,6 +189,76 @@ function playerSimParams(playerId, projectionMap, catalogEntry, week) {
   return { mean: base.mean, sigmaDown, sigmaUp };
 }
 
+/** Standard normal CDF (Abramowitz & Stegun 7.1.26; abs error ~1e-7). */
+function stdNormCdf(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = INV_SQRT_2PI * Math.exp((-z * z) / 2);
+  const p = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937
+    + t * (-1.821255978 + t * 1.330274429))));
+  return z >= 0 ? 1 - p : p;
+}
+
+/** CDF of the engine's re-centered split-normal (median = mean - skewOffset). Continuous
+ *  at the median (= 0.5), so over/under odds are exact and match the matchup sims. */
+function splitNormalCdf(p, x) {
+  const median = p.mean - (p.sigmaUp - p.sigmaDown) * INV_SQRT_2PI;
+  if (x <= median) {
+    return p.sigmaDown > 0 ? stdNormCdf((x - median) / p.sigmaDown) : (x < median ? 0 : 0.5);
+  }
+  return p.sigmaUp > 0 ? stdNormCdf((x - median) / p.sigmaUp) : (x > median ? 1 : 0.5);
+}
+
+/**
+ * Over/under ladder + probability histogram for ONE player's week, priced off the
+ * EXACT split-normal the matchup sims draw from -- so a rung here and the headline
+ * matchup win% never disagree. Lines run floor->ceiling (the 80% CI) in `step`-point
+ * rungs; each gives P(exceeds) / P(falls short). The histogram is per-bin probability
+ * mass from the same CDF. Returns { available:false } when the player has no live
+ * distribution (out / bye / unpriced) or { available:false, reason:'locked' } for a
+ * finished game (fixed points, zero variance).
+ */
+export function playerScoreDistribution(playerId, projectionMap, catalogEntry, week, { step = 0.5 } = {}) {
+  const p = playerSimParams(playerId, projectionMap, catalogEntry, week);
+  if (!(p.mean > 0)) return { available: false, reason: 'unpriced' };
+  if (!(p.sigmaUp > 0) && !(p.sigmaDown > 0)) {
+    return { available: false, reason: 'locked', mean: Number(p.mean.toFixed(1)) };
+  }
+  const floor = Math.max(0, p.mean - Z80 * p.sigmaDown);
+  const ceiling = p.mean + Z80 * p.sigmaUp;
+  const lo = Math.max(0, Math.floor(floor / step) * step);
+  const hi = Math.ceil(ceiling / step) * step;
+  const ladder = [];
+  for (let line = lo; line <= hi + 1e-9; line += step) {
+    const under = splitNormalCdf(p, line);
+    ladder.push({
+      line: Number(line.toFixed(1)),
+      over: Number((1 - under).toFixed(4)),
+      under: Number(under.toFixed(4)),
+    });
+  }
+  const histogram = [];
+  for (let x = lo; x < hi - 1e-9; x += step) {
+    const prob = splitNormalCdf(p, x + step) - splitNormalCdf(p, x);
+    histogram.push({
+      lo: Number(x.toFixed(1)),
+      hi: Number((x + step).toFixed(1)),
+      mid: Number((x + step / 2).toFixed(2)),
+      prob: Number(Math.max(0, prob).toFixed(4)),
+    });
+  }
+  return {
+    available: true,
+    mean: Number(p.mean.toFixed(1)),
+    floor: Number(floor.toFixed(1)),
+    ceiling: Number(ceiling.toFixed(1)),
+    sigmaDown: Number(p.sigmaDown.toFixed(2)),
+    sigmaUp: Number(p.sigmaUp.toFixed(2)),
+    step,
+    ladder,
+    histogram,
+  };
+}
+
 /** Starter split-normal params for a roster's starters. */
 function starterParams(starterIds, projectionMap, catalog, week = null) {
   return { players: starterIds.map((id) => playerSimParams(id, projectionMap, catalog[id], week)) };

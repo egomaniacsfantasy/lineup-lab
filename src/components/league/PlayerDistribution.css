@@ -1,0 +1,195 @@
+.player-dist__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: var(--bg-overlay, rgba(6, 8, 15, 0.62));
+  backdrop-filter: blur(2px);
+}
+
+.player-dist {
+  width: min(420px, 100%);
+  max-height: min(88vh, 760px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong, var(--border-subtle));
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-elevated);
+}
+
+.player-dist__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.player-dist__name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.player-dist__sub {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.player-dist__close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.player-dist__close:hover {
+  color: var(--text-primary);
+}
+
+.player-dist__msg {
+  margin: 0;
+  padding: var(--space-lg) 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.player-dist__stats {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+.player-dist__stat b {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+.player-dist__stat--proj {
+  color: var(--text-primary);
+}
+
+/* --- density histogram --- */
+.player-dist__hist {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 132px;
+  padding: var(--space-xs);
+  background: var(--bg-inset);
+  border-radius: var(--radius-pill);
+}
+.player-dist__bar-wrap {
+  flex: 1 1 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.player-dist__bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: color-mix(in srgb, var(--text-soft) 55%, transparent);
+  transition: background var(--transition-base, 120ms);
+}
+.player-dist__bar--proj {
+  background: color-mix(in srgb, #38bdf8 78%, var(--text-soft));
+}
+.player-dist__bar-wrap:hover .player-dist__bar {
+  background: color-mix(in srgb, #38bdf8 60%, var(--text-soft));
+}
+
+.player-dist__axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.player-dist__axis-proj {
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+/* --- over/under ladder --- */
+.player-dist__ladder-wrap {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+.player-dist__ladder {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.player-dist__ladder th {
+  position: sticky;
+  top: 0;
+  padding: 6px 12px;
+  text-align: right;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--bg-inset);
+}
+.player-dist__ladder th:first-child {
+  text-align: left;
+}
+.player-dist__ladder td {
+  padding: 5px 12px;
+  text-align: right;
+  border-top: 1px solid var(--border-subtle);
+}
+.player-dist__ladder td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+.player-dist__over {
+  color: color-mix(in srgb, #22c55e 80%, var(--text-primary));
+}
+.player-dist__under {
+  color: var(--text-muted);
+}
+.player-dist__row--proj td {
+  background: color-mix(in srgb, #38bdf8 16%, transparent);
+  font-weight: 700;
+}
+.player-dist__row--proj .player-dist__under {
+  color: var(--text-soft);
+}
+
+.player-dist__foot {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* A starter/bench slot in the game view is tappable to open its odds panel. */
+.matchup-page__slot-card--tap {
+  cursor: pointer;
+}
+.matchup-page__slot-card--tap:hover {
+  background: color-mix(in srgb, var(--text-soft) 9%, transparent);
+}
+.matchup-page__slot-card--tap:focus-visible {
+  outline: 2px solid var(--focus-ring, #38bdf8);
+  outline-offset: 1px;
+}
