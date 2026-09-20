@@ -71,6 +71,9 @@ test('a user already set at every slot gets no free K upgrade', () => {
     matchups: [{ rosterId: 1, matchupId: 1, starters: fullPlayers }, matchups[1]],
   });
   const waiver = movers.find((m) => m.kind === 'waiver');
-  // Either no waiver claim, or if one exists it isn't a marginal +1 kicker swap.
-  if (waiver) assert.ok(waiver.valueGain >= 2, 'any surfaced claim must clear the gain floor');
+  // New rule (no +2 pt floor): a surfaced claim need only OUT-PROJECT the starter (and
+  // move win%, asserted in waiverWinProbGate.test.mjs). So if one surfaces it is a real
+  // upgrade (gain > 0), never a downgrade -- but a marginal +1 K that does raise win% is
+  // now allowed to surface (that is the intended behavior change).
+  if (waiver) assert.ok(waiver.valueGain > 0, 'a surfaced claim must out-project the starter');
 });

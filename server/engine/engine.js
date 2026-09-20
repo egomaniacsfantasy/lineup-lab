@@ -1530,7 +1530,7 @@ export function computeMovers(ctx) {
     }
     if (!target) continue; // no legal slot for this position
     const gain = weekMeanOf(candidate.playerId) - target.mean;
-    if (gain < 2) continue; // must add real points to this week's lineup
+    if (gain <= 0) continue; // must project MORE than the starter it would replace (win% gate below decides)
     if (!bestClaim || gain > bestClaim.gain) {
       bestClaim = { candidate, gain, targetIndex: target.index, slot: target.slot };
     }
@@ -1570,23 +1570,33 @@ export function computeMovers(ctx) {
     // CRN delta: same opponent + same current-lineup draws, only the claimed
     // slot changes — so this is the pure effect of the add, not sim noise.
     const baseCrn = winProbVs(baseParams);
-    const afterCrn = Math.max(baseCrn, winProbVs(afterParams));
-    const delta = afterCrn - baseCrn;
+    const afterCrn = winProbVs(afterParams);
+    const delta = afterCrn - baseCrn; // TRUE CRN delta (may be <= 0); NOT clamped, so the gate below can see a non-improving add
     // Anchor the shown "before" to the EXACT win% the matchup tab displays (same
     // seeded sim as the headline line), then apply the CRN delta. So the card
     // reads "30.5% -> 30.5%+gain", consistent with the matchup and biggest-edge.
     const beforeWinProb = userDisplayWinProb != null ? userDisplayWinProb : baseCrn;
     const afterWinProb = Math.min(1, Math.max(0, beforeWinProb + delta));
-    movers.push({
-      kind: 'waiver',
-      headline: `Claim ${bestClaim.candidate.name} off waivers`,
-      detail: `Starts at ${bestClaim.candidate.position} this week (+${bestClaim.gain.toFixed(1)} pts to your lineup)`,
-      playerId: bestClaim.candidate.playerId,
-      valueGain: Number(bestClaim.gain.toFixed(1)),
-      weekly: true,
-      titleOddsBefore: probToAmerican(beforeWinProb),
-      titleOddsAfter: probToAmerican(afterWinProb),
-    });
+    // Surface the claim ONLY when it actually RAISES your win probability by a visible
+    // amount -- the displayed 0.1%-rounded odds must tick up. This replaces the old
+    // arbitrary "+2 projected pts" floor (a player disliked): a claim now qualifies by
+    // out-projecting the starter (gain > 0 above) AND moving the win%, not by a fixed
+    // point margin. A pure sideways/negative add (delta rounds to +0.0% or is negative)
+    // is not worth a waiver move, so it is suppressed.
+    const beforeTenths = Math.round(beforeWinProb * 1000);
+    const afterTenths = Math.round(afterWinProb * 1000);
+    if (afterTenths > beforeTenths) {
+      movers.push({
+        kind: 'waiver',
+        headline: `Claim ${bestClaim.candidate.name} off waivers`,
+        detail: `Starts at ${bestClaim.candidate.position} this week (+${bestClaim.gain.toFixed(1)} pts to your lineup)`,
+        playerId: bestClaim.candidate.playerId,
+        valueGain: Number(bestClaim.gain.toFixed(1)),
+        weekly: true,
+        titleOddsBefore: probToAmerican(beforeWinProb),
+        titleOddsAfter: probToAmerican(afterWinProb),
+      });
+    }
   }
 
   return movers;
