@@ -387,14 +387,29 @@ export function toMatchupData(
 
       const alternatives = swaps.map((swap) => {
         const altProjection = swap.benchMean;
+        // Anchor the swap's resulting win% to THIS matchup's current baseline plus the
+        // swap's own delta, not the static absolute resultingWinProb. In live mode the
+        // cached swap object was simulated against a PRE-GAME baseline, so its
+        // resultingWinProb sits on a different baseline than the live headline win%. The
+        // card computed its delta as (resultingWinProb - liveBaseline), which turned a
+        // downgrade into a phantom gain (sit a 13-pt WR for a 10-pt RB read as +6%).
+        // Anchoring keeps before/after/delta on ONE baseline. Pre-game this is unchanged
+        // (the line win% equals the sim base, so base + delta == resultingWinProb).
+        const baseWinProb = yoursSide?.winProbability;
+        const altWinProb =
+          baseWinProb != null
+            ? Math.max(0, Math.min(100, Number((baseWinProb + swap.deltaWinProb).toFixed(1))))
+            : swap.resultingWinProb;
+        const altMoneyline =
+          baseWinProb != null ? probabilityToAmerican(altWinProb / 100) : swap.resultingMoneyline;
         return {
           player: toPlayer(swap.benchId, bootstrap.players),
           projection: altProjection,
           floor: Number((altProjection * 0.6).toFixed(1)),
           ceiling: Number((altProjection * 1.45).toFixed(1)),
           resultingLine: {
-            moneyline: swap.resultingMoneyline,
-            winProbability: swap.resultingWinProb,
+            moneyline: altMoneyline,
+            winProbability: altWinProb,
             projection: swap.resultingProjection,
             spread: Number(((yoursSide?.spread ?? 0) + altProjection - swap.starterMean).toFixed(1)),
             total: Number(((yoursSide?.total ?? 0) + altProjection - swap.starterMean).toFixed(1)),
@@ -512,21 +527,29 @@ function buildOffseasonMatchupData(
   const roster: RosterSlot[] = userTeam.starters.map((playerId, index) => {
     const projection = playerMeans[playerId]?.mean ?? 0;
     const swaps = swapsBySlot.get(index) ?? [];
-    const alternatives = swaps.map((swap) => ({
-      player: toPlayer(swap.benchId, bootstrap.players),
-      projection: swap.benchMean,
-      floor: Number((swap.benchMean * 0.6).toFixed(1)),
-      ceiling: Number((swap.benchMean * 1.45).toFixed(1)),
-      resultingLine: {
-        moneyline: swap.resultingMoneyline,
-        winProbability: swap.resultingWinProb,
-        projection: swap.resultingProjection,
-        spread: Number((diff + swap.benchMean - swap.starterMean).toFixed(1)),
-        total: Number((yours.total + swap.benchMean - swap.starterMean).toFixed(1)),
-      },
-      deltaWinProbability: swap.deltaWinProb,
-      gameLine: `${bootstrap.players[swap.benchId]?.team ?? 'FA'} game, line pending`,
-    }));
+    const alternatives = swaps.map((swap) => {
+      // Same baseline-anchoring as the connected path: after = this line's win% + the
+      // swap's own delta, so before/after/delta stay on one baseline.
+      const altWinProb = Math.max(
+        0,
+        Math.min(100, Number((yours.winProbability + swap.deltaWinProb).toFixed(1))),
+      );
+      return {
+        player: toPlayer(swap.benchId, bootstrap.players),
+        projection: swap.benchMean,
+        floor: Number((swap.benchMean * 0.6).toFixed(1)),
+        ceiling: Number((swap.benchMean * 1.45).toFixed(1)),
+        resultingLine: {
+          moneyline: probabilityToAmerican(altWinProb / 100),
+          winProbability: altWinProb,
+          projection: swap.resultingProjection,
+          spread: Number((diff + swap.benchMean - swap.starterMean).toFixed(1)),
+          total: Number((yours.total + swap.benchMean - swap.starterMean).toFixed(1)),
+        },
+        deltaWinProbability: swap.deltaWinProb,
+        gameLine: `${bootstrap.players[swap.benchId]?.team ?? 'FA'} game, line pending`,
+      };
+    });
 
     return {
       slotLabel: labels[index] ?? 'FLEX',
