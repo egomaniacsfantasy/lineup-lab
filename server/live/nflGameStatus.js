@@ -130,6 +130,22 @@ export function getNflGameState() {
   return _cache.teamState;
 }
 
+/** Set of team abbreviations whose current REGULAR-SEASON game has KICKED OFF —
+ *  in progress ('in') or final ('post'). A player on one of these teams is LOCKED
+ *  for roster movement: he cannot be benched, started, added or dropped this week
+ *  (his real fantasy roster is frozen at kickoff). Distinct from getFinalNflTeams
+ *  (post only, which drives SCORING locks): a mid-game player is movement-locked but
+ *  not yet score-locked. A team on BYE is simply absent from the scoreboard, so it is
+ *  never here -> a bye player stays movable (you can still bench him). Non-blocking. */
+export function getLockedNflTeams() {
+  if (Date.now() - _cache.at >= TTL_MS) refreshInBackground();
+  const locked = new Set();
+  for (const [team, s] of _cache.teamState) {
+    if (s.state === 'in' || s.state === 'post') locked.add(team);
+  }
+  return locked;
+}
+
 /** Current NFL regular-season week number (from the scoreboard), or null in the
  *  off-season / before the scoreboard has been read. Non-blocking; used by the
  *  rankings board to sum only a player's REMAINING weeks. */
@@ -212,6 +228,17 @@ export function getNflGameStateSnapshot() {
 /** Stable signature of the current final-team set, for cache-busting pricing. */
 export function finalTeamsSignature() {
   return [..._cache.finalTeams].sort().join(',');
+}
+
+/** Stable signature of the current KICKED-OFF ('in'|'post') team set, folded into the
+ *  pricing cache key so start/sit + waiver recommendations re-price the moment a game
+ *  kicks off (and a played player drops out of the candidate pools), not a poll later. */
+export function lockedTeamsSignature() {
+  const locked = [];
+  for (const [team, s] of _cache.teamState) {
+    if (s.state === 'in' || s.state === 'post') locked.push(team);
+  }
+  return locked.sort().join(',');
 }
 
 /** True if any regular-season game is currently in progress (state 'in'). */

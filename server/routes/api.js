@@ -35,6 +35,8 @@ import {
   getNflGameState,
   getNflGameStateSnapshot,
   finalTeamsSignature,
+  getLockedNflTeams,
+  lockedTeamsSignature,
   buildLiveLocks,
   normalizeTeam,
 } from '../live/nflGameStatus.js';
@@ -723,7 +725,14 @@ async function assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams
     console.error('[pricing] injury reconciliation failed; using catalog flags', err);
   }
 
-  return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections, liveLocks };
+  // Teams whose game has KICKED OFF (in progress or final). A player on one of these
+  // is LOCKED for movement, so the start/sit + waiver recommenders must not suggest
+  // benching/starting/adding/dropping him (you can't move a player who's already
+  // playing or done). Only applied when the scoreboard is on the priced week -- same
+  // guard as the score locks above, so a rolled-over week never freezes the new lineup.
+  const lockedTeams = (sbWeek == null || sbWeek === ctx.week) ? getLockedNflTeams() : new Set();
+
+  return { ...ctx, catalog: ctx.players, scheduleWeeks, overlay, projections: liveProjections, liveLocks, lockedTeams };
 }
 
 export async function computeLeaguePricing(provider, leagueId, userId, overlay = null) {
@@ -732,6 +741,10 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
   // game busts the price and re-locks those players.
   const finalTeams = getFinalNflTeams();
   const liveSig = finalTeamsSignature();
+  // Kicked-off ('in'|'post') team set, folded into the key too so the swap/waiver
+  // recommendations re-price the instant a game starts and its players lock out of
+  // the candidate pools (finalTeamsSignature alone only moves when a game goes FINAL).
+  const lockSig = lockedTeamsSignature();
   // Resolve the fantasy week UP FRONT (both reads are provider-cached, so this is
   // cheap) and fold it into the cache key AND the built context. Without the week
   // in the key, a preseason week-1 price and a rollover-lag lastScoredWeek price
@@ -749,7 +762,7 @@ export async function computeLeaguePricing(provider, leagueId, userId, overlay =
   }
   return getLeaguePricing(
     () => assembleLeagueCtx(provider, leagueId, userId, overlay, finalTeams, week),
-    `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${playoffSettingsSignature(leagueId)}:w${week ?? '-'}`,
+    `${leagueId}:${userId}:${overlayHash(overlay)}:${liveSig}:${lockSig}:${playoffSettingsSignature(leagueId)}:w${week ?? '-'}`,
   );
 }
 
