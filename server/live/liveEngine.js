@@ -102,10 +102,17 @@ export function mergeLiveOverlay(pricing, overlay) {
   const futures = overlay.futures
     ? overlay.futures.map((row) => ({ ...row, isUser: requesterRosterIds.has(String(row.rosterId)) }))
     : pricing.futures;
+  // Drop WAIVER claims while live. Their win% gain is priced on the STATIC pre-game
+  // sim (this cache is not busted by in-progress scores), so mid-game it reads as a
+  // phantom gain against the live headline win% -- and a waiver add can't meaningfully
+  // change a week that is already being played out. Trades and start/sit swaps stay
+  // (swaps are anchored to the live baseline; trades are not a this-week live action).
+  const movers = (pricing.movers ?? []).filter((m) => m.kind !== 'waiver');
   return {
     ...pricing,
     lines,
     futures,
+    movers,
     livePlayers: overlay.players ?? null,
     live: { at: overlay.at, week: overlay.week },
   };
