@@ -73,3 +73,16 @@ test('a free agent whose game has kicked off is NOT suggested as a claim', () =>
   const waiver = movers.find((m) => m.kind === 'waiver');
   assert.equal(waiver, undefined, 'must not suggest claiming a free agent whose game already started');
 });
+
+test('an already-PLAYED starter (pinned lockedWeekly) is not targeted, even with the scoreboard set EMPTY', () => {
+  // The robust signal: a starter with an actual score pinned for this week
+  // (pinPlayedCurrentWeek sets lockedWeekly[week]) is locked regardless of lockedTeams.
+  // This is the D/ST-already-played case: the Lions defense finished, so no waiver may
+  // suggest replacing it -- and it must hold even when lockedTeams is empty (the
+  // scoreboard-week guard zeroed it, or live mode is off).
+  const pm = new Map(projectionMap);
+  pm.set('u_wr', { ...projectionMap.get('u_wr'), lockedWeekly: { [WEEK]: 3.0 } });
+  const movers = computeMovers({ ...baseCtx, projectionMap: pm, lockedTeams: new Set() });
+  const waiver = movers.find((m) => m.kind === 'waiver');
+  assert.equal(waiver, undefined, 'a played (pinned) starter must not be a waiver replacement target');
+});

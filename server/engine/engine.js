@@ -816,17 +816,31 @@ export function applyOverlay(projectionMap, overlay) {
 }
 
 /**
- * A player is LOCKED for roster movement when his NFL team's game this week has
- * KICKED OFF (in progress or final): he can no longer be benched, started, added or
- * dropped, so no start/sit or waiver recommendation may involve him. `lockedTeams`
- * (ctx.lockedTeams, from getLockedNflTeams) is the normalized kicked-off team set --
- * empty off-live and outside the priced week, so this is a no-op then. A bye team is
- * absent from the scoreboard, so a bye player is NOT locked (he stays benchable).
+ * A player is LOCKED for roster movement once his game this week has started/finished:
+ * he can no longer be benched, started, added or dropped, so no start/sit or waiver
+ * recommendation may involve him. TWO independent signals (either locks):
+ *   1. pinned actual score -- projectionMap[id].lockedWeekly[week] is set by
+ *      pinPlayedCurrentWeek for ANY player (incl. D/ST) who already has a real score
+ *      this week. This is the app's own "already played" flag and does NOT depend on
+ *      the scoreboard read or the priced-week guard, so it catches a finished D/ST /
+ *      K / QB even when `lockedTeams` is empty. It is the ROBUST primary signal.
+ *   2. kicked-off team -- `lockedTeams` (from getLockedNflTeams, normalized) covers a
+ *      player whose team's game is in progress but who hasn't accrued points yet, and
+ *      free agents (who are never in the matchup feed so never get a lockedWeekly pin).
+ * A bye player is in neither (no matchup points pinned, team not on the scoreboard),
+ * so he stays benchable -- correct.
  */
-function isPlayerLocked(playerId, catalog, lockedTeams) {
-  if (!lockedTeams || lockedTeams.size === 0 || playerId == null) return false;
-  const team = catalog?.[playerId]?.team;
-  return team ? lockedTeams.has(normalizeTeam(team)) : false;
+function isPlayerLocked(playerId, catalog, lockedTeams, projectionMap = null, week = null) {
+  if (playerId == null) return false;
+  if (projectionMap != null && week != null) {
+    const lw = projectionMap.get(playerId)?.lockedWeekly;
+    if (lw && (lw[week] != null || lw[String(week)] != null)) return true;
+  }
+  if (lockedTeams && lockedTeams.size > 0) {
+    const team = catalog?.[playerId]?.team;
+    if (team && lockedTeams.has(normalizeTeam(team))) return true;
+  }
+  return false;
 }
 
 /**
@@ -1058,13 +1072,13 @@ export function priceLeague(ctx) {
 
         // Locked starter (his game has kicked off) can't be moved out -> offer no swap
         // for this slot. Guards the "bench Michael Wilson mid-game for Pollard" bug.
-        if (isPlayerLocked(starterId, catalog, ctx.lockedTeams)) return;
+        if (isPlayerLocked(starterId, catalog, ctx.lockedTeams, projectionMap, week)) return;
 
         bench.forEach((benchId) => {
           const benchPosition = catalog[benchId]?.position;
           if (!benchPosition || !slotAllows(slotLabel, benchPosition)) return; // illegal swap
           // Locked bench player (his game has kicked off / is over) can't be started.
-          if (isPlayerLocked(benchId, catalog, ctx.lockedTeams)) return;
+          if (isPlayerLocked(benchId, catalog, ctx.lockedTeams, projectionMap, week)) return;
           const benchParam = playerSimParams(benchId, projectionMap, catalog[benchId], week);
           if (benchParam.mean <= 0 && starterParam.mean <= 0) return; // both effectively unpriced
 
@@ -1518,14 +1532,14 @@ export function computeMovers(ctx) {
     // slice is noise (he barely plays); Franco's depth_rank is the truth source.
     if (candidate.depthRank != null && candidate.depthRank >= 2) continue;
     // A free agent whose game has already kicked off can't be added/started this week.
-    if (isPlayerLocked(candidate.playerId, catalog, ctx.lockedTeams)) continue;
+    if (isPlayerLocked(candidate.playerId, catalog, ctx.lockedTeams, projectionMap, week)) continue;
     let target = null;
     for (const s of starterSlots) {
       if (!slotAllows(s.slot, candidate.position)) continue;
       // A LOCKED starter (already played -- e.g. a Thursday-game bust) can't be dropped,
       // so never target him. This is the midweek-waiver bug: without it, a played starter
       // pinned to a low actual score reads as the weakest slot and gets "replaced".
-      if (isPlayerLocked(s.playerId, catalog, ctx.lockedTeams)) continue;
+      if (isPlayerLocked(s.playerId, catalog, ctx.lockedTeams, projectionMap, week)) continue;
       if (target == null || s.mean < target.mean) target = s;
     }
     if (!target) continue; // no legal slot for this position
