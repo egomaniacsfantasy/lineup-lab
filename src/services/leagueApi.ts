@@ -216,6 +216,15 @@ export interface LeaguePricing {
     opponentProjection: number;
     note?: string;
     /**
+     * The lineups behind the line. For the current week these are the lineups
+     * as set; for a future week, the best lineup each roster could field, which
+     * is how the engine has always priced a week nobody has played.
+     */
+    yourStarters?: OptimalSlot[];
+    yourBench?: OptimalSlot[];
+    opponentStarters?: OptimalSlot[];
+    opponentBench?: OptimalSlot[];
+    /**
      * This week priced as if BOTH managers fielded their best lineup. Present
      * only on the current week (future weeks are already optimal-vs-optimal).
      *

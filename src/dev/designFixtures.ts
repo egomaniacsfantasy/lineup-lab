@@ -969,6 +969,15 @@ function buildPricing(leagueId: string, pricingMode: 'empty' | 'live'): LeaguePr
         projection: 148.6,
         opponentProjection: 144.7,
         note: 'Best-lineup projection.',
+        /* Week 9 starts Barkley and Burrow, neither of whom is in this week's
+           lineup: one is a bench upgrade, the other is back off IR. That is the
+           whole reason to look forward, so the fixture has to show it. */
+        yourStarters: bestLineupSlots(
+          USER_TEAM.starters.map((id) => (id === 't-mclaurin' ? 's-barkley' : id)),
+        ),
+        yourBench: bestLineupSlots(['t-mclaurin', 'd-smith', 't-mcbride']),
+        opponentStarters: bestLineupSlots(ATHENA_TEAM.starters),
+        opponentBench: [],
       },
       {
         week: 10,

@@ -27,6 +27,7 @@ const TARGETS = [
   'src/components/matchup/MatchupDistributions.css',
   'src/components/matchup/Scoreline.tsx',
   'src/components/matchup/BestLineups.tsx',
+  'src/components/matchup/WeekAhead.tsx',
   'src/components/trade-display/TradeDisplay.tsx',
   'src/components/trade-display/TradeDisplay.css',
   'src/components/trade/TradeAnalyzerPanel.tsx',

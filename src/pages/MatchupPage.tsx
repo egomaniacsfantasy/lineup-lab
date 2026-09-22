@@ -36,6 +36,8 @@ import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints,
 import { anyStarted, scorelineFor, teamScored, type Scoreline } from '../utils/liveScoreline';
 import { GameTag, SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
 import { BestLineups, type LineupChanges } from '../components/matchup/BestLineups';
+import { WeekAhead, type WeekAheadFork } from '../components/matchup/WeekAhead';
+import { fetchWeekForks } from '../services/predictor';
 import { winProbabilityToMoneyline } from '../utils/matchupSides';
 import { playerShortName } from '../utils/playerNames';
 import { useNflGameStateForWeek } from '../hooks/useNflGameState';
@@ -958,6 +960,8 @@ interface MatchupLiveProps {
   isConnected: boolean;
   /** This week priced as if both managers fielded their best lineup. */
   bestLineup?: OptimalLine | null;
+  /** Every scheduled week: the line, and both sides' best lineup for it. */
+  weeklyLines?: NonNullable<LeaguePricing['weeklyLines']>;
   /** The user's own futures row, for the season band under the hero. */
   userFuture?: PricedFuture | null;
   titles?: TitleRow[] | null;
@@ -1180,6 +1184,7 @@ function MatchupLive({
   lineMovement = null,
   lineHistory = null,
   bestLineup = null,
+  weeklyLines = [],
   scoringNote = null,
   unpricedStarterCount = 0,
   unpricedStarterNames = [],
@@ -1719,6 +1724,65 @@ function MatchupLive({
   const yourScoredTotal = teamScored(yourScorelines, matchupStarted);
   const opponentScoredTotal = teamScored(opponentScorelines, matchupStarted);
 
+  /* Scrubbing forward. The current week is the board; a later week is the
+     WeekAhead view, which is a different question and says so. There is no
+     backwards: a played week is a result, not a price, and the Season tab is
+     where results live. */
+  const [viewWeek, setViewWeek] = useState(matchup.week);
+  useEffect(() => { setViewWeek(matchup.week); }, [matchup.week]);
+  const scheduledWeeks = useMemo(
+    () => weeklyLines.map((line) => line.week).filter((week) => week >= matchup.week).sort((a, b) => a - b),
+    [weeklyLines, matchup.week],
+  );
+  const lastWeek = scheduledWeeks.at(-1) ?? matchup.week;
+  const aheadLine = viewWeek === matchup.week
+    ? null
+    : weeklyLines.find((line) => line.week === viewWeek) ?? null;
+
+  /* Playoff odds on both branches of that week's game, from the same
+     conditioned run the League tab's fork graphic uses. Fetched per week and
+     cached server-side; a week with no answer says so rather than guessing. */
+  const [aheadFork, setAheadFork] = useState<{ week: number; fork: WeekAheadFork | null } | null>(null);
+  useEffect(() => {
+    if (!stored || !aheadLine || userRosterId == null) return undefined;
+    let cancelled = false;
+    setAheadFork(null);
+    void fetchWeekForks(String(stored.leagueId), String(stored.userId), viewWeek).then((result) => {
+      if (cancelled) return;
+      const mine = (result.forks ?? [])
+        .flatMap((entry) => entry.sides)
+        .find((side) => String(side.rosterId) === String(userRosterId));
+      setAheadFork({
+        week: viewWeek,
+        fork: result.available && mine
+          ? { now: mine.nowProb, ifWin: mine.winProb, ifLose: mine.lossProb }
+          : null,
+      });
+    });
+    return () => { cancelled = true; };
+  }, [stored, aheadLine, viewWeek, userRosterId]);
+
+  /* Who is in that week's lineup but not in yours today: a bye clearing, a
+     player back from IR, a bench player the schedule promotes. That difference
+     is most of the reason to look forward at all. */
+  const aheadChangedIn = useMemo(() => {
+    if (!aheadLine?.yourStarters) return new Set<string>();
+    const now = new Set(engine.roster.map((slot) => slot.starter.id));
+    return new Set(
+      aheadLine.yourStarters
+        .map((slot) => slot.playerId)
+        .filter((id): id is string => Boolean(id) && !now.has(id as string)),
+    );
+  }, [aheadLine, engine.roster]);
+
+  const aheadOpponentRecord = useMemo(() => {
+    if (!aheadLine || !bootstrap) return null;
+    const team = bootstrap.teams.find((row) => row.rosterId === aheadLine.opponentRosterId);
+    if (!team?.record) return null;
+    const { wins, losses, ties } = team.record;
+    return ties ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
+  }, [aheadLine, bootstrap]);
+
   /* Your win probability over time.
      This used to match history entries on `matchupId`, which changes every
      week, so the panel only ever saw the handful of reprices inside the
@@ -2094,6 +2158,52 @@ function MatchupLive({
           </div>
         ) : null}
 
+        {aheadLine ? (
+          /* A week nobody has played. Its own view: no board, no live numbers,
+             and none of the rail's this-week widgets, because a start/sit call
+             and a line-movement chart are both about now. */
+          <section className="matchup-page__main">
+            <button
+              className="matchup-page__week-back"
+              onClick={() => setViewWeek(matchup.week)}
+              type="button"
+            >
+              <span aria-hidden="true">{'\u2039'}</span> Back to week {matchup.week}
+            </button>
+            <WeekAhead
+              changedIn={aheadChangedIn}
+              fork={aheadFork?.week === viewWeek ? aheadFork.fork : null}
+              forkPending={aheadFork?.week !== viewWeek}
+              opponentName={aheadLine.opponentName}
+              opponentRecord={aheadOpponentRecord}
+              opponentProjection={aheadLine.opponentProjection}
+              priceLabel={formatDisplayedOdds(aheadLine.moneyline, aheadLine.winProb)}
+              projection={aheadLine.projection}
+              starters={aheadLine.yourStarters ?? []}
+              week={aheadLine.week}
+              winProbability={aheadLine.winProb}
+            />
+            <div className="matchup-page__week-nav">
+              <button
+                className="matchup-page__week-step"
+                disabled={viewWeek <= matchup.week + 1}
+                onClick={() => setViewWeek(viewWeek - 1)}
+                type="button"
+              >
+                <span aria-hidden="true">{'\u2039'}</span> Week {viewWeek - 1}
+              </button>
+              <button
+                className="matchup-page__week-step"
+                disabled={viewWeek >= lastWeek}
+                onClick={() => setViewWeek(viewWeek + 1)}
+                type="button"
+              >
+                Week {viewWeek + 1} <span aria-hidden="true">{'\u203a'}</span>
+              </button>
+            </div>
+          </section>
+        ) : (
+          <>
         <section className="matchup-page__main">
         {isPreview ? (
           <div className="matchup-page__preview-banner" role="status">
@@ -2128,6 +2238,17 @@ function MatchupLive({
               <span className="matchup-page__preview-chip">Preview lineup</span>
             ) : null}
             <div className="matchup-page__hero-chips">
+              {isConnected && lastWeek > matchup.week ? (
+                <button
+                  aria-label={`Look ahead to week ${matchup.week + 1}`}
+                  className="matchup-page__week-step"
+                  onClick={() => setViewWeek(matchup.week + 1)}
+                  type="button"
+                >
+                  Week {matchup.week + 1}
+                  <span aria-hidden="true">{'\u203a'}</span>
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -2819,6 +2940,8 @@ function MatchupLive({
             </section>
 
           </aside>
+          </>
+        )}
       </div>
 
       {isCompareMode && !compareModalPlayers && !compareBoardPlayers ? (
@@ -3288,6 +3411,7 @@ export function MatchupPage() {
             ? pricing.weeklyLines?.find((line) => line.week === connectedMatchup?.week)?.optimal ?? null
             : null
         }
+        weeklyLines={pricing?.available ? pricing.weeklyLines ?? [] : []}
         movers={movers}
         titles={titleRows}
         userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}

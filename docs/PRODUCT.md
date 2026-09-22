@@ -505,6 +505,19 @@ and the connect screen consumes it on read.
 
 ## 4.10 Cross-cutting UI systems
 
+- **Looking ahead.** The Hub's hero carries a "Week N >" control, and pressing
+  it swaps the main column for that week: the line (optimal-vs-optimal, said out
+  loud), the opponent's name, record and projected total, **what the week is
+  worth** (your playoff odds if you win against if you lose, from the same
+  conditioned run the League tab's fork graphic uses, `GET
+  /league/:id/forks?week=N`), and your best lineup for that week with anybody
+  promoted into it marked `IN`. Forward only: a played week is a result rather
+  than a price, and results live on the Season tab. The widgets anchored to now
+  do not come with it - no board, no start/sit call, no line-movement chart,
+  since a future week has no history to chart and no lineup to set. It came from
+  a beta user asking for "a page where you only see your team", who then said
+  what he meant: clicking through weeks to see what is coming.
+
 - **Reserve players have their own group.** IR and taxi players are on the
   roster but cannot be started from where they sit, so they are not bench depth:
   they sit below the bench under "Reserve", tagged `IR` or `TAXI`, with a dash

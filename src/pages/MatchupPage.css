@@ -2452,6 +2452,189 @@
   font-weight: 700;
 }
 
+/* Looking ahead. The control sits on the hero's own header row, where the week
+   is already named, so "week 9 ›" reads as the next page of the same thing
+   rather than a new feature. */
+.matchup-page__week-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.matchup-page__week-step:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+  color: var(--text-primary);
+}
+
+.matchup-page__week-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.matchup-page__week-back {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.matchup-page__week-back:hover {
+  color: var(--text-primary);
+}
+
+.matchup-page__week-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* The week-ahead card. One column: there is no board to sit beside. */
+.matchup-page__ahead {
+  display: grid;
+  gap: 16px;
+}
+
+.matchup-page__ahead-note,
+.matchup-page__ahead-caption {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+}
+
+.matchup-page__ahead-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.matchup-page__ahead-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.matchup-page__ahead-prob,
+.matchup-page__ahead-totals,
+.matchup-page__ahead-record,
+.matchup-page__ahead-vs {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-page__ahead-opponent {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.matchup-page__ahead-name {
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.matchup-page__ahead-fork,
+.matchup-page__ahead-lineup {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
+}
+
+.matchup-page__ahead-fork-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 16px;
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-page__ahead-fork-leg strong {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.matchup-page__ahead-fork-swing {
+  color: var(--text-muted);
+}
+
+.matchup-page__ahead-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.matchup-page__ahead-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 45%, transparent);
+}
+
+.matchup-page__ahead-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  min-width: 0;
+}
+
+.matchup-page__ahead-empty {
+  color: var(--text-muted);
+}
+
+/* Not in your lineup today: a bye clearing, a return, a promotion. */
+.matchup-page__ahead-change {
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+  border-radius: 999px;
+  color: var(--amber-bright);
+  font-family: var(--font-num);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.matchup-page__ahead-projection {
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 /* The reserve group inside the bench drawer: IR and taxi, kept apart from the
    bench because they are not options this week. The tag carries the reason and
    the projection column carries a dash, since a player who cannot be started
