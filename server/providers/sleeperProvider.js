@@ -190,7 +190,11 @@ export const sleeperProvider = {
       coOwners: r.co_owners ?? [],
       players: r.players ?? [],
       starters: (r.starters ?? []).filter((p) => p && p !== '0'),
+      /* Both sit outside the startable roster, and both used to arrive as
+         ordinary bench players. Kept apart because they are different facts: a
+         player on IR is hurt, a taxi player is stashed. */
       reserve: r.reserve ?? [],
+      taxi: r.taxi ?? [],
       record: {
         wins: r.settings?.wins ?? 0,
         losses: r.settings?.losses ?? 0,

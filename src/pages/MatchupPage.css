@@ -1221,6 +1221,15 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* Player, the reason he cannot be started, and a dash where a projection
+   would go. */
+.matchup-page__lineup-hitbox--reserve {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .matchup-page__lineup-hitbox--static {
   cursor: default;
 }
@@ -2441,6 +2450,31 @@
 .matchup-page__slot-card--opponent .matchup-page__slot-scored {
   color: var(--text-soft);
   font-weight: 700;
+}
+
+/* The reserve group inside the bench drawer: IR and taxi, kept apart from the
+   bench because they are not options this week. The tag carries the reason and
+   the projection column carries a dash, since a player who cannot be started
+   has no projection worth printing. Neutral, not amber or red: a hurt player is
+   not an alarm and not a selection. */
+.matchup-page__reserve {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
+}
+
+.matchup-page__reserve-tag {
+  justify-self: end;
+  padding: 1px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 /* "If we both start our best": a hypothetical that opens under the board and

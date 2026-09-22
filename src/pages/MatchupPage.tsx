@@ -985,6 +985,47 @@ interface MatchupLiveProps {
   onDismissMover?: ((signature: string) => void) | null;
 }
 
+/**
+ * IR and taxi players: on the roster, not startable from where they sit.
+ *
+ * They used to arrive as ordinary bench players printed at 0.0, which said two
+ * untrue things at once. The first is that they are an option this week, which
+ * put them in the bench count and in the start/sit comparison. The second is
+ * that the engine projects them to score nothing, when in fact nobody asked:
+ * a player who cannot be started has no projection to show, so the slot carries
+ * a dash and his reason instead.
+ */
+function ReserveList({
+  rows,
+  meta,
+}: {
+  rows: BenchPlayer[];
+  meta: (player: Player, extra?: string | null, compact?: boolean) => string;
+}) {
+  return (
+    <div className="matchup-page__lineup-list matchup-page__lineup-list--bench">
+      {rows.map((row) => (
+        <div
+          className="matchup-page__lineup-row matchup-page__lineup-row--bench matchup-page__lineup-row--static"
+          key={`reserve-${row.player.id}`}
+        >
+          <span className="matchup-page__lineup-hitbox matchup-page__lineup-hitbox--reserve">
+            <span className="matchup-page__lineup-player">
+              <PlayerChip player={row.player} showPosition size="sm" />
+              <span className="matchup-page__lineup-copy">
+                <span className="matchup-page__row-name">{row.player.shortName}</span>
+                <span className="matchup-page__row-secondary">{meta(row.player, null, true)}</span>
+              </span>
+            </span>
+            <span className="matchup-page__reserve-tag">{row.reserveSlot ?? 'IR'}</span>
+            <span className="matchup-page__projection">{NO_VALUE}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* How many slot rows the arriving lineup board is drawn with. Nine is the
    common starting lineup and the board is the tallest thing in the main
    column, so getting this roughly right is what stops the page growing under
@@ -2508,6 +2549,17 @@ function MatchupLive({
                     ))}
                   </div>
                 </div>
+
+                {(matchup.yourTeam.reserve?.length ?? 0) > 0
+                  || (matchup.opponentTeam.reserve?.length ?? 0) > 0 ? (
+                  <div className="matchup-page__reserve">
+                    <span className="matchup-page__eyebrow">Reserve</span>
+                    <div className="matchup-page__bench-columns">
+                      <ReserveList meta={lineupMetaFor} rows={matchup.yourTeam.reserve ?? []} />
+                      <ReserveList meta={lineupMetaFor} rows={matchup.opponentTeam.reserve ?? []} />
+                    </div>
+                  </div>
+                ) : null}
               </details>
             </section>
 

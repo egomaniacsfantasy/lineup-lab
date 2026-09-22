@@ -59,11 +59,20 @@ export interface TeamMatchupData {
   avatarUrl?: string | null;
   roster: RosterSlot[];
   bench?: BenchPlayer[];
+  /** IR and taxi players, kept out of `bench` and shown in their own group. */
+  reserve?: BenchPlayer[];
 }
 
 export interface BenchPlayer {
   player: Player;
   projection: number;
+  /**
+   * Set when the player is on the roster but cannot be started from where he
+   * sits. A reserve player is NOT bench depth: he is not an option this week,
+   * so he does not belong in a bench count, a start/sit comparison, or a row
+   * reading 0.0 as though he were simply projected to do nothing.
+   */
+  reserveSlot?: 'IR' | 'TAXI';
 }
 
 export interface RosterSlot {

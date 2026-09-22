@@ -45,6 +45,10 @@ const SLOT_LABEL = {
   20: 'BN', 21: 'IR', 24: 'TAXI',
 };
 const BENCH_SLOTS = new Set([20, 21, 24]);
+/* Bench (20) is a player you can start this week; IR (21) and taxi (24) are
+   not. Both are also BENCH_SLOTS: neither can be a starter. */
+const IR_SLOT = 21;
+const TAXI_SLOT = 24;
 
 /* How a lineup should read, which is not the order ESPN numbers its slots.
    Sorting by raw slot id puts FLEX (23) below D/ST (16) and K (17), so the
@@ -335,11 +339,20 @@ export function createEspnProvider({ season, espnS2, swid }) {
          Ties (two RB slots, both id 2) keep entry order, which is arbitrary but
          consistent, and either RB is equally legal in either RB slot. */
       const startingEntries = [];
+      /* Players ESPN has in a RESERVE slot: injured reserve (21) and taxi (24).
+         They are on the roster and cannot be started from where they sit, which
+         is a different fact from "on the bench" and the reason the provider
+         contract carries `reserve` at all. It used to ship empty, so an IR
+         player arrived as an ordinary bench player projected 0.0. */
+      const reserve = [];
+      const taxi = [];
       for (const entry of entries) {
         const espnPlayer = entry.playerPoolEntry?.player;
         if (!espnPlayer) continue;
         const id = resolvePlayer(espnPlayer, crosswalk, synthetic);
         players.push(id);
+        if (entry.lineupSlotId === IR_SLOT) reserve.push(id);
+        if (entry.lineupSlotId === TAXI_SLOT) taxi.push(id);
         if (!BENCH_SLOTS.has(entry.lineupSlotId)) {
           startingEntries.push({ id, lineupSlotId: entry.lineupSlotId ?? 99 });
         }
@@ -360,7 +373,8 @@ export function createEspnProvider({ season, espnS2, swid }) {
         coOwners: (team.owners ?? []).slice(1),
         players,
         starters,
-        reserve: [],
+        reserve,
+        taxi,
         record: {
           wins: team.record?.overall?.wins ?? 0,
           losses: team.record?.overall?.losses ?? 0,

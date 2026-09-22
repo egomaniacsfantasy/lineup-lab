@@ -176,6 +176,9 @@ const USER_TEAM = {
     'sf-def',
   ],
   bench: ['s-barkley', 'd-smith', 't-mcbride', 'j-burrow', 'k-fairbairn', 'phi-def'],
+  /* On IR: on the roster, not startable this week. Without one in the fixture
+     the reserve group could not be looked at or asserted against. */
+  reserve: ['j-burrow'],
 };
 
 const HERMES_TEAM = {
@@ -201,6 +204,7 @@ const HERMES_TEAM = {
     'min-def',
   ],
   bench: ['a-stbrown', 'j-allen', 'd-smith', 'phi-def'],
+  reserve: ['j-allen'],
 };
 
 const APOLLO_TEAM = {
@@ -226,6 +230,7 @@ const APOLLO_TEAM = {
     'phi-def',
   ],
   bench: ['j-burrow', 'd-london', 't-kelce', 'j-jefferson'],
+  reserve: [],
 };
 
 const ATHENA_TEAM = {
@@ -251,6 +256,7 @@ const ATHENA_TEAM = {
     'sf-def',
   ],
   bench: ['p-mahomes', 'p-nacua', 'b-bowers'],
+  reserve: [],
 };
 
 const POSEIDON_TEAM = {
@@ -276,6 +282,7 @@ const POSEIDON_TEAM = {
     'min-def',
   ],
   bench: ['c-lamb', 'j-allen', 'phi-def'],
+  reserve: [],
 };
 
 const HADES_TEAM = {
@@ -301,6 +308,7 @@ const HADES_TEAM = {
     'sf-def',
   ],
   bench: ['j-burrow', 'j-chase', 'b-aubrey'],
+  reserve: [],
 };
 
 const TEAM_POOL = [USER_TEAM, HERMES_TEAM, APOLLO_TEAM, ATHENA_TEAM, POSEIDON_TEAM, HADES_TEAM];
@@ -392,7 +400,7 @@ function buildTeam(team: typeof USER_TEAM) {
     avatarUrl: team.avatarUrl,
     players: [...team.starters, ...team.bench],
     starters: [...team.starters],
-    reserve: [],
+    reserve: [...((team as { reserve?: string[] }).reserve ?? [])],
     record: team.record,
     pointsFor: team.pointsFor,
     pointsAgainst: team.pointsAgainst,

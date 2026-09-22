@@ -75,7 +75,10 @@ export interface ApiTeam {
   avatarUrl: string | null;
   players: string[];
   starters: string[];
+  /** On the roster, not startable from where they sit: injured reserve. */
   reserve: string[];
+  /** Dynasty taxi squad. Same "cannot be started" fact, different reason. */
+  taxi?: string[];
   record: { wins: number; losses: number; ties: number };
   pointsFor: number;
   pointsAgainst: number;

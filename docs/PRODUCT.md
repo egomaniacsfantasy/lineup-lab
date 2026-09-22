@@ -505,6 +505,17 @@ and the connect screen consumes it on read.
 
 ## 4.10 Cross-cutting UI systems
 
+- **Reserve players have their own group.** IR and taxi players are on the
+  roster but cannot be started from where they sit, so they are not bench depth:
+  they sit below the bench under "Reserve", tagged `IR` or `TAXI`, with a dash
+  where a projection would go. They are out of the bench count and out of the
+  start/sit comparison. They used to arrive as ordinary bench players printed at
+  0.0, which claimed both that they were an option this week and that the engine
+  projected them to score nothing. The provider contract always carried
+  `reserve`, but the ESPN adapter shipped it empty (it is lineup slot 21, taxi
+  is 24) and Sleeper's `taxi` was dropped; nothing downstream read either.
+  Design flag: the fixture league puts one QB on IR per side.
+
 - **"If we both start our best"** sits on the Hub's lineup board, closed until
   it is asked for. It prices THIS week with both managers fielding their best
   lineup, names the swaps on each side, and shows the move from the price

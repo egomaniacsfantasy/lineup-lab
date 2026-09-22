@@ -16,7 +16,8 @@
  * @typedef {Object} Team            { id, leagueId, rosterId, ownerId, ownerName,
  *                                     teamName, avatarUrl, record {wins,losses,ties},
  *                                     pointsFor, pointsAgainst }
- * @typedef {Object} Roster          { teamId, rosterId, players[], starters[], reserve[] }
+ * @typedef {Object} Roster          { teamId, rosterId, players[], starters[], reserve[],
+ *                                     taxi[] }
  * @typedef {Object} Matchup         { matchupId, week, rosterId, points, playersPoints,
  *                                     starters[] }
  * @typedef {Object} CatalogPlayer   { id, name, team, position, byeWeek, status, injuryStatus }

@@ -266,7 +266,14 @@ export function toWeekMatchups(
        internally, which is never shown. */
     const buildBench = (team: ApiTeam, m: ApiMatchup) =>
       buildLineup({
-        starters: team.players.filter((id) => !m.starters.includes(id)),
+        /* Reserve is not bench depth; see buildReserve below. On this surface
+           they are left out rather than grouped, because the game dialog is a
+           read of two lineups and an IR player is in neither. */
+        starters: team.players.filter(
+          (id) => !m.starters.includes(id)
+            && !team.reserve?.includes(id)
+            && !team.taxi?.includes(id),
+        ),
         labels: [],
         players: bootstrap.players,
         means: playerMeans,
@@ -443,13 +450,36 @@ export function toMatchupData(
       };
     });
 
+  /* Reserve is not bench depth. An IR player cannot be started this week from
+     where he sits, so counting him among the bench and printing him at 0.0 says
+     two untrue things: that he is an option, and that the engine projects him to
+     score nothing. He is in his own group with his slot on him. */
+  const reserveSlotFor = (team: ApiTeam, id: string): 'IR' | 'TAXI' | null => {
+    if (team.reserve?.includes(id)) return 'IR';
+    if (team.taxi?.includes(id)) return 'TAXI';
+    return null;
+  };
+
   const buildBench = (team: ApiTeam, matchup: ApiMatchup): BenchPlayer[] =>
     team.players
-      .filter((id) => !matchup.starters.includes(id))
+      .filter((id) => !matchup.starters.includes(id) && !reserveSlotFor(team, id))
       .map((id) => ({
         player: toPlayer(id, bootstrap.players),
         projection: projectionFor(id, matchup),
       }));
+
+  const buildReserve = (team: ApiTeam, matchup: ApiMatchup): BenchPlayer[] =>
+    team.players
+      .filter((id) => !matchup.starters.includes(id))
+      .flatMap((id) => {
+        const reserveSlot = reserveSlotFor(team, id);
+        if (!reserveSlot) return [];
+        return [{
+          player: toPlayer(id, bootstrap.players),
+          projection: projectionFor(id, matchup),
+          reserveSlot,
+        }];
+      });
 
   const userSide = pricedLine?.sides[String(userTeam.rosterId)];
   const oppSide = pricedLine?.sides[String(oppTeam.rosterId)];
@@ -469,6 +499,7 @@ export function toMatchupData(
       avatarUrl: userTeam.avatarUrl,
       roster: buildRoster(userMatchup, true),
       bench: buildBench(userTeam, userMatchup),
+      reserve: buildReserve(userTeam, userMatchup),
     },
     opponentTeam: {
       managerKey: oppTeam.ownerId,
@@ -480,6 +511,7 @@ export function toMatchupData(
       // Their bench is players minus starters, same as ours. Useful for
       // seeing what they could swap in; we still never price their moves.
       bench: buildBench(oppTeam, oppMatchup),
+      reserve: buildReserve(oppTeam, oppMatchup),
     },
     baseline: line,
     histograms: pricedLine?.sides[String(userTeam.rosterId)]?.histograms ?? null,
