@@ -1189,6 +1189,61 @@ export function priceLeague(ctx) {
         note = 'Optimal lineups (bye/empty slots filled at replacement), simulated player-by-player.';
       }
 
+      /* THIS WEEK, PRICED AS IF BOTH MANAGERS FIELDED THEIR BEST LINEUP.
+         Future weeks are already optimal-vs-optimal above; the current week is
+         deliberately the line for the lineup you have actually set. This is the
+         hypothetical beside it: what the price would be if you fixed yours AND
+         he fixed his. Both, because optimising only your side prices a mistake
+         the opponent has not made yet and reads as free win probability.
+
+         Three things keep it honest:
+
+         COMMON RANDOM NUMBERS. Both runs are seeded identically, so the same
+         draws price both lineups and the difference is the lineup change rather
+         than sim noise. A lineup that is already optimal returns exactly zero,
+         which a second independent sim could not do: at MATCHUP_SIMS it would
+         wander a few tenths either way and invent movement that is not there.
+
+         ITS OWN STREAM. Seeded apart from weeklyRng, because consuming that one
+         here would shift every future week's draws and silently reprice the
+         whole Season tab.
+
+         NO STREAMING. Future weeks fill a bye or an empty slot at replacement
+         level, on the reasoning that you would pick somebody up by then. You
+         cannot do that for a game this week, so this prices the best lineup
+         actually fieldable from the roster as it stands, and an unfillable slot
+         is the zero it really is.
+
+         A DELTA, not a price. The caller applies it to the displayed win
+         probability, the same anchoring the waiver card uses, so the two
+         numbers on screen can never disagree about where the line is now. */
+      let optimal = null;
+      if (isCurrent) {
+        const startersOf = (assign) => assign.map((a) => a.playerId).filter(Boolean);
+        const myBest = optimalAssign(userTeamForWeekly.players, slotLabels, projectionMap, catalog, entry.week);
+        const oppBest = optimalAssign(oppTeam?.players ?? [], slotLabels, projectionMap, catalog, entry.week);
+        const myBestIds = startersOf(myBest);
+        const oppBestIds = startersOf(oppBest);
+        const crnSeed = (seed ^ 0x27d4eb2d) >>> 0;
+        const winProbFor = (mineIds, theirIds) =>
+          simulateMatchupWinProb(
+            starterParams(mineIds, projectionMap, catalog, entry.week),
+            starterParams(theirIds, projectionMap, catalog, entry.week),
+            mulberry32(crnSeed),
+          );
+        const asSet = winProbFor(mine.starters, theirs.starters);
+        const atBest = winProbFor(myBestIds, oppBestIds);
+        const bestDetail = rosterDetail(myBest, userTeamForWeekly.players, projectionMap, catalog, entry.week);
+        const oppBestDetail = rosterDetail(oppBest, oppTeam?.players ?? [], projectionMap, catalog, entry.week);
+        optimal = {
+          deltaWinProb: Number(((atBest - asSet) * 100).toFixed(1)),
+          projection: Number(teamDistribution(myBestIds, projectionMap, catalog, entry.week).mean.toFixed(1)),
+          opponentProjection: Number(teamDistribution(oppBestIds, projectionMap, catalog, entry.week).mean.toFixed(1)),
+          yourStarters: bestDetail.starters,
+          opponentStarters: oppBestDetail.starters,
+        };
+      }
+
       weeklyLines.push({
         week: entry.week,
         opponentRosterId: theirs.rosterId,
@@ -1203,6 +1258,7 @@ export function priceLeague(ctx) {
         yourBench: my.bench,
         opponentStarters: opp.starters,
         opponentBench: opp.bench,
+        optimal,
       });
     }
   }

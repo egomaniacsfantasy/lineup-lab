@@ -505,6 +505,21 @@ and the connect screen consumes it on read.
 
 ## 4.10 Cross-cutting UI systems
 
+- **"If we both start our best"** sits on the Hub's lineup board, closed until
+  it is asked for. It prices THIS week with both managers fielding their best
+  lineup, names the swaps on each side, and shows the move from the price
+  already on the board. Both sides, because optimising only yours prices a
+  mistake the opponent has not made and banks it as your edge; when the benched
+  stud is theirs, the number goes down, which is the useful half nobody else
+  shows. The engine returns a MOVEMENT in percentage points, priced off one
+  seed for both lineups (common random numbers), so an already-optimal pair
+  reads exactly zero rather than the few tenths a second independent sim would
+  invent; the resulting price is converted from the resulting probability, never
+  offset in odds-space (`src/utils/matchupSides.ts`). It is a pregame tool: once
+  anybody in the matchup kicks off it says so and stops, because a best lineup
+  that benches a player who has already played is not a lineup anyone can set.
+  Engine: the current week's `weeklyLines[].optimal` (future weeks were always
+  optimal-vs-optimal). Design flag: `?pregame`.
 - **Live scoring** follows one rule on the Hub rows, the League board and the
   game dialog (`src/utils/liveScoreline.ts`). Each player follows his own game.
   Before kickoff the big number is his projection and the meta line carries the

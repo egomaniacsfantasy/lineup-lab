@@ -2443,6 +2443,121 @@
   font-weight: 700;
 }
 
+/* "If we both start our best": a hypothetical that opens under the board and
+   closes again. Quiet by default, because the board is the answer and this is a
+   question somebody chooses to ask. No green or red on the movement either:
+   this is not the market moving, it is a lineup nobody has set. */
+.matchup-page__best {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.matchup-page__best-toggle {
+  padding: 4px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.matchup-page__best-toggle:hover {
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+  color: var(--text-primary);
+}
+
+.matchup-page__best-panel {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-inset) 70%, transparent);
+  text-align: left;
+}
+
+.matchup-page__best-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.matchup-page__best-from {
+  color: var(--text-muted);
+}
+
+.matchup-page__best-to {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.matchup-page__best-arrow,
+.matchup-page__best-delta {
+  color: var(--text-muted);
+}
+
+.matchup-page__best-sides {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+@media (min-width: 720px) {
+  .matchup-page__best-sides {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.matchup-page__best-side {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.matchup-page__best-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.matchup-page__best-change {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.matchup-page__best-in {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.matchup-page__best-out {
+  color: var(--text-muted);
+}
+
+.matchup-page__best-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* Where a player's game is, in the spot his kickoff time held: the clock while
    it runs, FINAL once it ends. See GameTag in components/matchup/Scoreline.tsx.
 

@@ -212,7 +212,36 @@ export interface LeaguePricing {
     projection: number;
     opponentProjection: number;
     note?: string;
+    /**
+     * This week priced as if BOTH managers fielded their best lineup. Present
+     * only on the current week (future weeks are already optimal-vs-optimal).
+     *
+     * `deltaWinProb` is a MOVEMENT in percentage points, not a price: the
+     * engine prices both lineups off one seed so the difference is the lineup
+     * change rather than sim noise, and the caller applies it to the win
+     * probability already on screen. That way the hypothetical and the real
+     * line can never disagree about where the market is now.
+     */
+    optimal?: OptimalLine | null;
   }[];
+}
+
+/** This week with both lineups at their best. See `weeklyLines[].optimal`. */
+export interface OptimalLine {
+  deltaWinProb: number;
+  projection: number;
+  opponentProjection: number;
+  yourStarters: OptimalSlot[];
+  opponentStarters: OptimalSlot[];
+}
+
+/** One slot of an engine-built best lineup. */
+export interface OptimalSlot {
+  slot: string;
+  playerId: string | null;
+  name: string;
+  position: string | null;
+  projection: number;
 }
 
 export interface DraftWrappedReal {

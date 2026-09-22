@@ -19,7 +19,7 @@ import { OddsChart, type OddsChartPoint } from '../components/charts/OddsChart';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { tradesSupported } from '../utils/leagueCapabilities';
-import type { LeaguePricing, PricedFuture } from '../services/leagueApi';
+import type { LeaguePricing, OptimalLine, PricedFuture } from '../services/leagueApi';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
 import { useDismissedTradeSuggestions } from '../hooks/useDismissedTradeSuggestions';
@@ -35,6 +35,9 @@ import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints, impliedProbability } from '../utils/formatOdds';
 import { anyStarted, scorelineFor, teamScored, type Scoreline } from '../utils/liveScoreline';
 import { GameTag, SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
+import { BestLineups, type LineupChanges } from '../components/matchup/BestLineups';
+import { winProbabilityToMoneyline } from '../utils/matchupSides';
+import { playerShortName } from '../utils/playerNames';
 import { useNflGameStateForWeek } from '../hooks/useNflGameState';
 import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
@@ -953,6 +956,8 @@ interface PricedMover {
 interface MatchupLiveProps {
   matchup: MatchupData;
   isConnected: boolean;
+  /** This week priced as if both managers fielded their best lineup. */
+  bestLineup?: OptimalLine | null;
   /** The user's own futures row, for the season band under the hero. */
   userFuture?: PricedFuture | null;
   titles?: TitleRow[] | null;
@@ -1133,6 +1138,7 @@ function MatchupLive({
   isPriced = false,
   lineMovement = null,
   lineHistory = null,
+  bestLineup = null,
   scoringNote = null,
   unpricedStarterCount = 0,
   unpricedStarterNames = [],
@@ -1619,6 +1625,56 @@ function MatchupLive({
     .map(scorelineOf)
     .filter((line): line is Scoreline => line != null);
   const matchupStarted = isConnected && anyStarted([...yourScorelines, ...opponentScorelines]);
+
+  /* "What if we both started our best?" The engine returns a MOVEMENT in
+     percentage points, priced off one seed for both lineups, and it is applied
+     to the win probability already on the board so the two cannot disagree
+     about where the line is now. The moneyline is converted from the resulting
+     probability rather than shifted in odds-space, for the reason
+     matchupSides.ts spells out: American odds are not linear, and offsetting
+     them produces a number that is not the price of anything. */
+  const bestLineupView = useMemo(() => {
+    if (!bestLineup || !isConnected || !isPriced) return null;
+    /* The engine sends full names; every other name on this board is the
+       product's short form, and two conventions in one panel reads as two
+       different products. */
+    const nameFor = (slots: { playerId: string | null; name: string; position: string | null }[]) =>
+      new Map(
+        slots
+          .filter((slot) => slot.playerId)
+          .map((slot) => [slot.playerId as string, playerShortName(slot.name, slot.position)]),
+      );
+    const changesFrom = (
+      current: { id: string; shortName: string }[],
+      best: { playerId: string | null; name: string; position: string | null }[],
+    ): LineupChanges => {
+      const currentIds = new Set(current.map((player) => player.id));
+      const bestIds = new Set(best.map((slot) => slot.playerId).filter(Boolean) as string[]);
+      const names = nameFor(best);
+      return {
+        in: [...bestIds].filter((id) => !currentIds.has(id)).map((id) => names.get(id) ?? id),
+        out: current.filter((player) => !bestIds.has(player.id)).map((player) => player.shortName),
+      };
+    };
+    const winProbability = clamp(
+      roundTo(engine.activeLine.yours.winProbability + bestLineup.deltaWinProb),
+      0,
+      100,
+    );
+    return {
+      deltaWinProb: bestLineup.deltaWinProb,
+      winProbability,
+      moneyline: winProbabilityToMoneyline(winProbability),
+      changes: changesFrom(
+        engine.roster.map((slot) => slot.starter),
+        bestLineup.yourStarters,
+      ),
+      opponentChanges: changesFrom(
+        matchup.opponentTeam.roster.map((slot) => slot.starter),
+        bestLineup.opponentStarters,
+      ),
+    };
+  }, [bestLineup, engine.activeLine.yours.winProbability, engine.roster, isConnected, isPriced, matchup.opponentTeam.roster]);
   const yourScoredTotal = teamScored(yourScorelines, matchupStarted);
   const opponentScoredTotal = teamScored(opponentScorelines, matchupStarted);
 
@@ -2216,6 +2272,19 @@ function MatchupLive({
                   <h2 className="matchup-page__module-title">Lineup vs lineup</h2>
                   <p className="matchup-page__lineup-hint">{compareHint}</p>
                 </div>
+                {bestLineupView ? (
+                  <BestLineups
+                    bestLabel={formatDisplayedOdds(bestLineupView.moneyline, bestLineupView.winProbability)}
+                    changes={bestLineupView.changes}
+                    deltaWinProb={bestLineupView.deltaWinProb}
+                    nowLabel={formatDisplayedOdds(
+                      engine.activeLine.yours.moneyline,
+                      engine.activeLine.yours.winProbability,
+                    )}
+                    opponentChanges={bestLineupView.opponentChanges}
+                    started={matchupStarted}
+                  />
+                ) : null}
               </div>
 
               <div className="matchup-page__slot-board-grid">
@@ -3162,6 +3231,11 @@ export function MatchupPage() {
   return (
     <>
       <MatchupLive
+        bestLineup={
+          pricing?.available
+            ? pricing.weeklyLines?.find((line) => line.week === connectedMatchup?.week)?.optimal ?? null
+            : null
+        }
         movers={movers}
         titles={titleRows}
         userFuture={pricing?.available ? pricing.futures?.find((f) => f.isUser) ?? null : null}

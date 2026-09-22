@@ -42,6 +42,15 @@ const STALE_SEASON =
 const SYNCING =
   typeof window !== 'undefined' && window.location.search.includes('syncing');
 
+/* ?pregame is the Hub between Tuesday and Sunday morning: a priced week where
+   nobody has played yet. The fixture credits every player with his projection
+   as points scored, which is what makes the lineup rows show live scores, so
+   without this the pregame half of the week - the projections, the kickoff
+   times, "if we both start our best" - could not be looked at or asserted
+   against at all. */
+const PREGAME =
+  typeof window !== 'undefined' && window.location.search.includes('pregame');
+
 /* ?dynasty makes the design league answer as a dynasty league. Trades vanish
    and the shell's scope note appears, and neither of those states was
    reachable at all without a real dynasty league to connect, which is how the
@@ -354,7 +363,23 @@ function delay(ms: number) {
 }
 
 function playersPoints(ids: string[]) {
+  /* Nobody has played, so nobody has points. Not zeros: a zero is a score. */
+  if (PREGAME) return {};
   return Object.fromEntries(ids.map((id) => [id, PLAYER_MEANS[id]?.mean ?? 0]));
+}
+
+/* A best lineup in the shape the engine returns: slot-ordered rows carrying the
+   player in each slot. The fixture's is one swap off each side's set lineup, so
+   the panel has something real to show and a rendered test has something to
+   assert. */
+function bestLineupSlots(starterIds: string[]) {
+  return starterIds.map((id, index) => ({
+    slot: SLOT_ORDER[index] ?? 'FLEX',
+    playerId: id,
+    name: PLAYER_CATALOG[id]?.name ?? id,
+    position: PLAYER_CATALOG[id]?.position ?? null,
+    projection: PLAYER_MEANS[id]?.mean ?? 0,
+  }));
 }
 
 function buildTeam(team: typeof USER_TEAM) {
@@ -911,6 +936,21 @@ function buildPricing(leagueId: string, pricingMode: 'empty' | 'live'): LeaguePr
         projection: 149.8,
         opponentProjection: 143.1,
         note: 'Live line. Reprices as lineups move.',
+        /* Both lineups at their best: the user starts Barkley over McLaurin,
+           the opponent starts St. Brown over London. Positive, so this fixture
+           shows the case where the user is the one leaving points on the
+           bench. */
+        optimal: {
+          deltaWinProb: 2.4,
+          projection: 156.2,
+          opponentProjection: 147.9,
+          yourStarters: bestLineupSlots(
+            USER_TEAM.starters.map((id) => (id === 't-mclaurin' ? 's-barkley' : id)),
+          ),
+          opponentStarters: bestLineupSlots(
+            HERMES_TEAM.starters.map((id) => (id === 'd-london' ? 'a-stbrown' : id)),
+          ),
+        },
       },
       {
         week: 9,
