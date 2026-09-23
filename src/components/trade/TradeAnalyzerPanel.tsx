@@ -174,6 +174,24 @@ function SideCard({ side }: { side: TradeSideDelta }) {
   );
 }
 
+function DropsNote({ drops }: { drops: TradeAnalysis['drops'] }) {
+  const you = drops?.you ?? [];
+  if (you.length === 0) return null;
+  return (
+    <div className="trade-analyzer-panel__drops">
+      {you.map((d) => (
+        <p key={d.playerId} className="trade-analyzer-panel__drop">
+          {d.week != null && d.whenReturns ? (
+            <>Drop <strong>{d.name}</strong> when <strong>{d.whenReturns}</strong> returns (wk {d.week}). Your IR slot holds the spot open until then.</>
+          ) : (
+            <>Drop <strong>{d.name}</strong> to fit this trade.</>
+          )}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function Results({
   result,
 }: {
@@ -186,6 +204,7 @@ function Results({
         <SideCard side={result.you!} />
         <SideCard side={result.partner!} />
       </div>
+      <DropsNote drops={result.drops} />
       {league.length > 0 ? (
         <div className="trade-analyzer-panel__league">
           <p className="trade-analyzer-panel__league-heading">

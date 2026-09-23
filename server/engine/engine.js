@@ -1797,7 +1797,16 @@ function seasonSetup({ league, teams, scheduleWeeks, week, projectionMap, catalo
     const teWk = Number.isFinite(t.tradeEffectiveWeek) ? t.tradeEffectiveWeek : null;
     for (const wk of weeksNeeded) {
       const preTrade = teWk != null && wk < teWk;
-      const players = preTrade ? (t.playersBefore ?? t.players) : t.players;
+      let players = preTrade ? (t.playersBefore ?? t.players) : t.players;
+      // Deferred IR-return drop: an actually-stashed injured player freed an
+      // active slot so an uneven trade needed no drop while he sat; the player
+      // who takes his spot when he returns is removed from that week onward.
+      if (!preTrade && t.dropSchedule) {
+        players = players.filter((id) => {
+          const dw = t.dropSchedule[String(id)];
+          return !(dw != null && wk >= dw);
+        });
+      }
       const starters = preTrade ? (t.startersBefore ?? t.starters) : t.starters;
       // Current (ongoing) week: the team's ACTUAL set starters — the user controls
       // this week, so an empty slot scores 0. Every future/playoff week: the optimal
@@ -2499,6 +2508,102 @@ export function seasonTotalFrom(proj, fromWeek) {
   return any ? s : 0;
 }
 
+/**
+ * First week >= fromWeek in which a player is projected to score (weekly
+ * projection > 0). null when he never scores again through lastWeek (a
+ * season-ending IR stash -> a permanent free slot).
+ */
+function firstProjectedWeek(playerId, projectionMap, fromWeek, lastWeek) {
+  const weekly = projectionMap.get(playerId)?.weekly ?? {};
+  for (let w = fromWeek; w <= lastWeek; w += 1) {
+    const v = weekly[w] ?? weekly[String(w)];
+    if (Number(v) > 0) return w;
+  }
+  return null;
+}
+
+/**
+ * Roster-limit drops for a team, made INJURED-RESERVE aware. A player the
+ * manager has actually stashed in an ESPN/Sleeper IR slot (`team.reserve`,
+ * read from the real roster -- NOT our injury sheet) does not occupy an active
+ * roster spot for the weeks he is out, so an uneven trade can be absorbed with
+ * NO immediate drop while he sits: each freed IR slot buys back one body. The
+ * drop is DEFERRED to the week the stash RETURNS (two stashes back the same
+ * week -> two drops that week). At a return week the dropped player is the
+ * lowest marginal value over the remaining weeks among the players ACTIVE that
+ * week -- which may be the returning IR player himself if he is the weakest.
+ *
+ * Returns { finalPlayers, dropSchedule, immediateDrops, deferred, totalDrops }:
+ *   finalPlayers  post-trade roster minus the immediate (targetStart) drops;
+ *   dropSchedule  { playerId: week } for the sim to remove each deferred drop;
+ *   deferred      [{ id, week, triggerId }] for display (which return forces it).
+ */
+export function planIrAwareDrops({
+  team, afterPlayers, droppableIds, maxRoster, targetStart, lastWeek,
+  slotLabels, projectionMap, catalog, dropWeeks, replacementFor, userDropsOverride = null,
+}) {
+  const reserveSet = new Set((team.reserve ?? []).map(String));
+  // IR players the manager has stashed AND still owns after the trade.
+  const stashed = afterPlayers
+    .filter((id) => reserveSet.has(String(id)))
+    .map((id) => ({ id, returnWeek: firstProjectedWeek(id, projectionMap, targetStart, lastWeek) }));
+  // Stashes still on IR at targetStart free an active slot right now.
+  const outAtStart = stashed.filter((s) => s.returnWeek == null || s.returnWeek > targetStart).length;
+
+  const activeAtStart = afterPlayers.length - outAtStart;
+  const immediateNeed = Math.max(0, activeAtStart - maxRoster);
+
+  const droppable = new Set(droppableIds.map(String));
+  // A stash still on IR at targetStart can't be an immediate drop -- dropping him
+  // frees no active slot (he isn't in one). Only active players reduce the count.
+  const outAtStartSet = new Set(
+    stashed.filter((s) => s.returnWeek == null || s.returnWeek > targetStart).map((s) => String(s.id)),
+  );
+  const immediateDroppable = [...droppable].filter((id) => !outAtStartSet.has(id));
+  const immediateDrops = userDropsOverride && userDropsOverride.length >= immediateNeed
+    ? userDropsOverride.slice(0, immediateNeed)
+    : chooseDrops(afterPlayers, immediateDroppable, immediateNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
+  const immediateSet = new Set(immediateDrops.map(String));
+  for (const id of immediateSet) droppable.delete(id);
+  let remaining = afterPlayers.filter((id) => !immediateSet.has(String(id)));
+
+  // Each returning stash reclaims an active slot; when active exceeds the limit,
+  // drop one ACTIVE player that week (earliest returns first).
+  const dropSchedule = {};
+  const deferred = [];
+  let active = activeAtStart - immediateNeed; // == min(activeAtStart, maxRoster)
+  const returns = stashed
+    .filter((s) => s.returnWeek != null && s.returnWeek > targetStart)
+    .sort((a, b) => a.returnWeek - b.returnWeek);
+  for (const s of returns) {
+    active += 1;
+    // Players still on IR at this return week can't be dropped to solve an
+    // active-count overflow (dropping them frees no active slot).
+    const stillOut = new Set(
+      stashed.filter((x) => x.returnWeek != null && x.returnWeek > s.returnWeek).map((x) => String(x.id)),
+    );
+    while (active > maxRoster) {
+      const activeDroppable = [...droppable].filter((id) => !stillOut.has(id));
+      const weeksFromReturn = dropWeeks.filter((w) => w >= s.returnWeek);
+      const [drop] = chooseDrops(remaining, activeDroppable, 1, slotLabels, projectionMap, catalog, weeksFromReturn, replacementFor);
+      if (drop == null) break;
+      dropSchedule[String(drop)] = s.returnWeek;
+      deferred.push({ id: drop, week: s.returnWeek, triggerId: s.id });
+      remaining = remaining.filter((id) => String(id) !== String(drop));
+      droppable.delete(String(drop));
+      active -= 1;
+    }
+  }
+
+  return {
+    finalPlayers: afterPlayers.filter((id) => !immediateSet.has(String(id))),
+    dropSchedule,
+    immediateDrops,
+    deferred,
+    totalDrops: immediateDrops.length + deferred.length,
+  };
+}
+
 export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDrops = null }) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
@@ -2540,22 +2645,25 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   const userAfter = [...userTeam.players.filter((id) => !giveSet.has(String(id))), ...get];
   const partnerAfter = [...partnerTeam.players.filter((id) => !getSet.has(String(id))), ...give];
 
-  // Roster-limit drops, valued by points over replacement (user's is a
-  // suggestion they can override).
+  // Roster-limit drops, valued by points over replacement, made IR-aware: a
+  // player the manager has actually stashed on IR frees an active slot while
+  // he's out, so an uneven trade can be absorbed with no immediate drop and the
+  // drop is deferred to his return week. user's immediate drop is a suggestion.
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
-  const userNeed = Math.max(0, userAfter.length - maxRoster);
-  const partnerNeed = Math.max(0, partnerAfter.length - maxRoster);
+  const lastWeek = playoffWeekStart + rounds - 1;
   const userDroppable = userTeam.players.filter((id) => !giveSet.has(String(id)));
   const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)));
-  const finalUserDrops = userDrops && userDrops.length >= userNeed
-    ? userDrops.slice(0, userNeed)
-    : chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
-  const finalPartnerDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
-
-  const userDropSet = new Set(finalUserDrops.map(String));
-  const partnerDropSet = new Set(finalPartnerDrops.map(String));
-  const userFinal = userAfter.filter((id) => !userDropSet.has(String(id)));
-  const partnerFinal = partnerAfter.filter((id) => !partnerDropSet.has(String(id)));
+  const userPlan = planIrAwareDrops({
+    team: userTeam, afterPlayers: userAfter, droppableIds: userDroppable, maxRoster,
+    targetStart, lastWeek, slotLabels, projectionMap, catalog, dropWeeks, replacementFor,
+    userDropsOverride: userDrops,
+  });
+  const partnerPlan = planIrAwareDrops({
+    team: partnerTeam, afterPlayers: partnerAfter, droppableIds: partnerDroppable, maxRoster,
+    targetStart, lastWeek, slotLabels, projectionMap, catalog, dropWeeks, replacementFor,
+  });
+  const userFinal = userPlan.finalPlayers;
+  const partnerFinal = partnerPlan.finalPlayers;
 
   // A trade that strips your last player at a required position (e.g. your only
   // kicker) leaves an unfillable slot every week — warn rather than pretend.
@@ -2584,19 +2692,22 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   // team, the traded-in player still sits on his old team — and only weeks >= targetStart
   // use the post-trade roster. When targetStart == week (nobody has played yet) this is
   // identical to swapping immediately, so the normal case is unchanged.
-  const tradeSwap = (t, finalPlayers) => ({
+  const tradeSwap = (t, finalPlayers, dropSchedule) => ({
     ...t,
     players: finalPlayers,
     starters: optimalStarters(finalPlayers),
     playersBefore: t.players,
     startersBefore: t.starters,
     tradeEffectiveWeek: targetStart,
+    // { playerId: week } -- a deferred IR-return drop removes the player from
+    // the sim roster starting that week (see simulateSeason's per-week loop).
+    dropSchedule: dropSchedule && Object.keys(dropSchedule).length ? dropSchedule : null,
   });
   const tradedTeams = teams.map((t) =>
     t.rosterId === userTeam.rosterId
-      ? tradeSwap(t, userFinal)
+      ? tradeSwap(t, userFinal, userPlan.dropSchedule)
       : t.rosterId === partnerTeam.rosterId
-        ? tradeSwap(t, partnerFinal)
+        ? tradeSwap(t, partnerFinal, partnerPlan.dropSchedule)
         : t,
   );
   const after = simulateSeason({ ...base, teams: tradedTeams, sims: TRADE_SIMS });
@@ -2625,11 +2736,21 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   };
 
   const nameOf = (id) => ({ playerId: id, name: catalog[id]?.name ?? String(id) });
+  // Immediate drops take effect now (targetStart); deferred drops fire the week
+  // an IR stash returns and reclaims his active slot. `week` is null for an
+  // immediate drop; `whenReturns` names the returning player that forces a
+  // deferred one, so the panel can say "drop X when Y comes back (wk N)".
+  const dropList = (plan) => [
+    ...plan.immediateDrops.map((id) => ({ ...nameOf(id), week: null, whenReturns: null })),
+    ...plan.deferred.map((d) => ({
+      ...nameOf(d.id), week: d.week, whenReturns: catalog[d.triggerId]?.name ?? null,
+    })),
+  ];
   return {
     available: true,
     maxRoster,
-    dropsNeeded: { you: userNeed, partner: partnerNeed },
-    drops: { you: finalUserDrops.map(nameOf), partner: finalPartnerDrops.map(nameOf) },
+    dropsNeeded: { you: userPlan.totalDrops, partner: partnerPlan.totalDrops },
+    drops: { you: dropList(userPlan), partner: dropList(partnerPlan) },
     warnings,
     you: sideDelta(userTeam),
     partner: sideDelta(partnerTeam),

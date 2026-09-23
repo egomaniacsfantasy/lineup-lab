@@ -250,6 +250,28 @@
   text-transform: none;
 }
 
+.trade-analyzer-panel__drops {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trade-analyzer-panel__drop {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.13));
+  border-radius: 8px;
+  background: var(--bg-surface-soft, #171a1d);
+  color: var(--text-muted, #8a8f98);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.trade-analyzer-panel__drop strong {
+  color: var(--text-primary, #f4f5f2);
+  font-weight: 700;
+}
+
 .trade-analyzer-panel__card {
   border: 1px solid var(--border, rgba(255, 255, 255, 0.13));
   border-radius: 14px;

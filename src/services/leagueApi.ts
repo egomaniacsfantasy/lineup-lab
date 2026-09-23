@@ -954,7 +954,12 @@ export interface TradeAnalysis {
   reason?: string;
   maxRoster?: number;
   dropsNeeded?: { you: number; partner: number };
-  drops?: { you: { playerId: string; name: string }[]; partner: { playerId: string; name: string }[] };
+  // week: null = drop needed now (targetStart); a number = a DEFERRED drop that
+  // fires when an IR stash returns and reclaims his active slot (whenReturns names him).
+  drops?: {
+    you: { playerId: string; name: string; week?: number | null; whenReturns?: string | null }[];
+    partner: { playerId: string; name: string; week?: number | null; whenReturns?: string | null }[];
+  };
   warnings?: { you: string | null; partner: string | null };
   you?: TradeSideDelta;
   partner?: TradeSideDelta;
