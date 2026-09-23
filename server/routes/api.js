@@ -1344,7 +1344,8 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     const { userId } = req.body ?? {};
     const partnerRosterId = req.body?.partnerRosterId != null ? Number(req.body.partnerRosterId) : null;
     const position = ['QB', 'RB', 'WR', 'TE'].includes(req.body?.position) ? req.body.position : null;
-    const targetPlayerId = req.body?.targetPlayerId != null ? String(req.body.targetPlayerId) : null;
+    const givePlayerIds = Array.isArray(req.body?.givePlayerIds) ? req.body.givePlayerIds.map(String) : [];
+    const getPlayerIds = Array.isArray(req.body?.getPlayerIds) ? req.body.getPlayerIds.map(String) : [];
     const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
 
     const ctxBase = await loadLeagueContext(provider, leagueId, userId);
@@ -1379,8 +1380,10 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     const readsByRoster = req.body?.readsByRoster ?? {};
     const readsSig = Object.entries(readsByRoster).sort()
       .map(([k, v]) => `${k}.${v?.friendliness ?? ''}.${v?.relationship ?? ''}`).join('_');
-    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${targetPlayerId ?? 'noplayer'}:${version}:${overlay ? 'ov' : 'base'}:${build}:${readsSig}`;
-    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position, targetPlayerId, readsByRoster }));
+    const giveSig = [...givePlayerIds].sort().join('+') || 'nogive';
+    const getSig = [...getPlayerIds].sort().join('+') || 'noget';
+    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${giveSig}:${getSig}:${version}:${overlay ? 'ov' : 'base'}:${build}:${readsSig}`;
+    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position, givePlayerIds, getPlayerIds, readsByRoster }));
     res.json(result);
   } catch (error) {
     next(error);

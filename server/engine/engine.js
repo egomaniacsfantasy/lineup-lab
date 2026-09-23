@@ -2912,7 +2912,7 @@ function acceptanceProbability(theirDeltaTitle, friendliness = 5, relationship =
   return Math.max(3, Math.min(97, Math.round((1 / (1 + Math.exp(-z))) * 100)));
 }
 
-export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, targetPlayerId = null, readsByRoster = {} } = {}) {
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, givePlayerIds = [], getPlayerIds = [], readsByRoster = {} } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -2924,21 +2924,22 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return { available: false, reason: 'team_not_found' };
 
-  // Optional specific-player target. Every scored trade must include this player
-  // on the matching side: ACQUIRE (he's on an opponent -> he must be in `get`, and
-  // we search only HIS team) or GIVE-AWAY (he's yours -> he must be in `give`).
-  // This collapses the search enough to sim far more survivors at full fidelity.
-  const targetId = targetPlayerId != null ? String(targetPlayerId) : null;
-  const targetOnUser = targetId != null && userTeam.players.map(String).includes(targetId);
-  const targetOwner = targetId != null && !targetOnUser
-    ? teams.find((t) => !t.isUser && t.players.map(String).includes(targetId)) ?? null
+  // Optional must-include targets on BOTH sides at once: `getMust` = opponent
+  // players every trade must acquire, `giveMust` = your players every trade must
+  // send. Multiple per side. Each is a hard candidate constraint, so the finder
+  // only sims trades that contain the exact core you pinned (plus balancing
+  // throw-ins). getMust come from ONE opponent's roster (the chosen manager), so
+  // they pin the search to his team.
+  const giveMust = (givePlayerIds ?? []).map(String);
+  const getMust = (getPlayerIds ?? []).map(String);
+  const getOwner = getMust.length
+    ? teams.find((t) => !t.isUser && getMust.every((id) => t.players.map(String).includes(id))) ?? null
     : null;
-  // Acquiring an opponent's player pins the search to HIS team; giving a player of
-  // yours respects an explicitly chosen partner (else every opponent).
-  const scopedPartnerId = targetOwner != null ? targetOwner.rosterId : partnerRosterId;
+  const scopedPartnerId = getOwner != null ? getOwner.rosterId : partnerRosterId;
+  const hasTarget = giveMust.length > 0 || getMust.length > 0;
 
-  // Manager-first: when a partner is chosen (or implied by an acquire target),
-  // search ONLY that manager (a wider, deeper net). Otherwise every opponent.
+  // Manager-first: when a partner is chosen (or implied by a get-target), search
+  // ONLY that manager (a wider, deeper net). Otherwise every opponent.
   const opponents = scopedPartnerId != null
     ? teams.filter((t) => !t.isUser && t.rosterId === scopedPartnerId)
     : teams.filter((t) => !t.isUser);
@@ -3099,12 +3100,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
           // below still sims the most balanced first, so you always get that manager's
           // 5 fairest trades, never blank.
           if (scopedPartnerId == null && (r < 0.5 || r > 2.0)) continue;
-          // Specific-player target: the trade must include him on the right side.
-          if (targetId) {
-            if (targetOnUser) {
-              if (!give.map(String).includes(targetId)) continue;
-            } else if (!get.map(String).includes(targetId)) continue;
-          }
+          // Must-include targets: the trade must contain every pinned player on
+          // its side (multiple allowed on each side).
+          if (giveMust.length && !giveMust.every((id) => give.map(String).includes(id))) continue;
+          if (getMust.length && !getMust.every((id) => get.map(String).includes(id))) continue;
           if (targetPos) {
             const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
             const afterPos = positionStarterMean(userAfter, targetPos, slotLabels, projectionMap, catalog);
@@ -3124,7 +3123,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const dedupeKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
   // A specific-player target is a tiny search -> keep more finalists; a pinned
   // manager 8; the all-managers sweep 5.
-  const K_PER_MGR = targetId != null && scopedPartnerId != null ? 14 : scopedPartnerId != null ? 8 : 5;
+  const K_PER_MGR = hasTarget && scopedPartnerId != null ? 14 : scopedPartnerId != null ? 8 : 5;
   const byMgr = new Map();
   const seen = new Set();
   for (const c of scored) {

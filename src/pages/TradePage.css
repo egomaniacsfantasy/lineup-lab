@@ -288,21 +288,9 @@
   text-transform: uppercase;
 }
 
-.trade-cc__target-selects {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.trade-cc__target-select {
-  display: inline-flex;
-  align-items: center;
+.trade-cc__target-group {
+  display: grid;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.13));
-  border-radius: 8px;
-  padding: 4px 8px;
 }
 
 .trade-cc__target-select-tag {
@@ -314,17 +302,51 @@
   text-transform: uppercase;
 }
 
-.trade-cc__target-dropdown {
-  background: transparent;
-  border: none;
-  color: var(--text-strong, #f4f5f2);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  max-width: 190px;
+.trade-cc__target-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.trade-cc__target-dropdown option {
-  color: #111;
+.trade-cc__target-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.13));
+  border-radius: 999px;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 5px 11px;
+}
+
+.trade-cc__target-chip--active {
+  background: var(--accent, #3b82f6);
+  border-color: var(--accent, #3b82f6);
+  color: #fff;
+  font-weight: 800;
+}
+
+.trade-cc__target-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.trade-cc__target-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.trade-cc__target-note {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.trade-cc__target-note strong {
+  color: var(--text-strong, #f4f5f2);
 }
 
 .trade-cc__target-clear {
@@ -336,17 +358,6 @@
   font-family: var(--font-ui);
   font-size: 12px;
   padding: 5px 10px;
-}
-
-.trade-cc__target-note {
-  margin: 6px 0 0;
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 12px;
-}
-
-.trade-cc__target-note strong {
-  color: var(--text-strong, #f4f5f2);
 }
 
 .trade-cc__filter-chips {

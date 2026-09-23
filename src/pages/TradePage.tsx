@@ -249,9 +249,10 @@ function TradeDealsView() {
   // the user taps a manager (its own deep scan) or builds a trade.
 
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
-  // Optional specific-player target for the finder: one of the selected manager's
-  // players (get him) or one of yours (find his best return with that manager).
-  const [marketTargetPlayerId, setMarketTargetPlayerId] = useState<string | null>(null);
+  // Optional must-include targets for the finder: any of the selected manager's
+  // players to GET and any of yours to SEND (multiple per side, both at once).
+  const [marketGetIds, setMarketGetIds] = useState<string[]>([]);
+  const [marketGiveIds, setMarketGiveIds] = useState<string[]>([]);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
   const [managerSuggestionsError, setManagerSuggestionsError] = useState<string | null>(null);
   const [managerSuggestionsUpdatedAt, setManagerSuggestionsUpdatedAt] = useState<number | null>(null);
@@ -338,11 +339,15 @@ function TradeDealsView() {
         .sort((a, b) => a.name.localeCompare(b.name));
     return { get: opts(selectedPartner?.players), give: opts(userTeam?.players) };
   }, [bootstrap, selectedPartner, userTeam]);
-  const targetIsGet = marketTargetPlayerId != null && targetOptions.get.some((p) => p.id === marketTargetPlayerId);
-  const targetIsGive = marketTargetPlayerId != null && targetOptions.give.some((p) => p.id === marketTargetPlayerId);
-  const targetPlayerName = marketTargetPlayerId != null
-    ? bootstrap?.players[marketTargetPlayerId]?.name ?? null
-    : null;
+  const MAX_TARGETS_PER_SIDE = 3; // matches the finder's 1-for-1 .. 3-for-2 sizes
+  const toggleGet = (id: string) =>
+    setMarketGetIds((cur) =>
+      cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= MAX_TARGETS_PER_SIDE ? cur : [...cur, id]);
+  const toggleGive = (id: string) =>
+    setMarketGiveIds((cur) =>
+      cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= MAX_TARGETS_PER_SIDE ? cur : [...cur, id]);
+  const nameOfId = (id: string) => bootstrap?.players[id]?.name ?? id;
+  const hasTargets = marketGetIds.length > 0 || marketGiveIds.length > 0;
   const visibleManagerSuggestions = showAllMarketCards
     ? managerSuggestionEntries
     : managerSuggestionEntries.slice(0, MAX_VISIBLE_MARKET_CARDS);
@@ -370,7 +375,8 @@ function TradeDealsView() {
     void fetchTradeSuggestions(stored.leagueId, {
       userId: stored.userId,
       partnerRosterId: marketManagerFilter,
-      targetPlayerId: marketTargetPlayerId,
+      givePlayerIds: marketGiveIds,
+      getPlayerIds: marketGetIds,
     })
       .then((response) => {
         if (cancelled) return;
@@ -387,7 +393,7 @@ function TradeDealsView() {
     return () => {
       cancelled = true;
     };
-  }, [marketManagerFilter, marketTargetPlayerId, stored]);
+  }, [marketManagerFilter, marketGiveIds, marketGetIds, stored]);
 
   // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
   // pre-selects that partner in the builder. We intentionally do NOT pre-fill
@@ -819,7 +825,8 @@ function TradeDealsView() {
   const applyMarketManagerFilter = (rosterId: number | null) => {
     if (isPricing || counterLoading) return;
     setMarketManagerFilter(rosterId);
-    setMarketTargetPlayerId(null); // a fresh manager clears any player target
+    setMarketGetIds([]); // a fresh manager clears any player targets
+    setMarketGiveIds([]);
     if (rosterId != null) choosePartner(rosterId);
   };
 
@@ -1043,53 +1050,68 @@ function TradeDealsView() {
 
           {showingManagerMarket ? (
             <div className="trade-cc__filter-row trade-cc__target-row">
-              <span className="trade-cc__filter-label">Target a player</span>
-              <div className="trade-cc__target-selects">
-                <label className="trade-cc__target-select">
-                  <span className="trade-cc__target-select-tag">Get</span>
-                  <select
-                    className="trade-cc__target-dropdown"
-                    value={targetIsGet ? marketTargetPlayerId ?? '' : ''}
-                    onChange={(event) => setMarketTargetPlayerId(event.target.value || null)}
-                  >
-                    <option value="">Anyone</option>
-                    {targetOptions.get.map((player) => (
-                      <option key={player.id} value={player.id}>
-                        {player.name} ({player.position})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="trade-cc__target-select">
-                  <span className="trade-cc__target-select-tag">Send</span>
-                  <select
-                    className="trade-cc__target-dropdown"
-                    value={targetIsGive ? marketTargetPlayerId ?? '' : ''}
-                    onChange={(event) => setMarketTargetPlayerId(event.target.value || null)}
-                  >
-                    <option value="">Anyone</option>
-                    {targetOptions.give.map((player) => (
-                      <option key={player.id} value={player.id}>
-                        {player.name} ({player.position})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {marketTargetPlayerId ? (
+              <span className="trade-cc__filter-label">Target players (optional)</span>
+              <div className="trade-cc__target-group">
+                <span className="trade-cc__target-select-tag">
+                  Get from {selectedPartner?.teamName ?? 'them'}
+                </span>
+                <div className="trade-cc__target-chips">
+                  {targetOptions.get.map((player) => {
+                    const on = marketGetIds.includes(player.id);
+                    return (
+                      <button
+                        aria-pressed={on}
+                        className={['trade-cc__target-chip', on ? 'trade-cc__target-chip--active' : ''].filter(Boolean).join(' ')}
+                        disabled={!on && marketGetIds.length >= MAX_TARGETS_PER_SIDE}
+                        key={`get-${player.id}`}
+                        onClick={() => toggleGet(player.id)}
+                        type="button"
+                      >
+                        {player.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="trade-cc__target-group">
+                <span className="trade-cc__target-select-tag">Send</span>
+                <div className="trade-cc__target-chips">
+                  {targetOptions.give.map((player) => {
+                    const on = marketGiveIds.includes(player.id);
+                    return (
+                      <button
+                        aria-pressed={on}
+                        className={['trade-cc__target-chip', on ? 'trade-cc__target-chip--active' : ''].filter(Boolean).join(' ')}
+                        disabled={!on && marketGiveIds.length >= MAX_TARGETS_PER_SIDE}
+                        key={`give-${player.id}`}
+                        onClick={() => toggleGive(player.id)}
+                        type="button"
+                      >
+                        {player.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {hasTargets ? (
+                <div className="trade-cc__target-summary">
+                  <p className="trade-cc__target-note">
+                    Building trades that
+                    {marketGiveIds.length ? <> send <strong>{marketGiveIds.map(nameOfId).join(', ')}</strong></> : null}
+                    {marketGiveIds.length && marketGetIds.length ? ' and' : ''}
+                    {marketGetIds.length ? <> get <strong>{marketGetIds.map(nameOfId).join(', ')}</strong></> : null}.
+                  </p>
                   <button
                     className="trade-cc__target-clear"
-                    onClick={() => setMarketTargetPlayerId(null)}
+                    onClick={() => {
+                      setMarketGetIds([]);
+                      setMarketGiveIds([]);
+                    }}
                     type="button"
                   >
                     Clear
                   </button>
-                ) : null}
-              </div>
-              {targetPlayerName ? (
-                <p className="trade-cc__target-note">
-                  Building trades that {targetIsGive ? 'send' : 'get'}{' '}
-                  <strong>{targetPlayerName}</strong>.
-                </p>
+                </div>
               ) : null}
             </div>
           ) : null}
