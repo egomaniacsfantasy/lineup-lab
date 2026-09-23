@@ -2912,7 +2912,7 @@ function acceptanceProbability(theirDeltaTitle, friendliness = 5, relationship =
   return Math.max(3, Math.min(97, Math.round((1 / (1 + Math.exp(-z))) * 100)));
 }
 
-export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, readsByRoster = {} } = {}) {
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, targetPlayerId = null, readsByRoster = {} } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -2923,10 +2923,24 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
   const userTeam = teams.find((t) => t.isUser);
   if (!userTeam) return { available: false, reason: 'team_not_found' };
-  // Manager-first: when a partner is chosen, search ONLY that manager (a wider,
-  // deeper net for the one team). Otherwise fall back to every opponent.
-  const opponents = partnerRosterId != null
-    ? teams.filter((t) => !t.isUser && t.rosterId === partnerRosterId)
+
+  // Optional specific-player target. Every scored trade must include this player
+  // on the matching side: ACQUIRE (he's on an opponent -> he must be in `get`, and
+  // we search only HIS team) or GIVE-AWAY (he's yours -> he must be in `give`).
+  // This collapses the search enough to sim far more survivors at full fidelity.
+  const targetId = targetPlayerId != null ? String(targetPlayerId) : null;
+  const targetOnUser = targetId != null && userTeam.players.map(String).includes(targetId);
+  const targetOwner = targetId != null && !targetOnUser
+    ? teams.find((t) => !t.isUser && t.players.map(String).includes(targetId)) ?? null
+    : null;
+  // Acquiring an opponent's player pins the search to HIS team; giving a player of
+  // yours respects an explicitly chosen partner (else every opponent).
+  const scopedPartnerId = targetOwner != null ? targetOwner.rosterId : partnerRosterId;
+
+  // Manager-first: when a partner is chosen (or implied by an acquire target),
+  // search ONLY that manager (a wider, deeper net). Otherwise every opponent.
+  const opponents = scopedPartnerId != null
+    ? teams.filter((t) => !t.isUser && t.rosterId === scopedPartnerId)
     : teams.filter((t) => !t.isUser);
   if (opponents.length === 0) return { available: true, suggestions: [], debug: { generated: 0, simmed: 0, positive: 0, ms: 0 } };
 
@@ -3084,7 +3098,13 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
           // to build 100k combos. A CLICKED manager keeps EVERY combo — the gap-sort
           // below still sims the most balanced first, so you always get that manager's
           // 5 fairest trades, never blank.
-          if (partnerRosterId == null && (r < 0.5 || r > 2.0)) continue;
+          if (scopedPartnerId == null && (r < 0.5 || r > 2.0)) continue;
+          // Specific-player target: the trade must include him on the right side.
+          if (targetId) {
+            if (targetOnUser) {
+              if (!give.map(String).includes(targetId)) continue;
+            } else if (!get.map(String).includes(targetId)) continue;
+          }
           if (targetPos) {
             const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
             const afterPos = positionStarterMean(userAfter, targetPos, slotLabels, projectionMap, catalog);
@@ -3102,7 +3122,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // the old design SCANNED hundreds of trades with full sims and timed out after ~20,
   // leaving most managers empty. Now we sim ~K per manager and always cover everyone.
   const dedupeKey = (c) => `${c.partner.rosterId}|${[...c.give].sort()}|${[...c.get].sort()}`;
-  const K_PER_MGR = partnerRosterId != null ? 8 : 5;
+  // A specific-player target is a tiny search -> keep more finalists; a pinned
+  // manager 8; the all-managers sweep 5.
+  const K_PER_MGR = targetId != null && scopedPartnerId != null ? 14 : scopedPartnerId != null ? 8 : 5;
   const byMgr = new Map();
   const seen = new Set();
   for (const c of scored) {
@@ -3128,7 +3150,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // A single clicked manager is only ~K trades, so sim it at the FULL analyzer count —
   // its numbers then MATCH the Build-a-Trade analyzer exactly. The all-managers sweep
   // stays a light, fast scan (hence approximate, clearly a quick read).
-  const FINDER_SIMS = partnerRosterId != null ? TRADE_SIMS : 600;
+  const FINDER_SIMS = scopedPartnerId != null ? TRADE_SIMS : 600;
   const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS });
   const suggestions = [];
   let re = 0;

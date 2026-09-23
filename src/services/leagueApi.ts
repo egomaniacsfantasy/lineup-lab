@@ -1039,6 +1039,9 @@ export function fetchTradeSuggestions(
     userId: string;
     partnerRosterId?: number | null;
     position?: 'QB' | 'RB' | 'WR' | 'TE' | null;
+    // A specific player to build trades around: an opponent's (acquire him) or
+    // one of yours (find his best return). Narrows the search so it can sim deeper.
+    targetPlayerId?: string | null;
     readsByRoster?: Record<number, { friendliness: number; relationship: number }>;
   },
 ): Promise<TradeSuggestions> {

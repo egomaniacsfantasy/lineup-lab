@@ -249,6 +249,9 @@ function TradeDealsView() {
   // the user taps a manager (its own deep scan) or builds a trade.
 
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
+  // Optional specific-player target for the finder: one of the selected manager's
+  // players (get him) or one of yours (find his best return with that manager).
+  const [marketTargetPlayerId, setMarketTargetPlayerId] = useState<string | null>(null);
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
   const [managerSuggestionsError, setManagerSuggestionsError] = useState<string | null>(null);
   const [managerSuggestionsUpdatedAt, setManagerSuggestionsUpdatedAt] = useState<number | null>(null);
@@ -322,6 +325,24 @@ function TradeDealsView() {
     stored,
   ]);
   const showingManagerMarket = marketManagerFilter != null;
+  // Tradeable players on each side, for the "target a player" selectors.
+  const targetOptions = useMemo(() => {
+    const opts = (ids: string[] | undefined) =>
+      (ids ?? [])
+        .map((id) => ({
+          id,
+          name: bootstrap?.players[id]?.name ?? id,
+          position: bootstrap?.players[id]?.position ?? '',
+        }))
+        .filter((p) => ['QB', 'RB', 'WR', 'TE'].includes(p.position))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    return { get: opts(selectedPartner?.players), give: opts(userTeam?.players) };
+  }, [bootstrap, selectedPartner, userTeam]);
+  const targetIsGet = marketTargetPlayerId != null && targetOptions.get.some((p) => p.id === marketTargetPlayerId);
+  const targetIsGive = marketTargetPlayerId != null && targetOptions.give.some((p) => p.id === marketTargetPlayerId);
+  const targetPlayerName = marketTargetPlayerId != null
+    ? bootstrap?.players[marketTargetPlayerId]?.name ?? null
+    : null;
   const visibleManagerSuggestions = showAllMarketCards
     ? managerSuggestionEntries
     : managerSuggestionEntries.slice(0, MAX_VISIBLE_MARKET_CARDS);
@@ -349,6 +370,7 @@ function TradeDealsView() {
     void fetchTradeSuggestions(stored.leagueId, {
       userId: stored.userId,
       partnerRosterId: marketManagerFilter,
+      targetPlayerId: marketTargetPlayerId,
     })
       .then((response) => {
         if (cancelled) return;
@@ -365,7 +387,7 @@ function TradeDealsView() {
     return () => {
       cancelled = true;
     };
-  }, [marketManagerFilter, stored]);
+  }, [marketManagerFilter, marketTargetPlayerId, stored]);
 
   // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
   // pre-selects that partner in the builder. We intentionally do NOT pre-fill
@@ -797,6 +819,7 @@ function TradeDealsView() {
   const applyMarketManagerFilter = (rosterId: number | null) => {
     if (isPricing || counterLoading) return;
     setMarketManagerFilter(rosterId);
+    setMarketTargetPlayerId(null); // a fresh manager clears any player target
     if (rosterId != null) choosePartner(rosterId);
   };
 
@@ -1017,6 +1040,59 @@ function TradeDealsView() {
               ))}
             </div>
           </div>
+
+          {showingManagerMarket ? (
+            <div className="trade-cc__filter-row trade-cc__target-row">
+              <span className="trade-cc__filter-label">Target a player</span>
+              <div className="trade-cc__target-selects">
+                <label className="trade-cc__target-select">
+                  <span className="trade-cc__target-select-tag">Get</span>
+                  <select
+                    className="trade-cc__target-dropdown"
+                    value={targetIsGet ? marketTargetPlayerId ?? '' : ''}
+                    onChange={(event) => setMarketTargetPlayerId(event.target.value || null)}
+                  >
+                    <option value="">Anyone</option>
+                    {targetOptions.get.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {player.name} ({player.position})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="trade-cc__target-select">
+                  <span className="trade-cc__target-select-tag">Send</span>
+                  <select
+                    className="trade-cc__target-dropdown"
+                    value={targetIsGive ? marketTargetPlayerId ?? '' : ''}
+                    onChange={(event) => setMarketTargetPlayerId(event.target.value || null)}
+                  >
+                    <option value="">Anyone</option>
+                    {targetOptions.give.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {player.name} ({player.position})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {marketTargetPlayerId ? (
+                  <button
+                    className="trade-cc__target-clear"
+                    onClick={() => setMarketTargetPlayerId(null)}
+                    type="button"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+              {targetPlayerName ? (
+                <p className="trade-cc__target-note">
+                  Building trades that {targetIsGive ? 'send' : 'get'}{' '}
+                  <strong>{targetPlayerName}</strong>.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
 
