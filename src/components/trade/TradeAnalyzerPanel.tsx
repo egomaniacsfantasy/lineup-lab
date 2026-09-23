@@ -189,7 +189,7 @@ function Results({
       {league.length > 0 ? (
         <div className="trade-analyzer-panel__league">
           <p className="trade-analyzer-panel__league-heading">
-            Rest of the league <span className="trade-analyzer-panel__league-sub">— how this deal moves everyone else</span>
+            Rest of the league <span className="trade-analyzer-panel__league-sub">(how this deal moves everyone else)</span>
           </p>
           <div className="trade-analyzer-panel__cards">
             {league.map((side) => (
