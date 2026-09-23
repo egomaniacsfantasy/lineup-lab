@@ -6,7 +6,8 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
-import { saveEspnCreds } from '../providers/espnCredStore.js';
+import { saveEspnCreds, getEspnCreds } from '../providers/espnCredStore.js';
+import { getAutopilot, setAutopilot, listEnabledAutopilot } from '../engine/autopilotStore.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import {
@@ -1271,65 +1272,106 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
  * applied move is live -- the client always previews and asks first, and this
  * only ever fires on an explicit user confirmation. ESPN-only.
  */
+const LINEUP_SLOT_UI = { 0: 'QB', 2: 'RB', 4: 'WR', 6: 'TE', 16: 'D/ST', 17: 'K', 23: 'FLEX', 3: 'RB/WR', 5: 'W/R/T', 7: 'SUPERFLEX', 20: 'Bench' };
+
+/**
+ * Compute the optimal-lineup moves for the user's team and, when confirm is
+ * true, apply them via the provider. Shared by the /set-lineup endpoint and the
+ * autopilot sweep. Read-first: a write only happens on confirm AND when the
+ * lineup is actually sub-optimal. Returns a plain result; throws provider
+ * errors (with .status) for the caller to map.
+ */
+async function setLineupFor(provider, leagueId, userId, confirm) {
+  if (typeof provider.setLineup !== 'function' || typeof provider.getTeamLineup !== 'function') {
+    return { available: false, reason: 'unsupported_provider' };
+  }
+  const ctxBase = await loadLeagueContext(provider, leagueId, userId);
+  if (!ctxBase) return { available: false, reason: 'league_not_found' };
+  const userTeam = ctxBase.teams.find((t) => t.isUser);
+  if (!userTeam) return { available: false, reason: 'team_not_found' };
+
+  let liveProjections;
+  try {
+    const adjusted = await getModelProjections(scoringSuffix(ctxBase.league?.scoringFamily));
+    if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+  } catch (err) {
+    console.error('[set-lineup] projections failed; using snapshot', err);
+  }
+  const active = liveProjections ?? getActiveProjections();
+  const projectionMap = new Map((active?.projections ?? []).map((p) => [p.playerId, p]));
+  const catalog = ctxBase.players;
+  const week = ctxBase.week;
+  const slotLabels = (ctxBase.league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+
+  const rosterSlots = await provider.getTeamLineup(leagueId, userTeam.rosterId);
+  if (!rosterSlots) return { available: false, reason: 'roster_not_found' };
+  const optimal = optimalAssign(userTeam.players, slotLabels, projectionMap, catalog, week);
+
+  // Never move a player whose NFL game has already kicked off -- ESPN rejects it
+  // and it would fail the whole transaction.
+  const locked = getLockedNflTeams();
+  const lockedIds = new Set(
+    rosterSlots
+      .filter((rs) => locked.has(String(catalog[rs.id]?.team ?? '').toUpperCase()))
+      .map((rs) => String(rs.id)),
+  );
+  const { moves, readable } = computeLineupMoves(rosterSlots, optimal, lockedIds);
+  const summary = readable.map((m) => ({
+    name: m.name,
+    from: LINEUP_SLOT_UI[m.from] ?? `slot ${m.from}`,
+    to: LINEUP_SLOT_UI[m.to] ?? `slot ${m.to}`,
+    benched: m.benched,
+  }));
+
+  if (!confirm) return { available: true, applied: false, moves: summary, count: moves.length };
+  if (moves.length === 0) return { available: true, applied: false, reason: 'already_optimal', moves: [], count: 0 };
+  await provider.setLineup(leagueId, userTeam.rosterId, week, moves);
+  return { available: true, applied: true, moves: summary, count: moves.length };
+}
+
+/**
+ * Autopilot sweep: for every league that opted in, build an ESPN provider from
+ * the STORED cookies and apply the optimal lineup. Read-first, so a write only
+ * fires when the lineup is actually sub-optimal (and never for a locked player).
+ * Records each result for the audit; stale cookies (401) disable the opt-in and
+ * flag for re-link. Scheduled hourly from index.js.
+ */
+export async function runAutopilotSweep() {
+  const entries = listEnabledAutopilot();
+  for (const entry of entries) {
+    try {
+      const provider = createEspnProvider({ season: seasonParam(entry.season) });
+      const result = await setLineupFor(provider, entry.leagueId, entry.userId, true);
+      setAutopilot(entry.leagueId, {
+        lastRun: Date.now(),
+        lastResult: {
+          at: Date.now(),
+          applied: Boolean(result.applied),
+          count: result.count ?? 0,
+          moves: result.moves ?? [],
+          reason: result.reason ?? (result.applied ? null : 'no_change'),
+        },
+      });
+      if (result.applied) console.log(`[autopilot] ${entry.leagueId}: set ${result.count} move(s)`);
+    } catch (err) {
+      const stale = err?.status === 401;
+      setAutopilot(entry.leagueId, {
+        ...(stale ? { enabled: false } : {}),
+        lastRun: Date.now(),
+        lastResult: { at: Date.now(), applied: false, reason: stale ? 'creds_stale_relink' : (err?.message ?? 'error') },
+      });
+      console.error(`[autopilot] ${entry.leagueId} failed: ${err?.message}`);
+    }
+  }
+}
+
 apiRouter.post('/league/:leagueId/set-lineup', async (req, res, next) => {
   try {
     const provider = getProvider(req);
     const { leagueId } = req.params;
     const { userId, confirm = false } = req.body ?? {};
-    if (typeof provider.setLineup !== 'function' || typeof provider.getTeamLineup !== 'function') {
-      res.status(400).json({ available: false, reason: 'unsupported_provider' });
-      return;
-    }
-    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
-    if (!ctxBase) throw new Error('league_not_found');
-    const userTeam = ctxBase.teams.find((t) => t.isUser);
-    if (!userTeam) { res.status(400).json({ available: false, reason: 'team_not_found' }); return; }
-
-    let liveProjections;
-    try {
-      const adjusted = await getModelProjections(scoringSuffix(ctxBase.league?.scoringFamily));
-      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-    } catch (err) {
-      console.error('[set-lineup] projections failed; using snapshot', err);
-    }
-    const active = liveProjections ?? getActiveProjections();
-    const projectionMap = new Map((active?.projections ?? []).map((p) => [p.playerId, p]));
-    const catalog = ctxBase.players;
-    const week = ctxBase.week;
-    const slotLabels = (ctxBase.league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
-
-    const rosterSlots = await provider.getTeamLineup(leagueId, userTeam.rosterId);
-    if (!rosterSlots) { res.status(400).json({ available: false, reason: 'roster_not_found' }); return; }
-    const optimal = optimalAssign(userTeam.players, slotLabels, projectionMap, catalog, week);
-
-    // Never move a player whose NFL game has already kicked off -- ESPN rejects it
-    // and it would fail the whole transaction.
-    const locked = getLockedNflTeams();
-    const lockedIds = new Set(
-      rosterSlots
-        .filter((rs) => locked.has(String(catalog[rs.id]?.team ?? '').toUpperCase()))
-        .map((rs) => String(rs.id)),
-    );
-    const { moves, readable } = computeLineupMoves(rosterSlots, optimal, lockedIds);
-
-    const SLOT_UI = { 0: 'QB', 2: 'RB', 4: 'WR', 6: 'TE', 16: 'D/ST', 17: 'K', 23: 'FLEX', 3: 'RB/WR', 5: 'W/R/T', 7: 'SUPERFLEX', 20: 'Bench' };
-    const summary = readable.map((m) => ({
-      name: m.name,
-      from: SLOT_UI[m.from] ?? `slot ${m.from}`,
-      to: SLOT_UI[m.to] ?? `slot ${m.to}`,
-      benched: m.benched,
-    }));
-
-    if (!confirm) {
-      res.json({ available: true, applied: false, moves: summary, count: moves.length });
-      return;
-    }
-    if (moves.length === 0) {
-      res.json({ available: true, applied: false, reason: 'already_optimal', moves: [] });
-      return;
-    }
-    await provider.setLineup(leagueId, userTeam.rosterId, week, moves);
-    res.json({ available: true, applied: true, moves: summary, count: moves.length });
+    const result = await setLineupFor(provider, leagueId, userId, confirm);
+    res.status(result.available ? 200 : 400).json(result);
   } catch (error) {
     if (error?.status) {
       res.status(error.status === 401 ? 401 : 502)
@@ -1338,6 +1380,25 @@ apiRouter.post('/league/:leagueId/set-lineup', async (req, res, next) => {
     }
     next(error);
   }
+});
+
+/** Autopilot opt-in: read the current state (enabled + last sweep result). */
+apiRouter.get('/league/:leagueId/autopilot', (req, res) => {
+  const entry = getAutopilot(req.params.leagueId);
+  res.json({ enabled: Boolean(entry?.enabled), lastRun: entry?.lastRun ?? null, lastResult: entry?.lastResult ?? null });
+});
+
+/** Autopilot opt-in: give (or revoke) reign to auto-set the optimal lineup. ESPN
+ *  only, and only when we hold the league's cookies to act with. */
+apiRouter.post('/league/:leagueId/autopilot', (req, res) => {
+  const { leagueId } = req.params;
+  const { userId, enabled } = req.body ?? {};
+  if (enabled && !getEspnCreds(leagueId)) {
+    res.status(400).json({ ok: false, reason: 'no_espn_creds' });
+    return;
+  }
+  const entry = setAutopilot(leagueId, { userId: userId ?? null, enabled: Boolean(enabled), season: seasonParam(undefined) });
+  res.json({ enabled: Boolean(entry.enabled) });
 });
 
 /** Trade analyzer: re-simulate the season with post-trade rosters, both sides. */

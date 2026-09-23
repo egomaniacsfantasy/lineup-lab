@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { setEspnLineup, type SetLineupMove } from '../../services/leagueApi';
+import {
+  setEspnLineup,
+  getAutopilotState,
+  setAutopilotState,
+  type SetLineupMove,
+  type AutopilotState,
+} from '../../services/leagueApi';
 import './SetLineupButton.css';
 
 type Phase = 'idle' | 'loading' | 'preview' | 'applying' | 'done' | 'error';
@@ -14,6 +20,38 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
   const [phase, setPhase] = useState<Phase>('idle');
   const [moves, setMoves] = useState<SetLineupMove[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [autoEnabled, setAutoEnabled] = useState<boolean | null>(null);
+  const [autoLast, setAutoLast] = useState<AutopilotState['lastResult']>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAutopilotState(leagueId)
+      .then((state) => {
+        if (cancelled) return;
+        setAutoEnabled(state.enabled);
+        setAutoLast(state.lastResult ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAutoEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueId]);
+
+  const toggleAutopilot = async () => {
+    if (autoBusy || autoEnabled === null) return;
+    setAutoBusy(true);
+    try {
+      const res = await setAutopilotState(leagueId, { userId, enabled: !autoEnabled });
+      setAutoEnabled(res.enabled);
+    } catch {
+      /* leave the toggle where it was */
+    } finally {
+      setAutoBusy(false);
+    }
+  };
 
   const preview = async () => {
     setPhase('loading');
@@ -93,6 +131,22 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
             Done
           </button>
         </div>
+      ) : null}
+
+      {autoEnabled !== null ? (
+        <label className="set-lineup__auto">
+          <input checked={autoEnabled} disabled={autoBusy} onChange={toggleAutopilot} type="checkbox" />
+          <span className="set-lineup__auto-copy">
+            <span className="set-lineup__auto-title">Autopilot: keep my lineup optimal</span>
+            <span className="set-lineup__auto-note">
+              {autoEnabled
+                ? autoLast?.applied
+                  ? `On. Last auto-set ${autoLast.count ?? 0} change${autoLast.count === 1 ? '' : 's'}.`
+                  : 'On. We re-check hourly and set your best lineup before games lock.'
+                : 'Off. Let Odds Gods set your best lineup for you, automatically.'}
+            </span>
+          </span>
+        </label>
       ) : null}
     </div>
   );

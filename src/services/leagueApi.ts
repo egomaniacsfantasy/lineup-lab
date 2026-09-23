@@ -1081,6 +1081,31 @@ export function setEspnLineup(
   });
 }
 
+export interface AutopilotState {
+  enabled: boolean;
+  lastRun?: number | null;
+  lastResult?: {
+    at: number;
+    applied: boolean;
+    count?: number;
+    moves?: SetLineupMove[];
+    reason?: string | null;
+  } | null;
+}
+export function getAutopilotState(leagueId: string): Promise<AutopilotState> {
+  return get<AutopilotState>(`/api/league/${leagueId}/autopilot`, { method: 'GET' });
+}
+export function setAutopilotState(
+  leagueId: string,
+  body: { userId: string; enabled: boolean },
+): Promise<{ enabled: boolean; reason?: string }> {
+  return get<{ enabled: boolean; reason?: string }>(`/api/league/${leagueId}/autopilot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export function fetchTradeRationale(
   leagueId: string,
   body: {

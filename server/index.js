@@ -5,7 +5,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { apiRouter } from './routes/api.js';
+import { apiRouter, runAutopilotSweep } from './routes/api.js';
 import { corsMiddleware } from './cors.js';
 import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
@@ -152,3 +152,10 @@ setInterval(() => {
     `[metrics] upstream calls total=${callLog.total} lastMinute=${callsInLastMinute()} gameWindow=${isGameWindow()}`,
   );
 }, 5 * 60_000).unref();
+
+// Lineup autopilot: for every league that opted in, keep the ESPN lineup optimal.
+// Read-first (a write only happens when the lineup is actually sub-optimal), so an
+// hourly sweep tracks projection changes without churning already-optimal lineups.
+// First run is delayed so the process warms up (projections + game status) first.
+setTimeout(() => { void runAutopilotSweep(); }, 3 * 60_000).unref();
+setInterval(() => { void runAutopilotSweep(); }, 60 * 60_000).unref();
