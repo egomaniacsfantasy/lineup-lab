@@ -2633,6 +2633,14 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
     warnings,
     you: sideDelta(userTeam),
     partner: sideDelta(partnerTeam),
+    // Every OTHER team's before/after/delta on the same five numbers. The two
+    // season sims above already scored every team, so this is free -- a trade
+    // between two teams shifts the whole league's title/playoff odds under CRN.
+    // Sorted most-affected first (by |Δ championship %|); the client shows all.
+    league: teams
+      .filter((t) => t.rosterId !== userTeam.rosterId && t.rosterId !== partnerTeam.rosterId)
+      .map((t) => sideDelta(t))
+      .sort((x, y) => Math.abs(y.delta.titleProb) - Math.abs(x.delta.titleProb)),
   };
 }
 

@@ -958,6 +958,8 @@ export interface TradeAnalysis {
   warnings?: { you: string | null; partner: string | null };
   you?: TradeSideDelta;
   partner?: TradeSideDelta;
+  // Every other team in the league, most-affected first (by |Δ championship %|).
+  league?: TradeSideDelta[];
 }
 
 export interface TradeRationaleSection {

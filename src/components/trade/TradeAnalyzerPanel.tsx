@@ -179,12 +179,25 @@ function Results({
 }: {
   result: TradeAnalysis;
 }) {
+  const league = result.league ?? [];
   return (
     <div className="trade-analyzer-panel__results">
       <div className="trade-analyzer-panel__cards">
         <SideCard side={result.you!} />
         <SideCard side={result.partner!} />
       </div>
+      {league.length > 0 ? (
+        <div className="trade-analyzer-panel__league">
+          <p className="trade-analyzer-panel__league-heading">
+            Rest of the league <span className="trade-analyzer-panel__league-sub">— how this deal moves everyone else</span>
+          </p>
+          <div className="trade-analyzer-panel__cards">
+            {league.map((side) => (
+              <SideCard key={side.rosterId} side={side} />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
