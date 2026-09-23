@@ -25,6 +25,8 @@ import { LIVE_MATCHUP_TTL_MS } from '../gameWindows.js';
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
 const ESPN_BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
+// Writes (lineup moves, transactions) go to a DIFFERENT host than reads.
+const ESPN_WRITE_BASE = 'https://lm-api-writes.fantasy.espn.com/apis/v3/games/ffl';
 
 // ESPN proTeamId → NFL abbreviation (Sleeper's team codes).
 const PRO_TEAM = {
@@ -387,8 +389,79 @@ export function createEspnProvider({ season, espnS2, swid }) {
     });
   };
 
+  // Resolve the ESPN cookies (request-scoped, else the linked-league store).
+  const resolveCreds = (leagueId) => {
+    let s2 = espnS2;
+    let sw = swid;
+    if (!s2 || !sw) {
+      const stored = getEspnCreds(leagueId);
+      if (stored) { s2 = stored.espnS2; sw = stored.swid; }
+    }
+    return { s2, sw };
+  };
+
   return {
     providerId: 'espn',
+
+    // Current roster with per-player CURRENT lineupSlotId + eligibleSlots and the
+    // raw ESPN player id (writes key on that, not our canonical id).
+    async getTeamLineup(leagueId, teamId) {
+      const [blob, crosswalk] = await Promise.all([loadLeague(leagueId), getCrosswalk()]);
+      const team = (blob.teams ?? []).find((t) => t.id === Number(teamId));
+      if (!team) return null;
+      return (team.roster?.entries ?? [])
+        .map((entry) => {
+          const p = entry.playerPoolEntry?.player;
+          if (!p) return null;
+          return {
+            id: resolvePlayer(p, crosswalk, synthetic), // canonical (matches team.players)
+            espnId: Number(p.id),                        // raw ESPN id, for the write
+            name: p.fullName ?? String(p.id),
+            lineupSlotId: entry.lineupSlotId,
+            eligibleSlots: p.eligibleSlots ?? [],
+          };
+        })
+        .filter(Boolean);
+    },
+
+    // Apply LINEUP moves via an ESPN ROSTER transaction. `items` are the exact
+    // { playerId (ESPN id), type:'LINEUP', fromLineupSlotId, toLineupSlotId }.
+    // This is a real write (ESPN has no dry-run); only ever call on explicit user
+    // confirmation.
+    async setLineup(leagueId, teamId, scoringPeriodId, items) {
+      const { s2, sw } = resolveCreds(leagueId);
+      if (!s2 || !sw) { const e = new Error('espn_not_authed'); e.status = 401; throw e; }
+      const cleanSwid = sw.startsWith('{') ? sw : `{${sw}}`;
+      const url = `${ESPN_WRITE_BASE}/seasons/${season}/segments/0/leagues/${leagueId}/transactions/`;
+      const body = {
+        isLeagueManager: false,
+        teamId: Number(teamId),
+        type: 'ROSTER',
+        memberId: cleanSwid,
+        scoringPeriodId: Number(scoringPeriodId),
+        executionType: 'EXECUTE',
+        items,
+      };
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Cookie: `espn_s2=${s2}; SWID=${cleanSwid}`,
+          'Content-Type': 'application/json',
+          'X-Fantasy-Source': 'kona',
+          'X-Fantasy-Platform': 'kona-PROD-1.0.0',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(20_000),
+      });
+      const text = await response.text();
+      if (!response.ok) {
+        const e = new Error(`espn_write_${response.status}`);
+        e.status = response.status;
+        e.detail = text.slice(0, 400);
+        throw e;
+      }
+      return text ? JSON.parse(text) : { ok: true };
+    },
 
     async getLeague(leagueId) {
       const blob = await loadLeague(leagueId);

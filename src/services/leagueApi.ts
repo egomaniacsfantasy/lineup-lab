@@ -1054,6 +1054,33 @@ export function fetchTradeSuggestions(
   });
 }
 
+export interface SetLineupMove {
+  name: string;
+  from: string;
+  to: string;
+  benched: boolean;
+}
+export interface SetLineupResult {
+  available: boolean;
+  applied?: boolean;
+  reason?: string;
+  moves?: SetLineupMove[];
+  count?: number;
+  detail?: string | null;
+}
+// ESPN "set optimal lineup": confirm:false previews the moves, confirm:true
+// applies them to the real ESPN team. ESPN-only (server returns unsupported_provider otherwise).
+export function setEspnLineup(
+  leagueId: string,
+  body: { userId: string; confirm: boolean },
+): Promise<SetLineupResult> {
+  return get<SetLineupResult>(`/api/league/${leagueId}/set-lineup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export function fetchTradeRationale(
   leagueId: string,
   body: {

@@ -34,6 +34,7 @@ import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints,
 import { anyStarted, scorelineFor, teamScored, type Scoreline } from '../utils/liveScoreline';
 import { GameTag, SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
 import { BestLineups, type LineupChanges } from '../components/matchup/BestLineups';
+import { SetLineupButton } from '../components/matchup/SetLineupButton';
 import { WeekAhead, type WeekAheadFork } from '../components/matchup/WeekAhead';
 import { fetchWeekForks } from '../services/predictor';
 import { winProbabilityToMoneyline } from '../utils/matchupSides';
@@ -2895,6 +2896,12 @@ function MatchupLive({
             {/* The whole-league "Suggested trades" module was removed (user): no
                 auto-generated trades on the hub -- trades are built or found
                 on-demand from the Market/Trade tab. */}
+
+            {isConnected && stored?.provider === 'espn' && stored.leagueId && stored.userId ? (
+              <section className="matchup-page__module">
+                <SetLineupButton leagueId={stored.leagueId} userId={stored.userId} />
+              </section>
+            ) : null}
 
             {isConnected && titles && titles.length > 2 ? <TitleOdds rows={titles} /> : null}
 

@@ -364,7 +364,7 @@ function sumMeans(params) {
 }
 
 /** Optimal starter assignment (slot -> playerId) for a week; byes (proj 0) lose. */
-function optimalAssign(playerIds, slotLabels, projectionMap, catalog, week) {
+export function optimalAssign(playerIds, slotLabels, projectionMap, catalog, week) {
   const orderedSlots = flexLastSlots(slotLabels);
   const pool = playerIds
     .map((id) => ({ id, position: catalog[id]?.position, mean: playerDistribution(id, projectionMap, catalog[id], week).mean }))
@@ -2910,6 +2910,40 @@ function acceptanceProbability(theirDeltaTitle, friendliness = 5, relationship =
   const threshold = ACCEPT_BAR0 - ACCEPT_K_FRIEND * (friendliness - 5) - ACCEPT_K_REL * (relationship - 5);
   const z = (theirDeltaTitle - threshold) / ACCEPT_SPREAD;
   return Math.max(3, Math.min(97, Math.round((1 / (1 + Math.exp(-z))) * 100)));
+}
+
+// ESPN starting-slot label -> lineupSlotId (mirror of the provider's SLOT_LABEL).
+const ESPN_SLOT_ID = { QB: 0, RB: 2, WR: 4, TE: 6, DEF: 16, K: 17, FLEX: 23, WRRB_FLEX: 3, REC_FLEX: 5, SUPER_FLEX: 7 };
+const ESPN_BENCH_SLOT = 20;
+const ESPN_RESERVE_SLOTS = new Set([21, 24]); // IR + taxi: never auto-moved.
+
+/**
+ * Diff a team's CURRENT ESPN lineup against the optimal one and return the ESPN
+ * LINEUP moves that reach it -- the exact items an ESPN ROSTER transaction needs.
+ *   rosterSlots: [{ id (canonical), espnId, name, lineupSlotId }] (current state)
+ *   optimalAssignments: [{ slot (label), playerId (canonical) }] from optimalAssign
+ *   lockedIds: canonical ids whose NFL game has kicked off -> cannot be moved
+ * Returns { moves, readable }: `moves` is the ESPN payload; `readable` drives the
+ * confirmation UI. A player not in the optimal starters is benched (slot 20);
+ * IR/taxi and locked players are left exactly where they are.
+ */
+export function computeLineupMoves(rosterSlots, optimalAssignments, lockedIds = new Set()) {
+  const target = new Map(); // canonical id -> target lineupSlotId
+  for (const a of optimalAssignments ?? []) {
+    const slotId = ESPN_SLOT_ID[a.slot];
+    if (slotId != null && a.playerId != null) target.set(String(a.playerId), slotId);
+  }
+  const moves = [];
+  const readable = [];
+  for (const rs of rosterSlots ?? []) {
+    if (ESPN_RESERVE_SLOTS.has(rs.lineupSlotId)) continue; // leave IR/taxi alone
+    const want = target.get(String(rs.id)) ?? ESPN_BENCH_SLOT; // not optimal -> bench
+    if (want === rs.lineupSlotId) continue; // already in the right slot
+    if (lockedIds.has(String(rs.id))) continue; // game started; ESPN would reject
+    moves.push({ playerId: rs.espnId, type: 'LINEUP', fromLineupSlotId: rs.lineupSlotId, toLineupSlotId: want });
+    readable.push({ name: rs.name, playerId: rs.espnId, from: rs.lineupSlotId, to: want, benched: want === ESPN_BENCH_SLOT });
+  }
+  return { moves, readable };
 }
 
 export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, givePlayerIds = [], getPlayerIds = [], readsByRoster = {} } = {}) {

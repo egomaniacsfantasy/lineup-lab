@@ -12,7 +12,7 @@ import { isGameWindow } from '../gameWindows.js';
 import {
   getLeaguePricing, priceTrade, analyzeTrade, suggestCounter, suggestTrades,
   computeSeasonBaseline, buildLiveProjectionInputs, priceLiveOverlay, LIVE_SIMS,
-  prepareLeagueCtx, playerScoreDistribution,
+  prepareLeagueCtx, playerScoreDistribution, optimalAssign, computeLineupMoves,
 } from '../engine/engine.js';
 import { predictSeason, weekForks, weekProjections, PREDICTOR_SIMS } from '../engine/leverage.js';
 import { findSuccessorLeague } from '../leagueSuccession.js';
@@ -1261,6 +1261,81 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
       }),
     );
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * ESPN "set optimal lineup" (WRITE). confirm:false previews the exact moves;
+ * confirm:true APPLIES them to the real ESPN team. ESPN has no dry-run, so an
+ * applied move is live -- the client always previews and asks first, and this
+ * only ever fires on an explicit user confirmation. ESPN-only.
+ */
+apiRouter.post('/league/:leagueId/set-lineup', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const { userId, confirm = false } = req.body ?? {};
+    if (typeof provider.setLineup !== 'function' || typeof provider.getTeamLineup !== 'function') {
+      res.status(400).json({ available: false, reason: 'unsupported_provider' });
+      return;
+    }
+    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
+    if (!ctxBase) throw new Error('league_not_found');
+    const userTeam = ctxBase.teams.find((t) => t.isUser);
+    if (!userTeam) { res.status(400).json({ available: false, reason: 'team_not_found' }); return; }
+
+    let liveProjections;
+    try {
+      const adjusted = await getModelProjections(scoringSuffix(ctxBase.league?.scoringFamily));
+      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+    } catch (err) {
+      console.error('[set-lineup] projections failed; using snapshot', err);
+    }
+    const active = liveProjections ?? getActiveProjections();
+    const projectionMap = new Map((active?.projections ?? []).map((p) => [p.playerId, p]));
+    const catalog = ctxBase.players;
+    const week = ctxBase.week;
+    const slotLabels = (ctxBase.league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
+
+    const rosterSlots = await provider.getTeamLineup(leagueId, userTeam.rosterId);
+    if (!rosterSlots) { res.status(400).json({ available: false, reason: 'roster_not_found' }); return; }
+    const optimal = optimalAssign(userTeam.players, slotLabels, projectionMap, catalog, week);
+
+    // Never move a player whose NFL game has already kicked off -- ESPN rejects it
+    // and it would fail the whole transaction.
+    const locked = getLockedNflTeams();
+    const lockedIds = new Set(
+      rosterSlots
+        .filter((rs) => locked.has(String(catalog[rs.id]?.team ?? '').toUpperCase()))
+        .map((rs) => String(rs.id)),
+    );
+    const { moves, readable } = computeLineupMoves(rosterSlots, optimal, lockedIds);
+
+    const SLOT_UI = { 0: 'QB', 2: 'RB', 4: 'WR', 6: 'TE', 16: 'D/ST', 17: 'K', 23: 'FLEX', 3: 'RB/WR', 5: 'W/R/T', 7: 'SUPERFLEX', 20: 'Bench' };
+    const summary = readable.map((m) => ({
+      name: m.name,
+      from: SLOT_UI[m.from] ?? `slot ${m.from}`,
+      to: SLOT_UI[m.to] ?? `slot ${m.to}`,
+      benched: m.benched,
+    }));
+
+    if (!confirm) {
+      res.json({ available: true, applied: false, moves: summary, count: moves.length });
+      return;
+    }
+    if (moves.length === 0) {
+      res.json({ available: true, applied: false, reason: 'already_optimal', moves: [] });
+      return;
+    }
+    await provider.setLineup(leagueId, userTeam.rosterId, week, moves);
+    res.json({ available: true, applied: true, moves: summary, count: moves.length });
+  } catch (error) {
+    if (error?.status) {
+      res.status(error.status === 401 ? 401 : 502)
+        .json({ available: false, reason: error.message, detail: error.detail ?? null });
+      return;
+    }
     next(error);
   }
 });
