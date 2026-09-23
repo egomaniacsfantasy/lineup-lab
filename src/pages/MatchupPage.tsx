@@ -2848,9 +2848,28 @@ function MatchupLive({
               <section className="matchup-page__module matchup-page__module--rail-call matchup-page__module--rail-call-clean">
                 <div className="matchup-page__module-row">
                 </div>
-                <p className="matchup-page__rail-call-clean">
-                  Your lineup is already the best play.
-                </p>
+                {bestLineupView && bestLineupView.changes.in.length > 0 && !matchupStarted ? (
+                  /* The per-slot start/sit call (biggestSwing) only finds a
+                     single-slot swap, so a lineup that is only optimal after a
+                     multi-move shuffle -- e.g. move a WR from FLEX into WR2 to
+                     free the FLEX for a higher-projected RB -- reads to it as
+                     "already best". The engine's own best lineup (bestLineupView,
+                     the global optimizer that the Set-optimal button uses) knows
+                     better, so surface ITS moves here. */
+                  <>
+                    <p className="matchup-page__rail-call-clean">
+                      Set your best lineup: sit <strong>{bestLineupView.changes.out.join(', ')}</strong>, start{' '}
+                      <strong>{bestLineupView.changes.in.join(', ')}</strong>.
+                    </p>
+                    <p className="matchup-page__best-note">
+                      {`+${bestLineupView.deltaWinProb.toFixed(1)}% win probability. It needs your other starters shuffled between slots to fit; the "Set optimal lineup" button does the whole move in one tap.`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="matchup-page__rail-call-clean">
+                    Your lineup is already the best play.
+                  </p>
+                )}
                 {marketRows.length > 0 ? (
                   <div className="matchup-page__adds">
                     {marketRows.map((mover) => (
