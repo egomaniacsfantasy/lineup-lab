@@ -130,13 +130,16 @@ async function buildProviderIndex() {
  * { playerId, name, position, team, mean, stdev, weekly:{week:pts},
  *   weeklyCI:{week:{floor,ceiling}}, floor, ceiling, seasonTotal, depthRank }.
  */
-// Consensus (agreement) tilt for pricing/sims/futures is env-gated. It defaults to
-// OFF -> pricing runs on the PURE MODEL numbers (identical to the board's model-only
-// view). Set ODDS_CONSENSUS=1 in the environment to bring the agreement tilt back on.
+// Consensus (agreement) tilt for pricing/sims/futures is HARDCODED OFF (user 2026-09-22):
+// everything the book prices/simulates on -- trades, pricing, championship/playoff odds,
+// the predictor, and the rankings default -- runs on the PURE MODEL numbers, permanently,
+// so the trade analyzer and the season simulation can never diverge. This ignores the
+// ODDS_CONSENSUS env var on purpose (was: `process.env.ODDS_CONSENSUS === '1'`); to ever
+// re-enable the agreement tilt, restore that env gate here (a code change + redeploy).
 // The Supabase fetch is kept entirely OFF the pricing request path (see
 // getAdjustedProjections): consensus only ever loads in the background, so a slow or
 // hung DB call can never stall league pricing.
-const CONSENSUS_ENABLED = process.env.ODDS_CONSENSUS === '1';
+const CONSENSUS_ENABLED = false;
 
 /** Whether the agreement/consensus tilt is active for pricing (and, via the board's
  *  consensusEnabled flag, the board's non-admin view). Mirrors ODDS_CONSENSUS. */
