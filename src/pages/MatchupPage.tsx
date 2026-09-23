@@ -10,7 +10,6 @@ import { tradePage } from '../utils/tradeRotation';
    of a person pressing a button. */
 const BACKGROUND_SCAN_MS = 10 * 60 * 1000;
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
-import { HubDeals } from '../components/matchup/HubDeals';
 import { PlayerChip } from '../components/player/PlayerChip';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { TeamCrest } from '../components/matchup/TeamCrest';
@@ -18,7 +17,6 @@ import { TradeRow } from '../components/trade-display/TradeDisplay';
 import { OddsChart, type OddsChartPoint } from '../components/charts/OddsChart';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
-import { tradesSupported } from '../utils/leagueCapabilities';
 import type { LeaguePricing, OptimalLine, PricedFuture } from '../services/leagueApi';
 import { useOddsFormat } from '../contexts/OddsFormatContext';
 import { useScoutingCard } from '../contexts/ScoutingCardContext';
@@ -2894,7 +2892,9 @@ function MatchupLive({
             {/* Gated on the same rule as the tab. This was the gap: the nav
                 hid Trades for a dynasty league and the Hub went on offering
                 them anyway, which is the worse half of the two to leave. */}
-            {isConnected && tradesSupported(bootstrap) ? <HubDeals /> : null}
+            {/* The whole-league "Suggested trades" module was removed (user): no
+                auto-generated trades on the hub -- trades are built or found
+                on-demand from the Market/Trade tab. */}
 
             {isConnected && titles && titles.length > 2 ? <TitleOdds rows={titles} /> : null}
 

@@ -28,7 +28,6 @@ import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
 import { tradeSignature } from '../utils/tradeMarket';
 import {
   acceptanceGaugeLabel,
-  sortByTradeFairness,
 } from '../utils/tradeSuggestionDisplay';
 import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
 import { acceptanceProbability } from '../utils/tradeAcceptance';
@@ -53,13 +52,9 @@ import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { drawTradeCard, type TradeCardProposal, type TradeCardAsset } from '../utils/tradeCard';
 import { shareFilename, tradeShareMessage } from '../utils/shareMessage';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
-import { LeagueDealBoard, type LeagueDealRow } from '../components/trade/LeagueDealBoard';
-import { acceptableDeals } from '../utils/dealBoardPolicy';
-import { tradePage } from '../utils/tradeRotation';
 
 /* The board shows a handful at a time and refresh pages through the rest.
    Fifteen at once buried the good ones and gave the button nothing to do. */
-const DEALS_PER_PAGE = 5;
 
 type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
 
@@ -239,7 +234,6 @@ function TradeDealsView() {
      its own request rather than sharing the manager pipeline. Sharing them is
      what made a league-wide scan run and then filter every result away for not
      belonging to a manager nobody had picked. */
-  const [leagueDeals, setLeagueDeals] = useState<TradeSuggestion[] | null>(null);
   // TEMP diagnostic: the server's finder funnel, shown in the empty-state so we can see
   // exactly where trades collapse to zero without needing browser dev tools.
   // A clicked manager gets its OWN deep scan (partnerRosterId set) at the full sim count,
@@ -249,54 +243,10 @@ function TradeDealsView() {
   /* Which page of the pool the board is showing, and whether a fresh scan is
      in flight. Refresh advances the page first and only goes back to the
      engine when the pool has nothing else to show. */
-  const [dealPageIndex, setDealPageIndex] = useState(0);
-  const [dealsRefreshing, setDealsRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (!stored?.leagueId || !stored.userId || !bootstrap) return undefined;
-    const key = `og.leagueDeals.${stored.leagueId}:${stored.userId}`;
-    const DEALS_TTL_MS = 120_000;
-    // Use a RECENT cached scan as-is: the league-wide scan is heavy, and re-running it
-    // on every mount/navigation lagged the page and interrupted itself (returning only
-    // a couple of trades). Only refetch when the cache is stale, so the numbers stay
-    // fresh without constant re-simulation.
-    try {
-      const raw = window.sessionStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const data = Array.isArray(parsed) ? parsed : parsed?.data;
-        const at = Array.isArray(parsed) ? 0 : parsed?.at ?? 0;
-        if (Array.isArray(data)) {
-          setLeagueDeals(data as TradeSuggestion[]);
-          if (Date.now() - at < DEALS_TTL_MS) return undefined;
-        }
-      }
-    } catch {
-      // storage unavailable; the scan just runs
-    }
-    let cancelled = false;
-    void fetchTradeSuggestions(stored.leagueId, {
-      userId: stored.userId,
-      partnerRosterId: null,
-    })
-      .then((response) => {
-        if (cancelled) return;
-        const found = response.available ? response.suggestions ?? [] : [];
-        setLeagueDeals(found);
-        reportDealsFunnel(response.debug);
-        try {
-          window.sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), data: found }));
-        } catch {
-          // ignore
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLeagueDeals([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [stored?.leagueId, stored?.userId, bootstrap]);
+  // The whole-league auto-scan was removed (user): the finder no longer runs a
+  // blind partnerRosterId:null scan on mount, so no suggested trades appear until
+  // the user taps a manager (its own deep scan) or builds a trade.
 
   const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
   const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
@@ -319,168 +269,9 @@ function TradeDealsView() {
   const currentWeek = pricing?.week ?? bootstrap?.week ?? null;
   const { dismissedSignatures, dismiss, undo, restoreAll, pendingUndoSignature } =
     useDismissedTradeSuggestions(stored?.leagueId ?? null, currentWeek);
-  const [leagueScanLine, setLeagueScanLine] = useState(0);
-  useEffect(() => {
-    if (leagueDeals !== null) return undefined;
-    const timer = window.setInterval(() => setLeagueScanLine((n) => n + 1), 2600);
-    return () => window.clearInterval(timer);
-  }, [leagueDeals]);
-
-  /* One place that turns a suggestion into a card, so the league board and the
-     manager list cannot drift into describing the same deal differently. */
-  const shareSuggestion = (suggestion: TradeSuggestion) => {
-    if (!bootstrap) return;
-    const partner = bootstrap.teams.find(
-      (team) => team.rosterId === suggestion.partnerRosterId,
-    );
-    const asset = (id: string): TradeCardAsset => {
-      const player = toPlayer(id, bootstrap.players);
-      return {
-        name: player.name,
-        position: player.position,
-        team: player.team,
-        headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
-      };
-    };
-    /* Each column shows what that manager RECEIVES, so the sides cross: you
-       get what he gives up. Acceptance is deliberately absent; it is a private
-       read and this card is the thing you hand him. */
-    setTradeCard({
-      eyebrow: `Week ${bootstrap.week}`,
-      leagueName: stored?.leagueName ?? null,
-      verdict: tradeCardHeadline(suggestion.youDelta, suggestion.partnerDelta),
-      you: {
-        manager: userTeam?.teamName ?? 'You',
-        avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
-        assets: suggestion.get.map((a) => asset(a.id)),
-        titleDelta: signedPct(suggestion.youDelta),
-        playoffDelta: signedPct(suggestion.youPlayoffDelta ?? 0),
-        titleUp: suggestion.youDelta >= 0,
-        playoffUp: (suggestion.youPlayoffDelta ?? 0) >= 0,
-      },
-      them: {
-        manager: partner?.teamName ?? 'Them',
-        avatar: resolveApiUrl(partner?.avatarUrl) ?? null,
-        assets: suggestion.give.map((a) => asset(a.id)),
-        titleDelta: signedPct(suggestion.partnerDelta),
-        playoffDelta: signedPct(suggestion.partnerPlayoffDelta ?? 0),
-        titleUp: suggestion.partnerDelta >= 0,
-        playoffUp: (suggestion.partnerPlayoffDelta ?? 0) >= 0,
-      },
-    });
-  };
-
-  const leagueDealRows = useMemo<LeagueDealRow[] | null>(() => {
-    if (!bootstrap || leagueDeals === null) return null;
-    /* Fairest first: the trades that move BOTH teams' championship odds the least
-       (|youDelta| + |partnerDelta|). Identical ranking to the Hub deals section;
-       acceptance probability is no longer part of the value. The server already
-       guarantees youDelta > 0, so every shown deal still nudges your title up.
-       Acceptance % is still displayed as context, just not used to rank. */
-    /* Filter, then sort. The board only ever sorted, so the fifteen
-       least-bad ideas carried the heading "best deals" however bad they were.
-       See dealBoardPolicy: a quarterback straight across for a skill player
-       in a one-quarterback league, and any deal where one side takes nearly
-       all of the value, are not deals this heading can honestly make. */
-    const { kept } = acceptableDeals(
-      leagueDeals,
-      (playerId) => bootstrap.players[playerId]?.position ?? null,
-      bootstrap.league.rosterPositions,
-    );
-
-    /* A page at a time rather than the top fifteen at once. Refresh shows the
-       next page, so pressing it never leaves a trade you have just rejected
-       sitting on the screen. */
-    const ordered = sortByTradeFairness(kept);
-    return tradePage(ordered, dealPageIndex, DEALS_PER_PAGE)
-      .visible
-      .map((suggestion) => {
-        const accept = acceptanceProbability(suggestion.partnerDelta, 5, 5);
-        return {
-        key: tradeSignature({
-          leagueId: stored?.leagueId ?? '',
-          partnerRosterId: suggestion.partnerRosterId,
-          givePlayerIds: suggestion.give.map((asset) => asset.id),
-          getPlayerIds: suggestion.get.map((asset) => asset.id),
-        }),
-        partnerName:
-          bootstrap.teams.find((team) => team.rosterId === suggestion.partnerRosterId)?.teamName
-          ?? 'A manager',
-        send: suggestion.give.map((asset) => toPlayer(asset.id, bootstrap.players)),
-        get: suggestion.get.map((asset) => toPlayer(asset.id, bootstrap.players)),
-        delta: signedPct(suggestion.youDelta),
-        up: suggestion.youDelta >= 0,
-        acceptance: formatAcceptancePercent(accept),
-        };
-      });
-  }, [bootstrap, dealPageIndex, leagueDeals, stored?.leagueId]);
-
-  /**
-   * Refresh: show a different set of suggested trades.
-   *
-   * Rotates within the pool first, because that is instant and it is what
-   * "show me something else" means when there is something else to show. Only
-   * when the pool is out of pages does it go back to the engine for a fresh
-   * scan, which is slow enough that doing it on every press would make the
-   * button feel broken.
-   */
-  const refreshLeagueDeals = () => {
-    if (!stored?.leagueId || !stored.userId || !bootstrap || dealsRefreshing) return;
-
-    const filtered = acceptableDeals(
-      leagueDeals ?? [],
-      (playerId) => bootstrap.players[playerId]?.position ?? null,
-      bootstrap.league.rosterPositions,
-    ).kept;
-    const paged = tradePage(filtered, dealPageIndex, DEALS_PER_PAGE);
-
-    if (!paged.exhausted) {
-      setDealPageIndex((current) => current + 1);
-      return;
-    }
-
-    setDealsRefreshing(true);
-    void fetchTradeSuggestions(stored.leagueId, {
-      userId: stored.userId,
-      partnerRosterId: null,
-    })
-      .then((response) => {
-        const found = response.available ? response.suggestions ?? [] : [];
-        setLeagueDeals(found);
-        reportDealsFunnel(response.debug);
-        setDealPageIndex(0);
-        try {
-          window.sessionStorage.setItem(
-            `og.leagueDeals.${stored.leagueId}:${stored.userId}`,
-            JSON.stringify({ at: Date.now(), data: found }),
-          );
-        } catch {
-          // storage unavailable; the scan simply runs again next time
-        }
-      })
-      .catch(() => {
-        /* Leave what is on screen. A failed refresh that blanks the board is
-           worse than a refresh that changed nothing. */
-      })
-      .finally(() => setDealsRefreshing(false));
-  };
-
-  const leagueDealByKey = useMemo(() => {
-    const map = new Map<string, TradeSuggestion>();
-    if (!stored) return map;
-    for (const suggestion of leagueDeals ?? []) {
-      map.set(
-        tradeSignature({
-          leagueId: stored.leagueId,
-          partnerRosterId: suggestion.partnerRosterId,
-          givePlayerIds: suggestion.give.map((asset) => asset.id),
-          getPlayerIds: suggestion.get.map((asset) => asset.id),
-        }),
-        suggestion,
-      );
-    }
-    return map;
-  }, [leagueDeals, stored]);
+  // The entire-league board machinery (leagueScanLine, shareSuggestion,
+  // leagueDealRows, refreshLeagueDeals, leagueDealByKey) was removed with the
+  // whole-league auto-scan (user). Per-manager deals + the builder remain.
 
   const managerSuggestionEntries = useMemo(() => {
     if (!stored || !bootstrap || marketManagerFilter == null) return [];
@@ -488,7 +279,7 @@ function TradeDealsView() {
     // Prefer the clicked manager's OWN deep scan (managerDeals, full sim count so it
     // matches the analyzer); fall back to filtering the fast league-wide pool until it
     // arrives.
-    const source = managerDeals ?? leagueDeals ?? [];
+    const source = managerDeals ?? [];
     const entries = source
       .filter((suggestion) => suggestion.partnerRosterId === marketManagerFilter)
       .map((suggestion) => ({
@@ -524,7 +315,6 @@ function TradeDealsView() {
     bootstrap,
     dismissedSignatures,
     friendliness,
-    leagueDeals,
     managerDeals,
     marketManagerFilter,
     marketPositionFilter,
@@ -1119,21 +909,9 @@ function TradeDealsView() {
           marketView === 'finder' ? '' : 'trade-cc__finder--hidden',
         ].filter(Boolean).join(' ')}
       >
-        <LeagueDealBoard
-          loading={leagueDeals === null}
-          onRefresh={refreshLeagueDeals}
-          refreshing={dealsRefreshing}
-          onOpen={(key) => {
-            const found = leagueDealByKey.get(key);
-            if (found) loadSuggestedTrade(found);
-          }}
-          onShare={(key) => {
-            const found = leagueDealByKey.get(key);
-            if (found) shareSuggestion(found);
-          }}
-          rows={leagueDealRows}
-          scanLine={leagueScanLine}
-        />
+        {/* The whole-league "best deals" board was removed (user): no auto-scan,
+            no suggestions on load. Trades are found on-demand -- tap a manager
+            below for the best deals with THAT team, or build one directly. */}
 
         {/* The read is about a specific manager, so it appears once there is
             one. Rendering it disabled above an empty heading left a dead row
