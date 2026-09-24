@@ -1092,6 +1092,79 @@ export interface AutopilotState {
     reason?: string | null;
   } | null;
 }
+// ── Trade sender: standing rules -> background per-manager scan -> suggested
+// offers on the hub -> "Send on ESPN" behind a confirm.
+export interface TradeSenderSettings {
+  partners: number[];
+  giveAllow: string[];
+  protect: string[];
+  givePositions: string[];
+  getPositions: string[];
+  minYouDelta: number;
+  maxPartnerLoss: number;
+}
+export interface TradeSenderOffer {
+  id: string;
+  partnerRosterId: number;
+  partnerName: string;
+  give: { id: string; name: string }[];
+  get: { id: string; name: string }[];
+  youDelta: number;
+  partnerDelta: number;
+  youPlayoffDelta?: number;
+  partnerPlayoffDelta?: number;
+  sent: { at: number; espnTransactionId: string | null } | null;
+}
+export interface TradeSenderState {
+  enabled: boolean;
+  settings: TradeSenderSettings;
+  suggestions: TradeSenderOffer[];
+  lastScan: {
+    at: number;
+    reason?: string;
+    ms?: number;
+    managers?: number;
+    error?: string | null;
+  } | null;
+  scanning: boolean;
+  canSend: boolean;
+  myPlayers: { id: string; name: string; position: string | null }[];
+  managers: { rosterId: number; teamName: string; ownerName: string | null }[];
+}
+export function getTradeSenderState(leagueId: string, userId: string): Promise<TradeSenderState> {
+  return get<TradeSenderState>(
+    `/api/league/${leagueId}/trade-sender?userId=${encodeURIComponent(userId)}`,
+    { method: 'GET' },
+  );
+}
+export function saveTradeSender(
+  leagueId: string,
+  body: { userId: string; enabled?: boolean; settings?: TradeSenderSettings },
+): Promise<{ enabled: boolean; settings: TradeSenderSettings }> {
+  return get(`/api/league/${leagueId}/trade-sender`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+export function scanTradeSenderNow(leagueId: string, userId: string): Promise<{ scanning: boolean }> {
+  return get(`/api/league/${leagueId}/trade-sender/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  });
+}
+export function sendTradeOffer(
+  leagueId: string,
+  body: { userId: string; offerId: string; confirm: boolean },
+): Promise<{ sent: boolean; reason?: string; espnTransactionId?: string | null }> {
+  return get(`/api/league/${leagueId}/trade-sender/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export function getAutopilotState(leagueId: string): Promise<AutopilotState> {
   return get<AutopilotState>(`/api/league/${leagueId}/autopilot`, { method: 'GET' });
 }

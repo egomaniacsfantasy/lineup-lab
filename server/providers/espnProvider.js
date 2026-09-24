@@ -400,6 +400,35 @@ export function createEspnProvider({ season, espnS2, swid }) {
     return { s2, sw };
   };
 
+  // POST one transaction to the ESPN write host. `makeBody(memberId)` builds the
+  // payload (every write carries the SWID as memberId). A real write: ESPN has no
+  // dry-run, so callers only reach this on explicit consent.
+  const writeTransaction = async (leagueId, makeBody) => {
+    const { s2, sw } = resolveCreds(leagueId);
+    if (!s2 || !sw) { const e = new Error('espn_not_authed'); e.status = 401; throw e; }
+    const cleanSwid = sw.startsWith('{') ? sw : `{${sw}}`;
+    const url = `${ESPN_WRITE_BASE}/seasons/${season}/segments/0/leagues/${leagueId}/transactions/`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Cookie: `espn_s2=${s2}; SWID=${cleanSwid}`,
+        'Content-Type': 'application/json',
+        'X-Fantasy-Source': 'kona',
+        'X-Fantasy-Platform': 'kona-PROD-1.0.0',
+      },
+      body: JSON.stringify(makeBody(cleanSwid)),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      const e = new Error(`espn_write_${response.status}`);
+      e.status = response.status;
+      e.detail = text.slice(0, 400);
+      throw e;
+    }
+    return text ? JSON.parse(text) : { ok: true };
+  };
+
   return {
     providerId: 'espn',
 
@@ -429,38 +458,60 @@ export function createEspnProvider({ season, espnS2, swid }) {
     // This is a real write (ESPN has no dry-run); only ever call on explicit user
     // confirmation.
     async setLineup(leagueId, teamId, scoringPeriodId, items) {
-      const { s2, sw } = resolveCreds(leagueId);
-      if (!s2 || !sw) { const e = new Error('espn_not_authed'); e.status = 401; throw e; }
-      const cleanSwid = sw.startsWith('{') ? sw : `{${sw}}`;
-      const url = `${ESPN_WRITE_BASE}/seasons/${season}/segments/0/leagues/${leagueId}/transactions/`;
-      const body = {
+      return writeTransaction(leagueId, (memberId) => ({
         isLeagueManager: false,
         teamId: Number(teamId),
         type: 'ROSTER',
-        memberId: cleanSwid,
+        memberId,
         scoringPeriodId: Number(scoringPeriodId),
         executionType: 'EXECUTE',
         items,
-      };
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Cookie: `espn_s2=${s2}; SWID=${cleanSwid}`,
-          'Content-Type': 'application/json',
-          'X-Fantasy-Source': 'kona',
-          'X-Fantasy-Platform': 'kona-PROD-1.0.0',
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(20_000),
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        const e = new Error(`espn_write_${response.status}`);
-        e.status = response.status;
-        e.detail = text.slice(0, 400);
-        throw e;
+      }));
+    },
+
+    // Propose a trade to another team. `items` are { playerId (ESPN id),
+    // type:'TRADE', fromTeamId, toTeamId } for every player moving, both ways.
+    // Shape captured from ESPN's own web client (2026-09-23). The proposer's side
+    // comes back already ACCEPTED; the response `id` is what cancelTrade needs.
+    async proposeTrade(leagueId, teamId, scoringPeriodId, items, { expiresInDays = 2, comment = '' } = {}) {
+      return writeTransaction(leagueId, (memberId) => ({
+        isLeagueManager: false,
+        teamId: Number(teamId),
+        type: 'TRADE_PROPOSAL',
+        memberId,
+        scoringPeriodId: Number(scoringPeriodId),
+        executionType: 'EXECUTE',
+        comment,
+        expirationDate: new Date(Date.now() + expiresInDays * 24 * 60 * 60_000).toISOString(),
+        items,
+      }));
+    },
+
+    // Withdraw one of OUR pending proposals by the id proposeTrade returned.
+    async cancelTrade(leagueId, teamId, scoringPeriodId, transactionId) {
+      return writeTransaction(leagueId, (memberId) => ({
+        isLeagueManager: false,
+        teamId: Number(teamId),
+        type: 'TRADE_PROPOSAL',
+        memberId,
+        scoringPeriodId: Number(scoringPeriodId),
+        executionType: 'CANCEL',
+        relatedTransactionId: String(transactionId),
+      }));
+    },
+
+    // Canonical id -> raw ESPN id for every rostered player in the league (the
+    // trade write keys on ESPN ids, both teams' players).
+    async getEspnIdMap(leagueId) {
+      const [blob, crosswalk] = await Promise.all([loadLeague(leagueId), getCrosswalk()]);
+      const out = new Map();
+      for (const team of blob.teams ?? []) {
+        for (const entry of team.roster?.entries ?? []) {
+          const p = entry.playerPoolEntry?.player;
+          if (p) out.set(String(resolvePlayer(p, crosswalk, synthetic)), { espnId: Number(p.id), teamId: team.id });
+        }
       }
-      return text ? JSON.parse(text) : { ok: true };
+      return out;
     },
 
     async getLeague(leagueId) {

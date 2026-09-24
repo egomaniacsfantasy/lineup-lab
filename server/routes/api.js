@@ -8,6 +8,12 @@ import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
 import { saveEspnCreds, getEspnCreds } from '../providers/espnCredStore.js';
 import { getAutopilot, setAutopilot, listEnabledAutopilot } from '../engine/autopilotStore.js';
+import {
+  DEFAULT_SENDER_SETTINGS, getTradeSender, setTradeSender, logSentOffer, listEnabledTradeSenders,
+  noteProjectionsFingerprint, getProjectionsMeta,
+} from '../engine/tradeSenderStore.js';
+import { runTradeScan } from '../engine/tradeScanWorker.js';
+import { projectionsFingerprint } from '../projections/loadFromRepo.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import {
@@ -1399,6 +1405,268 @@ apiRouter.post('/league/:leagueId/autopilot', (req, res) => {
   }
   const entry = setAutopilot(leagueId, { userId: userId ?? null, enabled: Boolean(enabled), season: seasonParam(undefined) });
   res.json({ enabled: Boolean(entry.enabled) });
+});
+
+/* ── Trade sender ────────────────────────────────────────────────────────────
+ * Standing rules per league -> a background scan of each allowed manager, one at
+ * a time, exactly as clicking that manager in the Trade tab scans him (in a
+ * worker thread, so the site stays responsive) -> suggested offers on the hub ->
+ * "Send on ESPN" behind an explicit confirm.
+ *
+ * When: every sweep tick checks the projections fingerprint. A new push starts a
+ * quiet period; once nothing new has landed for SENDER_QUIET_MS the league is
+ * rescanned (so a position-by-position rerun triggers ONE scan, after the last
+ * position). SENDER_EVERY_MS is the recurring backstop. */
+const SENDER_QUIET_MS = 30 * 60_000;
+const SENDER_EVERY_MS = 3 * 60 * 60_000;
+const SENDER_TRADEABLE = ['QB', 'RB', 'WR', 'TE'];
+const senderScanning = new Set();
+
+/** The league context every trade endpoint sims on (schedule + live projections). */
+async function buildTradeCtx(provider, leagueId, userId) {
+  const ctxBase = await loadLeagueContext(provider, leagueId, userId);
+  if (!ctxBase) throw new Error('league_not_found');
+  const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
+  const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
+    const all = [];
+    for (let week = 1; week <= lastWeek; week += 1) {
+      all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
+    }
+    return all;
+  });
+  let liveProjections;
+  try {
+    const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
+    if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
+  } catch (err) {
+    console.error('[trade-sender] adjusted projections failed; using snapshot', err);
+  }
+  return { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay: null, projections: liveProjections };
+}
+
+// A package's identity: same partner + same players both ways = same offer.
+const offerKey = (s) =>
+  `${s.partnerRosterId}|${s.give.map((p) => p.id).sort().join('+')}|${s.get.map((p) => p.id).sort().join('+')}`;
+
+function sanitizeSenderSettings(raw = {}) {
+  const ids = (v) => (Array.isArray(v) ? v.map(String).slice(0, 60) : []);
+  const positions = (v) => (Array.isArray(v) ? v.filter((p) => SENDER_TRADEABLE.includes(p)) : []);
+  const pts = (v, fallback) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : fallback;
+  };
+  return {
+    partners: (Array.isArray(raw.partners) ? raw.partners : []).map(Number).filter(Number.isFinite),
+    giveAllow: ids(raw.giveAllow),
+    protect: ids(raw.protect),
+    givePositions: positions(raw.givePositions),
+    getPositions: positions(raw.getPositions),
+    minYouDelta: pts(raw.minYouDelta, DEFAULT_SENDER_SETTINGS.minYouDelta),
+    maxPartnerLoss: pts(raw.maxPartnerLoss, DEFAULT_SENDER_SETTINGS.maxPartnerLoss),
+  };
+}
+
+/** Scan one league's allowed managers and store the offers that clear the rules. */
+async function scanTradeSender(leagueId, reason) {
+  const key = String(leagueId);
+  if (senderScanning.has(key)) return false;
+  const entry = getTradeSender(key);
+  if (!entry) return false;
+  senderScanning.add(key);
+  const t0 = Date.now();
+  const fingerprint = getProjectionsMeta()?.fingerprint ?? null;
+  try {
+    const provider = buildHeadlessProvider(entry.provider ?? 'espn', entry.season);
+    const ctx = await buildTradeCtx(provider, key, entry.userId);
+    const userTeam = ctx.teams.find((t) => t.isUser);
+    if (!userTeam) throw new Error('team_not_found');
+    const s = entry.settings;
+    const partnerRosterIds = ctx.teams
+      .filter((t) => !t.isUser && (!s.partners.length || s.partners.includes(t.rosterId)))
+      .map((t) => t.rosterId);
+    const { suggestions, perManager } = await runTradeScan({
+      // Only the plain-data fields the sim reads cross the thread boundary.
+      ctx: {
+        league: ctx.league, teams: ctx.teams, week: ctx.week, catalog: ctx.catalog,
+        scheduleWeeks: ctx.scheduleWeeks, overlay: null, projections: ctx.projections,
+      },
+      partnerRosterIds,
+      sender: s,
+    });
+    // An offer already sent keeps its "sent" marker across rescans.
+    const sentById = new Map((entry.sent ?? []).map((r) => [r.offerId, r]));
+    const offers = suggestions.map((sug) => {
+      const id = offerKey(sug);
+      const sent = sentById.get(id);
+      return { ...sug, id, sent: sent ? { at: sent.at, espnTransactionId: sent.espnTransactionId } : null };
+    });
+    setTradeSender(key, {
+      suggestions: offers,
+      lastScan: {
+        at: Date.now(), reason, fingerprint, ms: Date.now() - t0, week: ctx.week,
+        userRosterId: userTeam.rosterId, managers: perManager.length, perManager, error: null,
+      },
+    });
+    console.log(`[trade-sender] ${key}: ${offers.length} offer(s) from ${perManager.length} manager(s) in ${Date.now() - t0}ms (${reason})`);
+  } catch (err) {
+    const stale = err?.status === 401;
+    setTradeSender(key, {
+      lastScan: {
+        ...(entry.lastScan ?? {}), at: Date.now(), reason, fingerprint, ms: Date.now() - t0,
+        error: stale ? 'creds_stale_relink' : String(err?.message ?? err),
+      },
+    });
+    console.error(`[trade-sender] ${key} scan failed: ${err?.message}`);
+  } finally {
+    senderScanning.delete(key);
+  }
+  return true;
+}
+
+/** Scheduled from index.js every few minutes; scans leagues whose turn it is. */
+export async function runTradeSenderSweep() {
+  let meta = getProjectionsMeta();
+  try {
+    meta = noteProjectionsFingerprint(projectionsFingerprint());
+  } catch (err) {
+    console.error('[trade-sender] fingerprint failed', err);
+  }
+  const now = Date.now();
+  // Projections landed recently: more positions may still be on the way. Wait.
+  if (meta?.changedAt && now - meta.changedAt < SENDER_QUIET_MS) return;
+  for (const entry of listEnabledTradeSenders()) {
+    const last = entry.lastScan;
+    const reason = !last?.at
+      ? 'first'
+      : meta?.fingerprint && last.fingerprint !== meta.fingerprint
+        ? 'projections_updated'
+        : now - last.at >= SENDER_EVERY_MS ? 'recurring' : null;
+    if (reason) await scanTradeSender(entry.leagueId, reason); // one league at a time
+  }
+}
+
+/** Settings, latest offers and the pickers' choices (my players, the managers). */
+apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
+  try {
+    const { leagueId } = req.params;
+    const userId = req.query.userId ? String(req.query.userId) : null;
+    const entry = getTradeSender(leagueId);
+    const provider = getProvider(req);
+    const ctx = await loadLeagueContext(provider, leagueId, userId);
+    if (!ctx) { res.status(404).json({ reason: 'league_not_found' }); return; }
+    const me = ctx.teams.find((t) => t.isUser);
+    const myPlayers = (me?.players ?? [])
+      .map((id) => ({ id: String(id), name: ctx.players[id]?.name ?? String(id), position: ctx.players[id]?.position ?? null }))
+      .filter((p) => SENDER_TRADEABLE.includes(p.position));
+    const managers = ctx.teams
+      .filter((t) => !t.isUser)
+      .map((t) => ({ rosterId: t.rosterId, teamName: t.teamName, ownerName: t.ownerName }));
+    res.json({
+      enabled: Boolean(entry?.enabled),
+      settings: entry?.settings ?? DEFAULT_SENDER_SETTINGS,
+      suggestions: entry?.suggestions ?? [],
+      lastScan: entry?.lastScan ?? null,
+      scanning: senderScanning.has(String(leagueId)),
+      canSend: providerName(req) === 'espn' && Boolean(getEspnCreds(leagueId)),
+      myPlayers,
+      managers,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Save the rules and/or the on-off switch. Turning it on (or changing rules) rescans. */
+apiRouter.post('/league/:leagueId/trade-sender', (req, res) => {
+  const { leagueId } = req.params;
+  const { userId, enabled, settings } = req.body ?? {};
+  const patch = {
+    userId: userId ?? null,
+    provider: providerName(req),
+    season: seasonParam(req.query.season),
+  };
+  if (enabled !== undefined) patch.enabled = Boolean(enabled);
+  if (settings) patch.settings = sanitizeSenderSettings(settings);
+  const entry = setTradeSender(leagueId, patch);
+  // New rules make the stored offers stale; rescan in the background.
+  if (settings || patch.enabled) void scanTradeSender(leagueId, settings ? 'settings_changed' : 'enabled');
+  res.json({ enabled: Boolean(entry.enabled), settings: entry.settings, scanning: true });
+});
+
+/** "Scan now": kick a background scan; the client polls GET for the result. */
+apiRouter.post('/league/:leagueId/trade-sender/scan', (req, res) => {
+  const { leagueId } = req.params;
+  if (!getTradeSender(leagueId)) {
+    setTradeSender(leagueId, {
+      userId: req.body?.userId ?? null, provider: providerName(req), season: seasonParam(req.query.season),
+    });
+  }
+  const already = senderScanning.has(String(leagueId));
+  if (!already) void scanTradeSender(leagueId, 'manual');
+  res.json({ scanning: true, already });
+});
+
+/** Send one suggested offer to the partner on ESPN. A real write: confirm only. */
+apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => {
+  try {
+    const { leagueId } = req.params;
+    const { offerId, confirm = false } = req.body ?? {};
+    const provider = getProvider(req);
+    if (typeof provider.proposeTrade !== 'function') {
+      res.json({ sent: false, reason: 'unsupported_provider' });
+      return;
+    }
+    const entry = getTradeSender(leagueId);
+    const offer = (entry?.suggestions ?? []).find((s) => s.id === offerId);
+    if (!offer) { res.json({ sent: false, reason: 'offer_gone' }); return; }
+    if (!confirm) { res.json({ sent: false, reason: 'confirm_required', offer }); return; }
+    if (offer.sent) { res.json({ sent: false, reason: 'already_sent' }); return; }
+
+    const myRosterId = entry.lastScan?.userRosterId;
+    const idMap = await provider.getEspnIdMap(leagueId);
+    // Both rosters must still hold every player in the package (a waiver move or
+    // another trade since the scan makes the offer invalid).
+    const leg = (players, fromTeamId, toTeamId) => players.map((p) => {
+      const hit = idMap.get(String(p.id));
+      return hit && hit.teamId === fromTeamId ? { playerId: hit.espnId, type: 'TRADE', fromTeamId, toTeamId } : null;
+    });
+    const items = [
+      ...leg(offer.give, myRosterId, offer.partnerRosterId),
+      ...leg(offer.get, offer.partnerRosterId, myRosterId),
+    ];
+    if (myRosterId == null || items.some((it) => it === null)) {
+      res.json({ sent: false, reason: 'roster_changed' });
+      return;
+    }
+    const result = await provider.proposeTrade(leagueId, myRosterId, entry.lastScan.week, items);
+    const record = {
+      at: Date.now(),
+      offerId,
+      partnerRosterId: offer.partnerRosterId,
+      partnerName: offer.partnerName,
+      give: offer.give,
+      get: offer.get,
+      youDelta: offer.youDelta,
+      partnerDelta: offer.partnerDelta,
+      espnTransactionId: result?.id ?? null,
+      status: result?.status ?? null,
+      mode: 'manual',
+    };
+    logSentOffer(leagueId, record);
+    const fresh = getTradeSender(leagueId);
+    setTradeSender(leagueId, {
+      suggestions: (fresh?.suggestions ?? []).map((s) =>
+        s.id === offerId ? { ...s, sent: { at: record.at, espnTransactionId: record.espnTransactionId } } : s),
+    });
+    res.json({ sent: true, espnTransactionId: record.espnTransactionId, status: record.status });
+  } catch (error) {
+    if (error?.status) {
+      // Handled outcomes answer 200 with a reason the hub can word for the user.
+      res.json({ sent: false, reason: error.status === 401 ? 'creds_stale_relink' : error.message, detail: error.detail ?? null });
+      return;
+    }
+    next(error);
+  }
 });
 
 /** Trade analyzer: re-simulate the season with post-trade rosters, both sides. */

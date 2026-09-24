@@ -8,6 +8,7 @@
  * This replaces the upload/crosswalk/version flow — the files ARE the source of truth.
  */
 import * as XLSX from 'xlsx';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -120,6 +121,18 @@ export function loadProjections({ force = false } = {}) {
   };
   console.log(`[projections] loaded ${players.length} entities`, perPosition);
   return _cache;
+}
+
+/** Content hash of the six workbooks: changes exactly when any position's
+ *  projections are re-pushed (file mtimes are useless after a fresh deploy). */
+export function projectionsFingerprint() {
+  const hash = crypto.createHash('sha1');
+  for (const cfg of Object.values(POS)) {
+    const file = path.join(DIR, cfg.file);
+    hash.update(cfg.file);
+    if (fs.existsSync(file)) hash.update(fs.readFileSync(file));
+  }
+  return hash.digest('hex').slice(0, 16);
 }
 
 export function reloadProjections() {

@@ -5,7 +5,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { apiRouter, runAutopilotSweep } from './routes/api.js';
+import { apiRouter, runAutopilotSweep, runTradeSenderSweep } from './routes/api.js';
 import { corsMiddleware } from './cors.js';
 import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
@@ -160,3 +160,16 @@ setInterval(() => {
 // First run is delayed so the process warms up (projections + game status) first.
 setTimeout(() => { void runAutopilotSweep(); }, 90_000).unref();
 setInterval(() => { void runAutopilotSweep(); }, 5 * 60_000).unref();
+
+// Trade sender: every 5 minutes, rescan any opted-in league that is due (new
+// projections that have been quiet for 30 min, or 3 hours since its last scan).
+// The scan itself runs in a worker thread; a sweep in progress is never doubled.
+let tradeSweepRunning = false;
+const tradeSenderTick = async () => {
+  if (tradeSweepRunning) return;
+  tradeSweepRunning = true;
+  try { await runTradeSenderSweep(); } catch (err) { console.error('[trade-sender] sweep failed', err); }
+  finally { tradeSweepRunning = false; }
+};
+setTimeout(() => { void tradeSenderTick(); }, 120_000).unref();
+setInterval(() => { void tradeSenderTick(); }, 5 * 60_000).unref();

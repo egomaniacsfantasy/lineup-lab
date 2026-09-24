@@ -2946,7 +2946,20 @@ export function computeLineupMoves(rosterSlots, optimalAssignments, lockedIds = 
   return { moves, readable };
 }
 
-export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, givePlayerIds = [], getPlayerIds = [], readsByRoster = {} } = {}) {
+/**
+ * `sender` (the automated trade sender; absent for the UI finder) narrows the SAME
+ * per-manager search to the user's standing rules instead of pinned targets:
+ *   giveAllow     ids I'm willing to give (empty = any of mine)
+ *   protect       ids I never give
+ *   givePositions / getPositions   positions allowed on each side (empty = any)
+ *   minYouDelta   keep a trade only if MY title % rises at least this much (pts)
+ *   maxPartnerLoss  ...and the partner's title % falls at most this much (pts)
+ * Uneven packages are only generated when neither roster would overflow, so a
+ * sent offer never needs a drop (ESPN's drop-in-trade shape is not captured yet).
+ * With `sender`, the per-manager "keep the best one anyway" fallback is off: a
+ * manager with nothing clearing the thresholds contributes nothing.
+ */
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, givePlayerIds = [], getPlayerIds = [], readsByRoster = {}, sender = null } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -3087,10 +3100,31 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     s += Math.max(-3.5, Math.min(3.5, valueGap / 18));
     return Math.max(3, Math.min(97, Math.round(100 / (1 + Math.exp(-s / 3.2)))));
   };
+  // Sender rules filter each side's pool BEFORE the top-9 cut, so an allowed
+  // deeper player can still be offered.
+  const senderGiveAllow = new Set((sender?.giveAllow ?? []).map(String));
+  const senderProtect = new Set((sender?.protect ?? []).map(String));
+  const senderGivePos = sender?.givePositions?.length ? sender.givePositions : null;
+  const senderGetPos = sender?.getPositions?.length ? sender.getPositions : null;
+  const senderAllows = (team, id) => {
+    if (!sender) return true;
+    const pos = catalog[id]?.position;
+    if (team.isUser) {
+      if (senderProtect.has(String(id))) return false;
+      if (senderGiveAllow.size && !senderGiveAllow.has(String(id))) return false;
+      return !senderGivePos || senderGivePos.includes(pos);
+    }
+    return !senderGetPos || senderGetPos.includes(pos);
+  };
   const tradeable = (team) => team.players
-    .filter((id) => TRADEABLE.includes(catalog[id]?.position))
+    .filter((id) => TRADEABLE.includes(catalog[id]?.position) && senderAllows(team, id))
     .sort((a, b) => projected(b) - projected(a))
     .slice(0, 9);
+  // Active (non-IR/taxi) bodies on a roster: what an uneven trade would overflow.
+  const activeCount = (team) => {
+    const stashed = new Set([...(team.reserve ?? []), ...(team.taxi ?? [])].map(String));
+    return team.players.filter((id) => !stashed.has(String(id))).length;
+  };
   const combos = (arr, k) => {
     if (k <= 0) return [[]];
     if (k > arr.length) return [];
@@ -3124,6 +3158,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const mine = tradeable(userTeam);
     const theirs = tradeable(opp);
     for (const [k, j] of SIZES) {
+      // Sender: an uneven package only when neither side would have to drop.
+      if (sender && k !== j && (activeCount(userTeam) - k + j > maxRoster || activeCount(opp) - j + k > maxRoster)) continue;
       for (const give of combos(mine, k)) {
         const gv = val(give);
         for (const get of combos(theirs, j)) {
@@ -3269,7 +3305,13 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     byMgrSug.set(s.partnerRosterId, list);
   }
   const kept = [];
-  for (const list of byMgrSug.values()) {
+  if (sender) {
+    // Sender thresholds replace the positive-or-fallback rule: only deals that
+    // clear BOTH the user's minimum gain and the partner's maximum loss.
+    const minYou = Number(sender.minYouDelta ?? 0);
+    const maxLoss = Number(sender.maxPartnerLoss ?? Infinity);
+    kept.push(...suggestions.filter((s) => s.youDelta > 0 && s.youDelta >= minYou && s.partnerDelta >= -maxLoss));
+  } else for (const list of byMgrSug.values()) {
     const positive = list.filter((s) => s.youDelta > 0);
     if (positive.length) kept.push(...positive);
     else kept.push([...list].sort((a, b) => b.youDelta - a.youDelta)[0]);

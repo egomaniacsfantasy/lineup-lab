@@ -35,6 +35,8 @@ import { anyStarted, scorelineFor, teamScored, type Scoreline } from '../utils/l
 import { GameTag, SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
 import { BestLineups, type LineupChanges } from '../components/matchup/BestLineups';
 import { SetLineupButton } from '../components/matchup/SetLineupButton';
+import { TradeSenderPanel } from '../components/matchup/TradeSenderPanel';
+import { tradesSupported } from '../utils/leagueCapabilities';
 import { WeekAhead, type WeekAheadFork } from '../components/matchup/WeekAhead';
 import { fetchWeekForks } from '../services/predictor';
 import { winProbabilityToMoneyline } from '../utils/matchupSides';
@@ -2919,6 +2921,15 @@ function MatchupLive({
             {isConnected && stored?.provider === 'espn' && stored.leagueId && stored.userId ? (
               <section className="matchup-page__module">
                 <SetLineupButton leagueId={stored.leagueId} userId={stored.userId} />
+              </section>
+            ) : null}
+
+            {/* Trade sender: the user's standing trade rules and the offers the
+                background scan found. Every provider can see suggestions; only
+                ESPN can send them (the panel handles that). */}
+            {isConnected && stored?.leagueId && stored.userId && tradesSupported(bootstrap) ? (
+              <section className="matchup-page__module">
+                <TradeSenderPanel leagueId={stored.leagueId} userId={stored.userId} />
               </section>
             ) : null}
 
