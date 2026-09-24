@@ -142,7 +142,7 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
               {autoEnabled
                 ? autoLast?.applied
                   ? `On. Last auto-set ${autoLast.count ?? 0} change${autoLast.count === 1 ? '' : 's'}.`
-                  : 'On. We re-check hourly and set your best lineup before games lock.'
+                  : 'On. We re-check every few minutes and set your best lineup automatically.'
                 : 'Off. Let Odds Gods set your best lineup for you, automatically.'}
             </span>
           </span>

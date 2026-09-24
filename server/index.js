@@ -154,8 +154,9 @@ setInterval(() => {
 }, 5 * 60_000).unref();
 
 // Lineup autopilot: for every league that opted in, keep the ESPN lineup optimal.
-// Read-first (a write only happens when the lineup is actually sub-optimal), so an
-// hourly sweep tracks projection changes without churning already-optimal lineups.
+// Read-first (a write only happens when the lineup is actually sub-optimal), so a
+// tight 5-minute sweep just catches projection changes fast without churning an
+// already-optimal lineup (most ticks are pure reads).
 // First run is delayed so the process warms up (projections + game status) first.
-setTimeout(() => { void runAutopilotSweep(); }, 3 * 60_000).unref();
-setInterval(() => { void runAutopilotSweep(); }, 60 * 60_000).unref();
+setTimeout(() => { void runAutopilotSweep(); }, 90_000).unref();
+setInterval(() => { void runAutopilotSweep(); }, 5 * 60_000).unref();
