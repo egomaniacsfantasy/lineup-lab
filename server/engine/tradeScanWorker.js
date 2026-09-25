@@ -11,11 +11,33 @@
  */
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
-import { suggestTrades } from './engine.js';
+import { suggestTrades, analyzeTrade } from './engine.js';
 
 const SELF = fileURLToPath(import.meta.url);
 
-async function scanManagers({ ctx, partnerRosterIds, sender }) {
+/**
+ * Re-price offers already out (the "is this still worth it?" check) with the
+ * Trade Analyzer itself, on the same fresh context as the scan: today's
+ * projections, injury report and final scores. `userDrops` = the drop that was
+ * sent with the offer, so it's valued exactly as proposed.
+ */
+function recheckOffers(ctx, recheck) {
+  const mine = new Set((ctx.teams.find((t) => t.isUser)?.players ?? []).map(String));
+  return (recheck ?? []).map((r) => {
+    // A player already gone from my roster: the offer can't execute; the watcher
+    // closes it. Nothing to re-price.
+    if (!r.give.every((id) => mine.has(String(id)))) return { espnTransactionId: r.espnTransactionId, youDelta: null, partnerDelta: null };
+    try {
+      const a = analyzeTrade(ctx, { partnerRosterId: r.partnerRosterId, give: r.give, get: r.get, userDrops: r.userDrops?.length ? r.userDrops : null });
+      return { espnTransactionId: r.espnTransactionId, youDelta: a?.you?.delta?.titleProb ?? null, partnerDelta: a?.partner?.delta?.titleProb ?? null };
+    } catch (err) {
+      return { espnTransactionId: r.espnTransactionId, youDelta: null, partnerDelta: null, error: String(err?.message ?? err) };
+    }
+  });
+}
+
+async function scanManagers({ ctx, partnerRosterIds, sender, recheck }) {
+  const rechecked = recheckOffers(ctx, recheck);
   const suggestions = [];
   const perManager = [];
   for (const partnerRosterId of partnerRosterIds) {
@@ -30,7 +52,7 @@ async function scanManagers({ ctx, partnerRosterIds, sender }) {
     }
   }
   suggestions.sort((a, b) => b.youDelta - a.youDelta);
-  return { suggestions, perManager };
+  return { suggestions, perManager, rechecked };
 }
 
 /** Main-thread entry: run the scan in a fresh worker; resolves with its result. */

@@ -1479,6 +1479,36 @@ function sanitizeSenderSettings(raw = {}) {
   };
 }
 
+/**
+ * Offers already out, re-priced by this scan. If one no longer clears the
+ * user's minimum gain (X): with Trade autopilot on, withdraw it on ESPN (as
+ * him); otherwise flag it for him to decide. The partner side is his call, so
+ * only the user's own gain is checked.
+ */
+async function applyRecheck(leagueId, userId, entry, rechecked) {
+  if (!rechecked.length) return;
+  const minYou = Number(entry.settings?.minYouDelta ?? 0);
+  const auto = entry.settings?.mode === 'auto' && entry.enabled;
+  const provider = auto ? buildHeadlessProvider('espn', entry.season, userId) : null;
+  const patches = {};
+  for (const r of rechecked) {
+    if (r.youDelta == null) continue;
+    const below = r.youDelta < minYou;
+    const patch = { recheck: { at: Date.now(), youDelta: r.youDelta, partnerDelta: r.partnerDelta }, belowRules: below };
+    if (below && auto) {
+      try {
+        await provider.cancelTrade(leagueId, entry.lastScan?.userRosterId, entry.lastScan?.week, r.espnTransactionId);
+        Object.assign(patch, { state: 'canceled', closedAt: Date.now(), closedBy: 'autopilot_value_dropped' });
+        console.log(`[trade-sender] ${leagueId}: withdrew ${r.espnTransactionId} (now ${r.youDelta}% < ${minYou}%)`);
+      } catch (err) {
+        console.error(`[trade-sender] ${leagueId}: withdraw ${r.espnTransactionId} failed: ${err?.message}`);
+      }
+    }
+    patches[r.espnTransactionId] = patch;
+  }
+  if (Object.keys(patches).length) updateSentOffers(leagueId, userId, patches);
+}
+
 /** Scan one league's allowed managers and store the offers that clear the rules. */
 async function scanTradeSender(leagueId, userId, reason) {
   const key = senderKey(leagueId, userId);
@@ -1498,7 +1528,8 @@ async function scanTradeSender(leagueId, userId, reason) {
     const partnerRosterIds = ctx.teams
       .filter((t) => !t.isUser && (!s.partners.length || s.partners.includes(t.rosterId)))
       .map((t) => t.rosterId);
-    const { suggestions, perManager } = await runTradeScan({
+    const pendingOut = (entry.sent ?? []).filter((r) => r.state === 'pending' && r.espnTransactionId);
+    const { suggestions, perManager, rechecked } = await runTradeScan({
       // Only the plain-data fields the sim reads cross the thread boundary.
       ctx: {
         league: ctx.league, teams: ctx.teams, week: ctx.week, catalog: ctx.catalog,
@@ -1507,7 +1538,15 @@ async function scanTradeSender(leagueId, userId, reason) {
       },
       partnerRosterIds,
       sender: { ...s, reservedSlots: reservedSlotsOf(entry) },
+      recheck: pendingOut.map((r) => ({
+        espnTransactionId: r.espnTransactionId,
+        partnerRosterId: r.partnerRosterId,
+        give: r.give.map((p) => p.id),
+        get: r.get.map((p) => p.id),
+        userDrops: (r.drops ?? []).map((p) => p.id),
+      })),
     });
+    await applyRecheck(leagueId, userId, entry, rechecked ?? []);
     // An offer already sent keeps its "sent" marker across rescans.
     const sentById = new Map((entry.sent ?? []).map((r) => [r.offerId, r]));
     const offers = suggestions.map((sug) => {

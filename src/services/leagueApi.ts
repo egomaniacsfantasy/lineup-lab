@@ -1135,6 +1135,9 @@ export interface SentTradeOffer {
   espnTransactionId: string | null;
   state?: TradeOfferState;
   closedBy?: string;
+  // Latest re-price of the offer while it was out (every scan re-checks it).
+  recheck?: { at: number; youDelta: number; partnerDelta: number | null };
+  belowRules?: boolean;
 }
 export interface TradeSenderState {
   enabled: boolean;

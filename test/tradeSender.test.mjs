@@ -191,3 +191,23 @@ test('a spot ESPN holds for a pending offer forces a drop on the next net-add of
   assert.ok(needs);
   assert.equal(needs.drops.you.length, 1, 'reserved spot -> one drop, like ESPN requires');
 });
+
+test('pending offers are re-priced by the analyzer on every scan (injury -> value drops)', async () => {
+  const { analyzeTrade } = await import('../server/engine/engine.js');
+  const t2 = teams[1].players;
+  const give = [you.players[3]];       // my RB3
+  const get = [t2[4]];                 // their WR1
+  const recheck = [{ espnTransactionId: 'tx-1', partnerRosterId: 2, give, get, userDrops: [] }];
+  const healthy = await runTradeScan({ ctx, partnerRosterIds: [], sender: {}, recheck });
+  const direct = analyzeTrade(ctx, { partnerRosterId: 2, give, get });
+  assert.equal(healthy.rechecked[0].youDelta, direct.you.delta.titleProb, 'the re-check IS the analyzer');
+
+  // Their WR1 gets hurt: the pipeline (or ESPN's Out tag) zeroes his weeks.
+  const hurt = projections.map((p) => (p.playerId === get[0]
+    ? { ...p, mean: 0, seasonTotal: 0, weekly: Object.fromEntries(Object.keys(p.weekly).map((w) => [w, 0])) }
+    : p));
+  const hurtCtx = { ...ctx, projections: { version: 'hurt', projections: hurt } };
+  const after = await runTradeScan({ ctx: hurtCtx, partnerRosterIds: [], sender: {}, recheck });
+  assert.ok(after.rechecked[0].youDelta < healthy.rechecked[0].youDelta, 'value falls once he is hurt');
+  assert.ok(after.rechecked[0].youDelta < 1, 'and no longer clears a 1% rule -> autopilot would withdraw it');
+});

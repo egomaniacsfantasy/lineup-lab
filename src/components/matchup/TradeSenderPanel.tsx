@@ -422,8 +422,19 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                 <span className="trade-sender__sent-copy">
                   <strong>{r.partnerName}</strong>: {names(r.give)} for {names(r.get)}
                   <span className={`trade-sender__state trade-sender__state--${r.state ?? 'pending'}`}>
-                    {r.closedBy === 'watcher_after_accept' ? 'Pulled after another offer was accepted' : STATE_LABEL[r.state ?? 'pending']}
+                    {r.closedBy === 'watcher_after_accept'
+                      ? 'Pulled after another offer was accepted'
+                      : r.closedBy === 'autopilot_value_dropped'
+                        ? `Withdrawn by autopilot: now ${fmtPct(r.recheck?.youDelta ?? 0)} for you, below your ${s.minYouDelta}%`
+                        : STATE_LABEL[r.state ?? 'pending']}
                   </span>
+                  {(r.state ?? 'pending') === 'pending' && r.recheck ? (
+                    <span className={`trade-sender__state${r.belowRules ? ' trade-sender__state--declined' : ''}`}>
+                      {r.belowRules
+                        ? `No longer clears your rules: now ${fmtPct(r.recheck.youDelta)} for you (was ${fmtPct(r.youDelta)}). Consider withdrawing.`
+                        : `Re-checked ${ago(r.recheck.at)}: still ${fmtPct(r.recheck.youDelta)} for you.`}
+                    </span>
+                  ) : null}
                 </span>
                 {(r.state ?? 'pending') === 'pending' && r.espnTransactionId ? (
                   <button
