@@ -1401,11 +1401,45 @@ apiRouter.post('/league/:leagueId/set-lineup', async (req, res, next) => {
   }
 });
 
+/**
+ * Link THIS manager's own ESPN login to the league (the hub's "Link my ESPN
+ * login" button). The normal connect flow never asks for a login when the
+ * server can already read the league with a league-mate's, so a manager could
+ * never hand over his own. Body: { espnS2, swid, userId } read by the ESPN
+ * connector from his browser. Refuses a different account than his team's and
+ * checks the login really reads the league before saving it under him.
+ */
+apiRouter.post('/league/:leagueId/espn-link', async (req, res, next) => {
+  try {
+    const { leagueId } = req.params;
+    const { espnS2, swid, userId } = req.body ?? {};
+    if (!espnS2 || !swid) { res.json({ linked: false, reason: 'no_session' }); return; }
+    if (userId && normSwid(swid) !== normSwid(userId)) { res.json({ linked: false, reason: 'different_account' }); return; }
+    let result;
+    try {
+      result = await espnConnect({ season: seasonParam(req.query.season), leagueId, espnS2, swid });
+    } catch (err) {
+      res.json({ linked: false, reason: 'espn_rejected', detail: err?.message ?? null });
+      return;
+    }
+    if (!result) { res.json({ linked: false, reason: 'league_not_found' }); return; }
+    saveEspnCreds(leagueId, { espnS2, swid });
+    res.json({ linked: true, yourRosterId: result.yourRosterId ?? null });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /** Autopilot opt-in: read the current state (enabled + last sweep result). */
 apiRouter.get('/league/:leagueId/autopilot', (req, res) => {
   rememberOwnEspnCreds(req, req.params.leagueId);
   const entry = getAutopilot(req.params.leagueId, req.query.userId ?? null);
-  res.json({ enabled: Boolean(entry?.enabled), lastRun: entry?.lastRun ?? null, lastResult: entry?.lastResult ?? null });
+  res.json({
+    enabled: Boolean(entry?.enabled),
+    lastRun: entry?.lastRun ?? null,
+    lastResult: entry?.lastResult ?? null,
+    canWrite: canWriteFor(req, req.params.leagueId, req.query.userId ?? null),
+  });
 });
 
 /** Autopilot opt-in: give (or revoke) reign to auto-set the optimal lineup. ESPN

@@ -1,0 +1,38 @@
+.link-espn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.link-espn__btn {
+  align-self: flex-start;
+  border: 1px solid var(--accent, #3b82f6);
+  border-radius: 10px;
+  background: var(--accent, #3b82f6);
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+}
+
+.link-espn__btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.link-espn__note {
+  margin: 0;
+  color: var(--text-muted, #8a8f98);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 12px;
+}
+
+.link-espn__note--error {
+  color: #ff6b6b;
+}
+
+.link-espn__note a {
+  color: var(--accent, #3b82f6);
+}

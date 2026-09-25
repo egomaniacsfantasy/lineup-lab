@@ -1083,6 +1083,7 @@ export function setEspnLineup(
 
 export interface AutopilotState {
   enabled: boolean;
+  canWrite?: boolean;
   lastRun?: number | null;
   lastResult?: {
     at: number;
@@ -1204,6 +1205,19 @@ export function cancelTradeOffer(
   body: { userId: string; espnTransactionId: string },
 ): Promise<{ canceled: boolean; reason?: string }> {
   return get(`/api/league/${leagueId}/trade-sender/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+// Save THIS manager's own ESPN login (read by the connector) for the league, so
+// autopilot writes act as him. Refuses a different ESPN account than his team's.
+export function linkEspnLogin(
+  leagueId: string,
+  body: { espnS2: string; swid: string; userId: string },
+): Promise<{ linked: boolean; reason?: string; yourRosterId?: number | null }> {
+  return get(`/api/league/${leagueId}/espn-link`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

@@ -11,6 +11,7 @@ import {
   type TradeSenderSettings,
   type TradeSenderState,
 } from '../../services/leagueApi';
+import { LinkEspnLogin } from './LinkEspnLogin';
 import './TradeSenderPanel.css';
 
 const POSITIONS = ['QB', 'RB', 'WR', 'TE'];
@@ -373,7 +374,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
               ) : !state.canSend ? (
                 <p className="trade-sender__note">
                   {state.provider === 'espn'
-                    ? 'Re-link your ESPN account once to send offers from here (or propose it in ESPN).'
+                    ? 'Tap Link my ESPN login (below) once to send offers from here, or propose it in ESPN.'
                     : 'Propose this one in your league app.'}
                 </p>
               ) : offer.drops?.you.length && !state.dropSendReady ? (
@@ -479,7 +480,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
             <span className="trade-sender__auto-title">Trade autopilot: send offers that clear my rules on ESPN</span>
             <span className="trade-sender__auto-note">
               {!state.canSend && s.mode !== 'auto'
-                ? 'Locked: we need your own ESPN login to send offers as you. Re-link your ESPN account once (Connect, ESPN), then come back and switch this on.'
+                ? 'Locked: we need your own ESPN login to send offers as you. Tap Link my ESPN login below (once, on a computer with Chrome).'
                 : s.mode === 'auto'
                 ? state.autoSend?.reason === 'needs_own_login'
                   ? 'Paused until we have your own ESPN login. Open Odds Gods on a device signed in to ESPN.'
@@ -490,6 +491,10 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
             </span>
           </span>
         </label>
+      ) : null}
+
+      {state.provider === 'espn' && !state.canSend ? (
+        <LinkEspnLogin leagueId={leagueId} userId={userId} onLinked={() => void load()} />
       ) : null}
 
       {confirmAuto ? (

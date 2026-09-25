@@ -7,6 +7,7 @@ import {
   type SetLineupMove,
   type AutopilotState,
 } from '../../services/leagueApi';
+import { LinkEspnLogin } from './LinkEspnLogin';
 import './SetLineupButton.css';
 
 type Phase = 'idle' | 'loading' | 'preview' | 'applying' | 'done' | 'error';
@@ -23,6 +24,9 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
   const [autoEnabled, setAutoEnabled] = useState<boolean | null>(null);
   const [autoLast, setAutoLast] = useState<AutopilotState['lastResult']>(null);
   const [autoBusy, setAutoBusy] = useState(false);
+  const [canWrite, setCanWrite] = useState<boolean | null>(null);
+  const [autoError, setAutoError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +35,7 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
         if (cancelled) return;
         setAutoEnabled(state.enabled);
         setAutoLast(state.lastResult ?? null);
+        setCanWrite(state.canWrite ?? null);
       })
       .catch(() => {
         if (!cancelled) setAutoEnabled(false);
@@ -38,16 +43,19 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
     return () => {
       cancelled = true;
     };
-  }, [leagueId, userId]);
+  }, [leagueId, userId, reloadKey]);
 
   const toggleAutopilot = async () => {
     if (autoBusy || autoEnabled === null) return;
     setAutoBusy(true);
+    setAutoError(null);
     try {
       const res = await setAutopilotState(leagueId, { userId, enabled: !autoEnabled });
       setAutoEnabled(res.enabled);
     } catch {
-      /* leave the toggle where it was */
+      // The only refusal is a missing login of the manager's own: say so.
+      setAutoError('Autopilot needs your own ESPN login. Tap Link my ESPN login below.');
+      setCanWrite(false);
     } finally {
       setAutoBusy(false);
     }
@@ -149,6 +157,10 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
             </span>
           </span>
         </label>
+      ) : null}
+      {autoError ? <p className="set-lineup__note">{autoError}</p> : null}
+      {canWrite === false ? (
+        <LinkEspnLogin leagueId={leagueId} userId={userId} onLinked={() => { setAutoError(null); setReloadKey((k) => k + 1); }} />
       ) : null}
     </div>
   );
