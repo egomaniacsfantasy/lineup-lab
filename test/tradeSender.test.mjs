@@ -55,7 +55,7 @@ const ctx = {
 const you = teams[0];
 const maxRoster = ROSTER_POSITIONS.length;
 
-test('sender rules: protect, give pool, positions, thresholds, no forced drops', async () => {
+test('sender rules: protect, give pool, positions, thresholds, drops that fit', async () => {
   const protect = [you.players[1]]; // my RB1 is untouchable
   const giveAllow = you.players.slice(1, 4); // only my RBs may go
   const sender = { protect, giveAllow, givePositions: [], getPositions: ['WR'], minYouDelta: 0.5, maxPartnerLoss: 13 };
@@ -70,8 +70,11 @@ test('sender rules: protect, give pool, positions, thresholds, no forced drops',
     assert.ok(get.every((id) => catalog[id].position === 'WR'), 'only receives allowed positions');
     assert.ok(s.youDelta >= 0.5, 'clears my minimum gain');
     assert.ok(s.partnerDelta >= -13, 'partner loses no more than the cap');
-    assert.ok(you.players.length - give.length + get.length <= maxRoster, 'I never have to drop');
-    assert.ok(teams[1].players.length - get.length + give.length <= maxRoster, 'partner never has to drop');
+    const need = Math.max(0, you.players.length - give.length + get.length - maxRoster);
+    const drops = s.drops.you.map((p) => p.id);
+    assert.equal(drops.length, need, 'I drop exactly enough to fit an uneven package');
+    assert.ok(!drops.some((id) => protect.includes(id)), 'a protected player is never the drop');
+    assert.ok(!drops.some((id) => get.includes(id) || give.includes(id)), 'never drops a traded player');
   }
 });
 
@@ -92,4 +95,21 @@ test('worker scan walks managers one by one and matches the in-process finder', 
     direct.suggestions.map((s) => [s.youDelta, s.partnerDelta]).sort(),
     'same seed + same sims -> identical numbers off the main thread',
   );
+});
+
+test('uneven packages: I receive more -> my worst unprotected player is dropped', async () => {
+  // My roster is 11 of 12 active. Pin a 1-for-3 (my WR5 for their three WRs): one
+  // body too many, so exactly one of mine is cut, and never a protected one.
+  const t2 = teams[1].players;
+  const protect = [you.players[6]]; // my WR3 (6 ppg), a natural drop candidate, is protected
+  const res = await suggestTrades(ctx, {
+    maxSim: 20, partnerRosterId: 2, getPlayerIds: [t2[4], t2[5], t2[6]],
+    sender: { protect, giveAllow: [you.players[10]], minYouDelta: 0, maxPartnerLoss: 100 },
+  });
+  const oneForThree = res.suggestions.find((s) => s.give.length === 1 && s.get.length === 3);
+  assert.ok(oneForThree, 'the pinned 1-for-3 clears the rules');
+  assert.equal(oneForThree.drops.you.length, 1, 'one body over -> one drop');
+  assert.ok(!protect.includes(oneForThree.drops.you[0].id), 'the protected player is not the drop');
+  // Giving more than I get never makes ME drop (the partner settles his own overflow).
+  for (const s of res.suggestions.filter((x) => x.give.length > x.get.length)) assert.equal(s.drops.you.length, 0);
 });

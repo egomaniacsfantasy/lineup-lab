@@ -28,6 +28,15 @@ const ESPN_BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
 // Writes (lineup moves, transactions) go to a DIFFERENT host than reads.
 const ESPN_WRITE_BASE = 'https://lm-api-writes.fantasy.espn.com/apis/v3/games/ffl';
 
+/* A drop attached to a trade proposal. NOT yet captured from ESPN's web client
+   (the propose + cancel shapes were); this mirrors the ESPN add/drop item shape.
+   Until a real capture confirms it, TRADE_DROP_CONFIRMED stays false and the
+   sender refuses to send an offer that needs a drop. */
+export const TRADE_DROP_CONFIRMED = false;
+export function espnTradeDropItem(espnId, teamId) {
+  return { playerId: Number(espnId), type: 'DROP', fromTeamId: Number(teamId), toTeamId: 0 };
+}
+
 // ESPN proTeamId → NFL abbreviation (Sleeper's team codes).
 const PRO_TEAM = {
   0: null, 1: 'ATL', 2: 'BUF', 3: 'CHI', 4: 'CIN', 5: 'CLE', 6: 'DAL', 7: 'DEN',
@@ -247,10 +256,10 @@ function rosterPositionsFromCounts(lineupSlotCounts = {}) {
 export function createEspnProvider({ season, espnS2, swid }) {
   const synthetic = {};
 
-  const espnGet = async (leagueId, views) => {
+  const espnGet = async (leagueId, views, extraQuery = '') => {
     const url = `${ESPN_BASE}/seasons/${season}/segments/0/leagues/${leagueId}?${views
       .map((v) => `view=${v}`)
-      .join('&')}`;
+      .join('&')}${extraQuery}`;
     const headers = {};
     // Request cookies win; otherwise fall back to the server store so any
     // device works after the league's been linked once (the mobile path).
@@ -473,7 +482,10 @@ export function createEspnProvider({ season, espnS2, swid }) {
     // type:'TRADE', fromTeamId, toTeamId } for every player moving, both ways.
     // Shape captured from ESPN's own web client (2026-09-23). The proposer's side
     // comes back already ACCEPTED; the response `id` is what cancelTrade needs.
-    async proposeTrade(leagueId, teamId, scoringPeriodId, items, { expiresInDays = 2, comment = '' } = {}) {
+    // `drops` (ESPN ids of OUR players to release when the trade processes) ride
+    // along as DROP items for an uneven package that overflows our roster.
+    async proposeTrade(leagueId, teamId, scoringPeriodId, items, { expiresInDays = 2, comment = '', drops = [] } = {}) {
+      const dropItems = drops.map((espnId) => espnTradeDropItem(espnId, Number(teamId)));
       return writeTransaction(leagueId, (memberId) => ({
         isLeagueManager: false,
         teamId: Number(teamId),
@@ -483,7 +495,7 @@ export function createEspnProvider({ season, espnS2, swid }) {
         executionType: 'EXECUTE',
         comment,
         expirationDate: new Date(Date.now() + expiresInDays * 24 * 60 * 60_000).toISOString(),
-        items,
+        items: [...items, ...dropItems],
       }));
     },
 
@@ -500,10 +512,40 @@ export function createEspnProvider({ season, espnS2, swid }) {
       }));
     },
 
+    // Trade-proposal activity for the watcher: every transaction ESPN lists for
+    // the given scoring periods (plus the default view), de-duplicated, trimmed
+    // to what status tracking needs. Uncached: the watcher needs it fresh.
+    async getTradeActivity(leagueId, scoringPeriodIds = []) {
+      const reads = [espnGet(leagueId, ['mTransactions2'])];
+      for (const sp of scoringPeriodIds) reads.push(espnGet(leagueId, ['mTransactions2'], `&scoringPeriodId=${Number(sp)}`));
+      const blobs = await Promise.all(reads);
+      const byId = new Map();
+      for (const blob of blobs) {
+        for (const t of blob?.transactions ?? []) {
+          if (!t?.id || byId.has(t.id)) continue;
+          byId.set(t.id, {
+            id: t.id,
+            type: t.type ?? null,
+            status: t.status ?? null,
+            teamId: t.teamId ?? null,
+            relatedTransactionId: t.relatedTransactionId ?? null,
+            teamActions: t.teamActions ?? null,
+            proposedDate: t.proposedDate ?? null,
+            processDate: t.processDate ?? null,
+            expirationDate: t.expirationDate ?? null,
+          });
+        }
+      }
+      return [...byId.values()];
+    },
+
     // Canonical id -> raw ESPN id for every rostered player in the league (the
     // trade write keys on ESPN ids, both teams' players).
-    async getEspnIdMap(leagueId) {
-      const [blob, crosswalk] = await Promise.all([loadLeague(leagueId), getCrosswalk()]);
+    async getEspnIdMap(leagueId, { fresh = false } = {}) {
+      const [blob, crosswalk] = await Promise.all([
+        fresh ? espnGet(leagueId, ['mRoster']) : loadLeague(leagueId),
+        getCrosswalk(),
+      ]);
       const out = new Map();
       for (const team of blob.teams ?? []) {
         for (const entry of team.roster?.entries ?? []) {

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
+  cancelTradeOffer,
   getTradeSenderState,
   saveTradeSender,
   scanTradeSenderNow,
   sendTradeOffer,
+  type TradeOfferState,
   type TradeSenderOffer,
   type TradeSenderSettings,
   type TradeSenderState,
@@ -24,7 +26,18 @@ function ago(at: number) {
   return hrs < 24 ? `${hrs} hr ago` : `${Math.round(hrs / 24)} d ago`;
 }
 
+const STATE_LABEL: Record<TradeOfferState, string> = {
+  pending: 'Waiting on them',
+  accepted: 'Accepted, processing on ESPN',
+  processed: 'Trade went through',
+  declined: 'Declined',
+  canceled: 'Withdrawn',
+  expired: 'Expired',
+};
+
 const SEND_ERRORS: Record<string, string> = {
+  drop_format_pending: 'Offers that need a drop from you are not switched on yet.',
+  trade_pending_processing: 'A trade was just accepted. New offers open up once ESPN processes it.',
   roster_changed: 'A roster changed since the scan, so this offer is no longer valid. Scan again.',
   offer_gone: 'That offer is out of date. Scan again.',
   already_sent: 'Already sent.',
@@ -46,6 +59,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ id: string; text: string; error: boolean } | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -121,6 +135,16 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
       setNotice({ id: offer.id, text: 'ESPN rejected the offer. Nothing was sent.', error: true });
     } finally {
       setSendingId(null);
+    }
+  };
+
+  const withdraw = async (espnTransactionId: string) => {
+    setCancelingId(espnTransactionId);
+    try {
+      await cancelTradeOffer(leagueId, { userId, espnTransactionId });
+      await load();
+    } finally {
+      setCancelingId(null);
     }
   };
 
@@ -268,6 +292,12 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
         </div>
       ) : null}
 
+      {state.awaitingTrade ? (
+        <p className="trade-sender__note trade-sender__note--good">
+          One of your offers was accepted. We pulled your other offers and will scan again once ESPN processes the trade.
+        </p>
+      ) : null}
+
       {state.scanning ? (
         <p className="trade-sender__note">Scanning your league, one manager at a time. This can take a few minutes.</p>
       ) : state.lastScan?.error ? (
@@ -295,18 +325,37 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
               <p className="trade-sender__offer-line">
                 <span className="trade-sender__offer-tag">You get</span> {names(offer.get)}
               </p>
+              {offer.drops?.you.length ? (
+                <p className="trade-sender__offer-line">
+                  <span className="trade-sender__offer-tag">You drop</span> {names(offer.drops.you)}
+                </p>
+              ) : null}
+              {offer.drops?.partner.length ? (
+                <p className="trade-sender__offer-line trade-sender__offer-line--muted">
+                  <span className="trade-sender__offer-tag">They drop</span> {names(offer.drops.partner)} (their call)
+                </p>
+              ) : null}
               <p className="trade-sender__offer-odds">
                 Title odds: you <strong className="is-up">{fmtPct(offer.youDelta)}</strong>, them{' '}
                 <strong className={offer.partnerDelta < 0 ? 'is-down' : 'is-up'}>{fmtPct(offer.partnerDelta)}</strong>
               </p>
 
               {offer.sent ? (
-                <p className="trade-sender__sent">Sent {ago(offer.sent.at)}</p>
+                <p className="trade-sender__sent">
+                  Sent {ago(offer.sent.at)}. {STATE_LABEL[offer.sent.state ?? 'pending']}.
+                </p>
               ) : !state.canSend ? (
                 <p className="trade-sender__note">Propose this one in your league app.</p>
+              ) : offer.drops?.you.length && !state.dropSendReady ? (
+                <p className="trade-sender__note">Sending offers that need a drop from you is not switched on yet.</p>
+              ) : state.awaitingTrade ? (
+                <p className="trade-sender__note">Paused while your accepted trade processes.</p>
               ) : confirmId === offer.id ? (
                 <div className="trade-sender__confirm">
-                  <p>This sends a real trade offer to {offer.partnerName} on ESPN.</p>
+                  <p>
+                    This sends a real trade offer to {offer.partnerName} on ESPN
+                    {offer.drops?.you.length ? `, and drops ${names(offer.drops.you)} if they accept` : ''}.
+                  </p>
                   <div className="trade-sender__actions">
                     <button className="trade-sender__btn trade-sender__btn--go" onClick={() => void send(offer)} type="button">
                       Send offer
@@ -336,6 +385,34 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {state.sentOffers.length > 0 ? (
+        <div className="trade-sender__sent-list">
+          <p className="trade-sender__label">Offers you sent</p>
+          <ul className="trade-sender__offers">
+            {state.sentOffers.map((r) => (
+              <li className="trade-sender__sent-row" key={r.espnTransactionId ?? r.offerId}>
+                <span className="trade-sender__sent-copy">
+                  <strong>{r.partnerName}</strong>: {names(r.give)} for {names(r.get)}
+                  <span className={`trade-sender__state trade-sender__state--${r.state ?? 'pending'}`}>
+                    {r.closedBy === 'watcher_after_accept' ? 'Pulled after another offer was accepted' : STATE_LABEL[r.state ?? 'pending']}
+                  </span>
+                </span>
+                {(r.state ?? 'pending') === 'pending' && r.espnTransactionId ? (
+                  <button
+                    className="trade-sender__btn trade-sender__btn--ghost"
+                    disabled={cancelingId !== null}
+                    onClick={() => void withdraw(r.espnTransactionId as string)}
+                    type="button"
+                  >
+                    {cancelingId === r.espnTransactionId ? 'Withdrawing...' : 'Withdraw'}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       <div className="trade-sender__foot">

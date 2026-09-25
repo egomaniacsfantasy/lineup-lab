@@ -5,7 +5,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { apiRouter, runAutopilotSweep, runTradeSenderSweep } from './routes/api.js';
+import { apiRouter, runAutopilotSweep, runTradeSenderSweep, runTradeWatcher } from './routes/api.js';
 import { corsMiddleware } from './cors.js';
 import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
@@ -173,3 +173,14 @@ const tradeSenderTick = async () => {
 };
 setTimeout(() => { void tradeSenderTick(); }, 120_000).unref();
 setInterval(() => { void tradeSenderTick(); }, 5 * 60_000).unref();
+
+// Trade-offer watcher: every 5 minutes, check each sent offer on ESPN. When one is
+// accepted, the others are pulled and the sender waits for the trade to process.
+let tradeWatchRunning = false;
+setInterval(() => {
+  if (tradeWatchRunning) return;
+  tradeWatchRunning = true;
+  runTradeWatcher()
+    .catch((err) => console.error('[trade-watch] sweep failed', err))
+    .finally(() => { tradeWatchRunning = false; });
+}, 5 * 60_000).unref();

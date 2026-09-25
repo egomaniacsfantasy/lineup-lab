@@ -273,3 +273,49 @@
   color: var(--text-muted, #8a8f98);
   font-size: 12px;
 }
+
+.trade-sender__note--good {
+  color: #3ecf8e;
+}
+
+.trade-sender__offer-line--muted {
+  color: var(--text-muted, #8a8f98);
+}
+
+.trade-sender__sent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trade-sender__sent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.13));
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.trade-sender__sent-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-primary, #f4f5f2);
+  font-size: 13px;
+}
+
+.trade-sender__state {
+  color: var(--text-muted, #8a8f98);
+  font-size: 12px;
+}
+
+.trade-sender__state--accepted,
+.trade-sender__state--processed {
+  color: #3ecf8e;
+}
+
+.trade-sender__state--declined {
+  color: #ff6b6b;
+}

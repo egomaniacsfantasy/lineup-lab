@@ -67,9 +67,27 @@ export function logSentOffer(leagueId, record) {
   writeAll(all);
 }
 
+/** Patch sent-offer records (matched by ESPN transaction id) in one write. */
+export function updateSentOffers(leagueId, patchesById) {
+  const all = readAll();
+  const key = String(leagueId);
+  const entry = all[key];
+  if (!entry?.sent) return;
+  entry.sent = entry.sent.map((r) => (patchesById[r.espnTransactionId] ? { ...r, ...patchesById[r.espnTransactionId] } : r));
+  writeAll(all);
+}
+
+/** Leagues the watcher must look at: any offer still pending, or an accepted
+ *  trade ESPN has not processed yet. */
+export function listWatchedTradeSenders() {
+  return Object.entries(readAll())
+    .filter(([k, v]) => k !== META_KEY && (v?.awaitingTrade || (v?.sent ?? []).some((r) => r.state === 'pending')))
+    .map(([leagueId]) => ({ leagueId, ...getTradeSender(leagueId) }));
+}
+
 export function listEnabledTradeSenders() {
   return Object.entries(readAll())
-    .filter(([k, v]) => k !== META_KEY && v?.enabled)
+    .filter(([k, v]) => k !== META_KEY && v?.enabled && !v?.awaitingTrade)
     .map(([leagueId]) => ({ leagueId, ...getTradeSender(leagueId) }));
 }
 

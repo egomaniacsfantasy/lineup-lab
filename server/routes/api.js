@@ -10,8 +10,10 @@ import { saveEspnCreds, getEspnCreds } from '../providers/espnCredStore.js';
 import { getAutopilot, setAutopilot, listEnabledAutopilot } from '../engine/autopilotStore.js';
 import {
   DEFAULT_SENDER_SETTINGS, getTradeSender, setTradeSender, logSentOffer, listEnabledTradeSenders,
-  noteProjectionsFingerprint, getProjectionsMeta,
+  noteProjectionsFingerprint, getProjectionsMeta, updateSentOffers, listWatchedTradeSenders,
 } from '../engine/tradeSenderStore.js';
+import { classifyOffer } from '../engine/tradeWatch.js';
+import { TRADE_DROP_CONFIRMED } from '../providers/espnProvider.js';
 import { runTradeScan } from '../engine/tradeScanWorker.js';
 import { projectionsFingerprint } from '../projections/loadFromRepo.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
@@ -1498,7 +1500,7 @@ async function scanTradeSender(leagueId, reason) {
     const offers = suggestions.map((sug) => {
       const id = offerKey(sug);
       const sent = sentById.get(id);
-      return { ...sug, id, sent: sent ? { at: sent.at, espnTransactionId: sent.espnTransactionId } : null };
+      return { ...sug, id, sent: sent ? { at: sent.at, espnTransactionId: sent.espnTransactionId, state: sent.state ?? 'pending' } : null };
     });
     setTradeSender(key, {
       suggestions: offers,
@@ -1568,6 +1570,9 @@ apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
       lastScan: entry?.lastScan ?? null,
       scanning: senderScanning.has(String(leagueId)),
       canSend: providerName(req) === 'espn' && Boolean(getEspnCreds(leagueId)),
+      sentOffers: (entry?.sent ?? []).slice(0, 20),
+      awaitingTrade: entry?.awaitingTrade ?? null,
+      dropSendReady: TRADE_DROP_CONFIRMED,
       myPlayers,
       managers,
     });
@@ -1621,9 +1626,12 @@ apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => 
     if (!offer) { res.json({ sent: false, reason: 'offer_gone' }); return; }
     if (!confirm) { res.json({ sent: false, reason: 'confirm_required', offer }); return; }
     if (offer.sent) { res.json({ sent: false, reason: 'already_sent' }); return; }
+    if (entry.awaitingTrade) { res.json({ sent: false, reason: 'trade_pending_processing' }); return; }
+    const myDrops = offer.drops?.you ?? [];
+    if (myDrops.length && !TRADE_DROP_CONFIRMED) { res.json({ sent: false, reason: 'drop_format_pending' }); return; }
 
     const myRosterId = entry.lastScan?.userRosterId;
-    const idMap = await provider.getEspnIdMap(leagueId);
+    const idMap = await provider.getEspnIdMap(leagueId, { fresh: true });
     // Both rosters must still hold every player in the package (a waiver move or
     // another trade since the scan makes the offer invalid).
     const leg = (players, fromTeamId, toTeamId) => players.map((p) => {
@@ -1634,11 +1642,16 @@ apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => 
       ...leg(offer.give, myRosterId, offer.partnerRosterId),
       ...leg(offer.get, offer.partnerRosterId, myRosterId),
     ];
-    if (myRosterId == null || items.some((it) => it === null)) {
+    const dropIds = myDrops.map((p) => {
+      const hit = idMap.get(String(p.id));
+      return hit && hit.teamId === myRosterId ? hit.espnId : null;
+    });
+    if (myRosterId == null || items.some((it) => it === null) || dropIds.some((d) => d === null)) {
       res.json({ sent: false, reason: 'roster_changed' });
       return;
     }
-    const result = await provider.proposeTrade(leagueId, myRosterId, entry.lastScan.week, items);
+    const EXPIRES_DAYS = 2;
+    const result = await provider.proposeTrade(leagueId, myRosterId, entry.lastScan.week, items, { expiresInDays: EXPIRES_DAYS, drops: dropIds });
     const record = {
       at: Date.now(),
       offerId,
@@ -1648,8 +1661,11 @@ apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => 
       get: offer.get,
       youDelta: offer.youDelta,
       partnerDelta: offer.partnerDelta,
+      drops: myDrops,
       espnTransactionId: result?.id ?? null,
       status: result?.status ?? null,
+      state: 'pending',
+      expiresAt: Date.now() + EXPIRES_DAYS * 24 * 60 * 60_000,
       mode: 'manual',
     };
     logSentOffer(leagueId, record);
@@ -1665,6 +1681,139 @@ apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => 
       res.json({ sent: false, reason: error.status === 401 ? 'creds_stale_relink' : error.message, detail: error.detail ?? null });
       return;
     }
+    next(error);
+  }
+});
+
+/** Withdraw one of our pending offers on ESPN. */
+apiRouter.post('/league/:leagueId/trade-sender/cancel', async (req, res, next) => {
+  try {
+    const { leagueId } = req.params;
+    const { espnTransactionId } = req.body ?? {};
+    const provider = getProvider(req);
+    const entry = getTradeSender(leagueId);
+    const record = (entry?.sent ?? []).find((r) => r.espnTransactionId === espnTransactionId);
+    if (typeof provider.cancelTrade !== 'function' || !record || record.state !== 'pending') {
+      res.json({ canceled: false, reason: record ? 'not_pending' : 'offer_gone' });
+      return;
+    }
+    await provider.cancelTrade(leagueId, entry.lastScan?.userRosterId, entry.lastScan?.week, espnTransactionId);
+    updateSentOffers(leagueId, { [espnTransactionId]: { state: 'canceled', closedAt: Date.now(), closedBy: 'user' } });
+    res.json({ canceled: true });
+  } catch (error) {
+    if (error?.status) {
+      res.json({ canceled: false, reason: error.status === 401 ? 'creds_stale_relink' : error.message, detail: error.detail ?? null });
+      return;
+    }
+    next(error);
+  }
+});
+
+/**
+ * Offer watcher (index.js, every 5 min). For every league with an offer out:
+ * read ESPN's transaction feed + a fresh roster and classify each pending offer
+ * (tradeWatch.classifyOffer). The moment one is ACCEPTED, cancel every other
+ * pending offer (each was simulated against the pre-trade roster, so two
+ * acceptances could stack into a trade nobody evaluated) and hold the sender
+ * until the accepted trade actually processes; then rescan on the new roster.
+ */
+export async function runTradeWatcher() {
+  for (const entry of listWatchedTradeSenders()) {
+    const leagueId = entry.leagueId;
+    const myTeamId = entry.lastScan?.userRosterId;
+    const week = entry.lastScan?.week ?? null;
+    try {
+      const provider = buildHeadlessProvider('espn', entry.season);
+      if (typeof provider.getTradeActivity !== 'function') continue;
+      const periods = week ? [week, week + 1] : [];
+      const [activity, roster] = await Promise.all([
+        provider.getTradeActivity(leagueId, periods),
+        provider.getEspnIdMap(leagueId, { fresh: true }),
+      ]);
+
+      const patches = {};
+      const stateOf = (r) => patches[r.espnTransactionId]?.state ?? r.state;
+      let accepted = null;
+      for (const record of entry.sent ?? []) {
+        const isAwaited = entry.awaitingTrade && record.espnTransactionId === entry.awaitingTrade.espnTransactionId;
+        if (record.state !== 'pending' && !isAwaited) continue;
+        const verdict = classifyOffer(record, activity, roster, myTeamId);
+        if (verdict.state !== record.state || verdict.espnStatus !== (record.espnStatus ?? null)) {
+          patches[record.espnTransactionId] = {
+            state: verdict.state,
+            espnStatus: verdict.espnStatus,
+            ...(verdict.state !== 'pending' ? { closedAt: Date.now() } : {}),
+          };
+        }
+        if (!accepted && !isAwaited && (verdict.state === 'accepted' || verdict.state === 'processed')) {
+          accepted = { record, verdict };
+        }
+      }
+
+      let awaitingTrade = entry.awaitingTrade ?? null;
+      let rescan = false;
+      if (accepted && !awaitingTrade) {
+        // Pull every OTHER still-pending offer before a second acceptance lands.
+        for (const other of entry.sent ?? []) {
+          if (other === accepted.record || stateOf(other) !== 'pending') continue;
+          try {
+            await provider.cancelTrade(leagueId, myTeamId, week, other.espnTransactionId);
+            patches[other.espnTransactionId] = { state: 'canceled', closedAt: Date.now(), closedBy: 'watcher_after_accept' };
+          } catch (err) {
+            console.error(`[trade-watch] ${leagueId}: cancel ${other.espnTransactionId} failed: ${err?.message}`);
+          }
+        }
+        console.log(`[trade-watch] ${leagueId}: offer ${accepted.record.espnTransactionId} ${accepted.verdict.state}; others pulled`);
+        if (accepted.verdict.state === 'processed') rescan = true; // already on the roster
+        else awaitingTrade = { offerId: accepted.record.offerId, espnTransactionId: accepted.record.espnTransactionId, since: Date.now() };
+      } else if (awaitingTrade) {
+        const awaited = (entry.sent ?? []).find((r) => r.espnTransactionId === awaitingTrade.espnTransactionId);
+        const st = awaited ? stateOf(awaited) : 'processed';
+        // Processed (rosters moved) or reversed (veto/decline): the hold ends either way.
+        if (st === 'processed' || st === 'declined' || st === 'canceled' || st === 'expired') {
+          rescan = true;
+          awaitingTrade = null;
+        }
+      }
+
+      if (Object.keys(patches).length) updateSentOffers(leagueId, patches);
+      const tradeTypes = {};
+      for (const t of activity) {
+        if (!/TRADE/i.test(t.type ?? '')) continue;
+        const k = `${t.type}:${t.status}`;
+        tradeTypes[k] = (tradeTypes[k] ?? 0) + 1;
+      }
+      setTradeSender(leagueId, {
+        awaitingTrade,
+        // Suggestions were priced on the pre-trade roster: drop them once a deal lands.
+        ...(accepted ? { suggestions: [] } : {}),
+        lastWatch: { at: Date.now(), read: activity.length, tradeTypes, error: null },
+      });
+      if (rescan) void scanTradeSender(leagueId, 'trade_processed');
+    } catch (err) {
+      const stale = err?.status === 401;
+      setTradeSender(leagueId, { lastWatch: { at: Date.now(), error: stale ? 'creds_stale_relink' : String(err?.message ?? err) } });
+      console.error(`[trade-watch] ${leagueId} failed: ${err?.message}`);
+    }
+  }
+}
+
+/** Watcher diagnostics: this league's trade activity as ESPN reports it. Only
+ *  for the linked account (userId must match the stored SWID). */
+apiRouter.get('/league/:leagueId/trade-sender/activity', async (req, res, next) => {
+  try {
+    const { leagueId } = req.params;
+    const creds = getEspnCreds(leagueId);
+    const norm = (v) => String(v ?? '').replace(/[{}]/g, '').toUpperCase();
+    if (!creds || norm(creds.swid) !== norm(req.query.userId)) {
+      res.status(403).json({ reason: 'forbidden' });
+      return;
+    }
+    const provider = buildHeadlessProvider('espn', seasonParam(req.query.season));
+    const week = Number(req.query.week) || getTradeSender(leagueId)?.lastScan?.week || null;
+    const activity = await provider.getTradeActivity(leagueId, week ? [week - 1, week, week + 1].filter((w) => w >= 1) : []);
+    res.json({ total: activity.length, trades: activity.filter((t) => /TRADE/i.test(t.type ?? '')) });
+  } catch (error) {
     next(error);
   }
 });

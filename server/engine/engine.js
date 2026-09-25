@@ -2954,8 +2954,9 @@ export function computeLineupMoves(rosterSlots, optimalAssignments, lockedIds = 
  *   givePositions / getPositions   positions allowed on each side (empty = any)
  *   minYouDelta   keep a trade only if MY title % rises at least this much (pts)
  *   maxPartnerLoss  ...and the partner's title % falls at most this much (pts)
- * Uneven packages are only generated when neither roster would overflow, so a
- * sent offer never needs a drop (ESPN's drop-in-trade shape is not captured yet).
+ * Uneven packages are allowed: when the user would overflow, the sim drops his
+ * rest-of-season worst active, unprotected player (returned in `drops.you`, and
+ * sent with the offer); a partner overflow is his to settle on accepting.
  * With `sender`, the per-manager "keep the best one anyway" fallback is off: a
  * manager with nothing clearing the thresholds contributes nothing.
  */
@@ -3016,10 +3017,19 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const getSet = new Set(getList.map(String));
     const userAfter = [...userTeam.players.filter((id) => !giveSet.has(String(id))), ...getList];
     const partnerAfter = [...partnerTeam.players.filter((id) => !getSet.has(String(id))), ...giveList];
-    const userNeed = Math.max(0, userAfter.length - maxRoster);
-    const partnerNeed = Math.max(0, partnerAfter.length - maxRoster);
-    const uDrops = chooseDrops(userAfter, userTeam.players.filter((id) => !giveSet.has(String(id))), userNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
-    const pDrops = chooseDrops(partnerAfter, partnerTeam.players.filter((id) => !getSet.has(String(id))), partnerNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
+    // Sender: count ACTIVE bodies (ESPN's limit ignores IR/taxi) and never drop a
+    // stashed or protected player -- dropping an IR stash frees no active spot, so
+    // the drop sent to ESPN would not make room. The UI finder keeps its old count.
+    const stashedOf = (t) => new Set([...(t.reserve ?? []), ...(t.taxi ?? [])].map(String));
+    const userStash = sender ? stashedOf(userTeam) : new Set();
+    const partnerStash = sender ? stashedOf(partnerTeam) : new Set();
+    const userNeed = Math.max(0, userAfter.filter((id) => !userStash.has(String(id))).length - maxRoster);
+    const partnerNeed = Math.max(0, partnerAfter.filter((id) => !partnerStash.has(String(id))).length - maxRoster);
+    const userDroppable = userTeam.players.filter((id) => !giveSet.has(String(id))
+      && !userStash.has(String(id)) && !(sender && senderProtect.has(String(id))));
+    const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)) && !partnerStash.has(String(id)));
+    const uDrops = chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
+    const pDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
     const uSet = new Set(uDrops.map(String));
     const pSet = new Set(pDrops.map(String));
     const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
@@ -3054,6 +3064,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       youWeekDelta: weekWinProbDelta(au, bu),
       partnerWeekDelta: weekWinProbDelta(ap, bp),
       theirValueDelta,
+      userDrops: uDrops,
+      partnerDrops: pDrops,
+      userDropShort: uDrops.length < userNeed, // not enough droppable bodies to fit
     };
   };
 
@@ -3120,11 +3133,6 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     .filter((id) => TRADEABLE.includes(catalog[id]?.position) && senderAllows(team, id))
     .sort((a, b) => projected(b) - projected(a))
     .slice(0, 9);
-  // Active (non-IR/taxi) bodies on a roster: what an uneven trade would overflow.
-  const activeCount = (team) => {
-    const stashed = new Set([...(team.reserve ?? []), ...(team.taxi ?? [])].map(String));
-    return team.players.filter((id) => !stashed.has(String(id))).length;
-  };
   const combos = (arr, k) => {
     if (k <= 0) return [[]];
     if (k > arr.length) return [];
@@ -3158,8 +3166,6 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const mine = tradeable(userTeam);
     const theirs = tradeable(opp);
     for (const [k, j] of SIZES) {
-      // Sender: an uneven package only when neither side would have to drop.
-      if (sender && k !== j && (activeCount(userTeam) - k + j > maxRoster || activeCount(opp) - j + k > maxRoster)) continue;
       for (const give of combos(mine, k)) {
         const gv = val(give);
         for (const get of combos(theirs, j)) {
@@ -3229,6 +3235,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     let ev;
     try { ev = evalTrade(c.give, c.get, c.partner, FINDER_SIMS, finalBaseline); }
     catch { finalErrors += 1; continue; }
+    if (sender && ev.userDropShort) continue; // can't make room without cutting a protected/IR player
     const { youDelta, partnerDelta, youPlayoffDelta, partnerPlayoffDelta, youWeekDelta, partnerWeekDelta } = ev;
     re += 1;
     if (re % 3 === 0) await yieldToLoop();
@@ -3248,6 +3255,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       partnerWeekDelta: partnerWeekDelta ?? null,
       acceptance: accept,
       score: Number((youDelta * (accept / 100)).toFixed(2)),
+      // Who each side cuts to fit an uneven package (rest-of-season worst player).
+      // Yours go into the ESPN offer; theirs is only what we expect them to drop.
+      drops: { you: ev.userDrops.map((id) => ({ id, name: nameOf(id) })), partner: ev.partnerDrops.map((id) => ({ id, name: nameOf(id) })) },
     });
   }
   // ── ALL-MANAGERS SWEEP consistency: the deltas above are a light 600-sim ESTIMATE, which
@@ -3285,6 +3295,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       s.partnerPlayoffDelta = Number(ev.partnerPlayoffDelta.toFixed(1));
       s.youWeekDelta = ev.youWeekDelta ?? s.youWeekDelta;
       s.partnerWeekDelta = ev.partnerWeekDelta ?? s.partnerWeekDelta;
+      s.drops = { you: ev.userDrops.map((id) => ({ id, name: nameOf(id) })), partner: ev.partnerDrops.map((id) => ({ id, name: nameOf(id) })) };
       const read = readsByRoster[s.partnerRosterId] ?? {};
       s.acceptance = acceptanceProbability(s.partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
       s.score = Number((s.youDelta * (s.acceptance / 100)).toFixed(2));

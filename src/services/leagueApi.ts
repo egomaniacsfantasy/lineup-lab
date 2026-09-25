@@ -1113,7 +1113,22 @@ export interface TradeSenderOffer {
   partnerDelta: number;
   youPlayoffDelta?: number;
   partnerPlayoffDelta?: number;
-  sent: { at: number; espnTransactionId: string | null } | null;
+  drops?: { you: { id: string; name: string }[]; partner: { id: string; name: string }[] };
+  sent: { at: number; espnTransactionId: string | null; state?: TradeOfferState } | null;
+}
+export type TradeOfferState = 'pending' | 'accepted' | 'processed' | 'declined' | 'canceled' | 'expired';
+export interface SentTradeOffer {
+  at: number;
+  offerId: string;
+  partnerName: string;
+  give: { id: string; name: string }[];
+  get: { id: string; name: string }[];
+  drops?: { id: string; name: string }[];
+  youDelta: number;
+  partnerDelta: number;
+  espnTransactionId: string | null;
+  state?: TradeOfferState;
+  closedBy?: string;
 }
 export interface TradeSenderState {
   enabled: boolean;
@@ -1128,6 +1143,9 @@ export interface TradeSenderState {
   } | null;
   scanning: boolean;
   canSend: boolean;
+  sentOffers: SentTradeOffer[];
+  awaitingTrade: { offerId: string; espnTransactionId: string; since: number } | null;
+  dropSendReady: boolean;
   myPlayers: { id: string; name: string; position: string | null }[];
   managers: { rosterId: number; teamName: string; ownerName: string | null }[];
 }
@@ -1159,6 +1177,17 @@ export function sendTradeOffer(
   body: { userId: string; offerId: string; confirm: boolean },
 ): Promise<{ sent: boolean; reason?: string; espnTransactionId?: string | null }> {
   return get(`/api/league/${leagueId}/trade-sender/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function cancelTradeOffer(
+  leagueId: string,
+  body: { userId: string; espnTransactionId: string },
+): Promise<{ canceled: boolean; reason?: string }> {
+  return get(`/api/league/${leagueId}/trade-sender/cancel`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
