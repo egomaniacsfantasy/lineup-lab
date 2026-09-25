@@ -59,22 +59,57 @@ function readAll() {
   }
 }
 
+/** Canonical form of an ESPN SWID ("{ABC-...}", URL-encoded, any case -> "ABC-..."). */
+export function normSwid(value) {
+  let t = String(value ?? '');
+  try { t = decodeURIComponent(t); } catch { /* keep raw */ }
+  return t.replace(/[{}\s"]/g, '').toUpperCase();
+}
+
+/*
+ * One login PER MANAGER per league (`members`, keyed by SWID). The top-level
+ * fields keep the most recent link, which is fine for READS (any member can read
+ * the league). WRITES must never use them: acting on a team with a league-mate's
+ * login is acting as that league-mate. Writes go through getEspnCredsFor.
+ */
 export function saveEspnCreds(leagueId, { espnS2, swid }) {
   if (!leagueId || !espnS2 || !swid) return;
   const all = readAll();
-  all[String(leagueId)] = {
-    espnS2: encrypt(espnS2),
-    swid: encrypt(swid),
-    savedAt: Date.now(),
-  };
+  const key = String(leagueId);
+  const prev = all[key] ?? {};
+  const members = { ...(prev.members ?? {}) };
+  // Carry a pre-members single entry over under its own owner.
+  if (!prev.members && prev.swid) {
+    const legacySwid = decrypt(prev.swid);
+    if (legacySwid) members[normSwid(legacySwid)] = { espnS2: prev.espnS2, swid: prev.swid, savedAt: prev.savedAt };
+  }
+  const record = { espnS2: encrypt(espnS2), swid: encrypt(swid), savedAt: Date.now() };
+  members[normSwid(swid)] = record;
+  all[key] = { ...record, members };
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(all));
 }
 
+/** Any linked login for the league: for READS only. */
 export function getEspnCreds(leagueId) {
   const entry = readAll()[String(leagueId)];
   if (!entry) return null;
   const espnS2 = decrypt(entry.espnS2);
   const swid = decrypt(entry.swid);
   return espnS2 && swid ? { espnS2, swid } : null;
+}
+
+/** THIS manager's own login for the league (by SWID), or null. For WRITES. */
+export function getEspnCredsFor(leagueId, userSwid) {
+  if (!userSwid) return null;
+  const entry = readAll()[String(leagueId)];
+  if (!entry) return null;
+  const want = normSwid(userSwid);
+  const candidates = [entry.members?.[want], entry].filter(Boolean);
+  for (const c of candidates) {
+    const swid = decrypt(c.swid);
+    const espnS2 = decrypt(c.espnS2);
+    if (espnS2 && swid && normSwid(swid) === want) return { espnS2, swid };
+  }
+  return null;
 }

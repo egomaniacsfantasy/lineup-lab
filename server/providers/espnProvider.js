@@ -18,7 +18,7 @@
 import { cached } from '../cache.js';
 import { sleeperProvider } from './sleeperProvider.js';
 import { normalizeName } from '../projections/importer.js';
-import { getEspnCreds } from './espnCredStore.js';
+import { getEspnCreds, getEspnCredsFor, normSwid } from './espnCredStore.js';
 import { anyGameLive } from '../live/nflGameStatus.js';
 import { LIVE_MATCHUP_TTL_MS } from '../gameWindows.js';
 
@@ -253,7 +253,10 @@ function rosterPositionsFromCounts(lineupSlotCounts = {}) {
  * One ESPN provider instance bound to a request's season + cookies. Holds a
  * per-request synthetic-player map shared across its method calls.
  */
-export function createEspnProvider({ season, espnS2, swid }) {
+// `actAs` = the SWID of the manager a WRITE is for. Writes only ever use that
+// manager's own login (the request's cookies when they are his, else his stored
+// ones); reads may use any linked login for the league.
+export function createEspnProvider({ season, espnS2, swid, actAs = null }) {
   const synthetic = {};
 
   const espnGet = async (leagueId, views, extraQuery = '') => {
@@ -398,23 +401,19 @@ export function createEspnProvider({ season, espnS2, swid }) {
     });
   };
 
-  // Resolve the ESPN cookies (request-scoped, else the linked-league store).
-  const resolveCreds = (leagueId) => {
-    let s2 = espnS2;
-    let sw = swid;
-    if (!s2 || !sw) {
-      const stored = getEspnCreds(leagueId);
-      if (stored) { s2 = stored.espnS2; sw = stored.swid; }
-    }
-    return { s2, sw };
-  };
-
   // POST one transaction to the ESPN write host. `makeBody(memberId)` builds the
   // payload (every write carries the SWID as memberId). A real write: ESPN has no
   // dry-run, so callers only reach this on explicit consent.
+  const resolveWriteCreds = (leagueId) => {
+    if (!actAs) { const e = new Error('espn_write_needs_user'); e.status = 401; throw e; }
+    if (espnS2 && swid && normSwid(swid) === normSwid(actAs)) return { s2: espnS2, sw: swid };
+    const mine = getEspnCredsFor(leagueId, actAs);
+    if (!mine) { const e = new Error('espn_creds_not_yours'); e.status = 401; throw e; }
+    return { s2: mine.espnS2, sw: mine.swid };
+  };
+
   const writeTransaction = async (leagueId, makeBody) => {
-    const { s2, sw } = resolveCreds(leagueId);
-    if (!s2 || !sw) { const e = new Error('espn_not_authed'); e.status = 401; throw e; }
+    const { s2, sw } = resolveWriteCreds(leagueId);
     const cleanSwid = sw.startsWith('{') ? sw : `{${sw}}`;
     const url = `${ESPN_WRITE_BASE}/seasons/${season}/segments/0/leagues/${leagueId}/transactions/`;
     const response = await fetch(url, {

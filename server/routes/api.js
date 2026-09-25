@@ -6,11 +6,11 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
-import { saveEspnCreds, getEspnCreds } from '../providers/espnCredStore.js';
+import { saveEspnCreds, getEspnCreds, getEspnCredsFor, normSwid } from '../providers/espnCredStore.js';
 import { getAutopilot, setAutopilot, listEnabledAutopilot } from '../engine/autopilotStore.js';
 import {
   DEFAULT_SENDER_SETTINGS, getTradeSender, setTradeSender, logSentOffer, listEnabledTradeSenders,
-  noteProjectionsFingerprint, getProjectionsMeta, updateSentOffers, listWatchedTradeSenders,
+  noteProjectionsFingerprint, getProjectionsMeta, updateSentOffers, listWatchedTradeSenders, senderKey,
 } from '../engine/tradeSenderStore.js';
 import { classifyOffer } from '../engine/tradeWatch.js';
 import { TRADE_DROP_CONFIRMED } from '../providers/espnProvider.js';
@@ -123,15 +123,35 @@ function scoringSuffix(scoringFamily) {
  * to the season and (for private leagues) the user's own cookies, passed as
  * headers so they never land in a URL or a log.
  */
-function getProvider(req) {
+function getProvider(req, actAs = null) {
   if (req.query.provider === 'espn') {
     return createEspnProvider({
       season: seasonParam(req.query.season),
       espnS2: req.get('x-espn-s2') || null,
       swid: req.get('x-espn-swid') || null,
+      actAs,
     });
   }
   return sleeperProvider;
+}
+
+/* The client sends ITS OWN ESPN cookies on every request. Keep them on file
+   under that manager, so his background writes (autopilot, trade watcher) act
+   with his login and never a league-mate's. Only writes when new or changed. */
+function rememberOwnEspnCreds(req, leagueId) {
+  const espnS2 = req.get('x-espn-s2');
+  const swid = req.get('x-espn-swid');
+  if (req.query.provider !== 'espn' || !espnS2 || !swid || !leagueId) return;
+  const onFile = getEspnCredsFor(leagueId, swid);
+  if (!onFile || onFile.espnS2 !== espnS2) saveEspnCreds(leagueId, { espnS2, swid });
+}
+
+/** Whether the server can write for this manager (his own login is on file). */
+function canWriteFor(req, leagueId, userId) {
+  if (!userId) return false;
+  const headerSwid = req.get('x-espn-swid');
+  if (req.get('x-espn-s2') && headerSwid && normSwid(headerSwid) === normSwid(userId)) return true;
+  return Boolean(getEspnCredsFor(leagueId, userId));
 }
 
 export const apiRouter = Router();
@@ -643,12 +663,13 @@ async function loadLeagueContext(provider, leagueId, userId, weekOverride = null
 // A provider built WITHOUT a request, for the scheduled repricer. ESPN uses the
 // creds saved on connect (espnProvider falls back to the cred store when the
 // header creds are null); Sleeper needs none.
-export function buildHeadlessProvider(providerKind, season) {
+export function buildHeadlessProvider(providerKind, season, actAs = null) {
   if (providerKind === 'espn') {
     return createEspnProvider({
       season: seasonParam(season),
       espnS2: null,
       swid: null,
+      actAs,
     });
   }
   return sleeperProvider;
@@ -1348,9 +1369,9 @@ export async function runAutopilotSweep() {
   const entries = listEnabledAutopilot();
   for (const entry of entries) {
     try {
-      const provider = createEspnProvider({ season: seasonParam(entry.season) });
+      const provider = createEspnProvider({ season: seasonParam(entry.season), actAs: entry.userId });
       const result = await setLineupFor(provider, entry.leagueId, entry.userId, true);
-      setAutopilot(entry.leagueId, {
+      setAutopilot(entry.leagueId, entry.userId, {
         lastRun: Date.now(),
         lastResult: {
           at: Date.now(),
@@ -1362,11 +1383,18 @@ export async function runAutopilotSweep() {
       });
       if (result.applied) console.log(`[autopilot] ${entry.leagueId}: set ${result.count} move(s)`);
     } catch (err) {
-      const stale = err?.status === 401;
-      setAutopilot(entry.leagueId, {
+      // No login of HIS on file yet (only a league-mate's): pause, stay enabled;
+      // it resumes the next time he opens the app and his own login is saved.
+      const needsOwn = err?.message === 'espn_creds_not_yours';
+      const stale = err?.status === 401 && !needsOwn;
+      setAutopilot(entry.leagueId, entry.userId, {
         ...(stale ? { enabled: false } : {}),
         lastRun: Date.now(),
-        lastResult: { at: Date.now(), applied: false, reason: stale ? 'creds_stale_relink' : (err?.message ?? 'error') },
+        lastResult: {
+          at: Date.now(),
+          applied: false,
+          reason: needsOwn ? 'needs_own_login' : stale ? 'creds_stale_relink' : (err?.message ?? 'error'),
+        },
       });
       console.error(`[autopilot] ${entry.leagueId} failed: ${err?.message}`);
     }
@@ -1375,9 +1403,10 @@ export async function runAutopilotSweep() {
 
 apiRouter.post('/league/:leagueId/set-lineup', async (req, res, next) => {
   try {
-    const provider = getProvider(req);
     const { leagueId } = req.params;
     const { userId, confirm = false } = req.body ?? {};
+    rememberOwnEspnCreds(req, leagueId);
+    const provider = getProvider(req, userId);
     const result = await setLineupFor(provider, leagueId, userId, confirm);
     res.status(result.available ? 200 : 400).json(result);
   } catch (error) {
@@ -1392,7 +1421,8 @@ apiRouter.post('/league/:leagueId/set-lineup', async (req, res, next) => {
 
 /** Autopilot opt-in: read the current state (enabled + last sweep result). */
 apiRouter.get('/league/:leagueId/autopilot', (req, res) => {
-  const entry = getAutopilot(req.params.leagueId);
+  rememberOwnEspnCreds(req, req.params.leagueId);
+  const entry = getAutopilot(req.params.leagueId, req.query.userId ?? null);
   res.json({ enabled: Boolean(entry?.enabled), lastRun: entry?.lastRun ?? null, lastResult: entry?.lastResult ?? null });
 });
 
@@ -1401,11 +1431,13 @@ apiRouter.get('/league/:leagueId/autopilot', (req, res) => {
 apiRouter.post('/league/:leagueId/autopilot', (req, res) => {
   const { leagueId } = req.params;
   const { userId, enabled } = req.body ?? {};
-  if (enabled && !getEspnCreds(leagueId)) {
+  rememberOwnEspnCreds(req, leagueId);
+  // Only with THIS manager's own login on file: never a league-mate's.
+  if (enabled && !getEspnCredsFor(leagueId, userId)) {
     res.status(400).json({ ok: false, reason: 'no_espn_creds' });
     return;
   }
-  const entry = setAutopilot(leagueId, { userId: userId ?? null, enabled: Boolean(enabled), season: seasonParam(undefined) });
+  const entry = setAutopilot(leagueId, userId ?? null, { enabled: Boolean(enabled), season: seasonParam(undefined) });
   res.json({ enabled: Boolean(entry.enabled) });
 });
 
@@ -1469,17 +1501,17 @@ function sanitizeSenderSettings(raw = {}) {
 }
 
 /** Scan one league's allowed managers and store the offers that clear the rules. */
-async function scanTradeSender(leagueId, reason) {
-  const key = String(leagueId);
+async function scanTradeSender(leagueId, userId, reason) {
+  const key = senderKey(leagueId, userId);
   if (senderScanning.has(key)) return false;
-  const entry = getTradeSender(key);
+  const entry = getTradeSender(leagueId, userId);
   if (!entry) return false;
   senderScanning.add(key);
   const t0 = Date.now();
   const fingerprint = getProjectionsMeta()?.fingerprint ?? null;
   try {
     const provider = buildHeadlessProvider(entry.provider ?? 'espn', entry.season);
-    const ctx = await buildTradeCtx(provider, key, entry.userId);
+    const ctx = await buildTradeCtx(provider, String(leagueId), entry.userId);
     const userTeam = ctx.teams.find((t) => t.isUser);
     if (!userTeam) throw new Error('team_not_found');
     const s = entry.settings;
@@ -1502,7 +1534,7 @@ async function scanTradeSender(leagueId, reason) {
       const sent = sentById.get(id);
       return { ...sug, id, sent: sent ? { at: sent.at, espnTransactionId: sent.espnTransactionId, state: sent.state ?? 'pending' } : null };
     });
-    setTradeSender(key, {
+    setTradeSender(leagueId, userId, {
       suggestions: offers,
       lastScan: {
         at: Date.now(), reason, fingerprint, ms: Date.now() - t0, week: ctx.week,
@@ -1512,7 +1544,7 @@ async function scanTradeSender(leagueId, reason) {
     console.log(`[trade-sender] ${key}: ${offers.length} offer(s) from ${perManager.length} manager(s) in ${Date.now() - t0}ms (${reason})`);
   } catch (err) {
     const stale = err?.status === 401;
-    setTradeSender(key, {
+    setTradeSender(leagueId, userId, {
       lastScan: {
         ...(entry.lastScan ?? {}), at: Date.now(), reason, fingerprint, ms: Date.now() - t0,
         error: stale ? 'creds_stale_relink' : String(err?.message ?? err),
@@ -1543,7 +1575,7 @@ export async function runTradeSenderSweep() {
       : meta?.fingerprint && last.fingerprint !== meta.fingerprint
         ? 'projections_updated'
         : now - last.at >= SENDER_EVERY_MS ? 'recurring' : null;
-    if (reason) await scanTradeSender(entry.leagueId, reason); // one league at a time
+    if (reason) await scanTradeSender(entry.leagueId, entry.userId, reason); // one at a time
   }
 }
 
@@ -1552,7 +1584,8 @@ apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
   try {
     const { leagueId } = req.params;
     const userId = req.query.userId ? String(req.query.userId) : null;
-    const entry = getTradeSender(leagueId);
+    rememberOwnEspnCreds(req, leagueId);
+    const entry = getTradeSender(leagueId, userId);
     const provider = getProvider(req);
     const ctx = await loadLeagueContext(provider, leagueId, userId);
     if (!ctx) { res.status(404).json({ reason: 'league_not_found' }); return; }
@@ -1568,8 +1601,8 @@ apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
       settings: entry?.settings ?? DEFAULT_SENDER_SETTINGS,
       suggestions: entry?.suggestions ?? [],
       lastScan: entry?.lastScan ?? null,
-      scanning: senderScanning.has(String(leagueId)),
-      canSend: providerName(req) === 'espn' && Boolean(getEspnCreds(leagueId)),
+      scanning: senderScanning.has(senderKey(leagueId, userId)),
+      canSend: providerName(req) === 'espn' && canWriteFor(req, leagueId, userId),
       sentOffers: (entry?.sent ?? []).slice(0, 20),
       awaitingTrade: entry?.awaitingTrade ?? null,
       dropSendReady: TRADE_DROP_CONFIRMED,
@@ -1585,29 +1618,28 @@ apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
 apiRouter.post('/league/:leagueId/trade-sender', (req, res) => {
   const { leagueId } = req.params;
   const { userId, enabled, settings } = req.body ?? {};
+  rememberOwnEspnCreds(req, leagueId);
   const patch = {
-    userId: userId ?? null,
     provider: providerName(req),
     season: seasonParam(req.query.season),
   };
   if (enabled !== undefined) patch.enabled = Boolean(enabled);
   if (settings) patch.settings = sanitizeSenderSettings(settings);
-  const entry = setTradeSender(leagueId, patch);
+  const entry = setTradeSender(leagueId, userId ?? null, patch);
   // New rules make the stored offers stale; rescan in the background.
-  if (settings || patch.enabled) void scanTradeSender(leagueId, settings ? 'settings_changed' : 'enabled');
+  if (settings || patch.enabled) void scanTradeSender(leagueId, userId ?? null, settings ? 'settings_changed' : 'enabled');
   res.json({ enabled: Boolean(entry.enabled), settings: entry.settings, scanning: true });
 });
 
 /** "Scan now": kick a background scan; the client polls GET for the result. */
 apiRouter.post('/league/:leagueId/trade-sender/scan', (req, res) => {
   const { leagueId } = req.params;
-  if (!getTradeSender(leagueId)) {
-    setTradeSender(leagueId, {
-      userId: req.body?.userId ?? null, provider: providerName(req), season: seasonParam(req.query.season),
-    });
+  const userId = req.body?.userId ?? null;
+  if (!getTradeSender(leagueId, userId)) {
+    setTradeSender(leagueId, userId, { provider: providerName(req), season: seasonParam(req.query.season) });
   }
-  const already = senderScanning.has(String(leagueId));
-  if (!already) void scanTradeSender(leagueId, 'manual');
+  const already = senderScanning.has(senderKey(leagueId, userId));
+  if (!already) void scanTradeSender(leagueId, userId, 'manual');
   res.json({ scanning: true, already });
 });
 
@@ -1615,13 +1647,14 @@ apiRouter.post('/league/:leagueId/trade-sender/scan', (req, res) => {
 apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => {
   try {
     const { leagueId } = req.params;
-    const { offerId, confirm = false } = req.body ?? {};
-    const provider = getProvider(req);
+    const { offerId, userId = null, confirm = false } = req.body ?? {};
+    rememberOwnEspnCreds(req, leagueId);
+    const provider = getProvider(req, userId);
     if (typeof provider.proposeTrade !== 'function') {
       res.json({ sent: false, reason: 'unsupported_provider' });
       return;
     }
-    const entry = getTradeSender(leagueId);
+    const entry = getTradeSender(leagueId, userId);
     const offer = (entry?.suggestions ?? []).find((s) => s.id === offerId);
     if (!offer) { res.json({ sent: false, reason: 'offer_gone' }); return; }
     if (!confirm) { res.json({ sent: false, reason: 'confirm_required', offer }); return; }
@@ -1668,9 +1701,9 @@ apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => 
       expiresAt: Date.now() + EXPIRES_DAYS * 24 * 60 * 60_000,
       mode: 'manual',
     };
-    logSentOffer(leagueId, record);
-    const fresh = getTradeSender(leagueId);
-    setTradeSender(leagueId, {
+    logSentOffer(leagueId, userId, record);
+    const fresh = getTradeSender(leagueId, userId);
+    setTradeSender(leagueId, userId, {
       suggestions: (fresh?.suggestions ?? []).map((s) =>
         s.id === offerId ? { ...s, sent: { at: record.at, espnTransactionId: record.espnTransactionId } } : s),
     });
@@ -1689,16 +1722,17 @@ apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => 
 apiRouter.post('/league/:leagueId/trade-sender/cancel', async (req, res, next) => {
   try {
     const { leagueId } = req.params;
-    const { espnTransactionId } = req.body ?? {};
-    const provider = getProvider(req);
-    const entry = getTradeSender(leagueId);
+    const { espnTransactionId, userId = null } = req.body ?? {};
+    rememberOwnEspnCreds(req, leagueId);
+    const provider = getProvider(req, userId);
+    const entry = getTradeSender(leagueId, userId);
     const record = (entry?.sent ?? []).find((r) => r.espnTransactionId === espnTransactionId);
     if (typeof provider.cancelTrade !== 'function' || !record || record.state !== 'pending') {
       res.json({ canceled: false, reason: record ? 'not_pending' : 'offer_gone' });
       return;
     }
     await provider.cancelTrade(leagueId, entry.lastScan?.userRosterId, entry.lastScan?.week, espnTransactionId);
-    updateSentOffers(leagueId, { [espnTransactionId]: { state: 'canceled', closedAt: Date.now(), closedBy: 'user' } });
+    updateSentOffers(leagueId, userId, { [espnTransactionId]: { state: 'canceled', closedAt: Date.now(), closedBy: 'user' } });
     res.json({ canceled: true });
   } catch (error) {
     if (error?.status) {
@@ -1719,11 +1753,12 @@ apiRouter.post('/league/:leagueId/trade-sender/cancel', async (req, res, next) =
  */
 export async function runTradeWatcher() {
   for (const entry of listWatchedTradeSenders()) {
-    const leagueId = entry.leagueId;
+    const { leagueId, userId } = entry;
     const myTeamId = entry.lastScan?.userRosterId;
     const week = entry.lastScan?.week ?? null;
     try {
-      const provider = buildHeadlessProvider('espn', entry.season);
+      // Acts (cancels) as THIS manager only; reads may use any linked login.
+      const provider = buildHeadlessProvider('espn', entry.season, userId);
       if (typeof provider.getTradeActivity !== 'function') continue;
       const periods = week ? [week, week + 1] : [];
       const [activity, roster] = await Promise.all([
@@ -1776,23 +1811,23 @@ export async function runTradeWatcher() {
         }
       }
 
-      if (Object.keys(patches).length) updateSentOffers(leagueId, patches);
+      if (Object.keys(patches).length) updateSentOffers(leagueId, userId, patches);
       const tradeTypes = {};
       for (const t of activity) {
         if (!/TRADE/i.test(t.type ?? '')) continue;
         const k = `${t.type}:${t.status}`;
         tradeTypes[k] = (tradeTypes[k] ?? 0) + 1;
       }
-      setTradeSender(leagueId, {
+      setTradeSender(leagueId, userId, {
         awaitingTrade,
         // Suggestions were priced on the pre-trade roster: drop them once a deal lands.
         ...(accepted ? { suggestions: [] } : {}),
         lastWatch: { at: Date.now(), read: activity.length, tradeTypes, error: null },
       });
-      if (rescan) void scanTradeSender(leagueId, 'trade_processed');
+      if (rescan) void scanTradeSender(leagueId, userId, 'trade_processed');
     } catch (err) {
       const stale = err?.status === 401;
-      setTradeSender(leagueId, { lastWatch: { at: Date.now(), error: stale ? 'creds_stale_relink' : String(err?.message ?? err) } });
+      setTradeSender(leagueId, userId, { lastWatch: { at: Date.now(), error: stale ? 'creds_stale_relink' : String(err?.message ?? err) } });
       console.error(`[trade-watch] ${leagueId} failed: ${err?.message}`);
     }
   }
@@ -1804,11 +1839,7 @@ apiRouter.get('/league/:leagueId/trade-sender/activity', async (req, res, next) 
   try {
     const { leagueId } = req.params;
     const creds = getEspnCreds(leagueId);
-    const norm = (v) => {
-      let t = String(v ?? '');
-      try { t = decodeURIComponent(t); } catch { /* keep raw */ }
-      return t.replace(/[{}\s"]/g, '').toUpperCase();
-    };
+    const norm = normSwid;
     const provider = buildHeadlessProvider('espn', seasonParam(req.query.season));
     // Gate: the caller must own a team in this league (by their SWID).
     const ctx = creds ? await loadLeagueContext(provider, leagueId, req.query.userId ?? null) : null;
@@ -1821,10 +1852,10 @@ apiRouter.get('/league/:leagueId/trade-sender/activity', async (req, res, next) 
     const credsOwner = ctx.teams.find((t) => t.ownerId && norm(t.ownerId) === norm(creds.swid))
       ?? ctx.teams.find((t) => (t.coOwners ?? []).some((o) => norm(o) === norm(creds.swid)))
       ?? null;
-    const week = Number(req.query.week) || getTradeSender(leagueId)?.lastScan?.week || null;
+    const week = Number(req.query.week) || getTradeSender(leagueId, req.query.userId ?? null)?.lastScan?.week || null;
     const activity = await provider.getTradeActivity(leagueId, week ? [week - 1, week, week + 1].filter((w) => w >= 1) : []);
     res.json({
-      credsMatchUser: norm(creds.swid) === norm(req.query.userId),
+      credsMatchUser: Boolean(getEspnCredsFor(leagueId, req.query.userId)),
       credsTeam: credsOwner ? { rosterId: credsOwner.rosterId, teamName: credsOwner.teamName } : null,
       myTeam: { rosterId: myTeam.rosterId, teamName: myTeam.teamName },
       total: activity.length,

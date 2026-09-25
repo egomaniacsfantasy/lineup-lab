@@ -26,7 +26,7 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
 
   useEffect(() => {
     let cancelled = false;
-    void getAutopilotState(leagueId)
+    void getAutopilotState(leagueId, userId)
       .then((state) => {
         if (cancelled) return;
         setAutoEnabled(state.enabled);
@@ -38,7 +38,7 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
     return () => {
       cancelled = true;
     };
-  }, [leagueId]);
+  }, [leagueId, userId]);
 
   const toggleAutopilot = async () => {
     if (autoBusy || autoEnabled === null) return;
@@ -140,7 +140,9 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
             <span className="set-lineup__auto-title">Autopilot: keep my lineup optimal</span>
             <span className="set-lineup__auto-note">
               {autoEnabled
-                ? autoLast?.applied
+                ? autoLast?.reason === 'needs_own_login'
+                  ? 'Paused until we have your own ESPN login. Open Odds Gods on a device linked to ESPN and it resumes.'
+                  : autoLast?.applied
                   ? `On. Last auto-set ${autoLast.count ?? 0} change${autoLast.count === 1 ? '' : 's'}.`
                   : 'On. We re-check every few minutes and set your best lineup automatically.'
                 : 'Off. Let Odds Gods set your best lineup for you, automatically.'}

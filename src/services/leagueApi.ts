@@ -1198,8 +1198,8 @@ export function cancelTradeOffer(
   });
 }
 
-export function getAutopilotState(leagueId: string): Promise<AutopilotState> {
-  return get<AutopilotState>(`/api/league/${leagueId}/autopilot`, { method: 'GET' });
+export function getAutopilotState(leagueId: string, userId: string): Promise<AutopilotState> {
+  return get<AutopilotState>(`/api/league/${leagueId}/autopilot?userId=${encodeURIComponent(userId)}`, { method: 'GET' });
 }
 export function setAutopilotState(
   leagueId: string,
