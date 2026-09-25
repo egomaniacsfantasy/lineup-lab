@@ -1809,14 +1809,27 @@ apiRouter.get('/league/:leagueId/trade-sender/activity', async (req, res, next) 
       try { t = decodeURIComponent(t); } catch { /* keep raw */ }
       return t.replace(/[{}\s"]/g, '').toUpperCase();
     };
-    if (!creds || norm(creds.swid) !== norm(req.query.userId)) {
+    const provider = buildHeadlessProvider('espn', seasonParam(req.query.season));
+    // Gate: the caller must own a team in this league (by their SWID).
+    const ctx = creds ? await loadLeagueContext(provider, leagueId, req.query.userId ?? null) : null;
+    const myTeam = ctx?.teams.find((t) => t.isUser) ?? null;
+    if (!myTeam) {
       res.status(403).json({ reason: 'forbidden' });
       return;
     }
-    const provider = buildHeadlessProvider('espn', seasonParam(req.query.season));
+    // Whose ESPN login does the server act with? Writes (lineups, offers) carry it.
+    const credsOwner = ctx.teams.find((t) => t.ownerId && norm(t.ownerId) === norm(creds.swid))
+      ?? ctx.teams.find((t) => (t.coOwners ?? []).some((o) => norm(o) === norm(creds.swid)))
+      ?? null;
     const week = Number(req.query.week) || getTradeSender(leagueId)?.lastScan?.week || null;
     const activity = await provider.getTradeActivity(leagueId, week ? [week - 1, week, week + 1].filter((w) => w >= 1) : []);
-    res.json({ total: activity.length, trades: activity.filter((t) => /TRADE/i.test(t.type ?? '')) });
+    res.json({
+      credsMatchUser: norm(creds.swid) === norm(req.query.userId),
+      credsTeam: credsOwner ? { rosterId: credsOwner.rosterId, teamName: credsOwner.teamName } : null,
+      myTeam: { rosterId: myTeam.rosterId, teamName: myTeam.teamName },
+      total: activity.length,
+      trades: activity.filter((t) => /TRADE/i.test(t.type ?? '')),
+    });
   } catch (error) {
     next(error);
   }
