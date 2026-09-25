@@ -36,10 +36,12 @@ const ESPN_WRITE_BASE = 'https://lm-api-writes.fantasy.espn.com/apis/v3/games/ff
    needs a drop even with a spot open. */
 export const TRADE_DROP_CONFIRMED = true;
 
-/* Accept / decline an offer sent TO us. The type names and the accept's DROP
-   items are confirmed from ESPN's own transaction feed; the request body is
-   inferred (same envelope as propose/cancel). Flip after one captured decline. */
-export const TRADE_RESPONSE_CONFIRMED = false;
+/* Accept / decline an offer sent TO us. DECLINE captured from ESPN's own client
+   (2026-09-25: {type:'TRADE_DECLINE', executionType:'EXECUTE', comment:'',
+   relatedTransactionId, teamId, memberId, scoringPeriodId}, no items). ACCEPT
+   uses the same envelope with type TRADE_ACCEPT plus our DROP items, the shape
+   ESPN's own feed records for accepts. */
+export const TRADE_RESPONSE_CONFIRMED = true;
 export function espnTradeDropItem(espnId, teamId) {
   return { playerId: Number(espnId), type: 'DROP', fromTeamId: Number(teamId), toTeamId: 0 };
 }
@@ -534,8 +536,10 @@ export function createEspnProvider({ season, espnS2, swid, actAs = null }) {
         memberId,
         scoringPeriodId: Number(scoringPeriodId),
         executionType: 'EXECUTE',
+        comment: '',
         relatedTransactionId: String(proposalId),
-        items: kind === 'TRADE_ACCEPT' ? drops.map((espnId) => espnTradeDropItem(espnId, Number(teamId))) : [],
+        // A decline carries no items (captured); an accept carries our drops.
+        ...(kind === 'TRADE_ACCEPT' ? { items: drops.map((espnId) => espnTradeDropItem(espnId, Number(teamId))) } : {}),
       }));
     },
 

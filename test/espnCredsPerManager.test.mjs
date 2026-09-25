@@ -114,3 +114,27 @@ test('proposeTrade with a drop sends exactly the shape ESPN\'s own client sends'
     globalThis.fetch = realFetch;
   }
 });
+
+test('declining an offer sends exactly the captured TRADE_DECLINE body', async () => {
+  if (fs.existsSync(FILE)) fs.unlinkSync(FILE);
+  saveEspnCreds(LEAGUE, { espnS2: 's2-team4', swid: TEAM4 });
+  const realFetch = globalThis.fetch;
+  let body = null;
+  globalThis.fetch = async (_url, init) => {
+    body = JSON.parse(init.body);
+    return new Response(JSON.stringify({ id: 'd-1', status: 'EXECUTED' }), { status: 200 });
+  };
+  try {
+    const provider = createEspnProvider({ season: 2026, actAs: TEAM4 });
+    await provider.respondToTrade(LEAGUE, 4, 3, '381606b0-7c8d-465f-80d9-6d0f78095cc6', 'DECLINE');
+    assert.deepEqual(body, {
+      isLeagueManager: false, teamId: 4, type: 'TRADE_DECLINE', memberId: TEAM4, scoringPeriodId: 3,
+      executionType: 'EXECUTE', comment: '', relatedTransactionId: '381606b0-7c8d-465f-80d9-6d0f78095cc6',
+    });
+    await provider.respondToTrade(LEAGUE, 4, 3, 'p-2', 'ACCEPT', { drops: [-16018] });
+    assert.equal(body.type, 'TRADE_ACCEPT');
+    assert.deepEqual(body.items, [{ playerId: -16018, type: 'DROP', fromTeamId: 4, toTeamId: 0 }]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
