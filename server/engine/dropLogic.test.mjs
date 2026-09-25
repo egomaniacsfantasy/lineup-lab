@@ -1,9 +1,7 @@
 /**
  * Drop-logic harness (value-over-replacement). The roster-limit drop chooser
- * values every player by POINTS OVER REPLACEMENT and drops the lowest. There is
- * no special K/DEF rule and no feasibility protection: a sole K/DEF is dropped
- * only if it is genuinely the least valuable asset, because the season sim
- * streams a replacement for any emptied required slot. Run: `node server/engine/dropLogic.test.mjs`
+ * values every player by POINTS OVER REPLACEMENT and drops the lowest, but never
+ * a player the lineup can't do without (a sole K, sole DEF, sole QB). Run: `node server/engine/dropLogic.test.mjs`
  */
 import { chooseDrops, replacementLevels } from './engine.js';
 
@@ -87,12 +85,22 @@ scenario('6. Sole DEF + scrub -> drop the scrub',
   [QB1, RB1, RB2, WR1, WR2, TE1, RB3, WR3, K1, DEF1, RBscrub], 1,
   [RBscrub], [DEF1, K1]);
 
-// 7. NEW VOR behavior: no worthless scrub anywhere, must drop 1. The sole kicker
-//    is the lowest-VOR asset, so it's dropped (the sim streams a replacement) —
-//    keeping a higher-value bench skill player. No protection, by design.
-scenario('7. No scrubs, must drop 1 -> the low-VOR sole kicker goes, keep the good WR',
+// 7. No scrubs, must drop 1. The sole kicker / sole defense are the lowest-VOR
+//    assets but are PROTECTED (a manager must keep one of each), so the lowest
+//    skill player that the lineup can spare goes instead.
+scenario('7. No scrubs, must drop 1 -> sole K and sole DEF are protected',
   [QB1, RB1, RB2, WR1, WR2, TE1, RB3, WR3, K1, DEF1, WR4elite], 1,
-  [K1, DEF1], [WR4elite, WR1, RB1]);
+  [RB3, WR3, WR4elite, RB2, WR2, TE1], [K1, DEF1, QB1]);
+
+// 8. Must drop 2 with a backup K on the roster -> the backup K can go, the last K can't.
+scenario('8. Backup K goes, the last K and sole DEF stay',
+  [QB1, RB1, RB2, WR1, WR2, TE1, RB3, WR3, K1, K2, DEF1, WR4elite], 2,
+  [K1, K2, RB3, WR3, WR4elite, RB2, WR2], [DEF1, QB1]);
+{
+  const d = drop([QB1, RB1, RB2, WR1, WR2, TE1, RB3, WR3, K1, K2, DEF1, WR4elite], 2);
+  const ks = d.filter((id) => catalog[id].position === 'K').length;
+  tests.push({ name: '8b. never both kickers', droppedNames: d.map(nm), pass: ks <= 1 });
+}
 
 let allPass = true;
 console.log('\n=== Drop-logic harness (value over replacement) ===\n');

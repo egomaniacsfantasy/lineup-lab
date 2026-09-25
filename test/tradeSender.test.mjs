@@ -157,3 +157,21 @@ test('parity with the Build-a-Trade analyzer, IR stash included', async () => {
   assert.equal(deal.partnerDelta, analyzed.partner.delta.titleProb, 'partner delta matches the analyzer exactly');
   assert.equal(analyzed.drops.you.length, 1, 'the analyzer plans the same single (deferred) drop');
 });
+
+test('live final games: the analyzer sees the real score the moment a game ends', async () => {
+  const { analyzeTrade, pinLeagueActuals, tradeEffectiveWeek } = await import('../server/engine/engine.js');
+  const star = you.players[0]; // my QB, week 1 game just went FINAL; pipeline has not rerun
+  // Pipeline not rerun yet: his week-1 row is still in the grid.
+  const pm = new Map(projections.map((p) => [p.playerId, p]));
+  assert.equal(tradeEffectiveWeek([star], pm, 1), 1, 'before the lock: looks unplayed');
+  pinLeagueActuals(pm, { liveLocks: { [star]: 45 }, matchups: [] }, 1);
+  assert.equal(tradeEffectiveWeek([star], pm, 1), 2, 'final game -> the trade waits for next week');
+
+  // His 45-point game lifts my "before" this-week win % exactly like the hub's odds.
+  const t2 = teams[1].players;
+  const give = [you.players[10]];
+  const get = [t2[10]];
+  const stale = analyzeTrade(ctx, { partnerRosterId: 2, give, get });
+  const live = analyzeTrade({ ...ctx, liveLocks: { [star]: 45 } }, { partnerRosterId: 2, give, get });
+  assert.ok(live.you.before.weekWinProb > stale.you.before.weekWinProb, 'the real score moves this week');
+});

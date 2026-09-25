@@ -1258,27 +1258,9 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
     const { userId, partnerRosterId, give = [], get = [], traits = {} } = req.body ?? {};
     const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
 
-    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
-    if (!ctxBase) throw new Error('league_not_found');
-
-    const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
-    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
-      const all = [];
-      for (let week = 1; week <= lastWeek; week += 1) {
-        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
-      }
-      return all;
-    });
-
-    let liveProjections;
-    try {
-      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
-      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-    } catch (err) {
-      console.error('[pricing] adjusted projections failed for trade; using snapshot', err);
-    }
-
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    // Same context the hub's odds are priced on (live final-game locks, fresh
+    // injury flags, schedule, projections).
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, overlay, getFinalNflTeams());
     const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
 
     res.json(
@@ -1458,24 +1440,8 @@ const senderScanning = new Set();
 
 /** The league context every trade endpoint sims on (schedule + live projections). */
 async function buildTradeCtx(provider, leagueId, userId) {
-  const ctxBase = await loadLeagueContext(provider, leagueId, userId);
-  if (!ctxBase) throw new Error('league_not_found');
-  const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
-  const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
-    const all = [];
-    for (let week = 1; week <= lastWeek; week += 1) {
-      all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
-    }
-    return all;
-  });
-  let liveProjections;
-  try {
-    const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
-    if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-  } catch (err) {
-    console.error('[trade-sender] adjusted projections failed; using snapshot', err);
-  }
-  return { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay: null, projections: liveProjections };
+  // Exactly the analyzer's context (which is the hub's pricing context).
+  return assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
 }
 
 // A package's identity: same partner + same players both ways = same offer.
@@ -1523,6 +1489,7 @@ async function scanTradeSender(leagueId, userId, reason) {
       ctx: {
         league: ctx.league, teams: ctx.teams, week: ctx.week, catalog: ctx.catalog,
         scheduleWeeks: ctx.scheduleWeeks, overlay: null, projections: ctx.projections, matchups: ctx.matchups,
+        liveLocks: ctx.liveLocks, priorFinalMatchups: ctx.priorFinalMatchups,
       },
       partnerRosterIds,
       sender: s,
@@ -1874,27 +1841,9 @@ apiRouter.post('/league/:leagueId/trade-analyze', async (req, res, next) => {
     const { userId, partnerRosterId, give = [], get = [], userDrops = null } = req.body ?? {};
     const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
 
-    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
-    if (!ctxBase) throw new Error('league_not_found');
-
-    const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
-    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
-      const all = [];
-      for (let week = 1; week <= lastWeek; week += 1) {
-        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
-      }
-      return all;
-    });
-
-    let liveProjections;
-    try {
-      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
-      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-    } catch (err) {
-      console.error('[trade-analyze] adjusted projections failed; using snapshot', err);
-    }
-
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    // Same context the hub's odds are priced on (live final-game locks, fresh
+    // injury flags, schedule, projections), so a trade's "before" == the hub.
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, overlay, getFinalNflTeams());
     res.json(analyzeTrade(ctx, { partnerRosterId: Number(partnerRosterId), give, get, userDrops }));
   } catch (error) {
     next(error);
@@ -1909,27 +1858,9 @@ apiRouter.post('/league/:leagueId/trade-counter', async (req, res, next) => {
     const { userId, partnerRosterId, give = [], get = [], userDrops = null, target = 0 } = req.body ?? {};
     const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
 
-    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
-    if (!ctxBase) throw new Error('league_not_found');
-
-    const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
-    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
-      const all = [];
-      for (let week = 1; week <= lastWeek; week += 1) {
-        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
-      }
-      return all;
-    });
-
-    let liveProjections;
-    try {
-      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
-      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-    } catch (err) {
-      console.error('[trade-counter] adjusted projections failed; using snapshot', err);
-    }
-
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    // Same context the hub's odds are priced on (live final-game locks, fresh
+    // injury flags, schedule, projections), so a trade's "before" == the hub.
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, overlay, getFinalNflTeams());
     res.json(suggestCounter(ctx, { partnerRosterId: Number(partnerRosterId), give, get, userDrops, target }));
   } catch (error) {
     next(error);
@@ -1949,27 +1880,10 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     const getPlayerIds = Array.isArray(req.body?.getPlayerIds) ? req.body.getPlayerIds.map(String) : [];
     const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
 
-    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
-    if (!ctxBase) throw new Error('league_not_found');
-
-    const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
-    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
-      const all = [];
-      for (let week = 1; week <= lastWeek; week += 1) {
-        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
-      }
-      return all;
-    });
-
-    let liveProjections;
-    try {
-      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
-      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-    } catch (err) {
-      console.error('[trade-suggestions] adjusted projections failed; using snapshot', err);
-    }
-
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    // Same context the hub's odds are priced on (live final-game locks, fresh
+    // injury flags, schedule, projections), so a trade's "before" == the hub.
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, overlay, getFinalNflTeams());
+    const liveProjections = ctx.projections;
     // The sim is expensive but input-stable; cache per league+user+overlay for 2 min.
     const version = liveProjections?.version ?? 'snapshot';
     // Include the deploy commit so a new deploy never serves finder numbers that
@@ -1983,7 +1897,7 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
       .map(([k, v]) => `${k}.${v?.friendliness ?? ''}.${v?.relationship ?? ''}`).join('_');
     const giveSig = [...givePlayerIds].sort().join('+') || 'nogive';
     const getSig = [...getPlayerIds].sort().join('+') || 'noget';
-    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${giveSig}:${getSig}:${version}:${overlay ? 'ov' : 'base'}:${build}:${readsSig}`;
+    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${giveSig}:${getSig}:${version}:${overlay ? 'ov' : 'base'}:${build}:${readsSig}:${finalTeamsSignature()}`;
     const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position, givePlayerIds, getPlayerIds, readsByRoster }));
     res.json(result);
   } catch (error) {
@@ -2063,27 +1977,10 @@ apiRouter.post('/league/:leagueId/trade-rationale', async (req, res, next) => {
     const { userId, partnerRosterId, give = [], get = [], traits = {}, userDrops = null } = req.body ?? {};
     const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
 
-    const ctxBase = await loadLeagueContext(provider, leagueId, userId);
-    if (!ctxBase) throw new Error('league_not_found');
-
-    const lastWeek = Math.min((ctxBase.league.playoffWeekStart ?? 15) + 2, 18);
-    const scheduleWeeks = await cached(`agg:schedule:${leagueId}`, 24 * 60 * 60_000, async () => {
-      const all = [];
-      for (let week = 1; week <= lastWeek; week += 1) {
-        all.push({ week, matchups: await provider.getMatchups(leagueId, week) });
-      }
-      return all;
-    });
-
-    let liveProjections;
-    try {
-      const adjusted = await getAdjustedProjections(scoringSuffix(ctxBase.league?.scoringFamily));
-      if (adjusted && adjusted.matched > 0) liveProjections = adjusted;
-    } catch (err) {
-      console.error('[trade-rationale] adjusted projections failed; using snapshot', err);
-    }
-
-    const ctx = { ...ctxBase, catalog: ctxBase.players, scheduleWeeks, overlay, projections: liveProjections };
+    // Same context the hub's odds are priced on (live final-game locks, fresh
+    // injury flags, schedule, projections).
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, overlay, getFinalNflTeams());
+    const liveProjections = ctx.projections;
     const userRosterId = ctx.teams.find((t) => t.isUser)?.rosterId ?? null;
     const price = priceTrade(ctx, {
       userRosterId,

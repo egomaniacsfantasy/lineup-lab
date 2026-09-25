@@ -855,6 +855,22 @@ function isPlayerLocked(playerId, catalog, lockedTeams, projectionMap = null, we
  * is the whole point of not rebuilding this outside the engine. Returns null if there
  * are no projections.
  */
+/**
+ * Every "this already happened" pin the season sim needs, in one place, so the
+ * hub's odds and every trade tool (analyzer, finder/sender, counter) price the
+ * SAME world: scoreboard-final games at their real score (applyLiveLocks, live
+ * the moment a game ends), players the pipeline already trimmed
+ * (pinPlayedCurrentWeek), and finished-but-unsettled prior weeks.
+ */
+export function pinLeagueActuals(projectionMap, ctx, week) {
+  applyLiveLocks(projectionMap, ctx.liveLocks, week);
+  pinPlayedCurrentWeek(projectionMap, ctx.matchups, week);
+  for (const [w, ms] of Object.entries(ctx.priorFinalMatchups ?? {})) {
+    pinPlayedCurrentWeek(projectionMap, ms, Number(w));
+  }
+  return projectionMap;
+}
+
 export function prepareLeagueCtx(ctx) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return null;
@@ -863,15 +879,10 @@ export function prepareLeagueCtx(ctx) {
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   applyOverlay(projectionMap, overlay);               // user's numbers on top of Franco
-  applyLiveLocks(projectionMap, ctx.liveLocks, week); // scoreboard-driven locks (only when live)
-  pinPlayedCurrentWeek(projectionMap, ctx.matchups, week); // pin played players to actuals (works off-live too)
-  // Pin any completed-but-unsettled PRIOR weeks (rolled past by advanceWeekIfComplete
-  // before the provider settled the win/loss record). Those weeks are still simulated
-  // (record-based startWeek keeps them in `remaining`), so pin each from its final
-  // matchups -- otherwise they'd score as zeros and re-inflate the standings.
-  for (const [w, ms] of Object.entries(ctx.priorFinalMatchups ?? {})) {
-    pinPlayedCurrentWeek(projectionMap, ms, Number(w));
-  }
+  // Live final-game locks + pipeline-trimmed played players + completed-but-
+  // unsettled PRIOR weeks (rolled past by advanceWeekIfComplete before the
+  // provider settled the record; still simulated, so pinned from their finals).
+  pinLeagueActuals(projectionMap, ctx, week);
   // Stable seed from rosters + week + overlay only (NOT record/schedule), so conditioning
   // a season on a pick reuses the identical random draws (common random numbers).
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
@@ -2407,12 +2418,14 @@ const BENCH_WEIGHT = 0.5;
 /**
  * Iteratively drop the lowest keep-score player, where keep-score = points OVER
  * REPLACEMENT while starting + half the standalone value-over-replacement as
- * depth. Because a player near the streamable replacement (a kicker, a defense,
- * a waiver-level skill player) has little value over replacement, backups and
- * even a sole K/DEF fall out naturally when a higher-VOR player needs the roster
- * spot — no special-case rules and no feasibility protection needed: the season
- * sim streams a replacement for any emptied required slot, so dropping your last
- * kicker is honestly priced, not blocked.
+ * depth. Backups (a second K/DEF, a waiver-level skill player) fall out
+ * naturally when a higher-VOR player needs the roster spot.
+ *
+ * Feasibility protection (user rule, 2026-09-25): never drop a player whose
+ * removal leaves a starting slot the roster can no longer fill -- your ONLY
+ * kicker, ONLY defense, only QB. A real manager keeps one of each. Only when
+ * EVERY candidate would break the lineup does the lowest keep-score go anyway
+ * (the analyzer then flags the lineup as illegal).
  */
 export function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projectionMap, catalog, weeks, replacementFor) {
   const drops = [];
@@ -2431,11 +2444,18 @@ export function chooseDrops(teamPlayers, droppableIds, n, slotLabels, projection
     };
     let worst = null;
     let worstScore = Infinity;
+    let fallback = null;
+    let fallbackScore = Infinity;
+    const legalNow = canFieldLineup(pool, slotLabels, catalog);
     for (const id of pool) {
       if (!droppable.has(String(id))) continue;
       const score = keepScore(id);
+      if (score < fallbackScore) { fallbackScore = score; fallback = id; }
+      // Protect a player the lineup can't do without (only when it's legal now).
+      if (legalNow && !canFieldLineup(pool.filter((p) => p !== id), slotLabels, catalog)) continue;
       if (score < worstScore) { worstScore = score; worst = id; }
     }
+    if (worst == null) worst = fallback;
     if (worst == null) break;
     drops.push(worst);
     pool = pool.filter((id) => id !== worst);
@@ -2482,7 +2502,10 @@ export function tradeEffectiveWeek(tradedIds, projectionMap, week) {
     // nothing, so we assume not-yet-played and leave the trade effective this week.
     const hasGrid = Object.keys(weekly).length > 0;
     const hasCurrent = weekly[week] != null || weekly[String(week)] != null;
-    const startable = hasGrid && !hasCurrent ? week + 1 : week;
+    // Or the scoreboard already has his game FINAL (pinned by pinLeagueActuals)
+    // before the pipeline has trimmed the week: same thing, he has played.
+    const lockedNow = proj?.lockedWeekly?.[week] != null || proj?.lockedWeekly?.[String(week)] != null;
+    const startable = (hasGrid && !hasCurrent) || lockedNow ? week + 1 : week;
     if (startable > ts) ts = startable;
   }
   return ts;
@@ -2616,7 +2639,9 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   // the in-progress week resolves on actual results, so the absolute win%/playoff% are right.
   // The trade DELTA is unchanged -- both the before and after sims share these locks under
   // CRN -- and future weeks keep full variance (the lock is per-week).
-  pinPlayedCurrentWeek(projectionMap, ctx.matchups, week);
+  // Same pins as the hub's pricing (live final games included), so the "before"
+  // side of every trade matches the odds the hub shows right now.
+  pinLeagueActuals(projectionMap, ctx, week);
 
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
@@ -2779,6 +2804,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   applyOverlay(projectionMap, overlay);
+  pinLeagueActuals(projectionMap, ctx, week); // same pins as the analyzer
 
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
@@ -2967,9 +2993,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   applyOverlay(projectionMap, overlay);
-  // Same as analyzeTrade: finished games this week resolve on their real score, so
-  // a deal found here prices exactly as it does in the Build-a-Trade analyzer.
-  pinPlayedCurrentWeek(projectionMap, ctx.matchups, week);
+  // Same as analyzeTrade (and the hub): finished games resolve on their real
+  // score, so a deal found here prices exactly as it does in the analyzer.
+  pinLeagueActuals(projectionMap, ctx, week);
 
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
