@@ -1804,7 +1804,11 @@ apiRouter.get('/league/:leagueId/trade-sender/activity', async (req, res, next) 
   try {
     const { leagueId } = req.params;
     const creds = getEspnCreds(leagueId);
-    const norm = (v) => String(v ?? '').replace(/[{}]/g, '').toUpperCase();
+    const norm = (v) => {
+      let t = String(v ?? '');
+      try { t = decodeURIComponent(t); } catch { /* keep raw */ }
+      return t.replace(/[{}\s"]/g, '').toUpperCase();
+    };
     if (!creds || norm(creds.swid) !== norm(req.query.userId)) {
       res.status(403).json({ reason: 'forbidden' });
       return;
