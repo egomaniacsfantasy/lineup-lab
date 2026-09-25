@@ -5,7 +5,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { apiRouter, runAutopilotSweep, runTradeSenderSweep, runTradeWatcher } from './routes/api.js';
+import { apiRouter, runAutopilotSweep, runTradeSenderSweep, runTradeWatcher, runIncomingSweep } from './routes/api.js';
 import { corsMiddleware } from './cors.js';
 import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
@@ -183,4 +183,14 @@ setInterval(() => {
   runTradeWatcher()
     .catch((err) => console.error('[trade-watch] sweep failed', err))
     .finally(() => { tradeWatchRunning = false; });
+}, 5 * 60_000).unref();
+
+// Offers sent TO each manager: read, price and (Trade autopilot on) answer them.
+let incomingRunning = false;
+setInterval(() => {
+  if (incomingRunning) return;
+  incomingRunning = true;
+  runIncomingSweep()
+    .catch((err) => console.error('[trade-incoming] sweep failed', err))
+    .finally(() => { incomingRunning = false; });
 }, 5 * 60_000).unref();

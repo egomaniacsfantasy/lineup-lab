@@ -1140,6 +1140,21 @@ export interface SentTradeOffer {
   recheck?: { at: number; youDelta: number; partnerDelta: number | null };
   belowRules?: boolean;
 }
+export interface IncomingTradeOffer {
+  id: string;
+  fromTeamId: number;
+  partnerName: string;
+  give: { id: string; name: string }[];
+  get: { id: string; name: string }[];
+  youDelta: number | null;
+  partnerDelta: number | null;
+  drops: { id: string; name: string; week: number | null; whenReturns: string | null }[];
+  recommendation: 'accept' | 'decline' | null;
+  reason: string;
+  status: 'pending' | 'accepted' | 'declined';
+  handledBy: string | null;
+  expirationDate: number | null;
+}
 export interface TradeSenderState {
   enabled: boolean;
   settings: TradeSenderSettings;
@@ -1157,6 +1172,8 @@ export interface TradeSenderState {
   sentOffers: SentTradeOffer[];
   awaitingTrade: { offerId: string; espnTransactionId: string; since: number } | null;
   dropSendReady: boolean;
+  incoming: IncomingTradeOffer[];
+  responseReady: boolean;
   autoSend: {
     at: number;
     sent: number;
@@ -1218,6 +1235,17 @@ export function linkEspnLogin(
   body: { espnS2: string; swid: string; userId: string },
 ): Promise<{ linked: boolean; reason?: string; yourRosterId?: number | null }> {
   return get(`/api/league/${leagueId}/espn-link`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export function respondToTradeOffer(
+  leagueId: string,
+  body: { userId: string; proposalId: string; action: 'ACCEPT' | 'DECLINE' },
+): Promise<{ done: boolean; reason?: string }> {
+  return get(`/api/league/${leagueId}/trade-sender/respond`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

@@ -36,8 +36,33 @@ function recheckOffers(ctx, recheck) {
   });
 }
 
-async function scanManagers({ ctx, partnerRosterIds, sender, recheck }) {
+/**
+ * Price offers OTHER managers sent us, with the Trade Analyzer from our side
+ * (give = our players in it, get = theirs). Returns each one's deltas and the
+ * drops we'd owe: immediate ones go into an ESPN accept; deferred ones (an IR
+ * stash's return week) are shown only.
+ */
+function priceIncoming(ctx, incoming) {
+  return (incoming ?? []).map((o) => {
+    try {
+      const a = analyzeTrade(ctx, { partnerRosterId: o.partnerRosterId, give: o.give, get: o.get });
+      if (!a?.available) return { id: o.id, youDelta: null, error: a?.reason ?? 'unavailable' };
+      return {
+        id: o.id,
+        youDelta: a.you?.delta?.titleProb ?? null,
+        partnerDelta: a.partner?.delta?.titleProb ?? null,
+        youPlayoffDelta: a.you?.delta?.playoffProb ?? null,
+        drops: (a.drops?.you ?? []).map((d) => ({ id: String(d.playerId), name: d.name, week: d.week ?? null, whenReturns: d.whenReturns ?? null })),
+      };
+    } catch (err) {
+      return { id: o.id, youDelta: null, error: String(err?.message ?? err) };
+    }
+  });
+}
+
+async function scanManagers({ ctx, partnerRosterIds, sender, recheck, incoming }) {
   const rechecked = recheckOffers(ctx, recheck);
+  const incomingPriced = priceIncoming(ctx, incoming);
   const suggestions = [];
   const perManager = [];
   for (const partnerRosterId of partnerRosterIds) {
@@ -52,7 +77,7 @@ async function scanManagers({ ctx, partnerRosterIds, sender, recheck }) {
     }
   }
   suggestions.sort((a, b) => b.youDelta - a.youDelta);
-  return { suggestions, perManager, rechecked };
+  return { suggestions, perManager, rechecked, incomingPriced };
 }
 
 /** Main-thread entry: run the scan in a fresh worker; resolves with its result. */

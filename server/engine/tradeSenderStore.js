@@ -109,6 +109,11 @@ export function listWatchedTradeSenders() {
     .map(([k, v]) => withDefaults(k, v));
 }
 
+/** Every manager's trade-sender entry (offers-to-me runs for all of them). */
+export function listTradeSenders() {
+  return entries().map(([k, v]) => withDefaults(k, v));
+}
+
 export function listEnabledTradeSenders() {
   return entries()
     .filter(([, v]) => v?.enabled && !v?.awaitingTrade)

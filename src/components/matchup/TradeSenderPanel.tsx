@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   cancelTradeOffer,
+  respondToTradeOffer,
+  type IncomingTradeOffer,
   getTradeSenderState,
   saveTradeSender,
   scanTradeSenderNow,
@@ -38,6 +40,7 @@ const STATE_LABEL: Record<TradeOfferState, string> = {
 
 const SEND_ERRORS: Record<string, string> = {
   drop_format_pending: 'Offers that need a drop from you are not switched on yet.',
+  response_format_pending: 'Answering from here unlocks after one ESPN capture. For now, accept or decline in ESPN.',
   roster_reserved: 'ESPN is holding your open roster spot for another pending trade, so this one needs a drop. Scan again (we add the drop), or withdraw the other offer.',
   trade_pending_processing: 'A trade was just accepted. New offers open up once ESPN processes it.',
   roster_changed: 'A roster changed since the scan, so this offer is no longer valid. Scan again.',
@@ -63,6 +66,8 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
   const [loadError, setLoadError] = useState(false);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [confirmAuto, setConfirmAuto] = useState(false);
+  const [confirmReply, setConfirmReply] = useState<{ id: string; action: 'ACCEPT' | 'DECLINE' } | null>(null);
+  const [replyNote, setReplyNote] = useState<{ id: string; text: string; error: boolean } | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -157,6 +162,33 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
       setCancelingId(null);
     }
   };
+
+  const reply = async (offer: IncomingTradeOffer, action: 'ACCEPT' | 'DECLINE') => {
+    setConfirmReply(null);
+    try {
+      const res = await respondToTradeOffer(leagueId, { userId, proposalId: offer.id, action });
+      setReplyNote({
+        id: offer.id,
+        text: res.done
+          ? `${action === 'ACCEPT' ? 'Accepted' : 'Declined'} on ESPN.`
+          : SEND_ERRORS[res.reason ?? ''] ?? 'ESPN did not take that. Nothing changed.',
+        error: !res.done,
+      });
+      await load();
+    } catch {
+      setReplyNote({ id: offer.id, text: 'ESPN did not take that. Nothing changed.', error: true });
+    }
+  };
+
+  const REC_REASON: Record<string, string> = {
+    clears_rules: 'clears your rules',
+    below_min: `below your ${state.settings.minYouDelta}% minimum`,
+    hurts_me: 'lowers your title odds',
+    protected: 'takes a protected player',
+    unpriced: 'still pricing',
+  };
+  const liveIncoming = state.incoming.filter((o) => o.status === 'pending');
+  const answered = state.incoming.filter((o) => o.status !== 'pending');
 
   const s = state.settings;
   const partnerLabel = s.partners.length
@@ -310,6 +342,88 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
               Cancel
             </button>
           </div>
+        </div>
+      ) : null}
+
+      {state.incoming.length > 0 ? (
+        <div className="trade-sender__incoming">
+          <p className="trade-sender__label">Offers to you</p>
+          {liveIncoming.length === 0 ? <p className="trade-sender__note">No open offers right now.</p> : null}
+          <ul className="trade-sender__offers">
+            {liveIncoming.map((o) => {
+              const dropNow = o.drops.filter((d) => d.week == null);
+              return (
+                <li className="trade-sender__offer" key={o.id}>
+                  <p className="trade-sender__offer-partner">From {o.partnerName}</p>
+                  <p className="trade-sender__offer-line">
+                    <span className="trade-sender__offer-tag">You give</span> {names(o.give)}
+                  </p>
+                  <p className="trade-sender__offer-line">
+                    <span className="trade-sender__offer-tag">You get</span> {names(o.get)}
+                  </p>
+                  {dropNow.length ? (
+                    <p className="trade-sender__offer-line">
+                      <span className="trade-sender__offer-tag">You drop</span> {names(dropNow)}
+                    </p>
+                  ) : null}
+                  {o.youDelta != null ? (
+                    <p className="trade-sender__offer-odds">
+                      Title odds: you <strong className={o.youDelta >= 0 ? 'is-up' : 'is-down'}>{fmtPct(o.youDelta)}</strong>, them{' '}
+                      <strong className={(o.partnerDelta ?? 0) < 0 ? 'is-down' : 'is-up'}>{fmtPct(o.partnerDelta ?? 0)}</strong>
+                    </p>
+                  ) : null}
+                  {o.recommendation ? (
+                    <p className={`trade-sender__verdict trade-sender__verdict--${o.recommendation}`}>
+                      {o.recommendation === 'accept' ? 'Accept' : 'Decline'}: {REC_REASON[o.reason] ?? o.reason}
+                    </p>
+                  ) : (
+                    <p className="trade-sender__note">Pricing this offer...</p>
+                  )}
+                  {!state.responseReady ? (
+                    <p className="trade-sender__note">
+                      Answer it in ESPN for now. Accept and Decline from here unlock after one ESPN capture.
+                    </p>
+                  ) : confirmReply?.id === o.id ? (
+                    <div className="trade-sender__confirm">
+                      <p>
+                        {confirmReply.action === 'ACCEPT'
+                          ? `Accept this trade on ESPN${dropNow.length ? `, dropping ${names(dropNow)}` : ''}?`
+                          : 'Decline this offer on ESPN?'}
+                      </p>
+                      <div className="trade-sender__actions">
+                        <button className="trade-sender__btn trade-sender__btn--go" onClick={() => void reply(o, confirmReply.action)} type="button">
+                          {confirmReply.action === 'ACCEPT' ? 'Accept' : 'Decline'}
+                        </button>
+                        <button className="trade-sender__btn trade-sender__btn--ghost" onClick={() => setConfirmReply(null)} type="button">
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="trade-sender__actions">
+                      <button className="trade-sender__btn" onClick={() => setConfirmReply({ id: o.id, action: 'ACCEPT' })} type="button">
+                        Accept
+                      </button>
+                      <button className="trade-sender__btn trade-sender__btn--ghost" onClick={() => setConfirmReply({ id: o.id, action: 'DECLINE' })} type="button">
+                        Decline
+                      </button>
+                    </div>
+                  )}
+                  {replyNote?.id === o.id ? (
+                    <p className={`trade-sender__note${replyNote.error ? ' trade-sender__note--error' : ''}`}>{replyNote.text}</p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          {answered.length ? (
+            <p className="trade-sender__note">
+              Answered:{' '}
+              {answered
+                .map((o) => `${o.status === 'accepted' ? 'accepted' : 'declined'} ${o.partnerName}${o.handledBy === 'autopilot' ? ' (autopilot)' : ''}`)
+                .join('; ')}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -477,7 +591,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
             type="checkbox"
           />
           <span className="trade-sender__auto-copy">
-            <span className="trade-sender__auto-title">Trade autopilot: send offers that clear my rules on ESPN</span>
+            <span className="trade-sender__auto-title">Trade autopilot: send and answer offers on ESPN by my rules</span>
             <span className="trade-sender__auto-note">
               {!state.canSend && s.mode !== 'auto'
                 ? 'Locked: we need your own ESPN login to send offers as you. Tap Link my ESPN login below (once, on a computer with Chrome).'
@@ -486,8 +600,8 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                   ? 'Paused until we have your own ESPN login. Open Odds Gods on a device signed in to ESPN.'
                   : state.autoSend?.reason === 'weekly_cap'
                     ? `On. Weekly limit reached (${s.autoCap} sent). It resumes as the week rolls.`
-                    : `On. Every 3 hours (and after each projection update) we scan and send the best offers that clear your rules${s.autoCap != null ? `, up to ${s.autoCap} a week` : ''}. Tap Scan now to check immediately. One pending offer per manager, never the same offer twice.${state.autoSend?.sent ? ` Last run sent ${state.autoSend.sent}.` : ''}`
-                : 'Off. Nothing runs in the background. Tap Scan now for offers and send the ones you like.'}
+                    : `On. Every 3 hours (and after each projection update) we scan and send the best offers that clear your rules${s.autoCap != null ? `, up to ${s.autoCap} a week` : ''}. Offers sent to you are accepted or declined by the same rules. Tap Scan now to check immediately. One pending offer per manager, never the same offer twice.${state.autoSend?.sent ? ` Last run sent ${state.autoSend.sent}.` : ''}`
+                : 'Off. Nothing runs in the background. Tap Scan now for offers, send the ones you like, and answer offers to you yourself.'}
             </span>
           </span>
         </label>
@@ -502,7 +616,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
           <p>
             Trade autopilot scans every 3 hours and proposes real trades to other managers on ESPN without asking you first, whenever an offer
             clears your rules ({s.minYouDelta}% for you, at most {s.maxPartnerLoss}% for them)
-            {s.autoCap != null ? `, up to ${s.autoCap} a week` : ', with no weekly limit'}. Turn it on?
+            {s.autoCap != null ? `, up to ${s.autoCap} a week` : ', with no weekly limit'}. It also accepts offers sent to you that clear your minimum and declines the rest. Turn it on?
           </p>
           <div className="trade-sender__actions">
             <button className="trade-sender__btn trade-sender__btn--go" onClick={() => void setMode('auto')} type="button">

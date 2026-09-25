@@ -71,3 +71,45 @@ test('auto-send picks: best first, no resends, one pending offer per manager, we
   assert.equal(remaining, 2);
   assert.equal(autoSendCandidates({ ...entry, settings: { autoCap: null } }, now).remaining, Infinity, 'blank cap = unlimited');
 });
+
+import { incomingOffers, recommendIncoming } from '../server/engine/tradeWatch.js';
+
+test('incoming offers: live ones only (ESPN leaves withdrawn originals reading PENDING)', () => {
+  const now = Date.now();
+  const future = now + 86_400_000;
+  const activity = [
+    // Team 2 offers me (team 4) two-for-one: live.
+    { id: 'live', type: 'TRADE_PROPOSAL', status: 'PENDING', teamId: 2, expirationDate: future, items: [
+      { playerId: 11, type: 'TRADE', fromTeamId: 2, toTeamId: 4 },
+      { playerId: 12, type: 'TRADE', fromTeamId: 2, toTeamId: 4 },
+      { playerId: 40, type: 'TRADE', fromTeamId: 4, toTeamId: 2 },
+    ] },
+    // Team 3 offered, then withdrew: original still says PENDING.
+    { id: 'gone', type: 'TRADE_PROPOSAL', status: 'PENDING', teamId: 3, expirationDate: future, items: [
+      { playerId: 13, type: 'TRADE', fromTeamId: 3, toTeamId: 4 }, { playerId: 41, type: 'TRADE', fromTeamId: 4, toTeamId: 3 },
+    ] },
+    { id: 'gone-cancel', type: 'TRADE_PROPOSAL', status: 'CANCELED', teamId: 3, relatedTransactionId: 'gone', items: [] },
+    // Team 5 offered and I already declined.
+    { id: 'answered', type: 'TRADE_PROPOSAL', status: 'PENDING', teamId: 5, expirationDate: future, items: [
+      { playerId: 14, type: 'TRADE', fromTeamId: 5, toTeamId: 4 }, { playerId: 42, type: 'TRADE', fromTeamId: 4, toTeamId: 5 },
+    ] },
+    { id: 'answered-no', type: 'TRADE_DECLINE', status: 'EXECUTED', teamId: 4, relatedTransactionId: 'answered', items: [] },
+    // Expired, my own offer, and a trade between two other teams: none are mine to answer.
+    { id: 'old', type: 'TRADE_PROPOSAL', status: 'PENDING', teamId: 6, expirationDate: now - 1000, items: [{ playerId: 15, type: 'TRADE', fromTeamId: 6, toTeamId: 4 }] },
+    { id: 'mine', type: 'TRADE_PROPOSAL', status: 'PENDING', teamId: 4, expirationDate: future, items: [{ playerId: 43, type: 'TRADE', fromTeamId: 4, toTeamId: 7 }] },
+    { id: 'others', type: 'TRADE_PROPOSAL', status: 'PENDING', teamId: 7, expirationDate: future, items: [{ playerId: 16, type: 'TRADE', fromTeamId: 7, toTeamId: 8 }] },
+  ];
+  const got = incomingOffers(activity, 4, now);
+  assert.deepEqual(got.map((o) => o.id), ['live']);
+  assert.deepEqual(got[0].getEspn, [11, 12]);
+  assert.deepEqual(got[0].giveEspn, [40]);
+  assert.equal(got[0].fromTeamId, 2);
+});
+
+test('incoming recommendation: same X + protected rules as the sender', () => {
+  const rules = { minYouDelta: 1, protect: ['p-star'] };
+  assert.equal(recommendIncoming({ youDelta: 2.4, givePlayerIds: ['p-bench'] }, rules).action, 'accept');
+  assert.equal(recommendIncoming({ youDelta: 0.5, givePlayerIds: ['p-bench'] }, rules).reason, 'below_min');
+  assert.equal(recommendIncoming({ youDelta: -1.2, givePlayerIds: ['p-bench'] }, rules).reason, 'hurts_me');
+  assert.equal(recommendIncoming({ youDelta: 9, givePlayerIds: ['p-star'] }, rules).reason, 'protected', 'never gives a protected player');
+});

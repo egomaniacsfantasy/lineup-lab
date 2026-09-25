@@ -211,3 +211,16 @@ test('pending offers are re-priced by the analyzer on every scan (injury -> valu
   assert.ok(after.rechecked[0].youDelta < healthy.rechecked[0].youDelta, 'value falls once he is hurt');
   assert.ok(after.rechecked[0].youDelta < 1, 'and no longer clears a 1% rule -> autopilot would withdraw it');
 });
+
+test('offers sent to me are priced by the analyzer from my side, with the drops I would owe', async () => {
+  const { analyzeTrade } = await import('../server/engine/engine.js');
+  const t2 = teams[1].players;
+  // Team 2 offers me two players for one of mine (I receive more -> I owe a drop if full).
+  const offer = { id: 'in-1', partnerRosterId: 2, give: [you.players[3]], get: [t2[4], t2[5]] };
+  const res = await runTradeScan({ ctx, partnerRosterIds: [], sender: {}, incoming: [offer] });
+  const p = res.incomingPriced[0];
+  const direct = analyzeTrade(ctx, { partnerRosterId: 2, give: offer.give, get: offer.get });
+  assert.equal(p.youDelta, direct.you.delta.titleProb, 'same number as the Trade Analyzer');
+  assert.equal(p.partnerDelta, direct.partner.delta.titleProb);
+  assert.deepEqual(p.drops.map((d) => d.id), direct.drops.you.map((d) => String(d.playerId)), 'same drop plan');
+});

@@ -35,6 +35,11 @@ const ESPN_WRITE_BASE = 'https://lm-api-writes.fantasy.espn.com/apis/v3/games/ff
    (TRAN_ROSTER_LIMIT_EXCEEDED_TRADE_RESERVED_ONE), so a second net-add offer
    needs a drop even with a spot open. */
 export const TRADE_DROP_CONFIRMED = true;
+
+/* Accept / decline an offer sent TO us. The type names and the accept's DROP
+   items are confirmed from ESPN's own transaction feed; the request body is
+   inferred (same envelope as propose/cancel). Flip after one captured decline. */
+export const TRADE_RESPONSE_CONFIRMED = false;
 export function espnTradeDropItem(espnId, teamId) {
   return { playerId: Number(espnId), type: 'DROP', fromTeamId: Number(teamId), toTeamId: 0 };
 }
@@ -271,7 +276,9 @@ export function createEspnProvider({ season, espnS2, swid, actAs = null }) {
     let s2 = espnS2;
     let sw = swid;
     if (!s2 || !sw) {
-      const stored = getEspnCreds(leagueId);
+      // Prefer the acting manager's OWN login: some things (offers sent to him)
+      // are visible only to him. Else any linked login for the league.
+      const stored = (actAs ? getEspnCredsFor(leagueId, actAs) : null) ?? getEspnCreds(leagueId);
       if (stored) {
         s2 = stored.espnS2;
         sw = stored.swid;
@@ -510,6 +517,25 @@ export function createEspnProvider({ season, espnS2, swid, actAs = null }) {
         scoringPeriodId: Number(scoringPeriodId),
         executionType: 'CANCEL',
         relatedTransactionId: String(transactionId),
+      }));
+    },
+
+    // Answer an offer another manager sent us: 'ACCEPT' or 'DECLINE', tied to his
+    // proposal by relatedTransactionId. An accept carries OUR drops (ESPN's own
+    // TRADE_ACCEPT rows show them as DROP items) when the deal overflows us.
+    // Shape inferred from ESPN's recorded TRADE_ACCEPT / TRADE_DECLINE rows, not
+    // yet from a captured request: gated by TRADE_RESPONSE_CONFIRMED.
+    async respondToTrade(leagueId, teamId, scoringPeriodId, proposalId, action, { drops = [] } = {}) {
+      const kind = action === 'ACCEPT' ? 'TRADE_ACCEPT' : 'TRADE_DECLINE';
+      return writeTransaction(leagueId, (memberId) => ({
+        isLeagueManager: false,
+        teamId: Number(teamId),
+        type: kind,
+        memberId,
+        scoringPeriodId: Number(scoringPeriodId),
+        executionType: 'EXECUTE',
+        relatedTransactionId: String(proposalId),
+        items: kind === 'TRADE_ACCEPT' ? drops.map((espnId) => espnTradeDropItem(espnId, Number(teamId))) : [],
       }));
     },
 

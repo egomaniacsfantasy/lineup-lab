@@ -79,3 +79,62 @@ export function autoSendCandidates(entry, now = Date.now()) {
   }
   return { offers, remaining: Math.max(0, cap - used), used };
 }
+
+// A proposal is closed once ESPN has ANY follow-up row for it: a withdrawal
+// (TRADE_PROPOSAL/CANCELED with relatedTransactionId), an accept, a decline,
+// the league's uphold or veto. ESPN never rewrites the original row's own
+// status (a withdrawn offer's row still reads PENDING), so this is the only
+// reliable way to tell a live offer.
+const TERMINAL_FOLLOWUP = /CANCEL|ACCEPT|DECLIN|UPHOLD|VETO|REJECT|EXPIR/i;
+
+/**
+ * Offers OTHER managers have sent to `myTeamId` that are still live.
+ * activity: rows from getTradeActivity (read with MY login: only members of a
+ * trade see its players). Returns [{ id, fromTeamId, giveEspn, getEspn,
+ * proposedDate, expirationDate }] where give = what I'd send, get = what I'd receive.
+ */
+export function incomingOffers(activity, myTeamId, now = Date.now()) {
+  const rows = activity ?? [];
+  const closed = new Set(
+    rows
+      .filter((t) => t.relatedTransactionId && (TERMINAL_FOLLOWUP.test(t.type ?? '') || TERMINAL_FOLLOWUP.test(t.status ?? '')))
+      .map((t) => t.relatedTransactionId),
+  );
+  const me = Number(myTeamId);
+  const out = [];
+  for (const t of rows) {
+    if (t.type !== 'TRADE_PROPOSAL' || t.relatedTransactionId) continue; // originals only
+    if (Number(t.teamId) === me) continue;                                 // mine: the watcher's job
+    if (closed.has(t.id)) continue;
+    if (t.status && !/PENDING/i.test(t.status)) continue;
+    if (t.expirationDate && Number(t.expirationDate) < now) continue;
+    const trades = (t.items ?? []).filter((i) => i.type === 'TRADE');
+    const giveEspn = trades.filter((i) => Number(i.fromTeamId) === me).map((i) => i.playerId);
+    const getEspn = trades.filter((i) => Number(i.toTeamId) === me).map((i) => i.playerId);
+    if (!giveEspn.length && !getEspn.length) continue; // not a deal with me
+    out.push({
+      id: t.id,
+      fromTeamId: Number(t.teamId),
+      giveEspn,
+      getEspn,
+      proposedDate: t.proposedDate ?? null,
+      expirationDate: t.expirationDate ?? null,
+    });
+  }
+  return out;
+}
+
+/**
+ * Accept or decline an incoming offer, by the SAME rules as the trade sender:
+ * accept only if it raises my title odds by at least X and takes none of my
+ * protected players. (The other side's loss is his own choice: he proposed it.)
+ */
+export function recommendIncoming({ youDelta, givePlayerIds = [] }, settings = {}) {
+  const protect = new Set((settings.protect ?? []).map(String));
+  const hit = givePlayerIds.map(String).filter((id) => protect.has(id));
+  if (hit.length) return { action: 'decline', reason: 'protected' };
+  if (youDelta == null) return { action: null, reason: 'unpriced' };
+  const minYou = Number(settings.minYouDelta ?? 0);
+  if (youDelta >= minYou && youDelta > 0) return { action: 'accept', reason: 'clears_rules' };
+  return { action: 'decline', reason: youDelta <= 0 ? 'hurts_me' : 'below_min' };
+}

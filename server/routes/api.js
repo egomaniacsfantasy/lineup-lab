@@ -10,10 +10,10 @@ import { saveEspnCreds, getEspnCreds, getEspnCredsFor, normSwid } from '../provi
 import { getAutopilot, setAutopilot, listEnabledAutopilot } from '../engine/autopilotStore.js';
 import {
   DEFAULT_SENDER_SETTINGS, getTradeSender, setTradeSender, logSentOffer, listEnabledTradeSenders,
-  noteProjectionsFingerprint, getProjectionsMeta, updateSentOffers, listWatchedTradeSenders, senderKey,
+  noteProjectionsFingerprint, getProjectionsMeta, updateSentOffers, listWatchedTradeSenders, senderKey, listTradeSenders,
 } from '../engine/tradeSenderStore.js';
-import { classifyOffer, autoSendCandidates } from '../engine/tradeWatch.js';
-import { TRADE_DROP_CONFIRMED } from '../providers/espnProvider.js';
+import { classifyOffer, autoSendCandidates, incomingOffers, recommendIncoming } from '../engine/tradeWatch.js';
+import { TRADE_DROP_CONFIRMED, TRADE_RESPONSE_CONFIRMED } from '../providers/espnProvider.js';
 import { runTradeScan } from '../engine/tradeScanWorker.js';
 import { projectionsFingerprint } from '../projections/loadFromRepo.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
@@ -1615,6 +1615,11 @@ async function scanTradeSender(leagueId, userId, reason) {
     } catch (err) {
       console.error(`[trade-sender] ${key} auto-send failed: ${err?.message}`);
     }
+    try {
+      await refreshIncoming(leagueId, userId);
+    } catch (err) {
+      console.error(`[trade-sender] ${key} incoming refresh failed: ${err?.message}`);
+    }
   }
   return true;
 }
@@ -1670,6 +1675,8 @@ apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
       sentOffers: (entry?.sent ?? []).slice(0, 20),
       awaitingTrade: entry?.awaitingTrade ?? null,
       autoSend: entry?.autoSend ?? null,
+      incoming: entry?.incoming ?? [],
+      responseReady: TRADE_RESPONSE_CONFIRMED,
       dropSendReady: TRADE_DROP_CONFIRMED,
       myPlayers,
       managers,
@@ -1946,7 +1953,7 @@ export async function runTradeWatcher() {
         console.log(`[trade-watch] ${leagueId}: offer ${accepted.record.espnTransactionId} ${accepted.verdict.state}; others pulled`);
         if (accepted.verdict.state === 'processed') rescan = true; // already on the roster
         else awaitingTrade = { offerId: accepted.record.offerId, espnTransactionId: accepted.record.espnTransactionId, since: Date.now() };
-      } else if (awaitingTrade) {
+      } else if (awaitingTrade && awaitingTrade.kind !== 'incoming') {
         const awaited = (entry.sent ?? []).find((r) => r.espnTransactionId === awaitingTrade.espnTransactionId);
         const st = awaited ? stateOf(awaited) : 'processed';
         // Processed (rosters moved) or reversed (veto/decline): the hold ends either way.
@@ -2012,6 +2019,197 @@ apiRouter.get('/league/:leagueId/trade-sender/activity', async (req, res, next) 
       trades: activity.filter((t) => /TRADE/i.test(t.type ?? '')),
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+/* ── Offers sent TO the manager ───────────────────────────────────────────────
+ * Same rules as the sender (X, protected players, the analyzer's drops), run on
+ * offers other managers propose. Suggest-only by default; with Trade autopilot
+ * on, it answers them. Reading needs HIS own login (only members of a trade see
+ * its players), so nothing here runs until he has linked it. */
+const INCOMING_REPRICE_MS = 30 * 60_000;
+
+/** After we accept an offer: pull our own pending offers (each was priced on the
+ *  pre-trade roster) and hold the sender until the accepted trade processes. */
+async function holdAfterIncomingAccept(leagueId, userId, entry, provider, offer) {
+  const patches = {};
+  for (const r of entry.sent ?? []) {
+    if (r.state !== 'pending' || !r.espnTransactionId) continue;
+    try {
+      await provider.cancelTrade(leagueId, entry.lastScan?.userRosterId, entry.lastScan?.week, r.espnTransactionId);
+      patches[r.espnTransactionId] = { state: 'canceled', closedAt: Date.now(), closedBy: 'accepted_incoming' };
+    } catch (err) {
+      console.error(`[trade-incoming] ${leagueId}: cancel ${r.espnTransactionId} failed: ${err?.message}`);
+    }
+  }
+  if (Object.keys(patches).length) updateSentOffers(leagueId, userId, patches);
+  setTradeSender(leagueId, userId, {
+    awaitingTrade: { kind: 'incoming', proposalId: offer.id, getIds: offer.get.map((p) => p.id), since: Date.now() },
+    suggestions: [],
+  });
+}
+
+/** Accept or decline one incoming offer on ESPN, as the manager. */
+async function respondIncomingFor(provider, leagueId, userId, proposalId, action, handledBy) {
+  if (!TRADE_RESPONSE_CONFIRMED) return { done: false, reason: 'response_format_pending' };
+  if (typeof provider.respondToTrade !== 'function') return { done: false, reason: 'unsupported_provider' };
+  const entry = getTradeSender(leagueId, userId);
+  const offer = (entry?.incoming ?? []).find((o) => o.id === proposalId);
+  if (!offer || offer.status !== 'pending') return { done: false, reason: 'offer_gone' };
+  const myTeamId = offer.myTeamId;
+  let dropIds = [];
+  if (action === 'ACCEPT') {
+    if (entry.awaitingTrade) return { done: false, reason: 'trade_pending_processing' };
+    const idMap = await provider.getEspnIdMap(leagueId, { fresh: true });
+    dropIds = (offer.drops ?? []).filter((d) => d.week == null).map((d) => {
+      const hit = idMap.get(String(d.id));
+      return hit && hit.teamId === myTeamId ? hit.espnId : null;
+    });
+    if (dropIds.some((d) => d === null)) return { done: false, reason: 'roster_changed' };
+  }
+  await provider.respondToTrade(leagueId, myTeamId, offer.week, proposalId, action, { drops: dropIds });
+  const fresh = getTradeSender(leagueId, userId);
+  setTradeSender(leagueId, userId, {
+    incoming: (fresh?.incoming ?? []).map((o) => (o.id === proposalId
+      ? { ...o, status: action === 'ACCEPT' ? 'accepted' : 'declined', handledAt: Date.now(), handledBy }
+      : o)),
+  });
+  if (action === 'ACCEPT') await holdAfterIncomingAccept(leagueId, userId, getTradeSender(leagueId, userId), provider, offer);
+  console.log(`[trade-incoming] ${leagueId}: ${action} ${proposalId} (${handledBy})`);
+  return { done: true };
+}
+
+/**
+ * Read + price the offers sent to this manager; with Trade autopilot on, answer
+ * them (at most ONE accept per run: an accept changes the roster every other
+ * offer was priced on). Runs every 5 min (index.js) and after every scan.
+ */
+export async function refreshIncoming(leagueId, userId) {
+  const entry = getTradeSender(leagueId, userId);
+  if (!entry || (entry.provider ?? 'espn') !== 'espn' || !getEspnCredsFor(leagueId, userId)) return;
+  const provider = buildHeadlessProvider('espn', entry.season, userId);
+  const week = entry.lastScan?.week ?? null;
+  const myTeamId = entry.lastScan?.userRosterId ?? null;
+  if (myTeamId == null) return; // needs one scan first (resolves his team + week)
+  const [activity, idMap] = await Promise.all([
+    provider.getTradeActivity(leagueId, week ? [week, week + 1] : []),
+    provider.getEspnIdMap(leagueId, { fresh: true }),
+  ]);
+
+  // An accepted offer we're waiting on: done once its players are on our roster.
+  if (entry.awaitingTrade?.kind === 'incoming') {
+    const got = (entry.awaitingTrade.getIds ?? []).every((id) => idMap.get(String(id))?.teamId === myTeamId);
+    const vetoed = activity.some((t) => t.relatedTransactionId === entry.awaitingTrade.proposalId && /VETO/i.test(t.type ?? ''));
+    if (got || vetoed) {
+      setTradeSender(leagueId, userId, { awaitingTrade: null });
+      void scanTradeSender(leagueId, userId, 'trade_processed');
+      return;
+    }
+  }
+
+  const live = incomingOffers(activity, myTeamId);
+  const byEspn = new Map([...idMap].map(([canon, v]) => [Number(v.espnId), canon]));
+  const prev = new Map((entry.incoming ?? []).map((o) => [o.id, o]));
+  const now = Date.now();
+  // Offers that need (re)pricing; the rest keep their last price.
+  const mapped = live.map((o) => ({
+    ...o,
+    give: o.giveEspn.map((e) => byEspn.get(Number(e)) ?? null),
+    get: o.getEspn.map((e) => byEspn.get(Number(e)) ?? null),
+  })).filter((o) => !o.give.includes(null) && !o.get.includes(null));
+  const toPrice = mapped.filter((o) => {
+    const p = prev.get(o.id);
+    return !p || p.youDelta == null || now - (p.evaluatedAt ?? 0) > INCOMING_REPRICE_MS;
+  });
+
+  let priced = [];
+  let ctx = null;
+  if (toPrice.length) {
+    ctx = await buildTradeCtx(provider, leagueId, userId);
+    ({ incomingPriced: priced } = await runTradeScan({
+      ctx: {
+        league: ctx.league, teams: ctx.teams, week: ctx.week, catalog: ctx.catalog,
+        scheduleWeeks: ctx.scheduleWeeks, overlay: null, projections: ctx.projections, matchups: ctx.matchups,
+        liveLocks: ctx.liveLocks, priorFinalMatchups: ctx.priorFinalMatchups,
+      },
+      partnerRosterIds: [],
+      sender: {},
+      incoming: toPrice.map((o) => ({ id: o.id, partnerRosterId: o.fromTeamId, give: o.give, get: o.get })),
+    }));
+  }
+  const priceById = new Map((priced ?? []).map((p) => [p.id, p]));
+  const nameOf = (id) => ctx?.players?.[id]?.name ?? String(id);
+  const teamName = (rid) => ctx?.teams?.find((t) => t.rosterId === rid)?.teamName ?? null;
+
+  const liveIds = new Set(mapped.map((o) => o.id));
+  const incoming = mapped.map((o) => {
+    const p = prev.get(o.id);
+    const fresh = priceById.get(o.id);
+    const base = {
+      id: o.id,
+      myTeamId,
+      week: ctx?.week ?? week,
+      fromTeamId: o.fromTeamId,
+      partnerName: teamName(o.fromTeamId) ?? p?.partnerName ?? `Team ${o.fromTeamId}`,
+      give: o.give.map((id) => ({ id, name: fresh ? nameOf(id) : p?.give?.find((x) => x.id === id)?.name ?? nameOf(id) })),
+      get: o.get.map((id) => ({ id, name: fresh ? nameOf(id) : p?.get?.find((x) => x.id === id)?.name ?? nameOf(id) })),
+      expirationDate: o.expirationDate,
+      status: p?.status ?? 'pending',
+      handledAt: p?.handledAt ?? null,
+      handledBy: p?.handledBy ?? null,
+    };
+    const price = fresh
+      ? { youDelta: fresh.youDelta, partnerDelta: fresh.partnerDelta, drops: fresh.drops ?? [], evaluatedAt: now }
+      : { youDelta: p?.youDelta ?? null, partnerDelta: p?.partnerDelta ?? null, drops: p?.drops ?? [], evaluatedAt: p?.evaluatedAt ?? null };
+    const rec = recommendIncoming({ youDelta: price.youDelta, givePlayerIds: o.give }, entry.settings);
+    return { ...base, ...price, recommendation: rec.action, reason: rec.reason };
+  });
+  // Keep our own recent answers visible for two days after the offer leaves the feed.
+  const history = (entry.incoming ?? []).filter((o) => !liveIds.has(o.id) && o.handledAt && now - o.handledAt < 2 * 86_400_000);
+  setTradeSender(leagueId, userId, { incoming: [...incoming, ...history], lastIncoming: { at: now, live: incoming.length } });
+
+  // Autopilot: answer for him.
+  const fresh = getTradeSender(leagueId, userId);
+  if (!(fresh.settings?.mode === 'auto' && fresh.enabled) || fresh.awaitingTrade || !TRADE_RESPONSE_CONFIRMED) return;
+  const pending = (fresh.incoming ?? []).filter((o) => o.status === 'pending' && o.recommendation);
+  const best = pending.filter((o) => o.recommendation === 'accept').sort((a, b) => b.youDelta - a.youDelta)[0];
+  try {
+    for (const o of pending.filter((x) => x.recommendation === 'decline')) {
+      await respondIncomingFor(provider, leagueId, userId, o.id, 'DECLINE', 'autopilot');
+    }
+    if (best) await respondIncomingFor(provider, leagueId, userId, best.id, 'ACCEPT', 'autopilot');
+  } catch (err) {
+    console.error(`[trade-incoming] ${leagueId}: autopilot answer failed: ${err?.message}`);
+  }
+}
+
+/** Every 5 min: offers to every linked ESPN manager who uses the trade sender. */
+export async function runIncomingSweep() {
+  for (const entry of listTradeSenders()) {
+    try {
+      await refreshIncoming(entry.leagueId, entry.userId);
+    } catch (err) {
+      console.error(`[trade-incoming] ${entry.leagueId} failed: ${err?.message}`);
+    }
+  }
+}
+
+/** The hub's Accept / Decline buttons (after an explicit confirm). */
+apiRouter.post('/league/:leagueId/trade-sender/respond', async (req, res, next) => {
+  try {
+    const { leagueId } = req.params;
+    const { userId = null, proposalId, action } = req.body ?? {};
+    rememberOwnEspnCreds(req, leagueId);
+    if (!['ACCEPT', 'DECLINE'].includes(action)) { res.json({ done: false, reason: 'bad_action' }); return; }
+    const result = await respondIncomingFor(getProvider(req, userId), leagueId, userId, proposalId, action, 'manual');
+    res.json(result);
+  } catch (error) {
+    if (error?.status) {
+      const r = mapSendError(error);
+      res.json({ done: false, reason: r.reason, detail: r.detail });
+      return;
+    }
     next(error);
   }
 });
