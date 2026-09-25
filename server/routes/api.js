@@ -1558,6 +1558,7 @@ export async function runTradeSenderSweep() {
   // Projections landed recently: more positions may still be on the way. Wait.
   if (meta?.changedAt && now - meta.changedAt < SENDER_QUIET_MS) return;
   for (const entry of listEnabledTradeSenders()) {
+    if (entry.settings?.mode !== 'auto') continue; // background work = autopilot only
     const last = entry.lastScan;
     const reason = !last?.at
       ? 'first'
@@ -1615,13 +1616,17 @@ apiRouter.post('/league/:leagueId/trade-sender', (req, res) => {
   };
   if (enabled !== undefined) patch.enabled = Boolean(enabled);
   if (settings) patch.settings = sanitizeSenderSettings(settings);
+  // ONE switch (Trade autopilot): mode 'auto' = background scans + auto-send;
+  // mode 'suggest' = nothing in the background (Scan now + manual Send only).
   if (patch.settings?.mode === 'auto') {
     // Auto-send writes to ESPN as this manager: only with his own login on file.
     if (providerName(req) !== 'espn' || !canWriteFor(req, leagueId, userId)) {
       res.status(400).json({ ok: false, reason: 'no_espn_creds' });
       return;
     }
-    patch.enabled = true; // auto-send rides the automatic scans
+    patch.enabled = true;
+  } else if (patch.settings?.mode === 'suggest') {
+    patch.enabled = false;
   }
   const entry = setTradeSender(leagueId, userId ?? null, patch);
   // New rules make the stored offers stale; rescan in the background.

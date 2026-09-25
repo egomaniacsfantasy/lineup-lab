@@ -108,17 +108,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
     }
   };
 
-  const toggleEnabled = async () => {
-    setSaving(true);
-    try {
-      const res = await saveTradeSender(leagueId, { userId, enabled: !state.enabled });
-      setState((s) => (s ? { ...s, enabled: res.enabled, scanning: res.enabled || s.scanning } : s));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Auto-send writes to other managers' inboxes, so turning it ON asks first.
+  // Trade autopilot sends to other managers' inboxes, so turning it ON asks first.
   const setMode = async (mode: 'suggest' | 'auto') => {
     setSaving(true);
     setAutoError(null);
@@ -127,7 +117,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
       setState((s) => (s ? { ...s, enabled: res.enabled, settings: res.settings, scanning: true } : s));
       setDraft(res.settings);
     } catch {
-      setAutoError('Auto-send needs your own ESPN login. Open Odds Gods on a device signed in to ESPN, then try again.');
+      setAutoError('Trade autopilot needs your own ESPN login. Open Odds Gods on a device signed in to ESPN, then try again.');
     } finally {
       setSaving(false);
       setConfirmAuto(false);
@@ -212,7 +202,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
           </div>
 
           <label className="trade-sender__field">
-            <span>Auto-send at most this many offers per week (blank = no limit)</span>
+            <span>Autopilot sends at most this many offers per week (blank = no limit)</span>
             <input
               min={0}
               step={1}
@@ -341,7 +331,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
           <p className="trade-sender__note">No trade clears your rules right now. Try a lower minimum or a higher cap.</p>
         ) : null
       ) : (
-        <p className="trade-sender__note">No scan yet. Tap Scan now, or turn on automatic scans below.</p>
+        <p className="trade-sender__note">No scan yet. Tap Scan now, or turn on trade autopilot below.</p>
       )}
 
       {state.suggestions.length > 0 ? (
@@ -462,17 +452,6 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
         </button>
       </div>
 
-      <label className="trade-sender__auto">
-        <input checked={state.enabled} disabled={saving} onChange={() => void toggleEnabled()} type="checkbox" />
-        <span className="trade-sender__auto-copy">
-          <span className="trade-sender__auto-title">Scan automatically</span>
-          <span className="trade-sender__auto-note">
-            {state.enabled
-              ? 'On. We rescan after each projection update and every 3 hours. You still choose what to send.'
-              : 'Off. Turn on to keep these offers fresh in the background.'}
-          </span>
-        </span>
-      </label>
       {state.canSend ? (
         <label className="trade-sender__auto">
           <input
@@ -482,15 +461,15 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
             type="checkbox"
           />
           <span className="trade-sender__auto-copy">
-            <span className="trade-sender__auto-title">Auto-send: send offers that clear my rules</span>
+            <span className="trade-sender__auto-title">Trade autopilot: send offers that clear my rules on ESPN</span>
             <span className="trade-sender__auto-note">
               {s.mode === 'auto'
                 ? state.autoSend?.reason === 'needs_own_login'
                   ? 'Paused until we have your own ESPN login. Open Odds Gods on a device signed in to ESPN.'
                   : state.autoSend?.reason === 'weekly_cap'
                     ? `On. Weekly limit reached (${s.autoCap} sent). It resumes as the week rolls.`
-                    : `On. After each scan we send the best offers for you${s.autoCap != null ? `, up to ${s.autoCap} a week` : ''}. One pending offer per manager, never the same offer twice.${state.autoSend?.sent ? ` Last run sent ${state.autoSend.sent}.` : ''}`
-                : 'Off. You choose every offer that gets sent.'}
+                    : `On. Every 3 hours (and after each projection update) we scan and send the best offers that clear your rules${s.autoCap != null ? `, up to ${s.autoCap} a week` : ''}. Tap Scan now to check immediately. One pending offer per manager, never the same offer twice.${state.autoSend?.sent ? ` Last run sent ${state.autoSend.sent}.` : ''}`
+                : 'Off. Nothing runs in the background. Tap Scan now for offers and send the ones you like.'}
             </span>
           </span>
         </label>
@@ -499,13 +478,13 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
       {confirmAuto ? (
         <div className="trade-sender__confirm trade-sender__confirm--auto">
           <p>
-            Auto-send proposes real trades to other managers on ESPN without asking you first, whenever an offer
+            Trade autopilot scans every 3 hours and proposes real trades to other managers on ESPN without asking you first, whenever an offer
             clears your rules ({s.minYouDelta}% for you, at most {s.maxPartnerLoss}% for them)
             {s.autoCap != null ? `, up to ${s.autoCap} a week` : ', with no weekly limit'}. Turn it on?
           </p>
           <div className="trade-sender__actions">
             <button className="trade-sender__btn trade-sender__btn--go" onClick={() => void setMode('auto')} type="button">
-              Turn on auto-send
+              Turn on trade autopilot
             </button>
             <button className="trade-sender__btn trade-sender__btn--ghost" onClick={() => setConfirmAuto(false)} type="button">
               Cancel
