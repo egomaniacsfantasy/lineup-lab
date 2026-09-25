@@ -534,6 +534,10 @@ export function createEspnProvider({ season, espnS2, swid, actAs = null }) {
             proposedDate: t.proposedDate ?? null,
             processDate: t.processDate ?? null,
             expirationDate: t.expirationDate ?? null,
+            // Present only to a signed-in member of the trade (read with HIS login).
+            items: (t.items ?? []).map((it) => ({
+              playerId: it.playerId, type: it.type, fromTeamId: it.fromTeamId, toTeamId: it.toTeamId,
+            })),
           });
         }
       }

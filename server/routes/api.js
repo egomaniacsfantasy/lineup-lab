@@ -1985,7 +1985,12 @@ apiRouter.get('/league/:leagueId/trade-sender/activity', async (req, res, next) 
     const { leagueId } = req.params;
     const creds = getEspnCreds(leagueId);
     const norm = normSwid;
-    const provider = buildHeadlessProvider('espn', seasonParam(req.query.season));
+    // Read with THIS manager's own login when linked (only members of a trade see
+    // its players), else any linked login.
+    const own = getEspnCredsFor(leagueId, req.query.userId);
+    const provider = own
+      ? createEspnProvider({ season: seasonParam(req.query.season), espnS2: own.espnS2, swid: own.swid })
+      : buildHeadlessProvider('espn', seasonParam(req.query.season));
     // Gate: the caller must own a team in this league (by their SWID).
     const ctx = creds ? await loadLeagueContext(provider, leagueId, req.query.userId ?? null) : null;
     const myTeam = ctx?.teams.find((t) => t.isUser) ?? null;
