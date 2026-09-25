@@ -330,6 +330,12 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                   <span className="trade-sender__offer-tag">You drop</span> {names(offer.drops.you)}
                 </p>
               ) : null}
+              {offer.drops?.youLater?.length ? (
+                <p className="trade-sender__offer-line trade-sender__offer-line--muted">
+                  <span className="trade-sender__offer-tag">Later</span>
+                  {offer.drops.youLater.map((d) => `drop ${d.name} in week ${d.week} when ${d.whenReturns} comes off IR`).join('; ')}
+                </p>
+              ) : null}
               {offer.drops?.partner.length ? (
                 <p className="trade-sender__offer-line trade-sender__offer-line--muted">
                   <span className="trade-sender__offer-tag">They drop</span> {names(offer.drops.partner)} (their call)

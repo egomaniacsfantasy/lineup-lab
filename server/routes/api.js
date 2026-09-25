@@ -1490,7 +1490,7 @@ async function scanTradeSender(leagueId, reason) {
       // Only the plain-data fields the sim reads cross the thread boundary.
       ctx: {
         league: ctx.league, teams: ctx.teams, week: ctx.week, catalog: ctx.catalog,
-        scheduleWeeks: ctx.scheduleWeeks, overlay: null, projections: ctx.projections,
+        scheduleWeeks: ctx.scheduleWeeks, overlay: null, projections: ctx.projections, matchups: ctx.matchups,
       },
       partnerRosterIds,
       sender: s,

@@ -1113,7 +1113,11 @@ export interface TradeSenderOffer {
   partnerDelta: number;
   youPlayoffDelta?: number;
   partnerPlayoffDelta?: number;
-  drops?: { you: { id: string; name: string }[]; partner: { id: string; name: string }[] };
+  drops?: {
+    you: { id: string; name: string }[];
+    youLater?: { id: string; name: string; week: number; whenReturns: string }[];
+    partner: { id: string; name: string }[];
+  };
   sent: { at: number; espnTransactionId: string | null; state?: TradeOfferState } | null;
 }
 export type TradeOfferState = 'pending' | 'accepted' | 'processed' | 'declined' | 'canceled' | 'expired';

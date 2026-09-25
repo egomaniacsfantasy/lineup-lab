@@ -113,3 +113,47 @@ test('uneven packages: I receive more -> my worst unprotected player is dropped'
   // Giving more than I get never makes ME drop (the partner settles his own overflow).
   for (const s of res.suggestions.filter((x) => x.give.length > x.get.length)) assert.equal(s.drops.you.length, 0);
 });
+
+test('parity with the Build-a-Trade analyzer, IR stash included', async () => {
+  const { analyzeTrade } = await import('../server/engine/engine.js');
+  // Copy of the league where I also hold an IR stash: out weeks 1-5, back week 6.
+  const stash = `p${uid++}`;
+  catalog[stash] = { position: 'RB', name: 'RB-stash' };
+  const weekly = {};
+  const weeklyCI = {};
+  for (let w = 6; w <= 18; w += 1) {
+    weekly[String(w)] = 12;
+    weeklyCI[String(w)] = { floor: 8, ceiling: 16 };
+  }
+  for (let w = 1; w <= 5; w += 1) {
+    weekly[String(w)] = 0;
+    weeklyCI[String(w)] = { floor: 0, ceiling: 0 };
+  }
+  const irProjections = [...projections, { playerId: stash, position: 'RB', mean: 12, stdev: 4, weekly, weeklyCI, seasonTotal: 12 * 13 }];
+  // 11 active + the stash = 12 on a 12-spot roster. A 1-for-2 makes 13: without
+  // IR awareness that forces a drop now; with it, the stash's slot absorbs it.
+  const irProj = irProjections;
+  const irTeams = teams.map((t) => (t.isUser
+    ? { ...t, players: [...t.players, stash], reserve: [stash] }
+    : t));
+  const irCtx = { ...ctx, teams: irTeams, projections: { version: 'sender-ir', projections: irProj } };
+  const me = irTeams[0];
+  const t2 = irTeams[1].players;
+  const give = [me.players[10]];     // my WR5
+  const get = [t2[4], t2[5]];        // their two best WRs
+
+  const found = await suggestTrades(irCtx, {
+    maxSim: 20, partnerRosterId: 2, getPlayerIds: get,
+    sender: { giveAllow: give, minYouDelta: -100, maxPartnerLoss: 100 },
+  });
+  const deal = found.suggestions.find((s) => s.give.length === 1 && s.get.length === 2);
+  assert.ok(deal, 'the pinned 1-for-2 is found');
+  assert.equal(deal.drops.you.length, 0, 'the IR stash frees the spot: no drop now');
+  assert.equal(deal.drops.youLater.length, 1, 'one drop deferred to the stash return');
+  assert.equal(deal.drops.youLater[0].week, 6, 'deferred to the week he returns');
+
+  const analyzed = analyzeTrade(irCtx, { partnerRosterId: 2, give, get });
+  assert.equal(deal.youDelta, analyzed.you.delta.titleProb, 'my title delta matches the analyzer exactly');
+  assert.equal(deal.partnerDelta, analyzed.partner.delta.titleProb, 'partner delta matches the analyzer exactly');
+  assert.equal(analyzed.drops.you.length, 1, 'the analyzer plans the same single (deferred) drop');
+});

@@ -2599,6 +2599,7 @@ export function planIrAwareDrops({
     finalPlayers: afterPlayers.filter((id) => !immediateSet.has(String(id))),
     dropSchedule,
     immediateDrops,
+    immediateNeed,
     deferred,
     totalDrops: immediateDrops.length + deferred.length,
   };
@@ -2966,6 +2967,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
   const projectionMap = new Map(active.projections.map((p) => [p.playerId, p]));
   applyOverlay(projectionMap, overlay);
+  // Same as analyzeTrade: finished games this week resolve on their real score, so
+  // a deal found here prices exactly as it does in the Build-a-Trade analyzer.
+  pinPlayedCurrentWeek(projectionMap, ctx.matchups, week);
 
   const slotLabels = (league.rosterPositions ?? []).filter((p) => !['BN', 'IR', 'TAXI'].includes(p));
   const maxRoster = (league.rosterPositions ?? []).filter((p) => !['IR', 'TAXI'].includes(p)).length;
@@ -2997,9 +3001,13 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   const playoffWeekStart = league.playoffWeekStart ?? (regularWeeks + 1);
   const bracketSize = nextPow2(Math.max(1, Math.min(league.playoffTeams ?? 6, teams.length)));
   const rounds = Math.max(1, Math.round(Math.log2(bracketSize)));
-  const dropWeeks = [];
-  for (let w = week; w <= regularWeeks; w += 1) dropWeeks.push(w);
-  for (let r = 0; r < rounds; r += 1) dropWeeks.push(playoffWeekStart + r);
+  const lastWeek = playoffWeekStart + rounds - 1;
+  const dropWeeksFrom = (start) => {
+    const out = [];
+    for (let w = start; w <= regularWeeks; w += 1) out.push(w);
+    for (let r = 0; r < rounds; r += 1) out.push(playoffWeekStart + r);
+    return out;
+  };
 
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
@@ -3017,32 +3025,38 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const getSet = new Set(getList.map(String));
     const userAfter = [...userTeam.players.filter((id) => !giveSet.has(String(id))), ...getList];
     const partnerAfter = [...partnerTeam.players.filter((id) => !getSet.has(String(id))), ...giveList];
-    // Sender: count ACTIVE bodies (ESPN's limit ignores IR/taxi) and never drop a
-    // stashed or protected player -- dropping an IR stash frees no active spot, so
-    // the drop sent to ESPN would not make room. The UI finder keeps its old count.
-    const stashedOf = (t) => new Set([...(t.reserve ?? []), ...(t.taxi ?? [])].map(String));
-    const userStash = sender ? stashedOf(userTeam) : new Set();
-    const partnerStash = sender ? stashedOf(partnerTeam) : new Set();
-    const userNeed = Math.max(0, userAfter.filter((id) => !userStash.has(String(id))).length - maxRoster);
-    const partnerNeed = Math.max(0, partnerAfter.filter((id) => !partnerStash.has(String(id))).length - maxRoster);
-    const userDroppable = userTeam.players.filter((id) => !giveSet.has(String(id))
-      && !userStash.has(String(id)) && !(sender && senderProtect.has(String(id))));
-    const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)) && !partnerStash.has(String(id)));
-    const uDrops = chooseDrops(userAfter, userDroppable, userNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
-    const pDrops = chooseDrops(partnerAfter, partnerDroppable, partnerNeed, slotLabels, projectionMap, catalog, dropWeeks, replacementFor);
-    const uSet = new Set(uDrops.map(String));
-    const pSet = new Set(pDrops.map(String));
-    const userFinal = userAfter.filter((id) => !uSet.has(String(id)));
-    const partnerFinal = partnerAfter.filter((id) => !pSet.has(String(id)));
     // The swap goes live at targetStart (a player already done for the week holds the
     // deal to next week); weeks before it keep the pre-trade roster/starters, so mid-week
     // both sides are valued from the same week.
     const targetStart = tradeEffectiveWeek([...giveList, ...getList], projectionMap, week);
+    const dropWeeks = dropWeeksFrom(targetStart);
+    // Roster-limit drops: the analyzer's IR-aware plan, verbatim. A player stashed
+    // in a real IR slot frees an active spot while he's out, so an uneven trade can
+    // need no drop now; the drop is deferred to his return week (dropSchedule).
+    // Only difference: the sender never drops a player the user protected.
+    const userDroppable = userTeam.players.filter((id) => !giveSet.has(String(id))
+      && !(sender && senderProtect.has(String(id))));
+    const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)));
+    const planFor = (team, afterPlayers, droppableIds) => planIrAwareDrops({
+      team, afterPlayers, droppableIds, maxRoster, targetStart, lastWeek,
+      slotLabels, projectionMap, catalog, dropWeeks, replacementFor,
+    });
+    const userPlan = planFor(userTeam, userAfter, userDroppable);
+    const partnerPlan = planFor(partnerTeam, partnerAfter, partnerDroppable);
+    const tradeSwap = (t, plan) => ({
+      ...t,
+      players: plan.finalPlayers,
+      starters: optimalStarters(plan.finalPlayers),
+      playersBefore: t.players,
+      startersBefore: t.starters,
+      tradeEffectiveWeek: targetStart,
+      dropSchedule: Object.keys(plan.dropSchedule).length ? plan.dropSchedule : null,
+    });
     const tradedTeams = teams.map((t) =>
       t.rosterId === userTeam.rosterId
-        ? { ...t, players: userFinal, starters: optimalStarters(userFinal), playersBefore: t.players, startersBefore: t.starters, tradeEffectiveWeek: targetStart }
+        ? tradeSwap(t, userPlan)
         : t.rosterId === partnerTeam.rosterId
-          ? { ...t, players: partnerFinal, starters: optimalStarters(partnerFinal), playersBefore: t.players, startersBefore: t.starters, tradeEffectiveWeek: targetStart }
+          ? tradeSwap(t, partnerPlan)
           : t);
     const after = simulateSeason({ ...base, teams: tradedTeams, sims });
     const bu = baseline.find((f) => f.rosterId === userTeam.rosterId);
@@ -3064,9 +3078,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       youWeekDelta: weekWinProbDelta(au, bu),
       partnerWeekDelta: weekWinProbDelta(ap, bp),
       theirValueDelta,
-      userDrops: uDrops,
-      partnerDrops: pDrops,
-      userDropShort: uDrops.length < userNeed, // not enough droppable bodies to fit
+      userDrops: userPlan.immediateDrops,
+      partnerDrops: partnerPlan.immediateDrops,
+      userDeferred: userPlan.deferred,
+      // Not enough droppable bodies to make room now (every candidate protected).
+      userDropShort: userPlan.immediateDrops.length < userPlan.immediateNeed,
     };
   };
 
@@ -3143,6 +3159,14 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     return out;
   };
   const nameOf = (id) => catalog[id]?.name ?? String(id);
+  // Drops as the UI/ESPN need them: `you` = cut now (goes into the ESPN offer),
+  // `youLater` = cut the week an IR stash returns (the analyzer's deferred drop),
+  // `partner` = what we expect them to cut now (their call).
+  const dropsView = (ev) => ({
+    you: ev.userDrops.map((id) => ({ id, name: nameOf(id) })),
+    youLater: (ev.userDeferred ?? []).map((d) => ({ id: d.id, name: nameOf(d.id), week: d.week, whenReturns: nameOf(d.triggerId) })),
+    partner: ev.partnerDrops.map((id) => ({ id, name: nameOf(id) })),
+  });
   // Every practical shape, including uneven ones (3-for-2, 3-for-1, etc.) so a lopsided
   // roster still produces balanced combos. Candidate generation is cheap (no sims); the
   // gap-sort + fairness ranking still pick the best few to actually simulate.
@@ -3257,7 +3281,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       score: Number((youDelta * (accept / 100)).toFixed(2)),
       // Who each side cuts to fit an uneven package (rest-of-season worst player).
       // Yours go into the ESPN offer; theirs is only what we expect them to drop.
-      drops: { you: ev.userDrops.map((id) => ({ id, name: nameOf(id) })), partner: ev.partnerDrops.map((id) => ({ id, name: nameOf(id) })) },
+      drops: dropsView(ev),
     });
   }
   // ── ALL-MANAGERS SWEEP consistency: the deltas above are a light 600-sim ESTIMATE, which
@@ -3295,7 +3319,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       s.partnerPlayoffDelta = Number(ev.partnerPlayoffDelta.toFixed(1));
       s.youWeekDelta = ev.youWeekDelta ?? s.youWeekDelta;
       s.partnerWeekDelta = ev.partnerWeekDelta ?? s.partnerWeekDelta;
-      s.drops = { you: ev.userDrops.map((id) => ({ id, name: nameOf(id) })), partner: ev.partnerDrops.map((id) => ({ id, name: nameOf(id) })) };
+      s.drops = dropsView(ev);
       const read = readsByRoster[s.partnerRosterId] ?? {};
       s.acceptance = acceptanceProbability(s.partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
       s.score = Number((s.youDelta * (s.acceptance / 100)).toFixed(2));
