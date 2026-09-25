@@ -24,6 +24,8 @@ export const DEFAULT_SENDER_SETTINGS = {
   getPositions: [],
   minYouDelta: 1,      // X: my title % must rise at least this much (pts)
   maxPartnerLoss: 3,   // Y: the partner's title % may fall at most this much (pts)
+  mode: 'suggest',     // 'suggest' = the user sends; 'auto' = auto-send after each scan
+  autoCap: null,       // max auto-sent offers per rolling 7 days; null = unlimited
 };
 
 const normUser = (v) => String(v ?? '').replace(/[{}\s"]/g, '').toUpperCase();

@@ -56,3 +56,26 @@ export function classifyOffer(record, activity, roster, myTeamId, now = Date.now
   }
   return { state: 'pending', espnStatus, relatedTypes };
 }
+
+const AUTO_WINDOW_MS = 7 * 24 * 60 * 60_000;
+
+/**
+ * Which suggested offers auto-send may send now, best first, and how many it may
+ * still send this week. Rules: never an offer already sent (by id, any state,
+ * so a declined package is not re-pitched), at most one PENDING offer per
+ * partner, and the rolling-7-day cap counts only auto-sent offers.
+ */
+export function autoSendCandidates(entry, now = Date.now()) {
+  const log = entry?.sent ?? [];
+  const cap = Number.isFinite(entry?.settings?.autoCap) ? entry.settings.autoCap : Infinity;
+  const used = log.filter((r) => r.mode === 'auto' && now - r.at < AUTO_WINDOW_MS).length;
+  const everSent = new Set(log.map((r) => r.offerId));
+  const busyPartners = new Set(log.filter((r) => r.state === 'pending').map((r) => r.partnerRosterId));
+  const offers = [];
+  for (const offer of entry?.suggestions ?? []) {
+    if (offer.sent || everSent.has(offer.id) || busyPartners.has(offer.partnerRosterId)) continue;
+    busyPartners.add(offer.partnerRosterId); // one per partner within this pass too
+    offers.push(offer);
+  }
+  return { offers, remaining: Math.max(0, cap - used), used };
+}

@@ -319,3 +319,9 @@
 .trade-sender__state--declined {
   color: #ff6b6b;
 }
+
+.trade-sender__confirm--auto {
+  border: 1px solid var(--accent, #3b82f6);
+  border-radius: 10px;
+  padding: 10px 14px;
+}

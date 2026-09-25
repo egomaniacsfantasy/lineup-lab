@@ -1102,6 +1102,8 @@ export interface TradeSenderSettings {
   getPositions: string[];
   minYouDelta: number;
   maxPartnerLoss: number;
+  mode: 'suggest' | 'auto';
+  autoCap: number | null;
 }
 export interface TradeSenderOffer {
   id: string;
@@ -1150,6 +1152,12 @@ export interface TradeSenderState {
   sentOffers: SentTradeOffer[];
   awaitingTrade: { offerId: string; espnTransactionId: string; since: number } | null;
   dropSendReady: boolean;
+  autoSend: {
+    at: number;
+    sent: number;
+    usedThisWeek?: number;
+    reason?: string | null;
+  } | null;
   myPlayers: { id: string; name: string; position: string | null }[];
   managers: { rosterId: number; teamName: string; ownerName: string | null }[];
 }

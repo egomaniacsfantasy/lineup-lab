@@ -49,3 +49,25 @@ test('past expiry with no acceptance = expired; invisible but unexpired stays pe
   assert.equal(classifyOffer(old, [], rosterBefore, 4).state, 'expired');
   assert.equal(classifyOffer(record, [], rosterBefore, 4).state, 'pending');
 });
+
+import { autoSendCandidates } from '../server/engine/tradeWatch.js';
+
+test('auto-send picks: best first, no resends, one pending offer per manager, weekly cap', () => {
+  const now = Date.now();
+  const day = 24 * 60 * 60_000;
+  const offer = (id, partnerRosterId, youDelta) => ({ id, partnerRosterId, partnerName: `T${partnerRosterId}`, youDelta, sent: null });
+  const entry = {
+    settings: { autoCap: 3 },
+    suggestions: [offer('a', 1, 3.0), offer('b', 1, 2.5), offer('c', 2, 2.0), offer('d', 3, 1.5), offer('e', 5, 1.2)],
+    sent: [
+      { offerId: 'd', partnerRosterId: 3, state: 'declined', mode: 'auto', at: now - 2 * day }, // declined: never re-pitch
+      { offerId: 'x', partnerRosterId: 2, state: 'pending', mode: 'manual', at: now - day },    // manager 2 has one out
+      { offerId: 'y', partnerRosterId: 9, state: 'expired', mode: 'auto', at: now - 8 * day },  // outside the 7-day window
+    ],
+  };
+  const { offers, remaining, used } = autoSendCandidates(entry, now);
+  assert.deepEqual(offers.map((o) => o.id), ['a', 'e'], 'a (best for mgr 1); b skipped (same mgr); c (mgr 2 busy); d (declined)');
+  assert.equal(used, 1, 'only auto offers inside 7 days count');
+  assert.equal(remaining, 2);
+  assert.equal(autoSendCandidates({ ...entry, settings: { autoCap: null } }, now).remaining, Infinity, 'blank cap = unlimited');
+});

@@ -61,6 +61,8 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
   const [notice, setNotice] = useState<{ id: string; text: string; error: boolean } | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [confirmAuto, setConfirmAuto] = useState(false);
+  const [autoError, setAutoError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -113,6 +115,22 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
       setState((s) => (s ? { ...s, enabled: res.enabled, scanning: res.enabled || s.scanning } : s));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Auto-send writes to other managers' inboxes, so turning it ON asks first.
+  const setMode = async (mode: 'suggest' | 'auto') => {
+    setSaving(true);
+    setAutoError(null);
+    try {
+      const res = await saveTradeSender(leagueId, { userId, settings: { ...state.settings, mode } });
+      setState((s) => (s ? { ...s, enabled: res.enabled, settings: res.settings, scanning: true } : s));
+      setDraft(res.settings);
+    } catch {
+      setAutoError('Auto-send needs your own ESPN login. Open Odds Gods on a device signed in to ESPN, then try again.');
+    } finally {
+      setSaving(false);
+      setConfirmAuto(false);
     }
   };
 
@@ -192,6 +210,17 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
               />
             </label>
           </div>
+
+          <label className="trade-sender__field">
+            <span>Auto-send at most this many offers per week (blank = no limit)</span>
+            <input
+              min={0}
+              step={1}
+              type="number"
+              value={draft.autoCap ?? ''}
+              onChange={(e) => setDraft({ ...draft, autoCap: e.target.value === '' ? null : Number(e.target.value) })}
+            />
+          </label>
 
           <p className="trade-sender__label">Trade with (none picked = everyone)</p>
           <div className="trade-sender__chips">
@@ -444,6 +473,48 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
           </span>
         </span>
       </label>
+      {state.canSend ? (
+        <label className="trade-sender__auto">
+          <input
+            checked={s.mode === 'auto'}
+            disabled={saving}
+            onChange={() => (s.mode === 'auto' ? void setMode('suggest') : setConfirmAuto(true))}
+            type="checkbox"
+          />
+          <span className="trade-sender__auto-copy">
+            <span className="trade-sender__auto-title">Auto-send: send offers that clear my rules</span>
+            <span className="trade-sender__auto-note">
+              {s.mode === 'auto'
+                ? state.autoSend?.reason === 'needs_own_login'
+                  ? 'Paused until we have your own ESPN login. Open Odds Gods on a device signed in to ESPN.'
+                  : state.autoSend?.reason === 'weekly_cap'
+                    ? `On. Weekly limit reached (${s.autoCap} sent). It resumes as the week rolls.`
+                    : `On. After each scan we send the best offers for you${s.autoCap != null ? `, up to ${s.autoCap} a week` : ''}. One pending offer per manager, never the same offer twice.${state.autoSend?.sent ? ` Last run sent ${state.autoSend.sent}.` : ''}`
+                : 'Off. You choose every offer that gets sent.'}
+            </span>
+          </span>
+        </label>
+      ) : null}
+
+      {confirmAuto ? (
+        <div className="trade-sender__confirm trade-sender__confirm--auto">
+          <p>
+            Auto-send proposes real trades to other managers on ESPN without asking you first, whenever an offer
+            clears your rules ({s.minYouDelta}% for you, at most {s.maxPartnerLoss}% for them)
+            {s.autoCap != null ? `, up to ${s.autoCap} a week` : ', with no weekly limit'}. Turn it on?
+          </p>
+          <div className="trade-sender__actions">
+            <button className="trade-sender__btn trade-sender__btn--go" onClick={() => void setMode('auto')} type="button">
+              Turn on auto-send
+            </button>
+            <button className="trade-sender__btn trade-sender__btn--ghost" onClick={() => setConfirmAuto(false)} type="button">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {autoError ? <p className="trade-sender__note trade-sender__note--error">{autoError}</p> : null}
+
       {s.protect.length ? (
         <p className="trade-sender__note">Protected: {s.protect.map(playerName).join(', ')}</p>
       ) : null}

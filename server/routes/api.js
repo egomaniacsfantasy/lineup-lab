@@ -12,7 +12,7 @@ import {
   DEFAULT_SENDER_SETTINGS, getTradeSender, setTradeSender, logSentOffer, listEnabledTradeSenders,
   noteProjectionsFingerprint, getProjectionsMeta, updateSentOffers, listWatchedTradeSenders, senderKey,
 } from '../engine/tradeSenderStore.js';
-import { classifyOffer } from '../engine/tradeWatch.js';
+import { classifyOffer, autoSendCandidates } from '../engine/tradeWatch.js';
 import { TRADE_DROP_CONFIRMED } from '../providers/espnProvider.js';
 import { runTradeScan } from '../engine/tradeScanWorker.js';
 import { projectionsFingerprint } from '../projections/loadFromRepo.js';
@@ -1471,6 +1471,11 @@ function sanitizeSenderSettings(raw = {}) {
     getPositions: positions(raw.getPositions),
     minYouDelta: pts(raw.minYouDelta, DEFAULT_SENDER_SETTINGS.minYouDelta),
     maxPartnerLoss: pts(raw.maxPartnerLoss, DEFAULT_SENDER_SETTINGS.maxPartnerLoss),
+    mode: raw.mode === 'auto' ? 'auto' : 'suggest',
+    // Offers auto-sent per rolling 7 days; null/blank = unlimited.
+    autoCap: raw.autoCap === null || raw.autoCap === '' || raw.autoCap === undefined
+      ? null
+      : Math.max(0, Math.min(100, Math.round(Number(raw.autoCap)) || 0)),
   };
 }
 
@@ -1481,6 +1486,7 @@ async function scanTradeSender(leagueId, userId, reason) {
   const entry = getTradeSender(leagueId, userId);
   if (!entry) return false;
   senderScanning.add(key);
+  let scanned = false;
   const t0 = Date.now();
   const fingerprint = getProjectionsMeta()?.fingerprint ?? null;
   try {
@@ -1517,6 +1523,7 @@ async function scanTradeSender(leagueId, userId, reason) {
       },
     });
     console.log(`[trade-sender] ${key}: ${offers.length} offer(s) from ${perManager.length} manager(s) in ${Date.now() - t0}ms (${reason})`);
+    scanned = true;
   } catch (err) {
     const stale = err?.status === 401;
     setTradeSender(leagueId, userId, {
@@ -1528,6 +1535,13 @@ async function scanTradeSender(leagueId, userId, reason) {
     console.error(`[trade-sender] ${key} scan failed: ${err?.message}`);
   } finally {
     senderScanning.delete(key);
+  }
+  if (scanned) {
+    try {
+      await autoSendOffers(leagueId, userId);
+    } catch (err) {
+      console.error(`[trade-sender] ${key} auto-send failed: ${err?.message}`);
+    }
   }
   return true;
 }
@@ -1580,6 +1594,7 @@ apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
       canSend: providerName(req) === 'espn' && canWriteFor(req, leagueId, userId),
       sentOffers: (entry?.sent ?? []).slice(0, 20),
       awaitingTrade: entry?.awaitingTrade ?? null,
+      autoSend: entry?.autoSend ?? null,
       dropSendReady: TRADE_DROP_CONFIRMED,
       myPlayers,
       managers,
@@ -1600,6 +1615,14 @@ apiRouter.post('/league/:leagueId/trade-sender', (req, res) => {
   };
   if (enabled !== undefined) patch.enabled = Boolean(enabled);
   if (settings) patch.settings = sanitizeSenderSettings(settings);
+  if (patch.settings?.mode === 'auto') {
+    // Auto-send writes to ESPN as this manager: only with his own login on file.
+    if (providerName(req) !== 'espn' || !canWriteFor(req, leagueId, userId)) {
+      res.status(400).json({ ok: false, reason: 'no_espn_creds' });
+      return;
+    }
+    patch.enabled = true; // auto-send rides the automatic scans
+  }
   const entry = setTradeSender(leagueId, userId ?? null, patch);
   // New rules make the stored offers stale; rescan in the background.
   if (settings || patch.enabled) void scanTradeSender(leagueId, userId ?? null, settings ? 'settings_changed' : 'enabled');
@@ -1618,88 +1641,148 @@ apiRouter.post('/league/:leagueId/trade-sender/scan', (req, res) => {
   res.json({ scanning: true, already });
 });
 
+/**
+ * Send one suggested offer to the partner on ESPN, as `userId` (his own login).
+ * Shared by the hub's Send button (mode 'manual', after an explicit confirm) and
+ * auto-send (mode 'auto', the user's standing opt-in). Re-verifies both rosters
+ * still hold every player (and every drop) before the real write. Returns
+ * { sent, reason?, espnTransactionId?, netAdd }; provider errors throw.
+ */
+async function sendOfferFor(provider, leagueId, userId, offerId, mode) {
+  if (typeof provider.proposeTrade !== 'function') return { sent: false, reason: 'unsupported_provider' };
+  const entry = getTradeSender(leagueId, userId);
+  const offer = (entry?.suggestions ?? []).find((s) => s.id === offerId);
+  if (!offer) return { sent: false, reason: 'offer_gone' };
+  if (offer.sent) return { sent: false, reason: 'already_sent' };
+  if (entry.awaitingTrade) return { sent: false, reason: 'trade_pending_processing' };
+  const myDrops = offer.drops?.you ?? [];
+  if (myDrops.length && !TRADE_DROP_CONFIRMED) return { sent: false, reason: 'drop_format_pending' };
+
+  const myRosterId = entry.lastScan?.userRosterId;
+  const idMap = await provider.getEspnIdMap(leagueId, { fresh: true });
+  // Both rosters must still hold every player in the package (a waiver move or
+  // another trade since the scan makes the offer invalid).
+  const leg = (players, fromTeamId, toTeamId) => players.map((p) => {
+    const hit = idMap.get(String(p.id));
+    return hit && hit.teamId === fromTeamId ? { playerId: hit.espnId, type: 'TRADE', fromTeamId, toTeamId } : null;
+  });
+  const items = [
+    ...leg(offer.give, myRosterId, offer.partnerRosterId),
+    ...leg(offer.get, offer.partnerRosterId, myRosterId),
+  ];
+  const dropIds = myDrops.map((p) => {
+    const hit = idMap.get(String(p.id));
+    return hit && hit.teamId === myRosterId ? hit.espnId : null;
+  });
+  if (myRosterId == null || items.some((it) => it === null) || dropIds.some((d) => d === null)) {
+    return { sent: false, reason: 'roster_changed' };
+  }
+  const EXPIRES_DAYS = 2;
+  const result = await provider.proposeTrade(leagueId, myRosterId, entry.lastScan.week, items, { expiresInDays: EXPIRES_DAYS, drops: dropIds });
+  const record = {
+    at: Date.now(),
+    offerId,
+    partnerRosterId: offer.partnerRosterId,
+    partnerName: offer.partnerName,
+    give: offer.give,
+    get: offer.get,
+    youDelta: offer.youDelta,
+    partnerDelta: offer.partnerDelta,
+    drops: myDrops,
+    espnTransactionId: result?.id ?? null,
+    status: result?.status ?? null,
+    state: 'pending',
+    expiresAt: Date.now() + EXPIRES_DAYS * 24 * 60 * 60_000,
+    mode,
+  };
+  logSentOffer(leagueId, userId, record);
+  const fresh = getTradeSender(leagueId, userId);
+  setTradeSender(leagueId, userId, {
+    suggestions: (fresh?.suggestions ?? []).map((s) =>
+      s.id === offerId ? { ...s, sent: { at: record.at, espnTransactionId: record.espnTransactionId, state: 'pending' } } : s),
+  });
+  // Net-add = the offer now holds one of the manager's open spots on ESPN.
+  const netAdd = offer.get.length - offer.give.length - myDrops.length > 0;
+  return { sent: true, espnTransactionId: record.espnTransactionId, status: record.status, netAdd };
+}
+
+/** Provider errors from a send, worded as reasons the hub can show. */
+function mapSendError(error) {
+  const rosterFull = /TRAN_ROSTER_LIMIT_EXCEEDED/.test(String(error?.detail ?? ''));
+  return {
+    sent: false,
+    reason: error?.message === 'espn_creds_not_yours' ? 'needs_own_login'
+      : error?.status === 401 ? 'creds_stale_relink'
+        : rosterFull ? 'roster_reserved' : String(error?.message ?? 'error'),
+    detail: error?.detail ?? null,
+  };
+}
+
 /** Send one suggested offer to the partner on ESPN. A real write: confirm only. */
 apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => {
   try {
     const { leagueId } = req.params;
     const { offerId, userId = null, confirm = false } = req.body ?? {};
     rememberOwnEspnCreds(req, leagueId);
-    const provider = getProvider(req, userId);
-    if (typeof provider.proposeTrade !== 'function') {
-      res.json({ sent: false, reason: 'unsupported_provider' });
-      return;
-    }
-    const entry = getTradeSender(leagueId, userId);
-    const offer = (entry?.suggestions ?? []).find((s) => s.id === offerId);
-    if (!offer) { res.json({ sent: false, reason: 'offer_gone' }); return; }
-    if (!confirm) { res.json({ sent: false, reason: 'confirm_required', offer }); return; }
-    if (offer.sent) { res.json({ sent: false, reason: 'already_sent' }); return; }
-    if (entry.awaitingTrade) { res.json({ sent: false, reason: 'trade_pending_processing' }); return; }
-    const myDrops = offer.drops?.you ?? [];
-    if (myDrops.length && !TRADE_DROP_CONFIRMED) { res.json({ sent: false, reason: 'drop_format_pending' }); return; }
-
-    const myRosterId = entry.lastScan?.userRosterId;
-    const idMap = await provider.getEspnIdMap(leagueId, { fresh: true });
-    // Both rosters must still hold every player in the package (a waiver move or
-    // another trade since the scan makes the offer invalid).
-    const leg = (players, fromTeamId, toTeamId) => players.map((p) => {
-      const hit = idMap.get(String(p.id));
-      return hit && hit.teamId === fromTeamId ? { playerId: hit.espnId, type: 'TRADE', fromTeamId, toTeamId } : null;
-    });
-    const items = [
-      ...leg(offer.give, myRosterId, offer.partnerRosterId),
-      ...leg(offer.get, offer.partnerRosterId, myRosterId),
-    ];
-    const dropIds = myDrops.map((p) => {
-      const hit = idMap.get(String(p.id));
-      return hit && hit.teamId === myRosterId ? hit.espnId : null;
-    });
-    if (myRosterId == null || items.some((it) => it === null) || dropIds.some((d) => d === null)) {
-      res.json({ sent: false, reason: 'roster_changed' });
-      return;
-    }
-    const EXPIRES_DAYS = 2;
-    const result = await provider.proposeTrade(leagueId, myRosterId, entry.lastScan.week, items, { expiresInDays: EXPIRES_DAYS, drops: dropIds });
-    const record = {
-      at: Date.now(),
-      offerId,
-      partnerRosterId: offer.partnerRosterId,
-      partnerName: offer.partnerName,
-      give: offer.give,
-      get: offer.get,
-      youDelta: offer.youDelta,
-      partnerDelta: offer.partnerDelta,
-      drops: myDrops,
-      espnTransactionId: result?.id ?? null,
-      status: result?.status ?? null,
-      state: 'pending',
-      expiresAt: Date.now() + EXPIRES_DAYS * 24 * 60 * 60_000,
-      mode: 'manual',
-    };
-    logSentOffer(leagueId, userId, record);
-    const fresh = getTradeSender(leagueId, userId);
-    setTradeSender(leagueId, userId, {
-      suggestions: (fresh?.suggestions ?? []).map((s) =>
-        s.id === offerId ? { ...s, sent: { at: record.at, espnTransactionId: record.espnTransactionId } } : s),
-    });
-    // A net-add offer now holds one of the manager's open spots on ESPN: rescan so
-    // the other suggestions carry the drop ESPN will demand.
-    if (offer.get.length - offer.give.length - myDrops.length > 0) void scanTradeSender(leagueId, userId, 'offer_sent');
-    res.json({ sent: true, espnTransactionId: record.espnTransactionId, status: record.status });
+    if (!confirm) { res.json({ sent: false, reason: 'confirm_required' }); return; }
+    const result = await sendOfferFor(getProvider(req, userId), leagueId, userId, offerId, 'manual');
+    // The other suggestions need the drop ESPN will now demand: rescan.
+    if (result.netAdd) void scanTradeSender(leagueId, userId, 'offer_sent');
+    res.json(result);
   } catch (error) {
     if (error?.status) {
-      // Handled outcomes answer 200 with a reason the hub can word for the user.
-      const rosterFull = /TRAN_ROSTER_LIMIT_EXCEEDED/.test(String(error.detail ?? ''));
-      res.json({
-        sent: false,
-        reason: error.status === 401 ? 'creds_stale_relink' : rosterFull ? 'roster_reserved' : error.message,
-        detail: error.detail ?? null,
-      });
+      res.json(mapSendError(error));
       return;
     }
     next(error);
   }
 });
+
+/**
+ * Auto-send (the trade sender's autopilot): runs after every scan for a manager
+ * whose mode is 'auto'. Sends the best offers that cleared his X/Y, best first,
+ * as HIM, within his weekly cap. Never resends a package already sent (even a
+ * declined one) and keeps at most one pending offer per partner. After an offer
+ * that adds a body it stops and rescans, so the next offers carry the drop ESPN
+ * will demand for the spot it now holds; that scan ends here again.
+ */
+async function autoSendOffers(leagueId, userId) {
+  const entry = getTradeSender(leagueId, userId);
+  const s = entry?.settings;
+  if (!entry?.enabled || s?.mode !== 'auto' || entry.awaitingTrade) return;
+  if ((entry.provider ?? 'espn') !== 'espn') return;
+  const at = Date.now();
+  if (!getEspnCredsFor(leagueId, userId)) {
+    setTradeSender(leagueId, userId, { autoSend: { at, sent: 0, reason: 'needs_own_login' } });
+    return;
+  }
+  const provider = buildHeadlessProvider('espn', entry.season, userId);
+  const { offers, remaining } = autoSendCandidates(entry, at);
+  let budget = remaining;
+  const results = [];
+  let rescan = false;
+  let stopReason = remaining === 0 ? 'weekly_cap' : null;
+  for (const offer of offers) {
+    if (budget <= 0) { stopReason = 'weekly_cap'; break; }
+    let r;
+    try {
+      r = await sendOfferFor(provider, leagueId, userId, offer.id, 'auto');
+    } catch (err) {
+      r = mapSendError(err);
+    }
+    results.push({ offerId: offer.id, partnerName: offer.partnerName, sent: r.sent, reason: r.reason ?? null });
+    if (r.reason === 'needs_own_login' || r.reason === 'creds_stale_relink') { stopReason = r.reason; break; }
+    if (!r.sent) continue;
+    budget -= 1;
+    console.log(`[trade-sender] ${leagueId}: auto-sent offer to ${offer.partnerName} (${r.espnTransactionId})`);
+    if (r.netAdd) { rescan = true; break; }
+  }
+  const sentNow = results.filter((r) => r.sent).length;
+  setTradeSender(leagueId, userId, {
+    autoSend: { at, sent: sentNow, reason: stopReason, results: results.slice(0, 10) },
+  });
+  if (rescan) void scanTradeSender(leagueId, userId, 'offer_sent');
+}
 
 /** Withdraw one of our pending offers on ESPN. */
 apiRouter.post('/league/:leagueId/trade-sender/cancel', async (req, res, next) => {
