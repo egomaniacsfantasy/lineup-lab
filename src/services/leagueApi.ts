@@ -1152,6 +1152,7 @@ export interface TradeSenderState {
   } | null;
   scanning: boolean;
   canSend: boolean;
+  provider?: 'espn' | 'sleeper';
   sentOffers: SentTradeOffer[];
   awaitingTrade: { offerId: string; espnTransactionId: string; since: number } | null;
   dropSendReady: boolean;

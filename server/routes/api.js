@@ -1632,6 +1632,7 @@ apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
       lastScan: entry?.lastScan ?? null,
       scanning: senderScanning.has(senderKey(leagueId, userId)),
       canSend: providerName(req) === 'espn' && canWriteFor(req, leagueId, userId),
+      provider: providerName(req),
       sentOffers: (entry?.sent ?? []).slice(0, 20),
       awaitingTrade: entry?.awaitingTrade ?? null,
       autoSend: entry?.autoSend ?? null,

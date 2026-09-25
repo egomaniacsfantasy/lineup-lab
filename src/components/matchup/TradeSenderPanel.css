@@ -325,3 +325,8 @@
   border-radius: 10px;
   padding: 10px 14px;
 }
+
+.trade-sender__auto--locked {
+  cursor: default;
+  opacity: 0.75;
+}

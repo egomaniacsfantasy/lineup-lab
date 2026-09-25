@@ -371,7 +371,11 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                   Sent {ago(offer.sent.at)}. {STATE_LABEL[offer.sent.state ?? 'pending']}.
                 </p>
               ) : !state.canSend ? (
-                <p className="trade-sender__note">Propose this one in your league app.</p>
+                <p className="trade-sender__note">
+                  {state.provider === 'espn'
+                    ? 'Re-link your ESPN account once to send offers from here (or propose it in ESPN).'
+                    : 'Propose this one in your league app.'}
+                </p>
               ) : offer.drops?.you.length && !state.dropSendReady ? (
                 <p className="trade-sender__note">Sending offers that need a drop from you is not switched on yet.</p>
               ) : state.awaitingTrade ? (
@@ -463,18 +467,20 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
         </button>
       </div>
 
-      {state.canSend ? (
-        <label className="trade-sender__auto">
+      {state.provider === 'espn' ? (
+        <label className={`trade-sender__auto${state.canSend ? '' : ' trade-sender__auto--locked'}`}>
           <input
             checked={s.mode === 'auto'}
-            disabled={saving}
+            disabled={saving || (!state.canSend && s.mode !== 'auto')}
             onChange={() => (s.mode === 'auto' ? void setMode('suggest') : setConfirmAuto(true))}
             type="checkbox"
           />
           <span className="trade-sender__auto-copy">
             <span className="trade-sender__auto-title">Trade autopilot: send offers that clear my rules on ESPN</span>
             <span className="trade-sender__auto-note">
-              {s.mode === 'auto'
+              {!state.canSend && s.mode !== 'auto'
+                ? 'Locked: we need your own ESPN login to send offers as you. Re-link your ESPN account once (Connect, ESPN), then come back and switch this on.'
+                : s.mode === 'auto'
                 ? state.autoSend?.reason === 'needs_own_login'
                   ? 'Paused until we have your own ESPN login. Open Odds Gods on a device signed in to ESPN.'
                   : state.autoSend?.reason === 'weekly_cap'
