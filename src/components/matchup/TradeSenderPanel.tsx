@@ -37,6 +37,7 @@ const STATE_LABEL: Record<TradeOfferState, string> = {
 
 const SEND_ERRORS: Record<string, string> = {
   drop_format_pending: 'Offers that need a drop from you are not switched on yet.',
+  roster_reserved: 'ESPN is holding your open roster spot for another pending trade, so this one needs a drop. Scan again (we add the drop), or withdraw the other offer.',
   trade_pending_processing: 'A trade was just accepted. New offers open up once ESPN processes it.',
   roster_changed: 'A roster changed since the scan, so this offer is no longer valid. Scan again.',
   offer_gone: 'That offer is out of date. Scan again.',

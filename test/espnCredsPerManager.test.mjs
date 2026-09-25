@@ -83,3 +83,34 @@ test('autopilot + trade sender: per manager, legacy entries re-keyed to their ow
     files.forEach((f, i) => (saved[i] ? fs.writeFileSync(f, saved[i]) : fs.existsSync(f) && fs.unlinkSync(f)));
   }
 });
+
+test('proposeTrade with a drop sends exactly the shape ESPN\'s own client sends', async () => {
+  if (fs.existsSync(FILE)) fs.unlinkSync(FILE);
+  saveEspnCreds(LEAGUE, { espnS2: 's2-team4', swid: TEAM4 });
+  const realFetch = globalThis.fetch;
+  let sent = null;
+  globalThis.fetch = async (url, init) => {
+    sent = { url, body: JSON.parse(init.body), cookie: init.headers.Cookie };
+    return new Response(JSON.stringify({ id: 'tx-1', status: 'PENDING' }), { status: 200 });
+  };
+  try {
+    const provider = createEspnProvider({ season: 2026, actAs: TEAM4 });
+    const items = [
+      { playerId: 4429795, type: 'TRADE', fromTeamId: 1, toTeamId: 4 },
+      { playerId: 4035538, type: 'TRADE', fromTeamId: 1, toTeamId: 4 },
+      { playerId: 4685382, type: 'TRADE', fromTeamId: 4, toTeamId: 1 },
+    ];
+    const res = await provider.proposeTrade(LEAGUE, 4, 3, items, { drops: [-16018] });
+    assert.equal(res.id, 'tx-1');
+    assert.match(sent.url, /lm-api-writes\.fantasy\.espn\.com\/apis\/v3\/games\/ffl\/seasons\/2026\/segments\/0\/leagues\/999\/transactions\//);
+    assert.equal(sent.body.type, 'TRADE_PROPOSAL');
+    assert.equal(sent.body.executionType, 'EXECUTE');
+    assert.equal(sent.body.teamId, 4);
+    assert.equal(sent.body.memberId, TEAM4);
+    assert.deepEqual(sent.body.items.at(-1), { playerId: -16018, type: 'DROP', fromTeamId: 4, toTeamId: 0 }, 'captured DROP shape');
+    assert.equal(sent.body.items.length, 4);
+    assert.match(sent.cookie, /espn_s2=s2-team4/, 'acts with my own login');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

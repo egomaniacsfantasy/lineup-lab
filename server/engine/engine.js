@@ -2981,6 +2981,7 @@ export function computeLineupMoves(rosterSlots, optimalAssignments, lockedIds = 
  *   givePositions / getPositions   positions allowed on each side (empty = any)
  *   minYouDelta   keep a trade only if MY title % rises at least this much (pts)
  *   maxPartnerLoss  ...and the partner's title % falls at most this much (pts)
+ *   reservedSlots roster spots ESPN is holding for the user's pending offers
  * Uneven packages are allowed: when the user would overflow, the sim drops his
  * rest-of-season worst active, unprotected player (returned in `drops.you`, and
  * sent with the offer); a partner overflow is his to settle on accepting.
@@ -3063,11 +3064,14 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const userDroppable = userTeam.players.filter((id) => !giveSet.has(String(id))
       && !(sender && senderProtect.has(String(id))));
     const partnerDroppable = partnerTeam.players.filter((id) => !getSet.has(String(id)));
-    const planFor = (team, afterPlayers, droppableIds) => planIrAwareDrops({
-      team, afterPlayers, droppableIds, maxRoster, targetStart, lastWeek,
+    const planFor = (team, afterPlayers, droppableIds, limit = maxRoster) => planIrAwareDrops({
+      team, afterPlayers, droppableIds, maxRoster: limit, targetStart, lastWeek,
       slotLabels, projectionMap, catalog, dropWeeks, replacementFor,
     });
-    const userPlan = planFor(userTeam, userAfter, userDroppable);
+    // ESPN holds an open spot for each of the user's pending net-add offers, so
+    // the sender plans drops against that smaller limit (the analyzer, which
+    // knows no pending offers, uses the plain limit).
+    const userPlan = planFor(userTeam, userAfter, userDroppable, maxRoster - Math.max(0, Number(sender?.reservedSlots) || 0));
     const partnerPlan = planFor(partnerTeam, partnerAfter, partnerDroppable);
     const tradeSwap = (t, plan) => ({
       ...t,

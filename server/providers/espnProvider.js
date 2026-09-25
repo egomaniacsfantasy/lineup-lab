@@ -28,11 +28,13 @@ const ESPN_BASE = 'https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl';
 // Writes (lineup moves, transactions) go to a DIFFERENT host than reads.
 const ESPN_WRITE_BASE = 'https://lm-api-writes.fantasy.espn.com/apis/v3/games/ffl';
 
-/* A drop attached to a trade proposal. NOT yet captured from ESPN's web client
-   (the propose + cancel shapes were); this mirrors the ESPN add/drop item shape.
-   Until a real capture confirms it, TRADE_DROP_CONFIRMED stays false and the
-   sender refuses to send an offer that needs a drop. */
-export const TRADE_DROP_CONFIRMED = false;
+/* A drop attached to a trade proposal. Shape CONFIRMED from ESPN's own web client
+   (2026-09-25 capture: a 2-for-1 with `{ playerId: -16018, type: 'DROP',
+   fromTeamId: 4, toTeamId: 0 }`; D/ST ids are negative). ESPN also RESERVES an
+   open roster spot for every pending trade that could fill it
+   (TRAN_ROSTER_LIMIT_EXCEEDED_TRADE_RESERVED_ONE), so a second net-add offer
+   needs a drop even with a spot open. */
+export const TRADE_DROP_CONFIRMED = true;
 export function espnTradeDropItem(espnId, teamId) {
   return { playerId: Number(espnId), type: 'DROP', fromTeamId: Number(teamId), toTeamId: 0 };
 }

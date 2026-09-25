@@ -1444,6 +1444,14 @@ async function buildTradeCtx(provider, leagueId, userId) {
   return assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
 }
 
+// Open roster spots ESPN is holding for this manager's pending offers: each
+// pending trade that adds bodies net of its own drops reserves that many.
+function reservedSlotsOf(entry) {
+  return (entry?.sent ?? [])
+    .filter((r) => r.state === 'pending')
+    .reduce((n, r) => n + Math.max(0, (r.get?.length ?? 0) - (r.give?.length ?? 0) - (r.drops?.length ?? 0)), 0);
+}
+
 // A package's identity: same partner + same players both ways = same offer.
 const offerKey = (s) =>
   `${s.partnerRosterId}|${s.give.map((p) => p.id).sort().join('+')}|${s.get.map((p) => p.id).sort().join('+')}`;
@@ -1492,7 +1500,7 @@ async function scanTradeSender(leagueId, userId, reason) {
         liveLocks: ctx.liveLocks, priorFinalMatchups: ctx.priorFinalMatchups,
       },
       partnerRosterIds,
-      sender: s,
+      sender: { ...s, reservedSlots: reservedSlotsOf(entry) },
     });
     // An offer already sent keeps its "sent" marker across rescans.
     const sentById = new Map((entry.sent ?? []).map((r) => [r.offerId, r]));
@@ -1674,11 +1682,19 @@ apiRouter.post('/league/:leagueId/trade-sender/send', async (req, res, next) => 
       suggestions: (fresh?.suggestions ?? []).map((s) =>
         s.id === offerId ? { ...s, sent: { at: record.at, espnTransactionId: record.espnTransactionId } } : s),
     });
+    // A net-add offer now holds one of the manager's open spots on ESPN: rescan so
+    // the other suggestions carry the drop ESPN will demand.
+    if (offer.get.length - offer.give.length - myDrops.length > 0) void scanTradeSender(leagueId, userId, 'offer_sent');
     res.json({ sent: true, espnTransactionId: record.espnTransactionId, status: record.status });
   } catch (error) {
     if (error?.status) {
       // Handled outcomes answer 200 with a reason the hub can word for the user.
-      res.json({ sent: false, reason: error.status === 401 ? 'creds_stale_relink' : error.message, detail: error.detail ?? null });
+      const rosterFull = /TRAN_ROSTER_LIMIT_EXCEEDED/.test(String(error.detail ?? ''));
+      res.json({
+        sent: false,
+        reason: error.status === 401 ? 'creds_stale_relink' : rosterFull ? 'roster_reserved' : error.message,
+        detail: error.detail ?? null,
+      });
       return;
     }
     next(error);

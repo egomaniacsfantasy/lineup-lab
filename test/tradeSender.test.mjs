@@ -175,3 +175,19 @@ test('live final games: the analyzer sees the real score the moment a game ends'
   const live = analyzeTrade({ ...ctx, liveLocks: { [star]: 45 } }, { partnerRosterId: 2, give, get });
   assert.ok(live.you.before.weekWinProb > stale.you.before.weekWinProb, 'the real score moves this week');
 });
+
+test('a spot ESPN holds for a pending offer forces a drop on the next net-add offer', async () => {
+  // 11 of 12 active: a pinned 1-for-2 fits with no drop...
+  const t2 = teams[1].players;
+  const args = { maxSim: 20, partnerRosterId: 2, getPlayerIds: [t2[4], t2[5]] };
+  const base = { giveAllow: [you.players[10]], minYouDelta: -100, maxPartnerLoss: 100 };
+  const open = await suggestTrades(ctx, { ...args, sender: base });
+  const free = open.suggestions.find((s) => s.give.length === 1 && s.get.length === 2);
+  assert.ok(free);
+  assert.equal(free.drops.you.length, 0, 'open spot, nothing pending: no drop');
+  // ...but with that spot held for another pending trade, ESPN demands a drop.
+  const held = await suggestTrades(ctx, { ...args, sender: { ...base, reservedSlots: 1 } });
+  const needs = held.suggestions.find((s) => s.give.length === 1 && s.get.length === 2);
+  assert.ok(needs);
+  assert.equal(needs.drops.you.length, 1, 'reserved spot -> one drop, like ESPN requires');
+});
