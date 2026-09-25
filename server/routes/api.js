@@ -1950,7 +1950,8 @@ export async function runTradeWatcher() {
             console.error(`[trade-watch] ${leagueId}: cancel ${other.espnTransactionId} failed: ${err?.message}`);
           }
         }
-        console.log(`[trade-watch] ${leagueId}: offer ${accepted.record.espnTransactionId} ${accepted.verdict.state}; others pulled`);
+        await declineOtherIncoming(leagueId, userId, provider);
+        console.log(`[trade-watch] ${leagueId}: offer ${accepted.record.espnTransactionId} ${accepted.verdict.state}; others pulled + incoming declined`);
         if (accepted.verdict.state === 'processed') rescan = true; // already on the roster
         else awaitingTrade = { offerId: accepted.record.offerId, espnTransactionId: accepted.record.espnTransactionId, since: Date.now() };
       } else if (awaitingTrade && awaitingTrade.kind !== 'incoming') {
@@ -2030,8 +2031,34 @@ apiRouter.get('/league/:leagueId/trade-sender/activity', async (req, res, next) 
  * its players), so nothing here runs until he has linked it. */
 const INCOMING_REPRICE_MS = 30 * 60_000;
 
-/** After we accept an offer: pull our own pending offers (each was priced on the
- *  pre-trade roster) and hold the sender until the accepted trade processes. */
+/**
+ * After ANY acceptance (his offer accepted, or he accepted one): every OTHER
+ * offer sent to him is declined. Each was priced on the roster that just
+ * changed. Until the decline request is confirmed from a capture, they are
+ * flagged for him to decline in ESPN instead.
+ */
+async function declineOtherIncoming(leagueId, userId, provider, exceptId = null) {
+  const entry = getTradeSender(leagueId, userId);
+  const updated = [];
+  for (const o of entry?.incoming ?? []) {
+    if (o.status !== 'pending' || o.id === exceptId) { updated.push(o); continue; }
+    if (TRADE_RESPONSE_CONFIRMED && typeof provider.respondToTrade === 'function') {
+      try {
+        await provider.respondToTrade(leagueId, o.myTeamId, o.week, o.id, 'DECLINE');
+        updated.push({ ...o, status: 'declined', handledAt: Date.now(), handledBy: 'after_accept' });
+        continue;
+      } catch (err) {
+        console.error(`[trade-incoming] ${leagueId}: decline ${o.id} after accept failed: ${err?.message}`);
+      }
+    }
+    updated.push({ ...o, staleAfterAccept: true });
+  }
+  setTradeSender(leagueId, userId, { incoming: updated });
+}
+
+/** After we accept an offer: pull our own pending offers and decline every other
+ *  offer sent to us (all priced on the pre-trade roster), and hold the sender
+ *  until the accepted trade processes. */
 async function holdAfterIncomingAccept(leagueId, userId, entry, provider, offer) {
   const patches = {};
   for (const r of entry.sent ?? []) {
@@ -2044,6 +2071,7 @@ async function holdAfterIncomingAccept(leagueId, userId, entry, provider, offer)
     }
   }
   if (Object.keys(patches).length) updateSentOffers(leagueId, userId, patches);
+  await declineOtherIncoming(leagueId, userId, provider, offer.id);
   setTradeSender(leagueId, userId, {
     awaitingTrade: { kind: 'incoming', proposalId: offer.id, getIds: offer.get.map((p) => p.id), since: Date.now() },
     suggestions: [],
@@ -2158,6 +2186,7 @@ export async function refreshIncoming(leagueId, userId) {
       status: p?.status ?? 'pending',
       handledAt: p?.handledAt ?? null,
       handledBy: p?.handledBy ?? null,
+      staleAfterAccept: p?.staleAfterAccept ?? false,
     };
     const price = fresh
       ? { youDelta: fresh.youDelta, partnerDelta: fresh.partnerDelta, drops: fresh.drops ?? [], evaluatedAt: now }
@@ -2172,7 +2201,7 @@ export async function refreshIncoming(leagueId, userId) {
   // Autopilot: answer for him.
   const fresh = getTradeSender(leagueId, userId);
   if (!(fresh.settings?.mode === 'auto' && fresh.enabled) || fresh.awaitingTrade || !TRADE_RESPONSE_CONFIRMED) return;
-  const pending = (fresh.incoming ?? []).filter((o) => o.status === 'pending' && o.recommendation);
+  const pending = (fresh.incoming ?? []).filter((o) => o.status === 'pending' && o.recommendation && !o.staleAfterAccept);
   const best = pending.filter((o) => o.recommendation === 'accept').sort((a, b) => b.youDelta - a.youDelta)[0];
   try {
     for (const o of pending.filter((x) => x.recommendation === 'decline')) {

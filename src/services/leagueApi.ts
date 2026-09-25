@@ -1154,6 +1154,7 @@ export interface IncomingTradeOffer {
   status: 'pending' | 'accepted' | 'declined';
   handledBy: string | null;
   expirationDate: number | null;
+  staleAfterAccept?: boolean;
 }
 export interface TradeSenderState {
   enabled: boolean;

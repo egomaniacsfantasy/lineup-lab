@@ -372,7 +372,11 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                       <strong className={(o.partnerDelta ?? 0) < 0 ? 'is-down' : 'is-up'}>{fmtPct(o.partnerDelta ?? 0)}</strong>
                     </p>
                   ) : null}
-                  {o.recommendation ? (
+                  {o.staleAfterAccept ? (
+                    <p className="trade-sender__verdict trade-sender__verdict--decline">
+                      Decline: a trade was just accepted, so this was priced on your old roster. Decline it in ESPN.
+                    </p>
+                  ) : o.recommendation ? (
                     <p className={`trade-sender__verdict trade-sender__verdict--${o.recommendation}`}>
                       {o.recommendation === 'accept' ? 'Accept' : 'Decline'}: {REC_REASON[o.reason] ?? o.reason}
                     </p>
@@ -420,7 +424,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
             <p className="trade-sender__note">
               Answered:{' '}
               {answered
-                .map((o) => `${o.status === 'accepted' ? 'accepted' : 'declined'} ${o.partnerName}${o.handledBy === 'autopilot' ? ' (autopilot)' : ''}`)
+                .map((o) => `${o.status === 'accepted' ? 'accepted' : 'declined'} ${o.partnerName}${o.handledBy === 'autopilot' ? ' (autopilot)' : o.handledBy === 'after_accept' ? ' (after another trade was accepted)' : ''}`)
                 .join('; ')}
             </p>
           ) : null}
