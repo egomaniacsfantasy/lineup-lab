@@ -334,6 +334,7 @@ function TradeDealsView() {
           id,
           name: bootstrap?.players[id]?.name ?? id,
           position: bootstrap?.players[id]?.position ?? '',
+          bye: bootstrap?.players[id]?.byeWeek ?? null,
         }))
         .filter((p) => ['QB', 'RB', 'WR', 'TE'].includes(p.position))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -726,6 +727,7 @@ function TradeDealsView() {
               <span className="trade-cc__asset-pos">{player.position}</span>
               <span className="trade-cc__asset-copy">
                 <span className="trade-cc__asset-name">{player.name}</span>
+                {player.byeWeek ? <span className="trade-cc__asset-bye">BYE {player.byeWeek}</span> : null}
               </span>
               <button
                 aria-label={`Remove ${player.name}`}
@@ -798,7 +800,9 @@ function TradeDealsView() {
                     <span className="trade-cc__pill-copy">
                       <span className="trade-cc__pill-name">{row.player.name}</span>
                       <span className="trade-cc__pill-pos">
-                        {[row.player.position, row.player.team].filter(Boolean).join(' · ')}
+                        {[row.player.position, row.player.team, row.player.byeWeek ? `BYE ${row.player.byeWeek}` : null]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </span>
                     </span>
                     <span aria-hidden="true" className="trade-cc__pill-add">
@@ -1068,6 +1072,7 @@ function TradeDealsView() {
                         type="button"
                       >
                         {player.name}
+                        {player.bye ? <span className="trade-cc__chip-bye"> BYE {player.bye}</span> : null}
                       </button>
                     );
                   })}
@@ -1088,6 +1093,7 @@ function TradeDealsView() {
                         type="button"
                       >
                         {player.name}
+                        {player.bye ? <span className="trade-cc__chip-bye"> BYE {player.bye}</span> : null}
                       </button>
                     );
                   })}

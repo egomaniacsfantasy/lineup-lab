@@ -14,7 +14,8 @@ export function tradeAssetFromPlayer(player: Player): TradeAssetItem {
     id: player.id,
     name: player.name,
     position: player.position,
-    subtitle: player.team,
+    // Team plus bye week, so every trade card shows each player's bye at a glance.
+    subtitle: [player.team, player.bye ? `BYE ${player.bye}` : null].filter(Boolean).join(' · '),
     headshotUrl: player.headshotUrl,
     teamLogoUrl: player.teamLogoUrl,
     kind: 'player',

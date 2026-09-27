@@ -2761,7 +2761,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
     };
   };
 
-  const nameOf = (id) => ({ playerId: id, name: catalog[id]?.name ?? String(id) });
+  const nameOf = (id) => ({ playerId: id, name: catalog[id]?.name ?? String(id), bye: catalog[id]?.byeWeek ?? null });
   // Immediate drops take effect now (targetStart); deferred drops fire the week
   // an IR stash returns and reclaims his active slot. `week` is null for an
   // immediate drop; `whenReturns` names the returning player that forces a
@@ -3193,9 +3193,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // `youLater` = cut the week an IR stash returns (the analyzer's deferred drop),
   // `partner` = what we expect them to cut now (their call).
   const dropsView = (ev) => ({
-    you: ev.userDrops.map((id) => ({ id, name: nameOf(id) })),
-    youLater: (ev.userDeferred ?? []).map((d) => ({ id: d.id, name: nameOf(d.id), week: d.week, whenReturns: nameOf(d.triggerId) })),
-    partner: ev.partnerDrops.map((id) => ({ id, name: nameOf(id) })),
+    you: ev.userDrops.map((id) => ({ id, name: nameOf(id), bye: catalog[id]?.byeWeek ?? null })),
+    youLater: (ev.userDeferred ?? []).map((d) => ({ id: d.id, name: nameOf(d.id), bye: catalog[d.id]?.byeWeek ?? null, week: d.week, whenReturns: nameOf(d.triggerId) })),
+    partner: ev.partnerDrops.map((id) => ({ id, name: nameOf(id), bye: catalog[id]?.byeWeek ?? null })),
   });
   // Every practical shape, including uneven ones (3-for-2, 3-for-1, etc.) so a lopsided
   // roster still produces balanced combos. Candidate generation is cheap (no sims); the
@@ -3299,8 +3299,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     suggestions.push({
       partnerRosterId: c.partner.rosterId,
       partnerName: c.partner.teamName,
-      give: c.give.map((id) => ({ id, name: nameOf(id) })),
-      get: c.get.map((id) => ({ id, name: nameOf(id) })),
+      give: c.give.map((id) => ({ id, name: nameOf(id), bye: catalog[id]?.byeWeek ?? null })),
+      get: c.get.map((id) => ({ id, name: nameOf(id), bye: catalog[id]?.byeWeek ?? null })),
       youDelta: Number(youDelta.toFixed(1)),
       partnerDelta: Number(partnerDelta.toFixed(1)),
       youPlayoffDelta: Number(youPlayoffDelta.toFixed(1)),

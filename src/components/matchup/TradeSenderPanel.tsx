@@ -19,7 +19,9 @@ import './TradeSenderPanel.css';
 const POSITIONS = ['QB', 'RB', 'WR', 'TE'];
 
 const fmtPct = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`;
-const names = (players: { name: string }[]) => players.map((p) => p.name).join(', ');
+// Every player shows his bye week (BYE 7) so a trade's bye-week fit is visible at a glance.
+const names = (players: { name: string; bye?: number | null }[]) =>
+  players.map((p) => (p.bye ? `${p.name} (BYE ${p.bye})` : p.name)).join(', ');
 
 function ago(at: number) {
   const mins = Math.round((Date.now() - at) / 60_000);
@@ -605,7 +607,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                   : state.autoSend?.reason === 'weekly_cap'
                     ? `On. Weekly limit reached (${s.autoCap} sent). It resumes as the week rolls.`
                     : `On. Every 3 hours (and after each projection update) we scan and send the best offers that clear your rules${s.autoCap != null ? `, up to ${s.autoCap} a week` : ''}. Offers sent to you are accepted or declined by the same rules. Tap Scan now to check immediately. One pending offer per manager, never the same offer twice.${state.autoSend?.sent ? ` Last run sent ${state.autoSend.sent}.` : ''}`
-                : 'Off. Nothing runs in the background. Tap Scan now for offers, send the ones you like, and answer offers to you yourself.'}
+                : 'Off. Suggestions still refresh every 3 hours and after each projection update, and Scan now works anytime. Nothing is sent or answered for you.'}
             </span>
           </span>
         </label>

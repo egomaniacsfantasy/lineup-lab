@@ -74,7 +74,7 @@ export function toPlayer(id: string, catalog: Record<string, ApiCatalogPlayer>):
         ? apiUrl(`/api/img/logo/${id.toLowerCase()}`)
         : apiUrl(`/api/img/headshot/${id}`),
     teamLogoUrl: apiUrl(`/api/img/logo/${team.toLowerCase()}`),
-    bye: 0,
+    bye: entry?.byeWeek ?? 0,
     isActive: entry?.status !== 'Inactive',
     injuryStatus: entry?.injuryStatus ?? undefined,
   };

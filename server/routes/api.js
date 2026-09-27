@@ -16,6 +16,7 @@ import { classifyOffer, autoSendCandidates, incomingOffers, recommendIncoming } 
 import { TRADE_DROP_CONFIRMED, TRADE_RESPONSE_CONFIRMED } from '../providers/espnProvider.js';
 import { runTradeScan } from '../engine/tradeScanWorker.js';
 import { projectionsFingerprint } from '../projections/loadFromRepo.js';
+import { withByeWeeks, byeWeekFor } from '../config/byes.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
 import { isGameWindow } from '../gameWindows.js';
 import {
@@ -632,7 +633,7 @@ async function loadLeagueContext(provider, leagueId, userId, weekOverride = null
   }
 
   const rosteredIds = [...new Set(teams.flatMap((t) => t.players))];
-  const players = await provider.getPlayerCatalog(rosteredIds);
+  const players = withByeWeeks(await provider.getPlayerCatalog(rosteredIds));
 
   // real draft (when complete): picks feed the computed Draft Wrapped
   let draftPicks = null;
@@ -1635,8 +1636,11 @@ export async function runTradeSenderSweep() {
   const now = Date.now();
   // Projections landed recently: more positions may still be on the way. Wait.
   if (meta?.changedAt && now - meta.changedAt < SENDER_QUIET_MS) return;
-  for (const entry of listEnabledTradeSenders()) {
-    if (entry.settings?.mode !== 'auto') continue; // background work = autopilot only
+  // Every manager who uses the trade sender gets fresh suggestions in the
+  // background (user 2026-09-26), autopilot or not. Only SENDING is autopilot-only
+  // (autoSendOffers checks the mode). Skip anyone waiting on an accepted trade.
+  for (const entry of listTradeSenders()) {
+    if (entry.awaitingTrade) continue;
     const last = entry.lastScan;
     const reason = !last?.at
       ? 'first'
@@ -2180,8 +2184,8 @@ export async function refreshIncoming(leagueId, userId) {
       week: ctx?.week ?? week,
       fromTeamId: o.fromTeamId,
       partnerName: teamName(o.fromTeamId) ?? p?.partnerName ?? `Team ${o.fromTeamId}`,
-      give: o.give.map((id) => ({ id, name: fresh ? nameOf(id) : p?.give?.find((x) => x.id === id)?.name ?? nameOf(id) })),
-      get: o.get.map((id) => ({ id, name: fresh ? nameOf(id) : p?.get?.find((x) => x.id === id)?.name ?? nameOf(id) })),
+      give: o.give.map((id) => ({ id, name: fresh ? nameOf(id) : p?.give?.find((x) => x.id === id)?.name ?? nameOf(id), bye: ctx?.players?.[id]?.byeWeek ?? p?.give?.find((x) => x.id === id)?.bye ?? null })),
+      get: o.get.map((id) => ({ id, name: fresh ? nameOf(id) : p?.get?.find((x) => x.id === id)?.name ?? nameOf(id), bye: ctx?.players?.[id]?.byeWeek ?? p?.get?.find((x) => x.id === id)?.bye ?? null })),
       expirationDate: o.expirationDate,
       status: p?.status ?? 'pending',
       handledAt: p?.handledAt ?? null,

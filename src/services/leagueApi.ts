@@ -104,6 +104,8 @@ export interface ApiCatalogPlayer {
   position: string;
   status: string | null;
   injuryStatus: string | null;
+  /** NFL bye week this season (server fills it from the schedule); null = unknown. */
+  byeWeek?: number | null;
 }
 
 export interface DraftPick {
@@ -957,8 +959,8 @@ export interface TradeAnalysis {
   // week: null = drop needed now (targetStart); a number = a DEFERRED drop that
   // fires when an IR stash returns and reclaims his active slot (whenReturns names him).
   drops?: {
-    you: { playerId: string; name: string; week?: number | null; whenReturns?: string | null }[];
-    partner: { playerId: string; name: string; week?: number | null; whenReturns?: string | null }[];
+    you: { playerId: string; name: string; bye?: number | null; week?: number | null; whenReturns?: string | null }[];
+    partner: { playerId: string; name: string; bye?: number | null; week?: number | null; whenReturns?: string | null }[];
   };
   warnings?: { you: string | null; partner: string | null };
   you?: TradeSideDelta;
@@ -1000,7 +1002,7 @@ export interface TradeCounter {
   reason?: string;
   needed?: boolean;
   whoAdds?: 'you' | 'them';
-  add?: { id: string; name: string }[];
+  add?: { id: string; name: string; bye?: number | null }[];
   before?: { youDelta: number; partnerDelta: number };
   after?: { youDelta: number; partnerDelta: number };
 }
@@ -1018,8 +1020,8 @@ export function fetchTradeCounter(
 export interface TradeSuggestion {
   partnerRosterId: number;
   partnerName: string;
-  give: { id: string; name: string }[];
-  get: { id: string; name: string }[];
+  give: { id: string; name: string; bye?: number | null }[];
+  get: { id: string; name: string; bye?: number | null }[];
   youDelta: number;
   partnerDelta: number;
   youPlayoffDelta?: number;
@@ -1110,16 +1112,16 @@ export interface TradeSenderOffer {
   id: string;
   partnerRosterId: number;
   partnerName: string;
-  give: { id: string; name: string }[];
-  get: { id: string; name: string }[];
+  give: { id: string; name: string; bye?: number | null }[];
+  get: { id: string; name: string; bye?: number | null }[];
   youDelta: number;
   partnerDelta: number;
   youPlayoffDelta?: number;
   partnerPlayoffDelta?: number;
   drops?: {
-    you: { id: string; name: string }[];
+    you: { id: string; name: string; bye?: number | null }[];
     youLater?: { id: string; name: string; week: number; whenReturns: string }[];
-    partner: { id: string; name: string }[];
+    partner: { id: string; name: string; bye?: number | null }[];
   };
   sent: { at: number; espnTransactionId: string | null; state?: TradeOfferState } | null;
 }
@@ -1128,9 +1130,9 @@ export interface SentTradeOffer {
   at: number;
   offerId: string;
   partnerName: string;
-  give: { id: string; name: string }[];
-  get: { id: string; name: string }[];
-  drops?: { id: string; name: string }[];
+  give: { id: string; name: string; bye?: number | null }[];
+  get: { id: string; name: string; bye?: number | null }[];
+  drops?: { id: string; name: string; bye?: number | null }[];
   youDelta: number;
   partnerDelta: number;
   espnTransactionId: string | null;
@@ -1144,11 +1146,11 @@ export interface IncomingTradeOffer {
   id: string;
   fromTeamId: number;
   partnerName: string;
-  give: { id: string; name: string }[];
-  get: { id: string; name: string }[];
+  give: { id: string; name: string; bye?: number | null }[];
+  get: { id: string; name: string; bye?: number | null }[];
   youDelta: number | null;
   partnerDelta: number | null;
-  drops: { id: string; name: string; week: number | null; whenReturns: string | null }[];
+  drops: { id: string; name: string; bye?: number | null; week: number | null; whenReturns: string | null }[];
   recommendation: 'accept' | 'decline' | null;
   reason: string;
   status: 'pending' | 'accepted' | 'declined';

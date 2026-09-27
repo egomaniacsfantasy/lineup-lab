@@ -182,9 +182,9 @@ function DropsNote({ drops }: { drops: TradeAnalysis['drops'] }) {
       {you.map((d) => (
         <p key={d.playerId} className="trade-analyzer-panel__drop">
           {d.week != null && d.whenReturns ? (
-            <>Drop <strong>{d.name}</strong> when <strong>{d.whenReturns}</strong> returns (wk {d.week}). Your IR slot holds the spot open until then.</>
+            <>Drop <strong>{d.name}</strong>{d.bye ? ` (BYE ${d.bye})` : ''} when <strong>{d.whenReturns}</strong> returns (wk {d.week}). Your IR slot holds the spot open until then.</>
           ) : (
-            <>Drop <strong>{d.name}</strong> to fit this trade.</>
+            <>Drop <strong>{d.name}</strong>{d.bye ? ` (BYE ${d.bye})` : ''} to fit this trade.</>
           )}
         </p>
       ))}

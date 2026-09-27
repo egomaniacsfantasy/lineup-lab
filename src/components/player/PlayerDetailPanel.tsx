@@ -179,7 +179,7 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
 
           <div className="player-detail-panel__status">
             <span>{player?.injuryStatus ?? 'Healthy'}</span>
-            <span>Bye: Wk {player?.bye ?? 10}</span>
+            <span>Bye: {player?.bye ? `Wk ${player.bye}` : '-'}</span>
             <span>Owned: {68 + (hashString(playerDetail.slug) % 30)}%</span>
           </div>
 

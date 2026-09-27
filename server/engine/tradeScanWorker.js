@@ -52,7 +52,7 @@ function priceIncoming(ctx, incoming) {
         youDelta: a.you?.delta?.titleProb ?? null,
         partnerDelta: a.partner?.delta?.titleProb ?? null,
         youPlayoffDelta: a.you?.delta?.playoffProb ?? null,
-        drops: (a.drops?.you ?? []).map((d) => ({ id: String(d.playerId), name: d.name, week: d.week ?? null, whenReturns: d.whenReturns ?? null })),
+        drops: (a.drops?.you ?? []).map((d) => ({ id: String(d.playerId), name: d.name, bye: d.bye ?? null, week: d.week ?? null, whenReturns: d.whenReturns ?? null })),
       };
     } catch (err) {
       return { id: o.id, youDelta: null, error: String(err?.message ?? err) };
