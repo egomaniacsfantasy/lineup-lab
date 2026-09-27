@@ -1668,18 +1668,34 @@ apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
     const managers = ctx.teams
       .filter((t) => !t.isUser)
       .map((t) => ({ rosterId: t.rosterId, teamName: t.teamName, ownerName: t.ownerName }));
+    // Bye weeks attached at READ time to every player the panel shows, so offers
+    // saved before byes existed (or never repriced) still show them.
+    const withBye = (list) => (Array.isArray(list) ? list.map((pl) => (pl && typeof pl === 'object'
+      ? { ...pl, bye: pl.bye ?? ctx.players?.[pl.id]?.byeWeek ?? null } : pl)) : list);
+    const withByes = (o) => (o ? {
+      ...o,
+      ...(o.give ? { give: withBye(o.give) } : {}),
+      ...(o.get ? { get: withBye(o.get) } : {}),
+      ...(Array.isArray(o.drops) ? { drops: withBye(o.drops) } : {}),
+      ...(o.drops && !Array.isArray(o.drops) ? { drops: {
+        ...o.drops,
+        you: withBye(o.drops.you ?? []),
+        youLater: withBye(o.drops.youLater ?? []),
+        partner: withBye(o.drops.partner ?? []),
+      } } : {}),
+    } : o);
     res.json({
       enabled: Boolean(entry?.enabled),
       settings: entry?.settings ?? DEFAULT_SENDER_SETTINGS,
-      suggestions: entry?.suggestions ?? [],
+      suggestions: (entry?.suggestions ?? []).map(withByes),
       lastScan: entry?.lastScan ?? null,
       scanning: senderScanning.has(senderKey(leagueId, userId)),
       canSend: providerName(req) === 'espn' && canWriteFor(req, leagueId, userId),
       provider: providerName(req),
-      sentOffers: (entry?.sent ?? []).slice(0, 20),
+      sentOffers: (entry?.sent ?? []).slice(0, 20).map(withByes),
       awaitingTrade: entry?.awaitingTrade ?? null,
       autoSend: entry?.autoSend ?? null,
-      incoming: entry?.incoming ?? [],
+      incoming: (entry?.incoming ?? []).map(withByes),
       responseReady: TRADE_RESPONSE_CONFIRMED,
       dropSendReady: TRADE_DROP_CONFIRMED,
       myPlayers,
