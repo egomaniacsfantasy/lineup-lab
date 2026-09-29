@@ -505,6 +505,15 @@ and the connect screen consumes it on read.
 
 ## 4.10 Cross-cutting UI systems
 
+- **The autopilots are admin-only for now.** "Set optimal lineup on ESPN" and
+  the trade sender (with its autopilot switch) are hidden on the Hub for
+  everybody outside `AGREEMENT_ADMIN_EMAILS`. Hidden, not removed: the
+  endpoints, the background scan and the saved per-manager settings are
+  untouched and still run for accounts that have them on. The objection is to a
+  stranger's Hub offering to act on their league on its own, which is a
+  placement question rather than a verdict on the feature. The multi-move
+  start/sit note drops its reference to the button when the button is not there.
+
 - **Looking ahead.** The Hub's hero carries a "Week N >" control, and pressing
   it swaps the main column for that week: the line (optimal-vs-optimal, said out
   loud), the opponent's name, record and projected total, **what the week is

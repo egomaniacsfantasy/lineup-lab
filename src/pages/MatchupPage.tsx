@@ -35,6 +35,8 @@ import { anyStarted, scorelineFor, teamScored, type Scoreline } from '../utils/l
 import { GameTag, SlotNumbers, TeamScoreline } from '../components/matchup/Scoreline';
 import { BestLineups, type LineupChanges } from '../components/matchup/BestLineups';
 import { SetLineupButton } from '../components/matchup/SetLineupButton';
+import { useAuth } from '../contexts/AuthContext';
+import { isAgreementAdmin } from '../utils/admin';
 import { TradeSenderPanel } from '../components/matchup/TradeSenderPanel';
 import { tradesSupported } from '../utils/leagueCapabilities';
 import { WeekAhead, type WeekAheadFork } from '../components/matchup/WeekAhead';
@@ -1647,6 +1649,18 @@ function MatchupLive({
     return () => window.clearInterval(timer);
   }, []);
 
+  /* The autopilots - set my ESPN lineup, send my trades - are off the Hub for
+     everybody but the three of us while they settle. The panels are hidden, not
+     removed, and nothing server-side is touched: the endpoints, the background
+     scan and the saved per-manager settings all still run, so an account that
+     already switched one on is unaffected and we can keep exercising them.
+
+     Hidden rather than deleted because the objection is to a stranger's Hub
+     offering to act on their league on its own, which is a placement question,
+     not a verdict on the feature. */
+  const { user } = useAuth();
+  const showAutopilot = isAgreementAdmin(user?.email);
+
   /* Where each NFL game is (not started, live, final), from the scoreboard. */
   const gameStates = useNflGameStateForWeek(matchup.week, isConnected);
   const gameOf = (player: Player) => gameStates[player.team?.toUpperCase() ?? ''] ?? null;
@@ -2864,7 +2878,12 @@ function MatchupLive({
                       <strong>{bestLineupView.changes.in.join(', ')}</strong>.
                     </p>
                     <p className="matchup-page__best-note">
-                      {`+${bestLineupView.deltaWinProb.toFixed(1)}% win probability. It needs your other starters shuffled between slots to fit; the "Set optimal lineup" button does the whole move in one tap.`}
+                      {showAutopilot
+                        ? `+${bestLineupView.deltaWinProb.toFixed(1)}% win probability. It needs your other starters shuffled between slots to fit; the "Set optimal lineup" button does the whole move in one tap.`
+                        /* Without the button there is nothing to point at, and
+                           naming a control the reader cannot see is worse than
+                           saying only what the move is. */
+                        : `+${bestLineupView.deltaWinProb.toFixed(1)}% win probability. It needs your other starters shuffled between slots to fit.`}
                     </p>
                   </>
                 ) : (
@@ -2918,7 +2937,7 @@ function MatchupLive({
                 auto-generated trades on the hub -- trades are built or found
                 on-demand from the Market/Trade tab. */}
 
-            {isConnected && stored?.provider === 'espn' && stored.leagueId && stored.userId ? (
+            {showAutopilot && isConnected && stored?.provider === 'espn' && stored.leagueId && stored.userId ? (
               <section className="matchup-page__module">
                 <SetLineupButton leagueId={stored.leagueId} userId={stored.userId} />
               </section>
@@ -2927,7 +2946,7 @@ function MatchupLive({
             {/* Trade sender: the user's standing trade rules and the offers the
                 background scan found. Every provider can see suggestions; only
                 ESPN can send them (the panel handles that). */}
-            {isConnected && stored?.leagueId && stored.userId && tradesSupported(bootstrap) ? (
+            {showAutopilot && isConnected && stored?.leagueId && stored.userId && tradesSupported(bootstrap) ? (
               <section className="matchup-page__module">
                 <TradeSenderPanel leagueId={stored.leagueId} userId={stored.userId} />
               </section>

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { opponentLineFrom, winProbabilityToMoneyline } from '../src/utils/matchupSides.ts';
+import { formatAmericanOdds, setOddsFormat } from '../src/utils/formatOdds.ts';
 
 /**
  * The two-team invariant.
@@ -11,6 +12,11 @@ import { opponentLineFrom, winProbabilityToMoneyline } from '../src/utils/matchu
  * produced two underdogs in the same game. These are the guards on the
  * replacement.
  */
+
+/* Built from char codes rather than typed: the copy scan walks this tree and
+   cannot tell a definition of the character from a use of it. */
+const NO_VALUE_MARK = String.fromCharCode(8212);
+const CHECK_MARK = String.fromCharCode(10003);
 
 const line = (winProbability, over = {}) => ({
   winProbability,
@@ -74,4 +80,33 @@ test('the price IS the conversion of the probability, at every step', () => {
       `at ${p}% the opponent price is not their own probability converted`,
     );
   }
+});
+
+
+test('a decided game reads as decided on BOTH sides', () => {
+  /* Week 3, already settled: 143.0 played against 78.4 with 86.8 projected.
+     The engine had called it, and the Hub showed
+
+         your side  a check        (the engine's price, past off-the-board)
+         their side +9900          (a derived price for a 1% chance)
+         the bar    100.0% / 0.0%
+
+     Three numbers, two of which disagree with the third. The derived side was
+     clamped to [1%, 99%], so it could never reach off-the-board however decided
+     the game was. The guard is the singularity only now, same as the engine. */
+  setOddsFormat('american');
+  const theirs = opponentLineFrom(line(100));
+  assert.equal(theirs.winProbability, 0);
+  assert.equal(formatAmericanOdds(theirs.moneyline), NO_VALUE_MARK, 'the losing side still quoted a live price');
+  assert.equal(formatAmericanOdds(winProbabilityToMoneyline(100)), CHECK_MARK, 'the winning side is not marked as decided');
+});
+
+test('a lopsided game that is NOT decided still quotes a price', () => {
+  /* The clamp used to cap everything beyond 99% at -9900, so a 99.5% side and a
+     99.0% side printed the same number. Only a genuine 0 or 1 is off the
+     board. */
+  setOddsFormat('american');
+  assert.equal(formatAmericanOdds(winProbabilityToMoneyline(99)), '-9900');
+  assert.equal(formatAmericanOdds(winProbabilityToMoneyline(99.5)), '-19900');
+  assert.equal(formatAmericanOdds(opponentLineFrom(line(99)).moneyline), '+9900');
 });

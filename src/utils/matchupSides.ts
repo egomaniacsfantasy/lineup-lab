@@ -13,8 +13,26 @@ export function roundTo(value: number, decimals = 1) {
   return Math.round(value * factor) / factor;
 }
 
+/**
+ * A probability, priced.
+ *
+ * The guard is the singularity only, matching the engine's own probToAmerican:
+ * american odds are infinite at a genuine 0 or 1, and everything short of that
+ * is a real price. It used to clamp to [1%, 99%], which quietly capped every
+ * lopsided game at -9900/+9900 and produced this, on a week-3 game that was
+ * already decided:
+ *
+ *     your side  [check]        (the engine's own price, past off-the-board)
+ *     their side +9900          (this clamp, a price for a 1% chance)
+ *     the bar    100.0% / 0.0%
+ *
+ * Three numbers, two of which disagree with the third. The engine had already
+ * called it; only the derived side was still quoting a live market. Past the
+ * off-the-board threshold formatOdds prints a check and a dash, which is the
+ * pair a decided game should read as.
+ */
 export function winProbabilityToMoneyline(winProbability: number) {
-  const probability = Math.min(Math.max(winProbability / 100, 0.01), 0.99);
+  const probability = Math.min(Math.max(winProbability / 100, 1e-9), 1 - 1e-9);
 
   if (probability >= 0.5) {
     return -Math.round((probability / (1 - probability)) * 100);
