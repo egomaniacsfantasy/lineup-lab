@@ -288,10 +288,15 @@ modules, top to bottom:
 - **Lineup vs lineup** — your starters against theirs slot by slot, with each
   player's projection, NFL opponent and kickoff time, and a per-slot edge
   arrow. Any two of your players can be tapped to compare, and a one-line hint
-  says so. With no bench option anywhere, which is where every lineup ends up
-  once its starters have kicked off, since a kickoff locks its players, there
-  is nothing to compare and no hint is printed. It used to say "No bench
-  options this week" over a drawer holding six bench players.
+  says so. A player whose game has kicked off cannot be picked, on the board
+  or on the bench: a kickoff locks him into or out of the lineup, so there is
+  no start/sit question to ask about him. His card simply stops responding (no
+  lift, no pointer) and keeps its live or finished look; once some games are
+  under way the hint says the tap is for players whose games haven't started.
+  With no bench option anywhere, which is where every lineup ends up once its
+  starters have kicked off, there is nothing to compare and no hint is
+  printed. It used to say "No bench options this week" over a drawer holding
+  six bench players.
 - **Bench comparison** — bench counts on both sides and the single best
   start/sit swap available to you, priced: the moneyline before, the moneyline
   after, and the win-probability delta.
@@ -1153,6 +1158,23 @@ and adding before it is used.
     longer passing its kickoffs. `test/weekGlanceKickoff.test.mjs` draws that
     Monday at `/design/board-row/kickoff` and fails when the kickoffs do not
     reach the rule.
+26. **"Who do I start?" weighed players who had already played.** Tap a
+    starter whose game was over, then a bench player whose game was also
+    over, and the sheet opened with a verdict on projection about two settled
+    scores. Every row already showed where its game stood; who could be picked
+    was decided by position alone. A player whose game has kicked off is now
+    out of the comparison, read off the same scoreline the row draws, so a row
+    cannot show its game under way and still offer itself. The lock takes the
+    tap away and nothing else: no lift under the pointer, no pointer cursor,
+    and no extra dimming, because live rows are meant to stand out once the
+    finished ones fade. The hint that counts who could take your pick's slot
+    counted starters only and ignored kickoffs, so by Sunday afternoon it sent
+    you to pick players who could not be picked; it now counts the bench too
+    and skips anyone locked. The engine was already right: its swap
+    suggestions never offered a locked starter or bench player.
+    `test/hubLockedCompare.test.mjs` runs a Sunday afternoon at
+    `/design/matchup?pregame&liveGames` and fails on a locked player being
+    pickable, on a locked card lifting or dimming, and on the old count.
 
 ## Still open
 

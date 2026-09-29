@@ -1511,9 +1511,13 @@ function MatchupLive({
   }, [compareSlot, engine.roster, benchRows]);
 
   const canPick = (player?: Player) => {
-    /* The first pick sets the slot, so nothing is excluded yet. */
-    if (compareSelection.length === 0 || !eligibleForSlot || !player) return true;
+    if (!player) return true;
+    /* A pick stays tappable, so it can always be put back. */
     if (compareSelection.some((candidate) => candidate.id === player.id)) return true;
+    /* Kicked off: in or out of the lineup for good. See lockedIds. */
+    if (lockedIds.has(player.id)) return false;
+    /* The first pick sets the slot, so nothing else is excluded yet. */
+    if (compareSelection.length === 0 || !eligibleForSlot) return true;
     return eligibleForSlot.has(player.id);
   };
 
@@ -1672,27 +1676,50 @@ function MatchupLive({
   const gameStates = useNflGameStateForWeek(matchup.week, isConnected);
   const gameOf = (player: Player) => gameStates[player.team?.toUpperCase() ?? ''] ?? null;
 
-  /* Every starter's scoreline. Each player follows his own game; see
-     utils/liveScoreline.ts. Points come from `currentPoints`, which is the live
-     overlay in live mode and the provider feed otherwise. */
-  const scorelineOf = (slot: RosterSlot | null): Scoreline | null => {
-    if (!slot) return null;
-    const context = getPlayerContext(slot.starter, gameContextSource);
+  /* Where any one player's game is. Each player follows his own game; see
+     utils/liveScoreline.ts. */
+  const scorelineForPlayer = (player: Player, currentPoints: number | null): Scoreline => {
+    const context = getPlayerContext(player, gameContextSource);
     return scorelineFor(
       {
         kickoffIso: context.contextAvailable ? context.kickoffIso : null,
         bye: context.contextAvailable ? context.bye : false,
-        currentPoints: slot.currentPoints ?? slot.live?.current ?? null,
-        game: gameOf(slot.starter),
+        currentPoints,
+        game: gameOf(player),
       },
       scoreClock,
     );
   };
+
+  /* Every starter's scoreline. Points come from `currentPoints`, which is the
+     live overlay in live mode and the provider feed otherwise. */
+  const scorelineOf = (slot: RosterSlot | null): Scoreline | null =>
+    slot ? scorelineForPlayer(slot.starter, slot.currentPoints ?? slot.live?.current ?? null) : null;
   const yourScorelines = engine.roster.map(scorelineOf).filter((line): line is Scoreline => line != null);
   const opponentScorelines = matchup.opponentTeam.roster
     .map(scorelineOf)
     .filter((line): line is Scoreline => line != null);
   const matchupStarted = isConnected && anyStarted([...yourScorelines, ...opponentScorelines]);
+
+  /* Your players whose games have kicked off. A kickoff locks a player into or
+     out of the lineup, so "Who do I start?" has nothing to ask about him, and
+     tapping one used to open the sheet anyway: a finished starter weighed
+     against a finished bench player, with a verdict on projection. Read off the
+     same scoreline each row draws, so a row cannot show its game under way and
+     still offer itself for a start/sit call. A bench player has no points on
+     the board, so for him it is the kickoff and the scoreboard. */
+  const lockedIds = new Set<string>(
+    isConnected
+      ? [
+          ...engine.roster
+            .filter((slot) => scorelineOf(slot)?.started)
+            .map((slot) => slot.starter.id),
+          ...benchRows
+            .filter((row) => scorelineForPlayer(row.player, null).started)
+            .map((row) => row.player.id),
+        ]
+      : [],
+  );
 
   /* "What if we both started our best?" The engine returns a MOVEMENT in
      percentage points, priced off one seed for both lineups, and it is applied
@@ -1872,17 +1899,28 @@ function MatchupLive({
 
   const firstPick = compareSelection[0];
   const decisionSlotCount = engine.roster.filter((slot) => slot.alternatives.length > 0).length;
-  /* How many starters could actually take the same slot as the first pick.
-     Zero is a real answer and worth saying out loud: with one quarterback on
-     the roster there is no second quarterback to weigh, and leaving every card
-     dimmed with no explanation reads as the app being broken. */
-  const comparableStarterCount = (() => {
+  /* How many players could actually be weighed against the first pick: a
+     starter in a slot the two could trade, or a bench player that slot takes,
+     and in both cases one whose game has not kicked off. Zero is a real answer
+     and worth saying out loud: with one quarterback on the roster there is no
+     second quarterback to weigh, and leaving every card dimmed with no
+     explanation reads as the app being broken. The bench counts because a
+     bench player is pickable, and it has to now that kickoffs take starters
+     out: by Sunday afternoon the only partner left is often on the bench. */
+  const comparableCount = (() => {
     if (!firstPick || !compareSlot) return null;
-    return slotComparisonRows.filter((row) => {
+    const starters = slotComparisonRows.filter((row) => {
       const starter = row.yourSlot?.starter;
-      if (!starter || starter.id === firstPick.id) return false;
+      if (!starter || starter.id === firstPick.id || lockedIds.has(starter.id)) return false;
       return slotsAreComparable(compareSlot, firstPick.position, row.slotLabel, starter.position);
     }).length;
+    const bench = benchRows.filter(
+      (row) =>
+        row.player.id !== firstPick.id
+        && !lockedIds.has(row.player.id)
+        && slotAccepts(compareSlot, row.player.position),
+    ).length;
+    return starters + bench;
   })();
 
   /* With no bench option anywhere there is nothing to compare, and a sentence
@@ -1892,7 +1930,7 @@ function MatchupLive({
      "Benches · 6 vs 6". */
   const compareHint = (() => {
     if (firstPick) {
-      if (comparableStarterCount === 0) {
+      if (comparableCount === 0) {
         return `Nobody else can take ${firstPick.shortName}'s slot, so there is nothing to weigh them against. Tap them again to clear it.`;
       }
       const options = eligiblePartnerIds?.size ?? 0;
@@ -1901,7 +1939,11 @@ function MatchupLive({
         : `Now pick anyone who could take the same slot as ${firstPick.shortName}.`;
     }
     if (decisionSlotCount === 0) return null;
-    return 'Tap any two of your players to compare them.';
+    /* Once games are under way, say which players the tap still works on. A
+       card that simply does not respond reads as a broken one. */
+    return lockedIds.size > 0
+      ? "Tap any two of your players whose games haven't started to compare them."
+      : 'Tap any two of your players to compare them.';
   })();
 
   const eligibleCount =

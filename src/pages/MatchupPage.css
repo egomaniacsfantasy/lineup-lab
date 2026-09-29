@@ -2260,7 +2260,12 @@
     box-shadow var(--transition-fast);
 }
 
-.matchup-page__slot-card:hover {
+/* Only a card you can press lifts. A disabled one is a player whose game has
+   kicked off, or one the current pick cannot be weighed against, and a lift
+   under the pointer promised a click that did nothing. The :where() adds no
+   specificity, so the opponent card and the game dialog still cancel the lift
+   the way they did before. */
+.matchup-page__slot-card:hover:where(:not(:disabled)) {
   border-color: color-mix(in srgb, var(--amber) 34%, var(--border-subtle));
   transform: translateY(-1px);
   box-shadow: 0 0 12px rgba(232, 84, 29, 0.16);
