@@ -34,10 +34,29 @@ async function waitForUrl(url, timeoutMs = 30_000) {
 }
 
 let vite = null;
+let api = null;
 let browser = null;
 let ownsVite = false;
+let ownsApi = false;
+
+/* The Board loads its projections through the dev proxy, which forwards /api
+   to :8799. Nothing in the design fixture answers /api/rankings, so with no
+   API up the proxy answers 500, the Board renders "Could not load Board", and
+   the search box this test waits for never appears. It used to pass only when
+   mobileNoHorizontalScroll's API server happened to be alive at the same
+   moment, which under load it was not. Same rule as that file: own it. */
+const API_PORT = 8799;
 
 test.before(async () => {
+  if (!(await isPortOpen(API_PORT))) {
+    api = spawn('node', ['server/index.js'], {
+      cwd,
+      env: { ...process.env, PORT: String(API_PORT) },
+      stdio: 'ignore',
+    });
+    ownsApi = true;
+    await waitForUrl(`http://127.0.0.1:${API_PORT}/api/health`);
+  }
   if (!(await isPortOpen(port))) {
     vite = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
       cwd,
@@ -54,6 +73,7 @@ test.before(async () => {
 test.after(async () => {
   if (browser) await browser.close();
   if (vite && ownsVite) vite.kill('SIGTERM');
+  if (api && ownsApi) api.kill('SIGTERM');
 });
 
 test('board search keeps every typed character under realistic typing speed', async () => {
