@@ -23,7 +23,12 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    open: true,
+    /* Auto-open is for a person typing `npm run dev`. Twenty rendered test
+       files each spawn a Vite of their own, and Claude Code's preview does
+       too, and every one of them was opening a Chrome tab on the landing
+       page. Node marks its test children, CI marks itself, and Claude Code
+       shells carry CLAUDECODE. */
+    open: !process.env.NODE_TEST_CONTEXT && !process.env.CI && !process.env.CLAUDECODE,
     proxy: {
       /* Tests that bring their own API each run it on a port of their own
          and point their Vite at it, so two files never share (and one never
