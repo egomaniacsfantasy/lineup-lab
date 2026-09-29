@@ -2991,8 +2991,14 @@ export function computeLineupMoves(rosterSlots, optimalAssignments, lockedIds = 
  * sent with the offer); a partner overflow is his to settle on accepting.
  * With `sender`, the per-manager "keep the best one anyway" fallback is off: a
  * manager with nothing clearing the thresholds contributes nothing.
+ *
+ * `givePosition` and `shape` are candidate filters for the UI finder's ticket,
+ * the same kind as `position`: they narrow which combos get simmed and change
+ * nothing about how a combo is valued. `givePosition` keeps only trades that
+ * send at least one of the user's players at that position; `shape` is
+ * `{ give, get }` package sizes and keeps only that one shape.
  */
-export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, givePlayerIds = [], getPlayerIds = [], readsByRoster = {}, sender = null } = {}) {
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, givePosition = null, shape = null, givePlayerIds = [], getPlayerIds = [], readsByRoster = {}, sender = null } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -3205,6 +3211,12 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // roster still produces balanced combos. Candidate generation is cheap (no sims); the
   // gap-sort + fairness ranking still pick the best few to actually simulate.
   const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3], [3, 2], [2, 3], [3, 1], [1, 3]];
+  const shapeGive = Number(shape?.give);
+  const shapeGet = Number(shape?.get);
+  const sizes = shapeGive >= 1 && shapeGet >= 1
+    ? SIZES.filter(([k, j]) => k === shapeGive && j === shapeGet)
+    : SIZES;
+  const giveTargetPos = givePosition && ['QB', 'RB', 'WR', 'TE'].includes(givePosition) ? givePosition : null;
 
   const t0 = Date.now();
   // Optional "upgrade this position" filter: only keep trades that raise the
@@ -3223,8 +3235,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   for (const opp of opponents) {
     const mine = tradeable(userTeam);
     const theirs = tradeable(opp);
-    for (const [k, j] of SIZES) {
+    for (const [k, j] of sizes) {
       for (const give of combos(mine, k)) {
+        if (giveTargetPos && !give.some((id) => catalog[id]?.position === giveTargetPos)) continue;
         const gv = val(give);
         for (const get of combos(theirs, j)) {
           const tv = val(get);

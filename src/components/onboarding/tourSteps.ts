@@ -136,15 +136,15 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'deal',
         title: 'What a trade is worth',
-        /* Pointed at a manager card since the league-wide deal board went away
-           (86ae4cd: no trades appear on their own any more, you pick a manager
-           and that team is scanned). The old target was .ldb__row, which no
-           longer exists, so this stop silently dropped and the tour ran one
-           stop short - taking the only place the product explains its own
-           currency with it. */
+        /* Pointed at the ticket. The finder is one question with three
+           blanks (who with, what you send, what you get) and every deal it
+           returns is scored in title odds. The manager grid this used to
+           target is gone; before that it was .ldb__row, and a stop aimed at
+           nothing silently drops, taking the only place the product explains
+           its own currency with it. */
         body:
-          'Pick a manager and every deal with them is scored by what it does to your championship odds, not by a points total. That is the only number that decides anything.',
-        selector: '.trade-cc__manager-card',
+          'Fill in as much or as little as you like: a manager, a position, a player. Every deal the book returns is scored by what it does to your championship odds, not by a points total. That is the only number that decides anything.',
+        selector: '.trade-finder__ticket',
         placement: 'bottom',
       },
     ],

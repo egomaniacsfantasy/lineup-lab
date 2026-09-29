@@ -3,9 +3,10 @@ import { resolveApiUrl } from '../services/apiBase.ts';
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
-import { TradeCard, TradeSide } from '../components/trade-display/TradeDisplay';
+import { TradeSide } from '../components/trade-display/TradeDisplay';
 import { SimulationLoader } from '../components/ui/SimulationLoader';
 import { TradeTargetsList } from '../components/trade/TradeTargetsList';
+import { TradeFinder } from '../components/trade/TradeFinder';
 import '../components/trade/TradeAnalyzerPanel.css';
 import '../components/trade-display/TradeDisplay.css';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
@@ -15,7 +16,6 @@ import {
   priceTrade,
   analyzeTradeApi,
   fetchTradeCounter,
-  fetchTradeSuggestions,
   type TradeResult,
   type TradeAnalysis,
   type TradeCounter,
@@ -25,15 +25,8 @@ import {
 import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
 import type { LeagueBootstrap } from '../services/leagueApi';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
-import { tradeSignature } from '../utils/tradeMarket';
-import {
-  acceptanceGaugeLabel,
-} from '../utils/tradeSuggestionDisplay';
-import { formatAcceptancePercent, getAcceptanceLingo } from '../utils/acceptanceLingo';
-import { acceptanceProbability } from '../utils/tradeAcceptance';
 import { signedDeltaClass } from '../utils/deltaTone';
-import { analysisVerdict, deltaTone, signedPct, tradeCardHeadline } from '../utils/tradeVerdict';
-import { formatProbOrOdds } from '../utils/formatOdds';
+import { analysisVerdict, signedPct, tradeCardHeadline } from '../utils/tradeVerdict';
 import { tradesSupported } from '../utils/leagueCapabilities';
 import { useScoutingAffectsAcceptance } from '../hooks/useLabsFlags';
 import type { ManagerFile } from '../services/managerFiles';
@@ -53,17 +46,6 @@ import { drawTradeCard, type TradeCardProposal, type TradeCardAsset } from '../u
 import { shareFilename, tradeShareMessage } from '../utils/shareMessage';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
 
-/* The board shows a handful at a time and refresh pages through the rest.
-   Fifteen at once buried the good ones and gave the button nothing to do. */
-
-type MarketPositionFilter = 'all' | 'QB' | 'RB' | 'WR' | 'TE';
-
-function normalizeMarketPosition(value: string | null | undefined): Exclude<MarketPositionFilter, 'all'> | null {
-  const upper = value?.toUpperCase();
-  if (upper === 'QB' || upper === 'RB' || upper === 'WR' || upper === 'TE') return upper;
-  return null;
-}
-
 function railPosition(youDeltaTitle: number) {
   return 0.5 + 0.5 * Math.tanh(youDeltaTitle / 6);
 }
@@ -77,14 +59,6 @@ function priceRailStyle(position: number): CSSProperties {
   } as CSSProperties;
 }
 
-function formatGeneratedAt(value?: number) {
-  if (!value) return null;
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
-
 function initials(name: string) {
   return name
     .split(/\s+/)
@@ -96,35 +70,13 @@ function initials(name: string) {
 
 type MarketView = 'finder' | 'build';
 
-/* Three tabs was a phone compromise: the finder and the manager picker were
-   split because neither fitted beside the other in 402px. On a desktop they
-   are the same job — the finder searches the whole league, and picking a
-   manager narrows the same search. */
-/**
- * The finder's funnel counts (enumerated / scanned / resimmed / positive / ms).
- *
- * These used to render under the empty state, which is how a line reading
- * "debug: enumerated=18 scanned=18 ..." ended up on a surface a stranger sees.
- * They are still worth having when a league legitimately finds no deals, so
- * they go to the console instead of the page.
- *
- * Module scope rather than a useCallback: nothing here closes over a render,
- * and at component scope every effect that calls it has to carry it as a
- * dependency for no reason.
- */
-function reportDealsFunnel(debug: Record<string, number> | null | undefined) {
-  if (!debug) return;
-  console.info('[trade-finder]', debug);
-}
-
+/* The finder is a ticket (TradeFinder): who with, what you send, what you
+   get, and the shape. The builder beside it is the same trade with every leg
+   exact. A found deal opens in the builder already filled in. */
 const MARKET_VIEWS: { id: MarketView; label: string }[] = [
   { id: 'finder', label: 'Trade finder' },
   { id: 'build', label: 'Build trades' },
 ];
-
-function recordText(record: { wins: number; losses: number; ties?: number }) {
-  return record.ties ? `${record.wins}-${record.losses}-${record.ties}` : `${record.wins}-${record.losses}`;
-}
 
 const NEUTRAL_TRADE_TRAITS: TradeTraits = {
   toughness: 5,
@@ -132,8 +84,6 @@ const NEUTRAL_TRADE_TRAITS: TradeTraits = {
   fandomTeam: null,
   fandomLevel: 5,
 };
-
-const MAX_VISIBLE_MARKET_CARDS = 15;
 
 // Starters first, in their lineup order, then the bench, the way a manager
 // reads a roster.
@@ -199,7 +149,9 @@ function TradeDealsView() {
   const [relationship, setRelationship] = useState(5);
   const [suggestedRead, setSuggestedRead] = useState(NEUTRAL_READ);
   const [scoutingFile, setScoutingFile] = useState<ManagerFile | null>(null);
-  const [marketManagerFilter, setMarketManagerFilter] = useState<number | null>(null);
+  /* The partner a deep link asked for (/market?manager=3). The finder owns
+     its own ticket; this is only the preset it applies on arrival. */
+  const [finderPartner, setFinderPartner] = useState<number | null>(null);
   const deepLinkAppliedRef = useRef(false);
 
   /* Deep link from the hub: /market?manager=3 opens that manager's deals
@@ -217,7 +169,7 @@ function TradeDealsView() {
       return;
     }
     deepLinkAppliedRef.current = true;
-    setMarketManagerFilter(rosterId);
+    setFinderPartner(rosterId);
     setPartnerRosterId(rosterId);
   }, [params, partners]);
   /* Deal-first. The tab opened on an instruction ("Pick a manager and the book
@@ -230,35 +182,8 @@ function TradeDealsView() {
   /* A proposal is an argument you make to another manager, so it has to be
      able to leave the app as a picture. */
   const [tradeCard, setTradeCard] = useState<TradeCardProposal | null>(null);
-  /* The league-wide board is its own question with its own answer, so it gets
-     its own request rather than sharing the manager pipeline. Sharing them is
-     what made a league-wide scan run and then filter every result away for not
-     belonging to a manager nobody had picked. */
-  // TEMP diagnostic: the server's finder funnel, shown in the empty-state so we can see
-  // exactly where trades collapse to zero without needing browser dev tools.
-  // A clicked manager gets its OWN deep scan (partnerRosterId set) at the full sim count,
-  // so its numbers match the analyzer exactly. Null = fall back to filtering the pool.
-  const [managerDeals, setManagerDeals] = useState<TradeSuggestion[] | null>(null);
-
-  /* Which page of the pool the board is showing, and whether a fresh scan is
-     in flight. Refresh advances the page first and only goes back to the
-     engine when the pool has nothing else to show. */
-
-  // The whole-league auto-scan was removed (user): the finder no longer runs a
-  // blind partnerRosterId:null scan on mount, so no suggested trades appear until
-  // the user taps a manager (its own deep scan) or builds a trade.
-
-  const [marketPositionFilter, setMarketPositionFilter] = useState<MarketPositionFilter>('all');
-  // Optional must-include targets for the finder: any of the selected manager's
-  // players to GET and any of yours to SEND (multiple per side, both at once).
-  const [marketGetIds, setMarketGetIds] = useState<string[]>([]);
-  const [marketGiveIds, setMarketGiveIds] = useState<string[]>([]);
-  const [managerSuggestionsLoading, setManagerSuggestionsLoading] = useState(false);
-  const [managerSuggestionsError, setManagerSuggestionsError] = useState<string | null>(null);
-  const [managerSuggestionsUpdatedAt, setManagerSuggestionsUpdatedAt] = useState<number | null>(null);
   const [partnerMenuOpen, setPartnerMenuOpen] = useState(false);
   const [isEditingTrade, setIsEditingTrade] = useState(true);
-  const [showAllMarketCards, setShowAllMarketCards] = useState(false);
   const verdictRef = useRef<HTMLElement | null>(null);
   const selectedPartner = useMemo(
     () => partners.find((team) => team.rosterId === partnerRosterId) ?? null,
@@ -277,124 +202,20 @@ function TradeDealsView() {
   // leagueDealRows, refreshLeagueDeals, leagueDealByKey) was removed with the
   // whole-league auto-scan (user). Per-manager deals + the builder remain.
 
-  const managerSuggestionEntries = useMemo(() => {
-    if (!stored || !bootstrap || marketManagerFilter == null) return [];
-
-    // Prefer the clicked manager's OWN deep scan (managerDeals, full sim count so it
-    // matches the analyzer); fall back to filtering the fast league-wide pool until it
-    // arrives.
-    const source = managerDeals ?? [];
-    const entries = source
-      .filter((suggestion) => suggestion.partnerRosterId === marketManagerFilter)
-      .map((suggestion) => ({
-        suggestion,
-        signature: tradeSignature({
-          leagueId: stored.leagueId,
-          partnerRosterId: suggestion.partnerRosterId,
-          givePlayerIds: suggestion.give.map((asset) => asset.id),
-          getPlayerIds: suggestion.get.map((asset) => asset.id),
-        }),
-        acceptanceProbability: acceptanceProbability(
-          suggestion.partnerDelta,
-          friendliness,
-          relationship,
-        ),
-        valueGain: suggestion.youDelta,
-        position: normalizeMarketPosition(
-          suggestion.get
-            .map((asset) => bootstrap.players[asset.id]?.position)
-            .find(Boolean),
-        ),
-      }));
-
-    const positionFiltered = entries.filter(
-      (entry) => marketPositionFilter === 'all' || entry.position === marketPositionFilter,
-    );
-    // Most title gain for YOU first (the finder now returns positive-only deals).
-    const ranked = [...positionFiltered].sort(
-      (a, b) => (b.valueGain ?? 0) - (a.valueGain ?? 0),
-    );
-    return ranked.filter((entry) => !dismissedSignatures.has(entry.signature));
-  }, [
-    bootstrap,
-    dismissedSignatures,
-    friendliness,
-    managerDeals,
-    marketManagerFilter,
-    marketPositionFilter,
-    relationship,
-    stored,
-  ]);
-  const showingManagerMarket = marketManagerFilter != null;
-  // Tradeable players on each side, for the "target a player" selectors.
-  const targetOptions = useMemo(() => {
-    const opts = (ids: string[] | undefined) =>
-      (ids ?? [])
-        .map((id) => ({
-          id,
-          name: bootstrap?.players[id]?.name ?? id,
-          position: bootstrap?.players[id]?.position ?? '',
-          bye: bootstrap?.players[id]?.byeWeek ?? null,
-        }))
-        .filter((p) => ['QB', 'RB', 'WR', 'TE'].includes(p.position))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    return { get: opts(selectedPartner?.players), give: opts(userTeam?.players) };
-  }, [bootstrap, selectedPartner, userTeam]);
-  const MAX_TARGETS_PER_SIDE = 3; // matches the finder's 1-for-1 .. 3-for-2 sizes
-  const toggleGet = (id: string) =>
-    setMarketGetIds((cur) =>
-      cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= MAX_TARGETS_PER_SIDE ? cur : [...cur, id]);
-  const toggleGive = (id: string) =>
-    setMarketGiveIds((cur) =>
-      cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= MAX_TARGETS_PER_SIDE ? cur : [...cur, id]);
-  const nameOfId = (id: string) => bootstrap?.players[id]?.name ?? id;
-  const hasTargets = marketGetIds.length > 0 || marketGiveIds.length > 0;
-  const visibleManagerSuggestions = showAllMarketCards
-    ? managerSuggestionEntries
-    : managerSuggestionEntries.slice(0, MAX_VISIBLE_MARKET_CARDS);
-  const visibleMarketCount = showingManagerMarket ? managerSuggestionEntries.length : 0;
-  const hiddenMarketCount = showingManagerMarket
-    ? managerSuggestionEntries.length - visibleManagerSuggestions.length
-    : 0;
-
-  useEffect(() => {
-    setShowAllMarketCards(false);
-  }, [marketManagerFilter, marketPositionFilter]);
-
-  useEffect(() => {
-    // A clicked manager runs its OWN deep scan at the full sim count so the numbers
-    // match the analyzer. Off (no manager) → clear and fall back to the league pool.
-    if (!stored || marketManagerFilter == null) {
-      setManagerDeals(null);
-      setManagerSuggestionsLoading(false);
-      return;
+  /* Your read on every manager, so a league-wide scan prices acceptance the
+     way the builder does for one. Scouted defaults only load for the manager
+     open in the builder; the rest resolve from saved overrides or neutral. */
+  const readsByRoster = useMemo(() => {
+    if (!stored) return {};
+    const out: Record<number, { friendliness: number; relationship: number }> = {};
+    for (const team of partners) {
+      const read = team.rosterId === partnerRosterId
+        ? { friendliness, relationship }
+        : resolveTradeTraits(stored.leagueId, team.rosterId, NEUTRAL_READ, scoutingAffectsAcceptance);
+      out[team.rosterId] = { friendliness: read.friendliness, relationship: read.relationship };
     }
-    let cancelled = false;
-    setManagerDeals(null);
-    setManagerSuggestionsError(null);
-    setManagerSuggestionsLoading(true);
-    void fetchTradeSuggestions(stored.leagueId, {
-      userId: stored.userId,
-      partnerRosterId: marketManagerFilter,
-      givePlayerIds: marketGiveIds,
-      getPlayerIds: marketGetIds,
-    })
-      .then((response) => {
-        if (cancelled) return;
-        setManagerDeals(response.available ? response.suggestions ?? [] : []);
-        reportDealsFunnel(response.debug);
-        setManagerSuggestionsLoading(false);
-        setManagerSuggestionsUpdatedAt(Date.now());
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setManagerDeals([]);
-        setManagerSuggestionsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [marketManagerFilter, marketGiveIds, marketGetIds, stored]);
+    return out;
+  }, [friendliness, partnerRosterId, partners, relationship, scoutingAffectsAcceptance, stored]);
 
   // A deep link from Scouting/Matchup (managerRosterId / manager in the URL)
   // pre-selects that partner in the builder. We intentionally do NOT pre-fill
@@ -423,7 +244,7 @@ function TradeDealsView() {
     if (appliedDeepLink.current === sig) return; // already applied; don't overwrite manual edits
     appliedDeepLink.current = sig;
     setPartnerRosterId(partner.rosterId);
-    setMarketManagerFilter(partner.rosterId);
+    setFinderPartner(partner.rosterId);
     setGive(nextGive);
     setGetIds(nextGet);
     /* A deal arriving with both sides is a built trade, so land on the builder
@@ -616,14 +437,14 @@ function TradeDealsView() {
     });
   };
 
-  const runAnalysis = async (giveIds: string[], getIds2: string[]) => {
-    if (partnerRosterId == null) return;
+  const runAnalysis = async (giveIds: string[], getIds2: string[], partner: number | null = partnerRosterId) => {
+    if (partner == null) return;
     setAnalyzing(true);
     setAnalysisError(null);
     try {
       const a = await analyzeTradeApi(stored.leagueId, {
         userId: stored.userId,
-        partnerRosterId,
+        partnerRosterId: partner,
         give: giveIds,
         get: getIds2,
       });
@@ -650,8 +471,8 @@ function TradeDealsView() {
     setGive(givePlayerIds);
     setGetIds(getPlayerIds);
     resetOutputs();
+    setMarketView('build');
     setParams({
-      view: 'deals',
       leagueId: stored.leagueId,
       managerRosterId: String(suggestion.partnerRosterId),
       give: givePlayerIds.join(','),
@@ -660,19 +481,19 @@ function TradeDealsView() {
     window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
   };
 
-  const dismissLane = (signature: string) => dismiss(signature);
-
-  const runPricing = async () => {
-    if (partnerRosterId == null || give.length === 0 || getIds.length === 0) return;
+  /* Explicit inputs rather than state, so a ticket the finder hands over
+     can be priced in the same press that fills the builder in. */
+  const runPricingWith = async (partner: number, giveIds: string[], getIds2: string[]) => {
+    if (giveIds.length === 0 || getIds2.length === 0) return;
     setIsPricing(true);
     setCounter(null);
     setPriceError(null);
     // One press: price the trade AND simulate its full-season impact.
     const pricePromise = priceTrade(stored.leagueId, {
       userId: stored.userId,
-      partnerRosterId,
-      give,
-      get: getIds,
+      partnerRosterId: partner,
+      give: giveIds,
+      get: getIds2,
       traits: NEUTRAL_TRADE_TRAITS,
     })
       .then(setResult)
@@ -688,13 +509,76 @@ function TradeDealsView() {
             : 'The trade could not be priced.',
         );
       });
-    const analysisPromise = runAnalysis(give, getIds);
+    const analysisPromise = runAnalysis(giveIds, getIds2, partner);
     try {
       await Promise.allSettled([pricePromise, analysisPromise]);
     } finally {
       setIsPricing(false);
       setIsEditingTrade(false);
     }
+  };
+
+  const runPricing = async () => {
+    if (partnerRosterId == null) return;
+    await runPricingWith(partnerRosterId, give, getIds);
+  };
+
+  /* Every leg of the ticket exact: fill the builder and price it at once. */
+  const priceExactTicket = (trade: { partnerRosterId: number; give: string[]; get: string[] }) => {
+    if (isPricing || counterLoading) return;
+    setPartnerRosterId(trade.partnerRosterId);
+    setGive(trade.give);
+    setGetIds(trade.get);
+    resetOutputs();
+    setMarketView('build');
+    setParams({
+      leagueId: stored.leagueId,
+      managerRosterId: String(trade.partnerRosterId),
+      give: trade.give.join(','),
+      get: trade.get.join(','),
+    }, { replace: true });
+    window.setTimeout(() => builderRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 0);
+    void runPricingWith(trade.partnerRosterId, trade.give, trade.get);
+  };
+
+  /* A proposal is an argument you make to another manager, so a found deal
+     has to be able to leave the app as a picture. */
+  const shareSuggestion = (suggestion: TradeSuggestion) => {
+    const partner = partners.find((team) => team.rosterId === suggestion.partnerRosterId);
+    const getPlayerIds = suggestion.get.map((asset) => asset.id);
+    const givePlayerIds = suggestion.give.map((asset) => asset.id);
+    const asset = (id: string): TradeCardAsset => {
+      const player = toPlayer(id, bootstrap.players);
+      return {
+        name: player.name,
+        position: player.position,
+        team: player.team,
+        headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
+      };
+    };
+    setTradeCard({
+      eyebrow: `Week ${bootstrap.week}`,
+      leagueName: stored?.leagueName ?? null,
+      verdict: tradeCardHeadline(suggestion.youDelta, suggestion.partnerDelta),
+      you: {
+        manager: userTeam?.teamName ?? 'You',
+        avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
+        assets: getPlayerIds.map(asset),
+        titleDelta: signedPct(suggestion.youDelta),
+        playoffDelta: signedPct(suggestion.youPlayoffDelta ?? 0),
+        titleUp: suggestion.youDelta >= 0,
+        playoffUp: (suggestion.youPlayoffDelta ?? 0) >= 0,
+      },
+      them: {
+        manager: partner?.teamName ?? 'Them',
+        avatar: resolveApiUrl(partner?.avatarUrl) ?? null,
+        assets: givePlayerIds.map(asset),
+        titleDelta: signedPct(suggestion.partnerDelta),
+        playoffDelta: signedPct(suggestion.partnerPlayoffDelta ?? 0),
+        titleUp: suggestion.partnerDelta >= 0,
+        playoffUp: (suggestion.partnerPlayoffDelta ?? 0) >= 0,
+      },
+    });
   };
 
   const tradeSideOrEmpty = (label: string, ids: string[]) =>
@@ -826,19 +710,6 @@ function TradeDealsView() {
     resetOutputs();
   };
 
-  const applyMarketManagerFilter = (rosterId: number | null) => {
-    if (isPricing || counterLoading) return;
-    setMarketManagerFilter(rosterId);
-    setMarketGetIds([]); // a fresh manager clears any player targets
-    setMarketGiveIds([]);
-    if (rosterId != null) choosePartner(rosterId);
-  };
-
-
-  const marketLoaderLabel = showingManagerMarket
-    ? `Simulating trades with ${partners.find((team) => team.rosterId === marketManagerFilter)?.teamName ?? 'this manager'}`
-    : 'Simulating trades';
-
   const renderTeamAvatar = (team: NonNullable<typeof selectedPartner>) => (
     <span className="trade-cc__team-avatar" aria-hidden="true">
       {team.avatarUrl ? (
@@ -930,9 +801,6 @@ function TradeDealsView() {
             type="button"
           >
             {view.label}
-            {view.id === 'finder' && visibleMarketCount > 0 ? (
-              <span className="trade-cc__view-count">{visibleMarketCount}</span>
-            ) : null}
           </button>
         ))}
       </div>
@@ -943,364 +811,24 @@ function TradeDealsView() {
           marketView === 'finder' ? '' : 'trade-cc__finder--hidden',
         ].filter(Boolean).join(' ')}
       >
-        {/* The whole-league "best deals" board was removed (user): no auto-scan,
-            no suggestions on load. Trades are found on-demand -- tap a manager
-            below for the best deals with THAT team, or build one directly. */}
-
-        {/* The read is about a specific manager, so it appears once there is
-            one. Rendering it disabled above an empty heading left a dead row
-            at the top of the view where the title used to be. */}
-        {managerSuggestionsError && showingManagerMarket ? (
-          <p className="trade-cc__finder-note">{managerSuggestionsError}</p>
-        ) : null}
-        <div className="trade-cc__filter-stack">
-          <div className="trade-cc__filter-row">
-            <span className="trade-cc__filter-label">
-              {marketManagerFilter == null
-                ? 'Tap a manager to see the best deals with them'
-                : 'Manager'}
-            </span>
-            {/* League sizes run 4 to 20, so density follows the number of
-                partners as well as the viewport: few managers get roomy
-                rows, a 20-team league packs tighter so the board never
-                pushes the builder off the page. */}
-            {selectedPartner && marketManagerFilter != null ? (
-              /* Once a manager is chosen the other eight are noise, and leaving
-                 them on screen pushed the deals they load a full screen down —
-                 you had to scroll to find out anything had happened at all. */
-              <div className="trade-cc__manager-chosen">
-                <span className="trade-cc__manager-chosen-id">
-                  {renderTeamAvatar(selectedPartner)}
-                  <span className="trade-cc__manager-chosen-copy">
-                    <span className="trade-cc__manager-chosen-name">{selectedPartner.teamName}</span>
-                    <span className="trade-cc__manager-chosen-meta">
-                      {recordText(selectedPartner.record)}
-                      {futuresByRoster.get(selectedPartner.rosterId)?.championOdds != null
-                        ? ` · title ${formatProbOrOdds(futuresByRoster.get(selectedPartner.rosterId)!.titleProb)}`
-                        : ''}
-                    </span>
-                  </span>
-                </span>
-                <button
-                  className="trade-cc__manager-change"
-                  onClick={() => applyMarketManagerFilter(null)}
-                  type="button"
-                >
-                  Change
-                </button>
-              </div>
-            ) : (
-            <div
-              className={[
-                'trade-cc__manager-grid',
-                partners.length <= 6 ? 'trade-cc__manager-grid--roomy' : '',
-                partners.length >= 13 ? 'trade-cc__manager-grid--dense' : '',
-              ].filter(Boolean).join(' ')}
-            >
-              {partners.map((team) => (
-                <button
-                  aria-pressed={marketManagerFilter === team.rosterId}
-                  className={[
-                    'trade-cc__manager-card',
-                    marketManagerFilter === team.rosterId ? 'trade-cc__manager-card--active' : '',
-                  ].filter(Boolean).join(' ')}
-                  key={`market-manager-${team.rosterId}`}
-                  onClick={() => applyMarketManagerFilter(team.rosterId)}
-                  type="button"
-                >
-                  <span className="trade-cc__manager-card-id">
-                    {renderTeamAvatar(team)}
-                    <span className="trade-cc__manager-card-copy">
-                      <span className="trade-cc__manager-card-name" title={team.teamName}>
-                        {team.teamName}
-                      </span>
-                      <span className="trade-cc__manager-card-meta">{recordText(team.record)}</span>
-                    </span>
-                  </span>
-                  <span className="trade-cc__manager-card-price">
-                    <span className="trade-cc__manager-card-stat-label">Title</span>
-                    <strong className="trade-cc__manager-card-stat-value">
-                      {futuresByRoster.get(team.rosterId)?.championOdds != null
-                        ? formatProbOrOdds(futuresByRoster.get(team.rosterId)!.titleProb)
-                        : 'Off board'}
-                    </strong>
-                    <span aria-hidden="true" className="trade-cc__manager-card-cta">Find trades ▸</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-            )}
-          </div>
-
-          <div className="trade-cc__filter-row">
-            <span className="trade-cc__filter-label">Position</span>
-            <div className="trade-cc__filter-chips">
-              {(['all', 'QB', 'RB', 'WR', 'TE'] as const).map((position) => (
-                <button
-                  aria-pressed={marketPositionFilter === position}
-                  className={[
-                    'trade-cc__filter-chip',
-                    marketPositionFilter === position ? 'trade-cc__filter-chip--active' : '',
-                  ].filter(Boolean).join(' ')}
-                  key={`market-position-${position}`}
-                  onClick={() => setMarketPositionFilter(position)}
-                  type="button"
-                >
-                  {position === 'all' ? 'All' : position}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {showingManagerMarket ? (
-            <div className="trade-cc__filter-row trade-cc__target-row">
-              <span className="trade-cc__filter-label">Target players (optional)</span>
-              <div className="trade-cc__target-group">
-                <span className="trade-cc__target-select-tag">
-                  Get from {selectedPartner?.teamName ?? 'them'}
-                </span>
-                <div className="trade-cc__target-chips">
-                  {targetOptions.get.map((player) => {
-                    const on = marketGetIds.includes(player.id);
-                    return (
-                      <button
-                        aria-pressed={on}
-                        className={['trade-cc__target-chip', on ? 'trade-cc__target-chip--active' : ''].filter(Boolean).join(' ')}
-                        disabled={!on && marketGetIds.length >= MAX_TARGETS_PER_SIDE}
-                        key={`get-${player.id}`}
-                        onClick={() => toggleGet(player.id)}
-                        type="button"
-                      >
-                        {player.name}
-                        {player.bye ? <span className="trade-cc__chip-bye"> BYE {player.bye}</span> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="trade-cc__target-group">
-                <span className="trade-cc__target-select-tag">Send</span>
-                <div className="trade-cc__target-chips">
-                  {targetOptions.give.map((player) => {
-                    const on = marketGiveIds.includes(player.id);
-                    return (
-                      <button
-                        aria-pressed={on}
-                        className={['trade-cc__target-chip', on ? 'trade-cc__target-chip--active' : ''].filter(Boolean).join(' ')}
-                        disabled={!on && marketGiveIds.length >= MAX_TARGETS_PER_SIDE}
-                        key={`give-${player.id}`}
-                        onClick={() => toggleGive(player.id)}
-                        type="button"
-                      >
-                        {player.name}
-                        {player.bye ? <span className="trade-cc__chip-bye"> BYE {player.bye}</span> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              {hasTargets ? (
-                <div className="trade-cc__target-summary">
-                  <p className="trade-cc__target-note">
-                    Building trades that
-                    {marketGiveIds.length ? <> send <strong>{marketGiveIds.map(nameOfId).join(', ')}</strong></> : null}
-                    {marketGiveIds.length && marketGetIds.length ? ' and' : ''}
-                    {marketGetIds.length ? <> get <strong>{marketGetIds.map(nameOfId).join(', ')}</strong></> : null}.
-                  </p>
-                  <button
-                    className="trade-cc__target-clear"
-                    onClick={() => {
-                      setMarketGetIds([]);
-                      setMarketGiveIds([]);
-                    }}
-                    type="button"
-                  >
-                    Clear
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-
-
-        {managerSuggestionsLoading && visibleMarketCount > 0 ? (
-          <div className="trade-cc__finder-loader-inline">
-            <SimulationLoader label={marketLoaderLabel} size="compact" variant="trade" />
-          </div>
-        ) : null}
-        {managerSuggestionsLoading ? (
-          <p className="trade-cc__empty-note">
-            Simulating every deal worth making with them. You can leave and come
-            back. The result is held for five minutes.
-          </p>
-        ) : null}
-
-        {visibleMarketCount > 0 ? (
-          <>
-            {/* The manager and the scan time are the same on every card, so
-                they belong here once rather than on each result. */}
-            <div className="trade-cc__market-results-head">
-              <span className="trade-cc__market-results-title">
-                Deals with {selectedPartner?.teamName ?? 'this manager'}
-              </span>
-              {formatGeneratedAt(managerSuggestionsUpdatedAt ?? undefined) ? (
-                <span className="trade-cc__market-results-meta">
-                  scanned {formatGeneratedAt(managerSuggestionsUpdatedAt ?? undefined)}
-                </span>
-              ) : null}
-            </div>
-            <div
-              className={[
-                'trade-cc__market-grid',
-                managerSuggestionsLoading && showingManagerMarket ? 'trade-cc__market-grid--stale' : '',
-              ].filter(Boolean).join(' ')}
-            >
-              {visibleManagerSuggestions.map((entry) => {
-                const getPlayerIds = entry.suggestion.get.map((asset) => asset.id);
-                const givePlayerIds = entry.suggestion.give.map((asset) => asset.id);
-                const acceptanceRead = acceptanceGaugeLabel(entry.acceptanceProbability);
-                /* Same mapping the analyzer already applies to a title delta,
-                   so a suggested deal and a built one are graded alike. */
-                const suggestionVerdict = analysisVerdict(entry.suggestion.youDelta);
-                return (
-                  <TradeCard
-                    acceptanceBand={getAcceptanceLingo(entry.acceptanceProbability)?.label ?? null}
-                    acceptanceLabel={acceptanceRead}
-                    acceptanceProbability={entry.acceptanceProbability}
-                    acceptanceValue={formatAcceptancePercent(entry.acceptanceProbability)}
-                    verdictLabel={suggestionVerdict.label}
-                    verdictTone={suggestionVerdict.tone as 'good' | 'neutral' | 'bad'}
-                    dismissLabel="Dismiss this suggested trade"
-                    getSide={tradeSideFromIds('You get', getPlayerIds, bootstrap.players)}
-                    impactRows={[
-                      /* Your title change is what the card is for, so it
-                         leads. Playoffs and this week support it at one shared
-                         smaller size, and each partner value rides on its own
-                         metric's row instead of taking a row of its own. Same
-                         six served numbers, three rows. */
-                      {
-                        label: 'Your title',
-                        value: signedPct(entry.suggestion.youDelta),
-                        tone: deltaTone(entry.suggestion.youDelta),
-                        emphasis: 'lead',
-                        mirror: {
-                          label: 'them',
-                          value: signedPct(entry.suggestion.partnerDelta),
-                          tone: deltaTone(entry.suggestion.partnerDelta),
-                        },
-                      },
-                      ...(entry.suggestion.youPlayoffDelta != null
-                        ? [
-                            {
-                              label: 'Playoffs',
-                              value: signedPct(entry.suggestion.youPlayoffDelta),
-                              tone: deltaTone(entry.suggestion.youPlayoffDelta),
-                              emphasis: 'primary' as const,
-                              mirror: {
-                                label: 'them',
-                                value: signedPct(entry.suggestion.partnerPlayoffDelta ?? 0),
-                                tone: deltaTone(entry.suggestion.partnerPlayoffDelta ?? 0),
-                              },
-                            },
-                          ]
-                        : []),
-                      ...(entry.suggestion.youWeekDelta != null
-                        ? [
-                            {
-                              label: 'This week',
-                              value: signedPct(entry.suggestion.youWeekDelta),
-                              tone: deltaTone(entry.suggestion.youWeekDelta),
-                              emphasis: 'primary' as const,
-                              mirror: {
-                                label: 'them',
-                                value: signedPct(entry.suggestion.partnerWeekDelta ?? 0),
-                                tone: deltaTone(entry.suggestion.partnerWeekDelta ?? 0),
-                              },
-                            },
-                          ]
-                        : []),
-                    ]}
-                    key={entry.signature}
-                    onShare={() => {
-                      const partner = partners.find(
-                        (team) => team.rosterId === entry.suggestion.partnerRosterId,
-                      );
-                      const asset = (id: string): TradeCardAsset => {
-                        const player = toPlayer(id, bootstrap.players);
-                        return {
-                          name: player.name,
-                          position: player.position,
-                          team: player.team,
-                          headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
-                        };
-                      };
-                      setTradeCard({
-                        eyebrow: `Week ${bootstrap.week}`,
-                        leagueName: stored?.leagueName ?? null,
-                        verdict: tradeCardHeadline(
-                          entry.suggestion.youDelta,
-                          entry.suggestion.partnerDelta,
-                        ),
-                        you: {
-                          manager: userTeam?.teamName ?? 'You',
-                          avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
-                          assets: getPlayerIds.map(asset),
-                          titleDelta: signedPct(entry.suggestion.youDelta),
-                          playoffDelta: signedPct(entry.suggestion.youPlayoffDelta ?? 0),
-                          titleUp: entry.suggestion.youDelta >= 0,
-                          playoffUp: (entry.suggestion.youPlayoffDelta ?? 0) >= 0,
-                        },
-                        them: {
-                          manager: partner?.teamName ?? 'Them',
-                          avatar: resolveApiUrl(partner?.avatarUrl) ?? null,
-                          assets: givePlayerIds.map(asset),
-                          titleDelta: signedPct(entry.suggestion.partnerDelta),
-                          playoffDelta: signedPct(entry.suggestion.partnerPlayoffDelta ?? 0),
-                          titleUp: entry.suggestion.partnerDelta >= 0,
-                          playoffUp: (entry.suggestion.partnerPlayoffDelta ?? 0) >= 0,
-                        },
-                      });
-                    }}
-                    onClick={() => loadSuggestedTrade(entry.suggestion)}
-                    onDismiss={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      dismissLane(entry.signature);
-                    }}
-                    sendSide={tradeSideFromIds('You send', givePlayerIds, bootstrap.players)}
-                  />
-                );
-              })}
-            </div>
-            {hiddenMarketCount > 0 ? (
-              <button
-                className="trade-cc__show-more"
-                onClick={() => setShowAllMarketCards(true)}
-                type="button"
-              >
-                Show {hiddenMarketCount} more
-              </button>
-            ) : null}
-          </>
-        ) : managerSuggestionsLoading && showingManagerMarket ? (
-          <SimulationLoader label={marketLoaderLabel} variant="trade" />
-        ) : (
-          <p className="trade-cc__empty-lane">
-            {showingManagerMarket
-              ? `The book found no deals with ${selectedPartner?.teamName ?? 'this manager'} this week.`
-              : 'Pick a manager above to see the book\'s deals.'}
-          </p>
-        )}
-        {dismissedSignatures.size > 0 ? (
-          <p className="trade-cc__restore-line">
-            Dismissed deals ({dismissedSignatures.size}) ·{' '}
-            <button className="trade-cc__restore-btn" onClick={restoreAll} type="button">
-              Restore
-            </button>
-          </p>
-        ) : null}
+        <TradeFinder
+          bootstrap={bootstrap}
+          busy={isPricing || counterLoading}
+          dismissedSignatures={dismissedSignatures}
+          futuresByRoster={futuresByRoster}
+          leagueId={stored.leagueId}
+          onBuild={loadSuggestedTrade}
+          onDismiss={dismiss}
+          onPriceExact={priceExactTicket}
+          onRestoreAll={restoreAll}
+          onShare={shareSuggestion}
+          partners={partners}
+          presetPartnerRosterId={finderPartner}
+          pricing={pricing}
+          readsByRoster={readsByRoster}
+          userId={stored.userId}
+          userTeam={userTeam}
+        />
       </section>
 
       {/* ── Builder ── */}

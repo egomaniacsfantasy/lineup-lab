@@ -1028,6 +1028,8 @@ export interface TradeSuggestion {
   partnerPlayoffDelta?: number;
   youWeekDelta?: number | null;
   partnerWeekDelta?: number | null;
+  /** The engine's own acceptance read, from the reads the request carried. */
+  acceptance?: number;
 }
 export interface TradeSuggestions {
   available: boolean;
@@ -1040,7 +1042,12 @@ export function fetchTradeSuggestions(
   body: {
     userId: string;
     partnerRosterId?: number | null;
+    // Only trades that raise your starting output at this position.
     position?: 'QB' | 'RB' | 'WR' | 'TE' | null;
+    // Only trades that send at least one of your players at this position.
+    givePosition?: 'QB' | 'RB' | 'WR' | 'TE' | null;
+    // Only this package shape: how many you send for how many you get.
+    shape?: { give: number; get: number } | null;
     // Must-include targets to build trades around: `getPlayerIds` = opponent
     // players every trade must acquire, `givePlayerIds` = your players every trade
     // must send. Multiple per side; both may be set at once. Narrows the search.

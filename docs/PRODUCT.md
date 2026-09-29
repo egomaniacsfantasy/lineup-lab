@@ -97,7 +97,9 @@ a league as a market rather than as twelve people who know each other.
 *Backing:* `src/utils/tradeAcceptance.ts` (logistic, output clamped to 3–97),
 `src/utils/tradeTraits.ts` (the per-manager reads), `POST
 /api/league/:id/trade-suggestions`, and the observed finder funnel
-(enumerate → scan → re-sim → keep positive).
+(enumerate → scan → re-sim → keep positive). The finder's candidate filters
+(`position`, `givePosition`, `shape`, pinned players) narrow what gets
+simmed and never change how a combo is valued.
 
 ### 2.4 The line moves all week
 
@@ -395,10 +397,30 @@ admins.
 
 ## 4.5 Trades (`/market`) — two views
 
-**Trade finder.** Suggested deals with send/get, acceptance percentage and
-title-odds delta. Below, every manager in the league as a card showing their
-record and current title price; picking one opens the best deals with that
-specific manager, filterable by position.
+**Trade finder.** A ticket, not a menu: three legs and a shape. *Partner*
+(anyone, or one manager), *You send* and *You get* (anything, a position, or
+a named player), and *Shape* (any, 1 for 1, 2 for 1, 1 for 2, 2 for 2, read as
+send-for-get). Every prompt a manager brings is the same ticket with a
+different leg pinned: "get me an RB" pins the get leg to a position, "what
+does Bijan cost" pins it to a player (which fixes the partner to his owner),
+"who wants my WR" pins the send leg, "deal with Hermes" pins the partner. All
+four map onto parameters the engine's finder already takes. Under the ticket,
+three *starting points* are derived from roster facts and pricing's
+per-player means rather than a fixed list: the starting slot furthest under
+the league median (upgrade), the position with the most bench bodies (sell),
+and the manager whose surplus and shortage mirror yours.
+
+Results read the ticket back. Whatever was pinned is the header, said once
+(the player with his owner and projection, or the position pair with what
+your starter projects now); each row is only what varied, with your title
+delta, theirs, the package shape and the acceptance read. An **acceptance
+floor** slider (default 40%) hides deals under it and says how many it hid;
+the empty state names the ask and offers a way out (drop the floor, any
+shape, anyone). Rows rank by your title gain weighted by the chance they say
+yes. Opening a row lands it in Build trades, filled in. Every leg exact is a
+trade rather than a search: the button reads Price and hands it to the
+builder. On a phone the ticket folds into a chip strip once results are up;
+at 1024px and wider it is a left rail beside a two-up card grid.
 
 **Build trades.** A two-sided builder. Your roster by position on the left;
 pick a manager to open theirs on the right. "Price this trade" returns both
@@ -406,6 +428,14 @@ sides' title, playoff and this-week deltas. A counter-offer search exists as a
 separate endpoint.
 
 Both views are unreachable in dynasty and keeper leagues.
+
+*Backing:* `src/components/trade/TradeFinder.tsx`, the pure query and
+starting-point logic in `src/utils/tradeFinderQuery.ts`, and `POST
+/api/league/:id/trade-suggestions`, which takes `partnerRosterId`,
+`position` (upgrade this position), `givePosition` (send one from this
+position), `givePlayerIds`, `getPlayerIds` and `shape`. Acceptance is priced
+on the client from your saved read on each manager, so a league-wide scan
+grades the way the builder does for one.
 
 ## 4.6 Board (`/rankings`)
 
@@ -1200,3 +1230,14 @@ and adding before it is used.
     engine stores a favourite's spread as positive (`a.mean - b.mean`), while
     `covered()` and `test/vsBook.test.mjs` assume the board's sign, negative
     for the favourite, which would grade every game the wrong way round.
+26. **The finder's two new candidate filters live in the engine file.**
+    `givePosition` and `shape` in `suggestTrades` (`server/engine/engine.js`)
+    are the same kind of thing as the existing `position` filter: they skip
+    combos before the sim and touch no simulation, pricing or odds maths.
+    They were added for the ticket without Franco's sign-off, so they want a
+    look. Related and open: the design fixture answers every
+    `trade-suggestions` call with the same five deals regardless of the ask,
+    so the position and player legs are only exercised against a real league;
+    `server/` has no test for the two filters (nothing under `server/` runs in
+    `npm test` anyway, see above); and `src/components/trade/LeagueDealBoard.tsx`
+    was already orphaned before the ticket and still is.

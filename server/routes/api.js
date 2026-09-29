@@ -2306,6 +2306,13 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
     const { userId } = req.body ?? {};
     const partnerRosterId = req.body?.partnerRosterId != null ? Number(req.body.partnerRosterId) : null;
     const position = ['QB', 'RB', 'WR', 'TE'].includes(req.body?.position) ? req.body.position : null;
+    const givePosition = ['QB', 'RB', 'WR', 'TE'].includes(req.body?.givePosition) ? req.body.givePosition : null;
+    // Package shape from the finder's ticket: { give, get } sizes, each 1..3.
+    const shapeGive = Number(req.body?.shape?.give);
+    const shapeGet = Number(req.body?.shape?.get);
+    const shape = shapeGive >= 1 && shapeGive <= 3 && shapeGet >= 1 && shapeGet <= 3
+      ? { give: shapeGive, get: shapeGet }
+      : null;
     const givePlayerIds = Array.isArray(req.body?.givePlayerIds) ? req.body.givePlayerIds.map(String) : [];
     const getPlayerIds = Array.isArray(req.body?.getPlayerIds) ? req.body.getPlayerIds.map(String) : [];
     const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
@@ -2327,8 +2334,9 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
       .map(([k, v]) => `${k}.${v?.friendliness ?? ''}.${v?.relationship ?? ''}`).join('_');
     const giveSig = [...givePlayerIds].sort().join('+') || 'nogive';
     const getSig = [...getPlayerIds].sort().join('+') || 'noget';
-    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${giveSig}:${getSig}:${version}:${overlay ? 'ov' : 'base'}:${build}:${readsSig}:${finalTeamsSignature()}`;
-    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position, givePlayerIds, getPlayerIds, readsByRoster }));
+    const shapeSig = shape ? `${shape.give}for${shape.get}` : 'anyshape';
+    const key = `agg:trade-suggestions:${leagueId}:${userId}:${partnerRosterId ?? 'all'}:${position ?? 'any'}:${givePosition ?? 'any'}:${shapeSig}:${giveSig}:${getSig}:${version}:${overlay ? 'ov' : 'base'}:${build}:${readsSig}:${finalTeamsSignature()}`;
+    const result = await cached(key, 5 * 60_000, async () => suggestTrades(ctx, { maxSim: 20, partnerRosterId, position, givePosition, shape, givePlayerIds, getPlayerIds, readsByRoster }));
     res.json(result);
   } catch (error) {
     next(error);
