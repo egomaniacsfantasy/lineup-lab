@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -14,7 +15,8 @@ import test from 'node:test';
    Same family as the missing brace that wiped the design tokens on desktop.
    Both are cheap to catch and expensive to find by eye. */
 
-const SRC = new URL('../src/', import.meta.url).pathname;
+// fileURLToPath, not .pathname: on Windows .pathname is "/C:/..." and readdir fails.
+const SRC = fileURLToPath(new URL('../src/', import.meta.url));
 
 function walk(dir, match, out = []) {
   for (const entry of readdirSync(dir)) {

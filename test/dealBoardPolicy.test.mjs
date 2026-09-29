@@ -155,7 +155,9 @@ test('both surfaces filter, so they cannot disagree', async () => {
   /* The Hub rail and the Trades board draw from one pool. A deal barred from
      one and shown on the other is the product contradicting itself in front
      of the reader. */
-  for (const file of ['src/pages/TradePage.tsx', 'src/components/matchup/HubDeals.tsx']) {
+  /* The Trades tab's league-wide board was removed on purpose (86ae4cd, 2026-09-23:
+     no trades appear automatically), so the Hub rail is the one surface left. */
+  for (const file of ['src/components/matchup/HubDeals.tsx']) {
     const source = await fs.readFile(path.resolve(file), 'utf8');
     assert.match(source, /acceptableDeals\(/, `${file} does not filter the deal pool`);
     assert.match(

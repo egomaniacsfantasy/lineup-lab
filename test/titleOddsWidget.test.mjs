@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -31,8 +32,8 @@ async function loadTitleOdds() {
       },
     })
     .outputText.replace("import './TitleOdds.css';", '')
-    .replace("from '../../utils/formatOdds'", `from '${path.resolve('src/utils/formatOdds.ts')}'`)
-    .replace("from '../../utils/leagueMovement'", `from '${path.resolve('src/utils/leagueMovement.ts')}'`);
+    .replace("from '../../utils/formatOdds'", `from '${pathToFileURL(path.resolve('src/utils/formatOdds.ts')).href}'`)
+    .replace("from '../../utils/leagueMovement'", `from '${pathToFileURL(path.resolve('src/utils/leagueMovement.ts')).href}'`);
 
   const tempRoot = path.resolve('.tmp-tests');
   await fs.mkdir(tempRoot, { recursive: true });
@@ -40,7 +41,7 @@ async function loadTitleOdds() {
   const tempFile = path.join(tempDir, 'TitleOdds.mjs');
   await fs.writeFile(tempFile, out);
   try {
-    return await import(`file://${tempFile}`);
+    return await import(pathToFileURL(tempFile).href);
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
