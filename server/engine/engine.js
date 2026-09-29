@@ -139,6 +139,10 @@ function playerDistribution(playerId, projectionMap, catalogEntry, week = null) 
   if (week != null && weeklyCount > 0) {
     const weekMean = weekly[week] ?? weekly[String(week)];
     if (weekMean != null) {
+      // A week the pipeline projects at 0 (injury out-week, season-ending IR) is a
+      // certain 0: no spread. Otherwise its leftover CI sigma, with draws clipped at 0,
+      // credits ~0.4*sigma phantom points per sim (Achane out for the season read ~1.2/wk).
+      if (Number(weekMean) <= 0) return { mean: 0, stdev: 0, unpriced: false, zeroed: false };
       const scale = mean > 0 ? weekMean / mean : 1;
       stdev = Number((stdev * Math.max(0.25, scale)).toFixed(2));
       mean = weekMean;
