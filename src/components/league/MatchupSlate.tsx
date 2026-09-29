@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useNflGameStateForWeek } from '../../hooks/useNflGameState';
 import { anyStarted, scorelineFor, teamScored } from '../../utils/liveScoreline';
 import { americanOddsValue, formatAmericanOdds } from '../../utils/formatOdds';
 import {
@@ -14,6 +15,7 @@ import type { LeagueWeekMatchup } from '../../mocks/league';
 import type { LineHistoryEntry } from '../../services/leagueApi';
 import { leagueChartFlags } from '../../config/leagueChartFlags';
 import { marketMovement, weekMovement } from '../../utils/openAnchors';
+import { firstKickoff, weekGlance, type KickoffMap } from '../../utils/weekGlance';
 import { OddsChart, type OddsChartPoint } from '../charts/OddsChart';
 import type { ForkPair } from './WeekFork';
 import { MatchupDetail } from './MatchupDetail';
@@ -53,7 +55,30 @@ interface MatchupSlateProps {
    * board, so the rail costs nothing to fill.
    */
   forks?: readonly ForkPair[];
+  /**
+   * This week's kickoff for every NFL team playing, keyed by team code.
+   *
+   * The glance reads each game at its closing line once the game is under
+   * way, and the close is the last snapshot before the first kickoff in it.
+   * Without these it cannot tell when a game closed, so a started game sits
+   * out of the glance rather than being read live.
+   */
+  kickoffs?: KickoffMap | null;
 }
+
+/**
+ * Why the glance stops following the board once the week starts.
+ *
+ * A started game's price is the engine reading the scoreboard. That is the
+ * right number for its card and the wrong one for a summary of the market,
+ * which is why the header says which lines it is reading.
+ */
+const GLANCE_CLOSE_WHY =
+  'Each game that has started is read at its closing line: the last price posted before anyone in it kicked off. After kickoff the price follows the score.';
+
+/* Kickoffs pass while the board is open. A minute is the resolution a kickoff
+   is printed at, and the same clock the Hub keeps for its rows. */
+const CLOCK_MS = 60_000;
 
 /**
  * Why this game and not another one.
@@ -248,7 +273,18 @@ export function MatchupSlate({
   slipLegs,
   onToggleLeg,
   forks,
+  kickoffs = null,
 }: MatchupSlateProps) {
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), CLOCK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+  /* Where each NFL game is, for the one case the clock cannot see: a game
+     that is under way before its listed kickoff, or a schedule that never
+     arrived. Same shared read the Hub and the game dialog use. */
+  const gameStates = useNflGameStateForWeek(currentWeek);
+
   /* Every side's move against this week's opening line, keyed matchup:roster.
      Computed once for the slate rather than re-derived per row. */
   const openMoves = useMemo(() => {
@@ -329,28 +365,47 @@ export function MatchupSlate({
      conflating them meant arriving on the League tab with a dialog already
      open over a board nobody had pressed yet. */
   const openedRow = rows.find((row) => row.rowKey === openedRowKey) ?? null;
-  const biggestFavorite = rows.reduce<typeof rows[number] | null>((current, row) => {
-    if (!current || row.favorite.winProb > current.favorite.winProb) return row;
-    return current;
-  }, null);
-  const closestLine = rows.reduce<typeof rows[number] | null>((current, row) => {
-    const gap = Math.abs(row.left.winProb - 50);
-    if (!current || gap < Math.abs(current.left.winProb - 50)) return row;
-    return current;
-  }, null);
-  const highestTotal = rows.reduce<typeof rows[number] | null>((current, row) => {
-    const total = row.matchup.totalProjection ?? 0;
-    if (!current || total > (current.matchup.totalProjection ?? 0)) return row;
-    return current;
-  }, null);
-  /* The week's biggest repricing. Every row already carries its own move, so
-     this only names the largest of them — it is a pointer into the board
-     rather than a number the board does not have. */
-  const biggestMove = rows.reduce<typeof rows[number] | null>((current, row) => {
-    if (!row.summary) return current;
-    if (!current?.summary) return row;
-    return Math.abs(row.summary.move) > Math.abs(current.summary.move) ? row : current;
-  }, null);
+
+  /* The week at a glance, read off each game's pregame line. These four used
+     to be reductions over the board itself, which is live: on a Monday night
+     the biggest favourite was a team that had already won and the closest
+     line was -313. A game that has started now counts at its closing line.
+     utils/weekGlance.ts has the rule; this only says when each game started. */
+  const glance = useMemo(
+    () =>
+      weekGlance({
+        games: rows.map(({ matchup, left, right }) => {
+          const starters = [...(left.starters ?? []), ...(right.starters ?? [])];
+          const kickoffAt = kickoffs ? firstKickoff(starters, kickoffs) : null;
+          /* Points on the board or a game the scoreboard has under way. The
+             kickoff is not passed here, because a kickoff that has passed is
+             enough on its own, whatever a lagging scoreboard still says. */
+          const underway = anyStarted(
+            starters.map((entry) =>
+              scorelineFor(
+                {
+                  kickoffIso: null,
+                  bye: false,
+                  currentPoints: entry.current ?? null,
+                  game: gameStates[entry.team?.toUpperCase() ?? ''] ?? null,
+                },
+                clock,
+              ),
+            ),
+          );
+          return {
+            matchup,
+            kickoffAt,
+            started: underway || (kickoffAt != null && kickoffAt <= clock),
+          };
+        }),
+        history: history ?? [],
+        week: currentWeek,
+        movement: leagueChartFlags.lineMovement,
+      }),
+    [rows, kickoffs, gameStates, clock, history, currentWeek],
+  );
+  const { biggestFavorite, closestLine, highestTotal, biggestMove } = glance;
 
   /* The branches for the selected game, with the sides put in the order the
      card shows them rather than the order the sim returned them. A rail whose
@@ -641,7 +696,7 @@ export function MatchupSlate({
 
               In the aside it was a narrow card stacked under a chart, so the
               right column ran well past the bottom of the board and the page
-              finished lopsided. It is four facts about six games — it wants
+              finished lopsided. It is four facts about six games: it wants
               width, not depth, and down here it can carry the crests that
               make each one identifiable without reading it.
 
@@ -653,62 +708,75 @@ export function MatchupSlate({
               price/percent toggle, so every price here goes through
               formatAmericanOdds and follows it. The total is the exception
               and is not a unit question: it is fantasy points, which is what
-              it says. */}
-          <section className="matchup-slate__glance">
-            <span className="matchup-slate__glance-title">The week at a glance</span>
-            <div className="matchup-slate__glance-cards">
-              {biggestFavorite ? (
-                <GlanceCard
-                  label="Biggest favorite"
-                  left={
-                    biggestFavorite.favorite.side === biggestFavorite.left.side
-                      ? biggestFavorite.left
-                      : biggestFavorite.right
-                  }
-                  right={
-                    biggestFavorite.favorite.side === biggestFavorite.left.side
-                      ? biggestFavorite.right
-                      : biggestFavorite.left
-                  }
-                  separator="over"
-                  value={formatAmericanOdds(biggestFavorite.favorite.odds)}
-                />
-              ) : null}
+              it says.
 
-              {closestLine ? (
-                <GlanceCard
-                  label="Closest line"
-                  left={closestLine.left}
-                  right={closestLine.right}
-                  separator="vs"
-                  value={formatAmericanOdds(closestLine.favorite.odds)}
-                />
-              ) : null}
+              Once the week starts the header says which lines it is reading,
+              because from then on they are not all the ones on the cards
+              above: a game that has started counts at its close. When there
+              is nothing left to say (every game started, none with a close on
+              record) the section goes, rather than a heading over nothing. */}
+          {biggestFavorite || closestLine || highestTotal || biggestMove ? (
+            <section className="matchup-slate__glance">
+              <span className="matchup-slate__glance-title">
+                The week at a glance
+                {glance.kickedOff !== 'none' ? (
+                  <span className="matchup-slate__glance-state" title={GLANCE_CLOSE_WHY}>
+                    {glance.kickedOff === 'all' ? ' · closing lines' : ' · pregame lines'}
+                    <span className="visually-hidden">. {GLANCE_CLOSE_WHY}</span>
+                  </span>
+                ) : null}
+              </span>
+              <div className="matchup-slate__glance-cards">
+                {biggestFavorite ? (
+                  <GlanceCard
+                    label="Biggest favorite"
+                    left={biggestFavorite.favorite}
+                    right={biggestFavorite.underdog}
+                    separator="over"
+                    value={formatAmericanOdds(biggestFavorite.favorite.odds)}
+                  />
+                ) : null}
 
-              {highestTotal?.matchup.totalProjection != null ? (
-                <GlanceCard
-                  label="Highest total"
-                  left={highestTotal.left}
-                  right={highestTotal.right}
-                  separator="vs"
-                  unit="pts"
-                  value={highestTotal.matchup.totalProjection.toFixed(1)}
-                />
-              ) : null}
+                {closestLine ? (
+                  <GlanceCard
+                    label="Closest line"
+                    left={closestLine.left}
+                    right={closestLine.right}
+                    separator="vs"
+                    value={formatAmericanOdds(closestLine.favorite.odds)}
+                  />
+                ) : null}
 
-              {biggestMove?.summary ? (
-                <GlanceCard
-                  label="Biggest move"
-                  left={biggestMove.left}
-                  right={biggestMove.right}
-                  separator="vs"
-                  tone={biggestMove.summary.move >= 0 ? 'up' : 'down'}
-                  unit="pp"
-                  value={moveLabel(biggestMove.summary.move)}
-                />
-              ) : null}
-            </div>
-          </section>
+                {highestTotal?.total != null ? (
+                  <GlanceCard
+                    label="Highest total"
+                    left={highestTotal.left}
+                    right={highestTotal.right}
+                    separator="vs"
+                    unit="pts"
+                    value={highestTotal.total.toFixed(1)}
+                  />
+                ) : null}
+
+                {/* The largest move among the week's lines. For a game that
+                    has not started it is the card's own arrow, so this names
+                    the card to look at. For one that has, it stops at
+                    kickoff: what the scoreboard did after that is not the
+                    market moving. */}
+                {biggestMove?.move != null ? (
+                  <GlanceCard
+                    label="Biggest move"
+                    left={biggestMove.left}
+                    right={biggestMove.right}
+                    separator="vs"
+                    tone={biggestMove.move >= 0 ? 'up' : 'down'}
+                    unit="pp"
+                    value={moveLabel(biggestMove.move)}
+                  />
+                ) : null}
+              </div>
+            </section>
+          ) : null}
         </div>
 
         <aside className="matchup-slate__aside">

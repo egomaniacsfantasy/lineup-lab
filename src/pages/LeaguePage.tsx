@@ -34,6 +34,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ProviderMark } from '../components/league/ProviderMark';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { useSeasonMode } from '../hooks/useSeasonMode';
+import { useNflSchedule } from '../hooks/useNflSchedule';
 import { isAgreementAdmin } from '../utils/admin';
 import {
   getUserTeam,
@@ -522,6 +523,14 @@ export function LeaguePage() {
     connected?.connection.currentWeek ?? null,
   );
 
+  /* This week's kickoff for every NFL team, so the board's glance knows when
+     each game's pregame line closed. The game dialog reads the same week for
+     its rows, and the schedule is cached per week, so this is one request. */
+  const nflSchedule = useNflSchedule(
+    bootstrap?.league.season ? Number(bootstrap.league.season) : null,
+    bootstrap?.week ?? null,
+  );
+
   if (isWizardOpen) {
     return (
       <div className="league-page">
@@ -707,6 +716,7 @@ export function LeaguePage() {
               forks={forkPairsForWeek}
               gameOfTheWeek={forks?.mostInfluentialGame ?? null}
               history={lineHistory}
+              kickoffs={nflSchedule.status === 'ready' ? nflSchedule.byTeam : null}
               matchups={slate}
               onToggleLeg={connected ? slip.toggle : undefined}
               slipLegs={slip.legs}

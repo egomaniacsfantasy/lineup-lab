@@ -7,7 +7,7 @@ import type { LeagueWeekMatchup } from '../mocks/league';
 import type { LineupSlotEntry } from '../utils/matchupLineups';
 import type { LineHistoryEntry } from '../services/leagueApi';
 
-type BoardRowVariant = 'collision' | 'truncation' | 'game-of-the-week' | 'slip' | 'detail';
+type BoardRowVariant = 'collision' | 'truncation' | 'game-of-the-week' | 'slip' | 'detail' | 'kickoff';
 
 function isVariant(value: string | undefined): value is BoardRowVariant {
   return (
@@ -15,7 +15,8 @@ function isVariant(value: string | undefined): value is BoardRowVariant {
     value === 'truncation' ||
     value === 'game-of-the-week' ||
     value === 'slip' ||
-    value === 'detail'
+    value === 'detail' ||
+    value === 'kickoff'
   );
 }
 
@@ -320,6 +321,196 @@ const detailMatchups: LeagueWeekMatchup[] = [
   },
 ];
 
+/**
+ * Monday night, midway through the late game.
+ *
+ * The board as it was reported: three games that started on Sunday and one
+ * that has not. Read off the live board, the glance crowned a team that had
+ * already won (a check where a price goes), called a -313 game the closest
+ * line, took its total from Sunday's scoring and its biggest move from one
+ * team's afternoon. The history is what the server stores: an open, a close
+ * two hours before the Sunday kickoffs, and two snapshots after them with
+ * Sunday's scores pinned in.
+ *
+ * Kickoffs are fixed dates on either side of any real clock the fixture is
+ * opened on, so which games have started does not depend on when it is run.
+ * Drawn twice: with the Monday game still to play, and once it has kicked off.
+ */
+const KICKOFF_SUNDAY = '2026-09-27T17:00:00Z';
+const KICKOFF_MONDAY = '2026-09-29T00:15:00Z';
+const KICKOFF_NOT_YET = '2099-01-06T01:15:00Z';
+
+function kickoffStarter(id: string, team: string, projection: number): LineupSlotEntry {
+  return { slot: 'FLEX', playerId: id, name: `${team} starter`, position: 'WR', team, injuryStatus: null, projection };
+}
+
+const kickoffMatchups: LeagueWeekMatchup[] = [
+  {
+    matchupId: 7301,
+    teamARosterId: 5,
+    teamA: 'Sonic and Knuckles',
+    teamAAvatarUrl: null,
+    teamARecord: '2-1',
+    /* Decided: the price has gone past the board. */
+    teamAOdds: -999_900,
+    teamAWinProb: 100,
+    teamAProjection: 151.0,
+    teamASpread: 50.3,
+    teamAStarters: [kickoffStarter('k1', 'KC', 18.2), kickoffStarter('k2', 'BUF', 16.4)],
+    teamBRosterId: 6,
+    teamB: "Adam's Astounding Team",
+    teamBAvatarUrl: null,
+    teamBRecord: '1-2',
+    teamBOdds: 999_900,
+    teamBWinProb: 0,
+    teamBProjection: 100.7,
+    teamBSpread: -50.3,
+    teamBStarters: [kickoffStarter('k3', 'PHI', 15.1), kickoffStarter('k4', 'DAL', 12.9)],
+    totalProjection: 251.7,
+    isUserGame: false,
+  },
+  {
+    matchupId: 7302,
+    teamARosterId: 7,
+    teamA: 'Zeus’s Bolts',
+    teamAAvatarUrl: null,
+    teamARecord: '3-0',
+    teamAOdds: -313,
+    teamAWinProb: 75.8,
+    teamAProjection: 139.9,
+    teamASpread: 21.5,
+    teamAStarters: [kickoffStarter('k5', 'SF', 17.0), kickoffStarter('k6', 'LAR', 14.2)],
+    teamBRosterId: 8,
+    teamB: 'Waiver Wire Warriors',
+    teamBAvatarUrl: null,
+    teamBRecord: '0-3',
+    teamBOdds: 313,
+    teamBWinProb: 24.2,
+    teamBProjection: 118.4,
+    teamBSpread: -21.5,
+    teamBStarters: [kickoffStarter('k7', 'SEA', 13.8), kickoffStarter('k8', 'ARI', 11.6)],
+    totalProjection: 262.0,
+    isUserGame: false,
+  },
+  {
+    matchupId: 7303,
+    teamARosterId: 9,
+    teamA: 'Gridiron Heretics',
+    teamAAvatarUrl: null,
+    teamARecord: '2-1',
+    teamAOdds: -733,
+    teamAWinProb: 88.0,
+    teamAProjection: 148.8,
+    teamASpread: 29.1,
+    teamAStarters: [kickoffStarter('k9', 'DET', 16.6), kickoffStarter('k10', 'GB', 14.0)],
+    teamBRosterId: 10,
+    teamB: 'Sunday Scaries',
+    teamBAvatarUrl: null,
+    teamBRecord: '1-2',
+    teamBOdds: 733,
+    teamBWinProb: 12.0,
+    teamBProjection: 119.7,
+    teamBSpread: -29.1,
+    teamBStarters: [kickoffStarter('k11', 'MIN', 15.3), kickoffStarter('k12', 'CHI', 10.9)],
+    /* Sunday's scoring, not a total anybody posted. */
+    totalProjection: 268.5,
+    isUserGame: false,
+  },
+  {
+    matchupId: 7304,
+    teamARosterId: 11,
+    teamA: 'Mount Olympians',
+    teamAAvatarUrl: null,
+    teamARecord: '2-1',
+    teamAOdds: -251,
+    teamAWinProb: 71.5,
+    teamAProjection: 128.0,
+    teamASpread: 10.0,
+    teamAStarters: [kickoffStarter('k13', 'NYJ', 15.7), kickoffStarter('k14', 'MIA', 14.8)],
+    teamBRosterId: 12,
+    teamB: 'Underworld United',
+    teamBAvatarUrl: null,
+    teamBRecord: '1-2',
+    teamBOdds: 251,
+    teamBWinProb: 28.5,
+    teamBProjection: 118.0,
+    teamBSpread: -10.0,
+    teamBStarters: [kickoffStarter('k15', 'NE', 13.4), kickoffStarter('k16', 'PIT', 12.2)],
+    totalProjection: 246.0,
+    isUserGame: false,
+  },
+];
+
+function kickoffSides(
+  a: number,
+  b: number,
+  aProb: number,
+  aMoneyline: number,
+  aProjection: number,
+  bProjection: number,
+) {
+  return {
+    [String(a)]: { moneyline: aMoneyline, winProbability: aProb, projection: aProjection },
+    [String(b)]: {
+      moneyline: -aMoneyline,
+      winProbability: Number((100 - aProb).toFixed(1)),
+      projection: bProjection,
+    },
+  };
+}
+
+function kickoffSnapshot(at: string, trigger: string, lines: LineHistoryEntry['lines']): LineHistoryEntry {
+  return {
+    computedAt: Date.parse(at),
+    inputsHash: `kickoff-${trigger}`,
+    projectionVersion: 'kickoff-v1',
+    week: 8,
+    trigger,
+    lines,
+  };
+}
+
+const kickoffHistory: LineHistoryEntry[] = [
+  kickoffSnapshot('2026-09-22T14:00:00Z', 'weekly roll', [
+    { matchupId: 7301, sides: kickoffSides(5, 6, 58.0, -138, 128.0, 120.0) },
+    { matchupId: 7302, sides: kickoffSides(7, 8, 55.0, -122, 130.0, 126.0) },
+    { matchupId: 7303, sides: kickoffSides(9, 10, 60.0, -150, 125.0, 118.0) },
+    { matchupId: 7304, sides: kickoffSides(11, 12, 68.0, -213, 128.0, 118.0) },
+  ]),
+  /* The close for the three Sunday games. */
+  kickoffSnapshot('2026-09-27T15:00:00Z', 'scheduled', [
+    { matchupId: 7301, sides: kickoffSides(5, 6, 64.0, -178, 130.1, 118.0) },
+    { matchupId: 7302, sides: kickoffSides(7, 8, 51.2, -105, 121.0, 120.1) },
+    { matchupId: 7303, sides: kickoffSides(9, 10, 57.0, -133, 124.0, 120.1) },
+    { matchupId: 7304, sides: kickoffSides(11, 12, 71.5, -251, 128.0, 118.0) },
+  ]),
+  /* From here on, Sunday's scores are pinned into every Sunday game. */
+  kickoffSnapshot('2026-09-27T22:00:00Z', 'scheduled', [
+    { matchupId: 7301, sides: kickoffSides(5, 6, 97.0, -3233, 150.2, 101.3) },
+    { matchupId: 7302, sides: kickoffSides(7, 8, 75.8, -313, 139.9, 118.4) },
+    { matchupId: 7303, sides: kickoffSides(9, 10, 88.0, -733, 148.8, 119.7) },
+    { matchupId: 7304, sides: kickoffSides(11, 12, 71.5, -251, 128.0, 118.0) },
+  ]),
+  kickoffSnapshot('2026-09-28T10:00:00Z', 'scheduled', [
+    { matchupId: 7301, sides: kickoffSides(5, 6, 99.9, -99900, 151.0, 100.7) },
+    { matchupId: 7302, sides: kickoffSides(7, 8, 75.8, -313, 139.9, 118.4) },
+    { matchupId: 7303, sides: kickoffSides(9, 10, 88.0, -733, 148.8, 119.7) },
+    { matchupId: 7304, sides: kickoffSides(11, 12, 71.5, -251, 128.0, 118.0) },
+  ]),
+];
+
+function kickoffMap(mondayKickoff: string) {
+  const sunday = ['KC', 'BUF', 'PHI', 'DAL', 'SF', 'LAR', 'SEA', 'ARI', 'DET', 'GB', 'MIN', 'CHI'];
+  const monday = ['NYJ', 'MIA', 'NE', 'PIT'];
+  return new Map([
+    ...sunday.map((team) => [team, { kickoffIso: KICKOFF_SUNDAY }] as const),
+    ...monday.map((team) => [team, { kickoffIso: mondayKickoff }] as const),
+  ]);
+}
+
+const KICKOFFS_MONDAY_TO_PLAY = kickoffMap(KICKOFF_NOT_YET);
+const KICKOFFS_ALL_STARTED = kickoffMap(KICKOFF_MONDAY);
+
 export function DesignBoardRowPage() {
   const { variant } = useParams<{ variant?: string }>();
   /* The slip scene drives the real component with real state, so a rendered
@@ -338,7 +529,9 @@ export function DesignBoardRowPage() {
         ? truncationMatchups
         : variant === 'detail'
           ? detailMatchups
-          : gameOfTheWeekMatchups;
+          : variant === 'kickoff'
+            ? kickoffMatchups
+            : gameOfTheWeekMatchups;
   const history = variant === 'collision' ? collisionHistory : null;
 
   return (
@@ -389,6 +582,23 @@ export function DesignBoardRowPage() {
               still going. No ribbon anywhere, including on the card that has
               no id of its own to be matched by. */}
           <MatchupSlate currentWeek={8} gameOfTheWeek={null} matchups={matchups} />
+        </>
+      ) : variant === 'kickoff' ? (
+        <>
+          <MatchupSlate
+            currentWeek={8}
+            history={kickoffHistory}
+            kickoffs={KICKOFFS_MONDAY_TO_PLAY}
+            matchups={matchups}
+          />
+          {/* The same night after the Monday game has kicked off too: every
+              game is read at its close. */}
+          <MatchupSlate
+            currentWeek={8}
+            history={kickoffHistory}
+            kickoffs={KICKOFFS_ALL_STARTED}
+            matchups={matchups}
+          />
         </>
       ) : (
         <MatchupSlate currentWeek={8} history={history} matchups={matchups} />

@@ -698,6 +698,15 @@ button.matchup-slate__cell:focus-visible {
   box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
 }
 
+/* Which lines the glance is reading, once the week has started. Muted: it
+   qualifies the title, it is not a second one, and amber is not the colour of
+   a status. cursor: help for the same reason the game-of-the-week ribbon has
+   it: it is the only sign a title attribute is there to be read. */
+.matchup-slate__glance-state {
+  color: var(--text-muted);
+  cursor: help;
+}
+
 .matchup-slate__glance-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
