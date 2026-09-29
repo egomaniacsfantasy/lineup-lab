@@ -45,7 +45,7 @@ let ownsApi = false;
    the search box this test waits for never appears. It used to pass only when
    mobileNoHorizontalScroll's API server happened to be alive at the same
    moment, which under load it was not. Same rule as that file: own it. */
-const API_PORT = 8799;
+const API_PORT = 8796;
 
 test.before(async () => {
   if (!(await isPortOpen(API_PORT))) {
@@ -60,7 +60,7 @@ test.before(async () => {
   if (!(await isPortOpen(port))) {
     vite = spawn('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
       cwd,
-      env: process.env,
+      env: { ...process.env, API_PORT: String(API_PORT) },
       stdio: 'ignore',
     });
     ownsVite = true;

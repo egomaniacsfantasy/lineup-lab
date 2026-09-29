@@ -43,7 +43,7 @@ const cwd = process.cwd();
 const OWN_PORT = 4182;
 let port = OWN_PORT;
 let baseUrl = `http://127.0.0.1:${OWN_PORT}`;
-const API_PORT = 8799;
+const API_PORT = 8797;
 
 function isPortOpen(checkPort) {
   return new Promise((resolve) => {
@@ -90,7 +90,7 @@ test.before(async () => {
     vite = spawn(
       'npm',
       ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(OWN_PORT), '--strictPort'],
-      { cwd, env: process.env, stdio: 'ignore' },
+      { cwd, env: { ...process.env, API_PORT: String(API_PORT) }, stdio: 'ignore' },
     );
     ownsVite = true;
   }

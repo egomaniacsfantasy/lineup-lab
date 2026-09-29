@@ -93,7 +93,7 @@ test.before(async () => {
     vite = spawn(
       'npm',
       ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
-      { cwd, env: process.env, stdio: 'ignore' },
+      { cwd, env: { ...process.env, API_PORT: String(API_PORT) }, stdio: 'ignore' },
     );
     ownsVite = true;
   }

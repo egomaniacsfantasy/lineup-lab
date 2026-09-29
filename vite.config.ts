@@ -25,7 +25,10 @@ export default defineConfig({
     port: 3000,
     open: true,
     proxy: {
-      '/api': 'http://localhost:8799',
+      /* Tests that bring their own API each run it on a port of their own
+         and point their Vite at it, so two files never share (and one never
+         kills) the other's server. Development stays on 8799. */
+      '/api': `http://localhost:${process.env.API_PORT ?? 8799}`,
     },
   },
   build: {
