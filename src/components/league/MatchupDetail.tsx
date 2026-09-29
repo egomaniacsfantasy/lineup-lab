@@ -172,12 +172,16 @@ export function MatchupDetail({
     );
   };
   const scorelinesOf = (starters?: readonly LineupSlotEntry[]) => (starters ?? []).map(scorelineOf);
-  /* Starters only. A bench player's live game is not scoring for anybody. */
-  const isLive = (entry: LineupSlotEntry | null) =>
-    entry?.playerId != null && scorelineOf(entry).phase === 'live';
+  /* A finished game's row recedes rather than carrying a FINAL tag, the same as
+     on the Hub (components/matchup/Scoreline.tsx). Bench rows too: they print
+     scores through the same SlotNumbers, and a bare score with neither a tag
+     nor a faded row reads as a projection. */
+  const isFinal = (entry: LineupSlotEntry | null) =>
+    entry?.playerId != null && scorelineOf(entry).phase === 'final';
   // The row's meta line: position + team normally, but before a game kicks off it
   // reads like the Hub -- position, opponent, kickoff time ("WR · @ PHI · Sun 1:00 PM").
-  // Once the game is live/final the kickoff is history and the GameTag carries state.
+  // Once the game is under way the kickoff is history: the GameTag carries a running
+  // game, and a finished one's row recedes instead.
   const metaWithKickoff = (entry: LineupSlotEntry) => {
     const ctx = contextOf(entry);
     if (!ctx?.contextAvailable) return metaFor(entry);
@@ -284,7 +288,6 @@ export function MatchupDetail({
     const numbers = (
       <SlotNumbers
         align={opponent ? 'right' : 'left'}
-        finalProjection={entry.pregameProjection == null ? null : pointsText(entry.pregameProjection)}
         projection={pointsText(entry.projection)}
         scoreline={scorelineOf(entry)}
       />
@@ -413,7 +416,7 @@ export function MatchupDetail({
                           'matchup-page__slot-card',
                           row.left?.playerId != null ? 'matchup-page__slot-card--tap' : '',
                           dimmed(left) ? 'matchup-page__slot-card--opponent' : '',
-                          isLive(row.left) ? 'matchup-page__slot-card--live' : '',
+                          isFinal(row.left) ? 'matchup-page__slot-card--final' : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}
@@ -461,7 +464,7 @@ export function MatchupDetail({
                           'matchup-page__slot-card--right',
                           row.right?.playerId != null ? 'matchup-page__slot-card--tap' : '',
                           dimmed(right) ? 'matchup-page__slot-card--opponent' : '',
-                          isLive(row.right) ? 'matchup-page__slot-card--live' : '',
+                          isFinal(row.right) ? 'matchup-page__slot-card--final' : '',
                         ]
                           .filter(Boolean)
                           .join(' ')}
@@ -506,6 +509,7 @@ export function MatchupDetail({
                         'matchup-page__slot-card',
                         entry.playerId != null ? 'matchup-page__slot-card--tap' : '',
                         dimmed(left) ? 'matchup-page__slot-card--opponent' : '',
+                        isFinal(entry) ? 'matchup-page__slot-card--final' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
@@ -535,6 +539,7 @@ export function MatchupDetail({
                         'matchup-page__slot-card--right',
                         entry.playerId != null ? 'matchup-page__slot-card--tap' : '',
                         dimmed(right) ? 'matchup-page__slot-card--opponent' : '',
+                        isFinal(entry) ? 'matchup-page__slot-card--final' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}

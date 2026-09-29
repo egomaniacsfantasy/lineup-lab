@@ -285,7 +285,11 @@ modules, top to bottom:
   projected points, a win-probability bar, the spread and the total.
 - **Lineup vs lineup** — your starters against theirs slot by slot, with each
   player's projection, NFL opponent and kickoff time, and a per-slot edge
-  arrow. Any two of your players can be tapped to compare.
+  arrow. Any two of your players can be tapped to compare, and a one-line hint
+  says so. With no bench option anywhere, which is where every lineup ends up
+  once its starters have kicked off, since a kickoff locks its players, there
+  is nothing to compare and no hint is printed. It used to say "No bench
+  options this week" over a drawer holding six bench players.
 - **Bench comparison** — bench counts on both sides and the single best
   start/sit swap available to you, priced: the moneyline before, the moneyline
   after, and the win-probability delta.
@@ -580,27 +584,35 @@ and the connect screen consumes it on read.
   game dialog (`src/utils/liveScoreline.ts`). Each player follows his own game.
   Before kickoff the big number is his projection and the meta line carries the
   kickoff time. Once his game is live, points scored take the big number, the
-  projected final sits beneath it labelled `proj`, and a cyan tag with a pulsing
-  dot carries the quarter and clock (`Q3 4:12`, `Half`, `OT 2:00`). Once it is
-  over, a quiet `FINAL` tag replaces the clock and `proj` shows the pregame
-  projection, since the live one converges on the score and would only repeat
-  it. Scores and projections share a column only because every row showing a
-  score is tagged; the two ship together or not at all.
+  projected final sits beneath it labelled `proj`, and a tag with a pulsing dot
+  carries the quarter and clock (`Q3 4:12`, `Half`, `OT 2:00`). Once it is
+  over, the row shows the score and nothing else, and its contents fade to 60%,
+  so the eye lands on the games still to be decided. Scores and projections
+  share a column only because every row showing a score is marked as one, by
+  its live tag or by its fade; a screen reader, which cannot see a fade, still
+  hears "Final". The game dialog's bench rows print scores too, and fade the
+  same way.
 
-  A starter whose game is live is also outlined in cyan (a cyan bar on the
-  row's outer edge on a phone, where rows have no border), so the rows that are
-  moving are found before any tag is read. Final and unplayed rows are never
-  outlined. Zero points are not evidence a game has started: in live mode every
-  player carries a live block, and one with `current: 0` for a Monday player
-  once turned a whole Thursday lineup into STARTED over 0.0.
+  A finished row used to carry a `FINAL` tag and a `proj`, and neither earned
+  its place: the tag repeated what the settled score already said, and on the
+  Hub the `proj` had converged on the score, so every finished row read
+  `15.9 / proj 15.9`. Live rows used to be outlined and tagged in cyan (a cyan
+  bar on a phone) until it was called off-palette on 2026-09-28. Amber is you
+  and green and red are money, so live has no colour of its own: it carries
+  itself on bright type, the pulsing dot, and the quiet of the finished rows
+  around it. `test/liveGameTags.test.mjs` fails on a FINAL tag, a `proj` on a
+  finished row, a finished row that does not fade (bench included), a live row
+  that does, and a live row framed or tinted differently from its neighbours.
 
   Game state comes from `GET /api/nfl/game-state`, served from the scoreboard
   cache the live cycle already keeps and polled once a minute by an open page.
   Without it, a passed kickoff or points on the board mark a row `Started`
-  without claiming live or final. On a phone the tag replaces the opponent in
-  the short meta line once a game starts, because the line cannot hold both.
-  Cyan is `var(--cyan, #6dc8ff)`: DESIGN_RATIONALE.md reserves it for live
-  state, but the palette never defined the token.
+  without claiming live or final. Zero points are not evidence a game has
+  started: in live mode every player carries a live block, and one with
+  `current: 0` for a Monday player once turned a whole Thursday lineup into
+  STARTED over 0.0. On a phone the tag replaces the opponent in the short meta
+  line while a game runs, because the line cannot hold both; a finished row has
+  no tag, so it keeps its opponent.
 
 - **Odds format** is global and exclusive: American odds or percentages, never
   both on screen at once.

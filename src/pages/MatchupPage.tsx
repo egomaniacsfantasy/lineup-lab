@@ -1878,6 +1878,11 @@ function MatchupLive({
     }).length;
   })();
 
+  /* With no bench option anywhere there is nothing to compare, and a sentence
+     announcing that is a line spent on nothing. By Sunday afternoon it was also
+     wrong: a kickoff locks the players in that game, so once every starter had
+     played the board said "No bench options this week" over a drawer reading
+     "Benches · 6 vs 6". */
   const compareHint = (() => {
     if (firstPick) {
       if (comparableStarterCount === 0) {
@@ -1888,9 +1893,7 @@ function MatchupLive({
         ? `Now pick anyone who could take the same slot as ${firstPick.shortName}. ${options} bench ${options === 1 ? 'option' : 'options'} can swap straight in.`
         : `Now pick anyone who could take the same slot as ${firstPick.shortName}.`;
     }
-    if (decisionSlotCount === 0) {
-      return 'No bench options this week. Every slot is the only play you have.';
-    }
+    if (decisionSlotCount === 0) return null;
     return 'Tap any two of your players to compare them.';
   })();
 
@@ -1905,23 +1908,27 @@ function MatchupLive({
      because those are the two things that change a start-or-sit. */
   const lineupMetaFor = (player: Player, extra?: string | null, compact = false) => {
     const context = getPlayerContext(player, gameContextSource);
-    /* Once the game is under way its kickoff time is history, and the row's
-       GameTag takes that spot instead: the clock while it runs, Final after. */
-    const kickedOff = context.contextAvailable
+    /* Once the game is under way its kickoff time is history. While it runs the
+       row's GameTag takes that spot; a finished game has no tag, because the
+       row itself recedes. */
+    const phase = context.contextAvailable
       ? scorelineFor(
         { kickoffIso: context.kickoffIso, bye: context.bye, currentPoints: null, game: gameOf(player) },
         scoreClock,
-      ).started
-      : false;
-    /* On a phone, a started game's tag takes the opponent's place too. The
+      ).phase
+      : 'upcoming';
+    const kickedOff = phase !== 'upcoming';
+    /* On a phone, a running game's tag takes the opponent's place too. The
        short line is about 100px, and with both in it the ellipsis cut the tag,
        leaving a live game as a bare dot. Before kickoff the opponent is the
-       useful fact; once the game is on, the clock is. */
+       useful fact; while the game is on, the clock is. Once it is over there is
+       no tag to make room for, so the opponent comes back. */
+    const tagged = phase === 'live' || phase === 'started';
     const gameMeta = context.contextAvailable
       ? context.bye
         ? 'BYE'
         : compact
-          ? kickedOff ? null : context.matchup
+          ? tagged ? null : context.matchup
           : kickedOff
             ? context.matchup
             : `${context.matchup} · ${context.kickoff}`
@@ -2447,7 +2454,7 @@ function MatchupLive({
               <div className="matchup-page__module-row matchup-page__module-row--lineup">
                 <div>
                   <h2 className="matchup-page__module-title">Lineup vs lineup</h2>
-                  <p className="matchup-page__lineup-hint">{compareHint}</p>
+                  {compareHint ? <p className="matchup-page__lineup-hint">{compareHint}</p> : null}
                 </div>
                 {bestLineupView ? (
                   <BestLineups
@@ -2505,7 +2512,7 @@ function MatchupLive({
                           optionCount > 0 ? 'matchup-page__slot-card--decision' : '',
                           isSelected ? 'matchup-page__slot-card--picked' : '',
                           isMuted ? 'matchup-page__slot-card--muted' : '',
-                          scorelineOf(row.yourSlot)?.phase === 'live' ? 'matchup-page__slot-card--live' : '',
+                          scorelineOf(row.yourSlot)?.phase === 'final' ? 'matchup-page__slot-card--final' : '',
                         ].filter(Boolean).join(' ')}
                         disabled={!isPickable}
                         onClick={() => starter && handleComparePick(starter, row.slotLabel)}
@@ -2548,7 +2555,6 @@ function MatchupLive({
                               </span>
                             </span>
                             <SlotNumbers
-                              finalProjection={formatProjection(row.yourSlot.projection, isPriced)}
                               projection={formatProjection(row.yourProjection, isPriced)}
                               scoreline={scorelineOf(row.yourSlot)}
                             />
@@ -2584,14 +2590,13 @@ function MatchupLive({
                           'matchup-page__slot-card--right',
                           'matchup-page__slot-card--opponent',
                           activePick ? 'matchup-page__slot-card--muted' : '',
-                          scorelineOf(row.opponentSlot)?.phase === 'live' ? 'matchup-page__slot-card--live' : '',
+                          scorelineOf(row.opponentSlot)?.phase === 'final' ? 'matchup-page__slot-card--final' : '',
                         ].filter(Boolean).join(' ')}
                       >
                         {row.opponentSlot ? (
                           <>
                             <SlotNumbers
                               align="right"
-                              finalProjection={formatProjection(row.opponentSlot.projection, isPriced)}
                               projection={formatProjection(row.opponentProjection, isPriced)}
                               scoreline={scorelineOf(row.opponentSlot)}
                             />

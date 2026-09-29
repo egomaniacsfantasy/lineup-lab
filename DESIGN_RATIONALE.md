@@ -21,7 +21,7 @@ Bracket Lab contributes the brand confidence: dark foundation, amber DNA, seriou
 3. **Scan first, read second.** Every key surface should make sense from shape, spacing, and hierarchy before the user reads labels.
 4. **Selection must feel consequential.** A start/sit choice should look like a sportsbook selection, not a generic card toggle.
 5. **Numbers need trust language.** IBM Plex Mono owns prices, projections, percentages, and movement.
-6. **Color is for signal, not ornament.** Amber marks priority, green/red mark movement, cyan marks live/system state.
+6. **Color is for signal, not ornament.** Amber marks priority, green/red mark movement. Live state has no colour of its own: bright type and a pulsing dot, beside finished rows that have receded.
 7. **Weekly use demands lower friction.** Reduce decorative blur, reduce visual chatter, tighten row density, improve keyboard and motion accessibility.
 8. **Odds Gods DNA stays visible.** Keep the dark luxury foundation and amber thread, but tune it for a repeat-use utility.
 
@@ -53,13 +53,12 @@ Bracket Lab contributes the brand confidence: dark foundation, amber DNA, seriou
 - `#ffd36c` `--amber-bright` / `--text-amber`: premium highlight, active odds, key emphasis
 - `#4ad89a` `--green`: favorable movement
 - `#ff6f7d` `--red`: unfavorable movement
-- `#6dc8ff` `--cyan`: live/system status
 
 ### Usage Rules
 
 - Amber is reserved for your side of the market, active navigation, and high-priority states.
 - Green and red are only for directional movement and deltas.
-- Cyan is only for live/state signaling.
+- There is no live colour. Cyan held that job on paper, was never defined in the palette, and was dropped on 2026-09-28 as off-palette once it reached the lineup board as an outline. A live game is carried by bright type and motion instead.
 - Neutrals carry structure. Borders and cards stay quiet.
 
 ## 6. Typography

@@ -5,23 +5,54 @@ import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
 /**
- * The per-player game tag on the Hub's lineup board, rendered.
+ * Where each player's game is, on the Hub's lineup board and in the League
+ * board's game dialog, rendered.
  *
- * The defect: during games a row showed a projection and a small "X now" in the
- * same face, and nothing on the row said whether the player's game was on, over
- * or yet to start. Now a live row leads with points and carries the clock, a
- * finished row says FINAL, and a row whose game has not started keeps its
- * projection with no tag.
+ * The first defect: during games a row showed a projection and a small "X now"
+ * in the same face, and nothing on the row said whether the player's game was
+ * on, over or yet to start. A live row now leads with points and carries the
+ * clock, and a row whose game has not started keeps its projection with no tag.
+ *
+ * The second: a finished row said so three ways at once, with a FINAL chip, a
+ * greyed score and a "proj" that on the Hub had converged on the score ("15.9 /
+ * proj 15.9"). It now shows the score alone and the whole row recedes. Live
+ * rows were outlined in cyan, which is not in the palette; live now has no
+ * colour of its own, and the tag's bright type and pulsing dot carry it.
  *
  * ?liveGames gives the design league a fixed scoreboard (see useNflGameState):
- * MIN live in the 3rd, DET in OT, WAS at half, BAL and ATL final. Without the
- * flag a design scene must never request the real scoreboard, because a fixture
- * that reads it fails whenever a real game involving its players happens to be on.
+ * MIN live in the 3rd, DET in OT, WAS at half, BAL, ATL and PHI final. Without
+ * the flag a design scene must never request the real scoreboard, because a
+ * fixture that reads it fails whenever a real game involving its players
+ * happens to be on.
  */
 
 const cwd = process.cwd();
 const port = 4211;
 const baseUrl = `http://127.0.0.1:${port}`;
+
+const HUB_CARDS = '.matchup-page__module--slot-board .matchup-page__slot-card';
+const DIALOG_CARDS = '.matchup-modal__scroll .matchup-page__slot-card';
+
+/* The teams DESIGN_LIVE_GAMES marks final. Written out here rather than read
+   off the page, so a row is judged against the fixture and not against the
+   rendering under test. */
+const FINAL_TEAMS = ['BAL', 'ATL', 'PHI'];
+
+/* Enough of week 8 for the rows the phone test reads. Routed, because the
+   design scene asks the API for its schedule and this suite runs no API, and
+   without a schedule no row has an opponent to keep or give up. */
+const SCHEDULE = {
+  available: true,
+  season: 2026,
+  week: 8,
+  games: [
+    { team: 'BAL', week: 8, season: 2026, opponent: 'BUF', homeAway: 'away', kickoffIso: '2026-10-25T17:00:00Z', gameId: 'bal-buf' },
+    { team: 'BUF', week: 8, season: 2026, opponent: 'BAL', homeAway: 'home', kickoffIso: '2026-10-25T17:00:00Z', gameId: 'bal-buf' },
+    { team: 'MIN', week: 8, season: 2026, opponent: 'DET', homeAway: 'away', kickoffIso: '2026-10-25T17:00:00Z', gameId: 'min-det' },
+    { team: 'DET', week: 8, season: 2026, opponent: 'MIN', homeAway: 'home', kickoffIso: '2026-10-25T17:00:00Z', gameId: 'min-det' },
+  ],
+  byes: [],
+};
 
 function isPortOpen(checkPort) {
   return new Promise((resolve) => {
@@ -70,32 +101,75 @@ test.after(async () => {
   if (vite && ownsVite) vite.kill('SIGTERM');
 });
 
-/* Every lineup card, by player name: its tag, and which number leads. */
-const READ_ROWS = () =>
-  Object.fromEntries(
-    [...document.querySelectorAll('.matchup-page__module--slot-board .matchup-page__slot-card')]
-      .map((card) => {
-        const name = card.querySelector('.matchup-page__row-name')?.textContent;
-        if (!name) return null;
-        const tag = card.querySelector('.matchup-page__meta-full .matchup-page__game-tag');
-        return [name, {
-          tag: tag?.textContent ?? null,
-          tagPhase: tag ? [...tag.classList].find((c) => c.startsWith('matchup-page__game-tag--') && !c.endsWith('--flush')) : null,
-          leadsWithScore: Boolean(card.querySelector('.matchup-page__slot-scored')),
-          leadsWithProjection: Boolean(card.querySelector('.matchup-page__slot-projection')),
-          projLabel: card.querySelector('.matchup-page__slot-proj-label')?.textContent ?? null,
-          outlined: card.classList.contains('matchup-page__slot-card--live'),
-        }];
-      })
-      .filter(Boolean),
-  );
+/* Every lineup card matching `selector`. `finished` comes from the team named
+   in the row's own meta line, `faded` from how the row is drawn, so the two can
+   be held against each other. */
+const READ_ROWS = ({ selector, finalTeams }) => {
+  const leadingText = (node) =>
+    node?.firstChild?.nodeType === Node.TEXT_NODE ? node.firstChild.textContent : '';
+  return [...document.querySelectorAll(selector)]
+    .map((card) => {
+      const name = card.querySelector('.matchup-page__row-name')?.textContent;
+      if (!name) return null;
+      const meta = card.querySelector('.matchup-page__meta-full');
+      const compact = card.querySelector('.matchup-page__meta-compact');
+      const tag = meta?.querySelector('.matchup-page__game-tag') ?? null;
+      const dot = tag?.querySelector('.matchup-page__game-tag-dot') ?? null;
+      const frame = getComputedStyle(card);
+      return {
+        name,
+        bench: card.closest('.matchup-detail__bench') != null,
+        finished: leadingText(meta).split(' · ').some((token) => finalTeams.includes(token)),
+        faded: [...card.children].some((child) => Number(getComputedStyle(child).opacity) < 1),
+        tag: tag?.textContent ?? null,
+        tagPhase: tag
+          ? [...tag.classList].find((c) => c.startsWith('matchup-page__game-tag--') && !c.endsWith('--flush'))
+          : null,
+        tagInk: tag
+          ? [
+            getComputedStyle(tag).color,
+            getComputedStyle(tag).borderTopColor,
+            getComputedStyle(tag).backgroundColor,
+            dot ? getComputedStyle(dot).backgroundColor : 'rgb(0, 0, 0)',
+          ]
+          : [],
+        spoken: meta?.querySelector('.visually-hidden')?.textContent ?? null,
+        compact: leadingText(compact),
+        compactTag: compact?.querySelector('.matchup-page__game-tag')?.textContent ?? null,
+        leadsWithScore: Boolean(card.querySelector('.matchup-page__slot-scored')),
+        leadsWithProjection: Boolean(card.querySelector('.matchup-page__slot-projection')),
+        projLabel: card.querySelector('.matchup-page__slot-proj-label')?.textContent ?? null,
+        frame: `${frame.borderTopColor} | ${frame.boxShadow}`,
+      };
+    })
+    .filter(Boolean);
+};
 
-async function rowsAt(path) {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, colorScheme: 'dark' });
+/* How far a computed colour sits from grey: the spread between its largest and
+   smallest channel. The palette's warm neutrals are all under 12; the cyan the
+   live tag used to wear is 146. */
+function hueOf(css) {
+  const scale = css.trim().startsWith('color(') ? 255 : 1;
+  const [r, g, b] = (css.match(/-?[\d.]+/g) ?? []).map(Number).slice(0, 3).map((v) => v * scale);
+  return Math.max(r, g, b) - Math.min(r, g, b);
+}
+
+async function rowsAt(path, { viewport = { width: 1440, height: 1100 }, schedule = null } = {}) {
+  const page = await browser.newPage({ viewport, colorScheme: 'dark' });
   try {
+    if (schedule) {
+      await page.route('**/api/nfl/schedule**', (route) => route.fulfill({ json: schedule }));
+    }
     await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
-    await page.locator('.matchup-page__module--slot-board .matchup-page__slot-card').first().waitFor();
-    return await page.evaluate(READ_ROWS);
+    await page.locator(HUB_CARDS).first().waitFor();
+    if (schedule) {
+      /* The rows paint before the schedule lands; wait for an opponent from it. */
+      await page.waitForFunction(
+        () => document.querySelector('.matchup-page__module--slot-board')?.textContent.includes('@ BUF'),
+      );
+    }
+    const rows = await page.evaluate(READ_ROWS, { selector: HUB_CARDS, finalTeams: FINAL_TEAMS });
+    return Object.fromEntries(rows.map((row) => [row.name, row]));
   } finally {
     await page.close();
   }
@@ -114,28 +188,113 @@ test('a live player leads with points and carries the quarter and clock', async 
   assert.equal(rows['T. McLaurin']?.tag, 'Half');
 });
 
-test('only rows whose game is live are outlined', async () => {
-  /* The outline is how the eye finds the moving rows before reading a tag, so
-     it must mark exactly those rows: a final or unplayed row outlined as live
-     is a false alarm on the one screen people watch on a Sunday. */
-  const rows = await rowsAt('/design/matchup?liveGames');
-  const outlined = Object.entries(rows).filter(([, row]) => row.outlined).map(([name]) => name).sort();
-  const live = Object.entries(rows)
-    .filter(([, row]) => row.tagPhase === 'matchup-page__game-tag--live')
-    .map(([name]) => name)
-    .sort();
-  assert.ok(live.length > 0, 'the ?liveGames fixture has no live rows to check');
-  assert.deepEqual(outlined, live);
-  assert.equal(rows['D. Henry']?.outlined, false, 'a final row must not be outlined');
-});
-
-test('a finished player says FINAL', async () => {
+test('a finished player shows his score alone, and his row recedes', async () => {
   const rows = await rowsAt('/design/matchup?liveGames');
   const henry = rows['D. Henry'];
   assert.ok(henry, 'the design lineup has no D. Henry');
-  assert.equal(henry.tagPhase, 'matchup-page__game-tag--final');
-  assert.equal(henry.tag, 'Final');
+  assert.equal(henry.finished, true, 'D. Henry is no longer on a team the fixture has final');
   assert.equal(henry.leadsWithScore, true);
+  assert.equal(henry.tag, null, 'a finished row printed a tag; the fade is the whole signal');
+  assert.equal(henry.projLabel, null, 'a finished row printed "proj" beside a settled score');
+  assert.equal(henry.faded, true, 'a finished row must recede, since nothing else on it says the game is over');
+  assert.equal(henry.spoken, 'Final', 'a screen reader cannot see a row fade, so it must still hear Final');
+});
+
+test('only finished rows recede', async () => {
+  /* The fade is the only thing marking a score as final, so it must mark
+     exactly those rows. A live row faded is the one game still worth watching
+     made hard to see; a finished row left bright reads as a projection. */
+  const rows = Object.values(await rowsAt('/design/matchup?liveGames'));
+  const faded = rows.filter((row) => row.faded).map((row) => row.name).sort();
+  const finished = rows.filter((row) => row.finished).map((row) => row.name).sort();
+  assert.ok(finished.length > 0, 'the ?liveGames fixture has no finished rows to check');
+  assert.ok(rows.some((row) => row.tagPhase === 'matchup-page__game-tag--live'), 'the fixture has no live rows to check');
+  assert.deepEqual(faded, finished);
+});
+
+test('a live row is framed like any other row, and its tag carries no hue', async () => {
+  /* Live used to outline the card in cyan and tint its tag, and cyan is not in
+     the palette. Compared against a started row on the same side, so each pair
+     shares a side's styling and differs only in whether its game is live. */
+  const rows = await rowsAt('/design/matchup?liveGames');
+  for (const [live, quiet] of [['J. Jefferson', 'C. Lamb'], ['J. Gibbs', 'J. Jacobs']]) {
+    assert.ok(rows[live] && rows[quiet], `the design lineup is missing ${live} or ${quiet}`);
+    assert.equal(rows[live].tagPhase, 'matchup-page__game-tag--live', `${live} is no longer live in the fixture`);
+    assert.equal(rows[quiet].tagPhase === 'matchup-page__game-tag--live', false, `${quiet} is live in the fixture`);
+    assert.equal(rows[live].frame, rows[quiet].frame, `${live}'s card is framed differently because his game is live`);
+    for (const ink of rows[live].tagInk) {
+      assert.ok(hueOf(ink) <= 24, `${live}'s live tag is tinted (${ink}); live has no colour of its own`);
+    }
+  }
+});
+
+test('on a phone a finished row keeps its opponent, and a live row gives it to the clock', async () => {
+  /* The short meta line has room for one of the two, so a running game's tag
+     takes the opponent's place. A finished row has no tag any more, and
+     blanking its line anyway threw away the one fact it had room for. */
+  const rows = await rowsAt('/design/matchup?liveGames&desktop=0', {
+    viewport: { width: 402, height: 874 },
+    schedule: SCHEDULE,
+  });
+  assert.equal(rows['D. Henry']?.compact, '@ BUF');
+  assert.equal(rows['D. Henry']?.compactTag, null);
+  assert.equal(rows['J. Jefferson']?.compact, '', 'a live row kept its opponent beside the clock');
+  assert.equal(rows['J. Jefferson']?.compactTag, 'Q3 4:12');
+});
+
+test('with no bench option anywhere, the board prints no hint', async () => {
+  /* It used to say "No bench options this week. Every slot is the only play
+     you have.", which is a line spent on nothing, and by Sunday was also wrong:
+     kickoffs lock players, so it appeared over a full bench. */
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, colorScheme: 'dark' });
+  try {
+    await page.goto(`${baseUrl}/design/matchup?liveGames`, { waitUntil: 'domcontentloaded' });
+    await page.locator(HUB_CARDS).first().waitFor();
+    assert.equal(
+      await page.locator('.matchup-page__slot-bench-cue').count(),
+      0,
+      'the fixture now has a bench option, so this no longer checks the empty case',
+    );
+    assert.equal(await page.locator('.matchup-page__lineup-hint').count(), 0);
+  } finally {
+    await page.close();
+  }
+});
+
+test('the game dialog recedes finished rows the same way, bench included', async () => {
+  /* The dialog draws its rows, bench too, with the Hub's own SlotNumbers, so a
+     finished bench row that did not recede would print a bare score reading as
+     a projection. Every game on the board is opened, since which one holds a
+     finished bench player is the fixture's business. */
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, colorScheme: 'dark' });
+  try {
+    await page.goto(`${baseUrl}/design/league?liveGames`, { waitUntil: 'domcontentloaded' });
+    const games = page.locator('.matchup-slate__row-button');
+    await games.first().waitFor({ timeout: 45_000 });
+    const count = await games.count();
+    let benchChecked = 0;
+    for (let index = 0; index < count; index += 1) {
+      await games.nth(index).click();
+      await page.locator('.matchup-modal__panel').waitFor();
+      const bench = page.locator('.matchup-modal__panel .matchup-detail__bench > summary');
+      if (await bench.count()) await bench.click();
+      const rows = await page.evaluate(READ_ROWS, { selector: DIALOG_CARDS, finalTeams: FINAL_TEAMS });
+      for (const row of rows) {
+        const where = `${row.name} (${row.bench ? 'bench' : 'starter'}, game ${index + 1})`;
+        assert.equal(row.faded, row.finished, `${where} ${row.finished ? 'did not recede' : 'receded'}`);
+        if (row.finished) {
+          assert.equal(row.tag, null, `${where} printed a tag`);
+          assert.equal(row.projLabel, null, `${where} printed "proj"`);
+        }
+      }
+      benchChecked += rows.filter((row) => row.bench && row.finished).length;
+      await page.keyboard.press('Escape');
+      await page.locator('.matchup-modal').waitFor({ state: 'detached' });
+    }
+    assert.ok(benchChecked > 0, 'no game in the fixture has a finished bench player, so the bench went unchecked');
+  } finally {
+    await page.close();
+  }
 });
 
 test('design scenes never read the real scoreboard', async () => {
@@ -150,7 +309,7 @@ test('design scenes never read the real scoreboard', async () => {
   });
   try {
     await page.goto(`${baseUrl}/design/matchup`, { waitUntil: 'domcontentloaded' });
-    await page.locator('.matchup-page__module--slot-board .matchup-page__slot-card').first().waitFor();
+    await page.locator(HUB_CARDS).first().waitFor();
     /* The hook polls on mount, so a request would already be out by now. The
        wait covers a slow first render, not the poll interval. */
     await page.waitForTimeout(1500);

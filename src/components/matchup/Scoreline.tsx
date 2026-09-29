@@ -5,24 +5,23 @@ import { gameTagFor, primaryNumber } from '../../utils/liveScoreline';
  * A lineup row's numbers. See utils/liveScoreline.ts for the rule.
  *
  * Before his game: one number, the projection, as the Hub has always shown.
- * Once it starts: points scored take the big number, and the projection moves
- * underneath with a word on it. Two unlabelled one-decimal numbers stacked in
- * the same face are a guessing game, and "20.9 / 0.1 now" was read as twenty
+ * While it is on: points scored take the big number, and the projected final
+ * sits underneath with a word on it. Two unlabelled one-decimal numbers stacked
+ * in the same face are a guessing game, and "20.9 / 0.1 now" was read as twenty
  * points scored.
  *
- * `finalProjection` is what a FINAL row compares against. A live projection
- * converges on the actual score as the clock runs out, so by the final whistle
- * "proj" would just repeat the score. The pregame number is the one worth
- * reading beside a result.
+ * Once it is over: the score and nothing else. A projection beside a settled
+ * result is a second number on a row where nothing is left to happen, and on
+ * the Hub it had converged on the score anyway, so every finished row read
+ * "15.9 / proj 15.9". The row recedes instead (slot-card--final), which is what
+ * says the game is done.
  */
 export function SlotNumbers({
   projection,
-  finalProjection = null,
   scoreline,
   align = 'left',
 }: {
   projection: string;
-  finalProjection?: string | null;
   scoreline: Scoreline | null;
   align?: 'left' | 'right';
 }) {
@@ -40,30 +39,39 @@ export function SlotNumbers({
     );
   }
 
-  const isFinal = scoreline.phase === 'final';
-  const reference = isFinal ? finalProjection ?? projection : projection;
+  if (scoreline.phase === 'final') {
+    return (
+      <span className={className}>
+        <span className="matchup-page__slot-scored" title="Final points">
+          {primaryNumber(scoreline, projection)}
+        </span>
+      </span>
+    );
+  }
+
   return (
     <span className={className}>
-      <span className="matchup-page__slot-scored" title={isFinal ? 'Final points' : 'Points scored'}>
+      <span className="matchup-page__slot-scored" title="Points scored">
         {primaryNumber(scoreline, projection)}
       </span>
-      <span
-        className="matchup-page__slot-proj-label"
-        title={isFinal ? 'Projected before kickoff' : 'Projected final'}
-      >
-        proj {reference}
+      <span className="matchup-page__slot-proj-label" title="Projected final">
+        proj {projection}
       </span>
     </span>
   );
 }
 
 /**
- * Where the player's game is: the clock while it runs, FINAL once it ends.
+ * Where the player's game is, in the spot his kickoff time held: the clock
+ * while it runs.
  *
- * It sits in the meta line where the kickoff time was, so that one spot always
- * answers "when": when it starts, where it is, that it is over. Live is the only
- * state with colour, cyan, which is the product's colour for live system state
- * and nothing else. Final is deliberately quiet: a settled result is not news.
+ * A finished game prints no tag. Its row recedes instead (slot-card--final),
+ * which says "over" without another word on the line. The word stays for
+ * screen readers, which cannot see a row go grey.
+ *
+ * Live has no colour of its own. Green and red are money, amber is you, and a
+ * game clock is neither: it is the brightest thing on a row whose finished
+ * neighbours have gone quiet, and its dot pulses.
  */
 export function GameTag({
   phase,
@@ -78,6 +86,7 @@ export function GameTag({
   if (!phase || phase === 'upcoming') return null;
   const label = gameTagFor(phase, game);
   if (!label) return null;
+  if (phase === 'final') return <span className="visually-hidden">{label}</span>;
   return (
     <span
       className={[
