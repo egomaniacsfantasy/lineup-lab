@@ -37,6 +37,7 @@ import { BestLineups, type LineupChanges } from '../components/matchup/BestLineu
 import { SetLineupButton } from '../components/matchup/SetLineupButton';
 import { useAuth } from '../contexts/AuthContext';
 import { isAgreementAdmin } from '../utils/admin';
+import { useAutopilotEnabled } from '../utils/autopilotPreference';
 import { TradeSenderPanel } from '../components/matchup/TradeSenderPanel';
 import { tradesSupported } from '../utils/leagueCapabilities';
 import { WeekAhead, type WeekAheadFork } from '../components/matchup/WeekAhead';
@@ -1659,7 +1660,13 @@ function MatchupLive({
      offering to act on their league on its own, which is a placement question,
      not a verdict on the feature. */
   const { user } = useAuth();
-  const showAutopilot = isAgreementAdmin(user?.email);
+  /* Both, and in this order: only an admin account is offered the switch, and
+     the switch is off until somebody turns it on. Being allowed to see the
+     autopilots is not the same as wanting them on the screen every time you
+     open the Hub, which is how they ended up back in front of the person who
+     asked for them to go away. Settings > Labs. */
+  const autopilotOn = useAutopilotEnabled();
+  const showAutopilot = isAgreementAdmin(user?.email) && autopilotOn;
 
   /* Where each NFL game is (not started, live, final), from the scoreboard. */
   const gameStates = useNflGameStateForWeek(matchup.week, isConnected);

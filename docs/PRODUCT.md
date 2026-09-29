@@ -532,14 +532,18 @@ and the connect screen consumes it on read.
 
 ## 4.10 Cross-cutting UI systems
 
-- **The autopilots are admin-only for now.** "Set optimal lineup on ESPN" and
-  the trade sender (with its autopilot switch) are hidden on the Hub for
-  everybody outside `AGREEMENT_ADMIN_EMAILS`. Hidden, not removed: the
-  endpoints, the background scan and the saved per-manager settings are
-  untouched and still run for accounts that have them on. The objection is to a
-  stranger's Hub offering to act on their league on its own, which is a
-  placement question rather than a verdict on the feature. The multi-move
-  start/sit note drops its reference to the button when the button is not there.
+- **The autopilots are off, behind a switch, behind an admin account.** "Set
+  optimal lineup on ESPN" and the trade sender appear on the Hub only when the
+  account is in `AGREEMENT_ADMIN_EMAILS` **and** Autopilot tools is switched on
+  in More > Labs. Off by default, including for us: being allowed to see a tool
+  that acts on a real league on somebody's behalf is not the same as wanting it
+  on screen every time the Hub opens. The preference is per device
+  (`src/utils/autopilotPreference.ts`), because the machine you demo on is not
+  the machine you develop on, and flipping it moves the Hub without a reload.
+  Hidden, not removed: the endpoints, the background scan and the saved
+  per-manager settings are untouched and still run for accounts that have them
+  on. The multi-move start/sit note drops its reference to the "Set optimal
+  lineup" button when the button is not there.
 
 - **Looking ahead.** The Hub's hero carries a "Week N >" control, and pressing
   it swaps the main column for that week: the line (optimal-vs-optimal, said out

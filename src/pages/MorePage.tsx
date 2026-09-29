@@ -21,6 +21,7 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
 
 import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { isAgreementAdmin } from '../utils/admin';
+import { setAutopilotEnabled, useAutopilotEnabled } from '../utils/autopilotPreference';
 import { useTour } from '../contexts/TourContext';
 
 declare const __BUILD_STAMP__: string | undefined;
@@ -34,6 +35,7 @@ export function MorePage() {
   const navigate = useNavigate();
   const { start: startTour } = useTour();
   const playerVotesEnabled = usePlayerVotesEnabled();
+  const autopilotOn = useAutopilotEnabled();
   /* The header's ADMIN pill and this link disagreed, so an account could be
      shown ADMIN in the chrome and still have no way to reach the projections
      import — the one screen the season actually depends on. One check now, the
@@ -229,6 +231,31 @@ export function MorePage() {
       ))}
       <section className="more-page__section">
         <p className="more-page__eyebrow">Labs</p>
+        {/* Admin only, and off until it is switched on. The autopilots act on a
+            real league on somebody's behalf, so they are not something to leave
+            sitting on the Hub: being allowed to see them is not the same as
+            wanting them there every time the page opens. Per device, because
+            the machine you demo on is not the machine you develop on. */}
+        {isOwner ? (
+          <div className="more-page__card more-page__labs-card">
+            <div>
+              <h3 className="more-page__card-title">Autopilot tools</h3>
+              <p className="more-page__card-body">
+                {autopilotOn
+                  ? 'Showing on the Hub: set my ESPN lineup, and the trade sender.'
+                  : 'Hidden. Turn on to put the ESPN lineup and trade-sender panels back on the Hub.'}
+              </p>
+            </div>
+            <button
+              aria-pressed={autopilotOn}
+              className="more-page__format"
+              onClick={() => setAutopilotEnabled(!autopilotOn)}
+              type="button"
+            >
+              {autopilotOn ? 'On' : 'Off'}
+            </button>
+          </div>
+        ) : null}
         {playerVotesEnabled ? (
           <Link className="more-page__card" to="/rankings?labs=player-votes">
             <div>
