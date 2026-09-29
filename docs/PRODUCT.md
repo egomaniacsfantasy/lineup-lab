@@ -106,9 +106,27 @@ lineup change, plus a scheduled repricing every six hours whether or not anyone
 is looking. Line history accumulates, so the charts gain points over time and
 "opened at / now" is a real comparison rather than a decoration.
 
-*Backing:* `server/scheduler.js` (6-hour cycle, force-appends a timestamped
-snapshot per registered league), `server/engine/lineStore.js`, and an
-`inputsHash` on every line record so movement is diffable.
+**What gets written down, and for how long.** Warming and stamping are separate
+jobs. Warming keeps the served price fresh for a league nobody is looking at:
+one pass a minute after boot, then every six hours, writing nothing. Stamping
+is the history, and it records the moments worth recording - once a day at 4am
+ET (after Monday night and after waivers, so Tuesday's point is also the week's
+closing line), every half hour while games are being played, and once at the
+very beginning. Retention matches what the UI offers: a full season, by time
+rather than by count, and the opening entry is never trimmed because
+"opened at" and Your Ticket's multiple are measured from it.
+
+It used to keep the last 200 entries and stamp one a minute after every boot.
+Deploys run several times a day, so restarts wrote most of the history: measured
+on production, 200 entries exactly, spanning 15.5 days, every one written by the
+scheduler, median gap 28 minutes against a six-hour cadence. The futures chart
+offers Week, Month and Season and the Time Machine offers any prior week, so the
+app was offering ranges it could not fill - Month showed eleven days - and
+"opened at" quietly meant "the oldest snapshot still on disk".
+
+*Backing:* `server/scheduler.js` (`stampReason`, and warming that writes
+nothing), `server/engine/lineStore.js` (`retain`), and an `inputsHash` on every
+line record so movement is diffable.
 
 ### 2.5 It says "I don't know"
 
@@ -285,9 +303,14 @@ modules, top to bottom:
 showing, per team, where their playoff odds land if they win versus if they
 lose. Then a matchup card per game carrying spread, total and moneyline on both
 sides, with movement arrows. A "week at a glance" summary (biggest favourite,
-closest line, highest total, biggest move). One game per week carries a
-**Game of the Week** ribbon — by definition, the game producing the largest
-league-wide change in championship and playoff odds.
+closest line, highest total, biggest move). The cards stay live; the glance
+is a summary of the market, so once a game kicks off it reads that game at
+its closing line, the last snapshot recorded before anyone in it kicked off.
+Its header says which lines it is reading ("pregame lines" once the week has
+started, "closing lines" once every game has), and a started game with no
+close on record sits out rather than being read live. One game per week
+carries a **Game of the Week** ribbon — by definition, the game producing the
+largest league-wide change in championship and playoff odds.
 
 Pressing any card **opens that game** as a dialog over a blurred board: the
 Hub's own head-to-head card, then the Hub's own lineup board with both
@@ -854,7 +877,7 @@ and adding before it is used.
 | Claim | Verified as |
 |---|---|
 | "Priced like a sportsbook" — moneyline, spread and total on every matchup | Yes, League → This week |
-| "Championship odds for every team, moving all week" | Yes, Futures view plus 6-hourly repricing |
+| "Championship odds for every team, moving all week" | Yes, Futures view plus daily and in-game stamping |
 | "10,000 simulations per matchup" | Yes, `MATCHUP_SIMS` |
 | "10,000 season simulations" | Yes, `SEASON_SIMS` |
 | "Works with Sleeper and ESPN" | Yes, both providers implemented |
@@ -1063,6 +1086,28 @@ and adding before it is used.
     two states of one page load against each other, which is the only way
     either fault is visible: both states look fine on their own.
 
+25. **The week at a glance read Monday night off the scoreboard.** Reported
+    midway through Monday Night Football: the biggest favourite was a team
+    that had already won, printed as a check, the closest line was -313, and
+    the biggest move was 59.9pp. All four cards were reductions over the live
+    board, and after kickoff a game's price is the engine reading the score.
+    Static pricing pins every player who has played to his real points
+    (`pinLeagueActuals`), the live overlay does the same by the play, and the
+    six-hour scheduler keeps stamping those prices into line history, so the
+    served line and the latest snapshot the move was measured to both had
+    Sunday in them. The glance now reads each game at its own close: the
+    last snapshot strictly before the first kickoff among both lineups'
+    starters, with kickoff times from `/api/nfl/schedule` and the scoreboard
+    and points as a backstop. A game that has not started still reads the
+    board, so its move is still the card's own arrow. The rule is
+    `src/utils/weekGlance.ts`; `test/weekGlance.test.mjs` fails on reading a
+    started game live, on a close stamped at the kickoff itself, on a move
+    measured past kickoff, on seating a closed game by the live leader, on a
+    missing close falling back to the live line, and on the League page no
+    longer passing its kickoffs. `test/weekGlanceKickoff.test.mjs` draws that
+    Monday at `/design/board-row/kickoff` and fails when the kickoffs do not
+    reach the rule.
+
 ## Still open
 
 15. **`server/engine/leverage.js` is not wired to a route.** The file documents
@@ -1123,3 +1168,19 @@ and adding before it is used.
     league they did not type.
 23. **Full dynasty support.** Pick and future-season valuation is the missing
     piece, and until it exists the note in 13 is the honest position.
+24. **Everything else that reads a week's close still reads the scoreboard.**
+    Found while fixing 25. `closingLine` in `src/utils/vsBook.ts` is the last
+    snapshot of the week, and every snapshot after a game kicks off has its
+    played points pinned in. So the record against the book grades against a
+    spread already close to the final margin, the Book's "longest price to
+    come in" and "worst beat" read closing probabilities that are mostly 0 or
+    100 by then, and the Time Machine's matchup lines are post-game. (Its
+    futures, and the ticket, are right to read the end of the week: results
+    are supposed to move a title price.) On the board itself, the card arrows
+    and the rail's line-movement chart also run on past kickoff; the kickoff
+    fixture shows a decided game at ▲41.9. The fix is the rule the glance now
+    uses, and `/api/nfl/schedule` serves past weeks' kickoffs. Separately,
+    found by reading and not yet checked against a real week's grades: the
+    engine stores a favourite's spread as positive (`a.mean - b.mean`), while
+    `covered()` and `test/vsBook.test.mjs` assume the board's sign, negative
+    for the favourite, which would grade every game the wrong way round.

@@ -15,7 +15,24 @@ const DIR = path.join(
   'lines',
 );
 
-const MAX_ENTRIES = 200;
+/**
+ * How long a league's line history is kept.
+ *
+ * It used to be "the last 200 entries", full stop, which was a promise the app
+ * could not keep. The futures chart offers Week, Month and Season, and the Time
+ * Machine offers any prior week; at the rate entries were being written, 200 of
+ * them was eleven days. So Month showed eleven days, Season showed eleven days,
+ * and "opened at" quietly meant "the oldest snapshot that survived" rather than
+ * where the book actually opened.
+ *
+ * Retention now matches what the UI offers: a full season, by time rather than
+ * by count. A season is about 480 entries at the cadence in scheduler.js and
+ * roughly 1.4 KB each, so under a megabyte per league per season against a 1 GB
+ * disk. The count cap that remains is a safety net for a pathological writer,
+ * set far above a real season, and it never trims the opener.
+ */
+const RETAIN_MS = 400 * 24 * 60 * 60_000;
+const MAX_ENTRIES = 20_000;
 
 function fileFor(leagueId) {
   return path.join(DIR, `${leagueId}.json`);
@@ -117,13 +134,29 @@ export function recordPricing(leagueId, pricing, { force = false } = {}) {
   });
 
   fs.mkdirSync(DIR, { recursive: true });
-  fs.writeFileSync(
-    fileFor(leagueId),
-    JSON.stringify(history.slice(-MAX_ENTRIES)),
-  );
+  fs.writeFileSync(fileFor(leagueId), JSON.stringify(retain(history)));
   // TODO(notifications): this is where a line-movement event would be
   // emitted to the push-notification engine.
   return true;
+}
+
+/**
+ * Drop what is older than a season, and never drop the opening entry.
+ *
+ * The opener is what "opened at / now" and Your Ticket's multiple are measured
+ * from. Trimmed away, those numbers do not go missing - they silently start
+ * quoting a later snapshot as the open, which is worse, because it still reads
+ * like a fact.
+ */
+export function retain(history, now = Date.now()) {
+  if (history.length === 0) return history;
+  const cutoff = now - RETAIN_MS;
+  const kept = history.filter((entry) => (entry.computedAt ?? 0) >= cutoff);
+  const opener = history[0];
+  const withOpener = kept[0] === opener ? kept : [opener, ...kept];
+  return withOpener.length > MAX_ENTRIES
+    ? [opener, ...withOpener.slice(-(MAX_ENTRIES - 1))]
+    : withOpener;
 }
 
 /**
