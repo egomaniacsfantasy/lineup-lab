@@ -107,6 +107,16 @@ function parseOverlayHeader(req) {
   }
 }
 
+/* A trade is one fact about the league: both managers must read the SAME numbers.
+   Every trade endpoint therefore prices on the shared house projections and never on
+   the viewer's personal "My board" overlay. The overlay used to ride along on these
+   requests, so the same deal was priced on each manager's own lines (and, since the
+   overlay is part of the sim seed, on a different random stream): Breece Hall for
+   George Kittle read +0.1 / +2.3 on one screen and +0.9 / +0.7 on the other.
+   The background trade sender already priced on the house line, so this also makes
+   the analyzer, the finder and the sender agree. test/tradeSymmetry.test.mjs. */
+const TRADE_OVERLAY = null;
+
 function overlayHash(overlay) {
   if (!overlay) return 'base';
   return crypto.createHash('sha1').update(JSON.stringify(overlay)).digest('hex').slice(0, 12);
@@ -1257,7 +1267,7 @@ apiRouter.post('/league/:leagueId/trade', async (req, res, next) => {
     const provider = getProvider(req);
     const { leagueId } = req.params;
     const { userId, partnerRosterId, give = [], get = [], traits = {} } = req.body ?? {};
-    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
+    const overlay = TRADE_OVERLAY;
 
     // Same context the hub's odds are priced on (live final-game locks, fresh
     // injury flags, schedule, projections).
@@ -2269,7 +2279,7 @@ apiRouter.post('/league/:leagueId/trade-analyze', async (req, res, next) => {
     const provider = getProvider(req);
     const { leagueId } = req.params;
     const { userId, partnerRosterId, give = [], get = [], userDrops = null } = req.body ?? {};
-    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
+    const overlay = TRADE_OVERLAY;
 
     // Same context the hub's odds are priced on (live final-game locks, fresh
     // injury flags, schedule, projections), so a trade's "before" == the hub.
@@ -2286,7 +2296,7 @@ apiRouter.post('/league/:leagueId/trade-counter', async (req, res, next) => {
     const provider = getProvider(req);
     const { leagueId } = req.params;
     const { userId, partnerRosterId, give = [], get = [], userDrops = null, target = 0 } = req.body ?? {};
-    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
+    const overlay = TRADE_OVERLAY;
 
     // Same context the hub's odds are priced on (live final-game locks, fresh
     // injury flags, schedule, projections), so a trade's "before" == the hub.
@@ -2315,7 +2325,7 @@ apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => 
       : null;
     const givePlayerIds = Array.isArray(req.body?.givePlayerIds) ? req.body.givePlayerIds.map(String) : [];
     const getPlayerIds = Array.isArray(req.body?.getPlayerIds) ? req.body.getPlayerIds.map(String) : [];
-    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
+    const overlay = TRADE_OVERLAY;
 
     // Same context the hub's odds are priced on (live final-game locks, fresh
     // injury flags, schedule, projections), so a trade's "before" == the hub.
@@ -2413,7 +2423,7 @@ apiRouter.post('/league/:leagueId/trade-rationale', async (req, res, next) => {
     const provider = getProvider(req);
     const { leagueId } = req.params;
     const { userId, partnerRosterId, give = [], get = [], traits = {}, userDrops = null } = req.body ?? {};
-    const overlay = parseOverlayHeader(req) ?? req.body?.overlay ?? null;
+    const overlay = TRADE_OVERLAY;
 
     // Same context the hub's odds are priced on (live final-game locks, fresh
     // injury flags, schedule, projections).
