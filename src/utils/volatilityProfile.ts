@@ -1,5 +1,4 @@
 import type { Player, ScoringFormat } from '../types';
-import { tiltFromConsensus, adjustFP, scaleBound, type TiltScoring } from '../services/agreementTilt';
 
 export const MATCHUP_STATE_THRESHOLDS = {
   heavyUnderdog: 35,
@@ -32,8 +31,6 @@ type ProjectionRow = {
   name: string;
   team: string | null;
   weekly: Record<string, unknown>[];
-  /** Consensus agreement across all voters, from /api/projections. */
-  consensus?: { avg?: number | null } | null;
 };
 
 export interface VolatilityProjectionSet {
@@ -124,13 +121,10 @@ function readWeeklyProfile(
     return EMPTY_PROFILE;
   }
 
-  // Apply the SAME consensus tilt the Projections page shows, so the compare
-  // range = the agreement-adjusted mean + floor/ceiling for this exact week.
-  const suf = scoringSuffix(row.position, scoringFormat) as TiltScoring;
-  const delta = tiltFromConsensus(row.consensus?.avg ?? null);
-  const mean = adjustFP(row.position, rawMean, weekly, suf, 'weekly', delta) ?? rawMean;
-  const floor = scaleBound(rawFloor, rawMean, mean) ?? rawFloor;
-  const ceiling = scaleBound(rawCeiling, rawMean, mean) ?? rawCeiling;
+  // The compare range is the model's own mean + floor/ceiling for this exact week.
+  const mean = rawMean;
+  const floor = rawFloor;
+  const ceiling = rawCeiling;
 
   return {
     floor,

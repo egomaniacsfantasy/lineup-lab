@@ -89,6 +89,10 @@ export function loadProjections({ force = false } = {}) {
 
     let n = 0;
     for (const s of seasonRows) {
+      // The workbooks still carry the old per-person agreement-score columns; they are
+      // not part of the model and must never reach the site (removed 2026-10-01).
+      delete s.vlahakis;
+      delete s.williams;
       const team = teamOf(s);
       const name = cfg.nameKey === 'team' ? (team ?? '') : String(s[cfg.nameKey] ?? '').trim();
       if (!name) continue;

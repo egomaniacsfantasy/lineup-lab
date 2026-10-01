@@ -510,7 +510,7 @@ export interface BoardRow {
   derived: boolean;
 }
 
-/** The projection board: agreement-weighted, scoring-specific season totals for
+/** The projection board: the model's scoring-specific season totals for
  *  the value-over-replacement board. Pass the league's scoring so PPR / half /
  *  standard return the right numbers. */
 export interface PlayoffSettings {
@@ -540,7 +540,7 @@ export function savePlayoffSettings(
 export function fetchBoard(limit = 800, scoring?: string, modelOnly = false) {
   const scoringQ = scoring ? `&scoring=${encodeURIComponent(scoring)}` : '';
   const modelQ = modelOnly ? '&model=1' : '';
-  return get<{ available: boolean; version: string; source: string; consensusEnabled?: boolean; rankings: BoardRow[] }>(
+  return get<{ available: boolean; version: string; source: string; rankings: BoardRow[] }>(
     `/api/rankings?limit=${limit}${scoringQ}${modelQ}`,
   );
 }

@@ -1,6 +1,5 @@
 import {
   Fragment,
-  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -9,21 +8,10 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
-import { RankingMechanic } from '../components/rankings/RankingMechanic';
 import { PlayerVotePrompt } from '../components/votes/PlayerVotePrompt';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../services/supabase';
-import { isAgreementAdmin } from '../utils/admin';
 import { toPlayer } from '../adapters/connectedLeague';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import { apiUrl, fetchBoard, type BoardRow } from '../services/leagueApi';
-import {
-  tiltFromConsensus,
-  adjustFP,
-  adjustStat,
-  scaleBound,
-  type TiltScoring,
-} from '../services/agreementTilt';
 import type { Player } from '../types';
 import { computeLegacyAdjustedValues } from './legacyAdjustedValue';
 import './MyBoardPage.css';
@@ -43,9 +31,6 @@ interface ProjectionPlayer {
   ceiling: number | null;
   season: Row;
   weekly: Row[];
-  // Agreement consensus across the admin raters (avg 0-100, n voters). Drives the
-  // Consensus-view tilt; null when nobody has rated this player.
-  consensus?: { avg: number; n: number } | null;
 }
 
 interface ProjectionDataset {
@@ -63,23 +48,6 @@ interface MergedBoardPlayer {
   // Value rescaled 0-100 across the whole projected population (100 = best value
   // in the league, 0 = worst).
   scaledValue: number;
-  // Consensus agreement tilt applied to this player's numbers.
-  delta: number;
-}
-
-/** Map the league scoring family to the tilt module's reception-weight suffix. */
-function tiltSuffix(scoringFamily: string | undefined): TiltScoring {
-  if (scoringFamily === 'half-ppr') return '_half';
-  if (scoringFamily === 'standard') return '_nonppr';
-  return '';
-}
-
-/** A displayed stat, tilted by the player's consensus delta. Returns the value
- *  unchanged when it can't be tilted (delta 0 / missing), so formatting is
- *  identical to the untilted path. */
-function tiltStat(pos: string, key: string, value: unknown, delta: number): unknown {
-  if (!delta || value == null || !Number.isFinite(Number(value))) return value;
-  return adjustStat(pos, key, value, delta);
 }
 
 interface StatColumn {
@@ -94,11 +62,6 @@ const VIEW_OPTIONS: Array<{ key: BoardView; label: string }> = [
   { key: 'board', label: 'Cards' },
   { key: 'sheet', label: 'Table' },
 ];
-
-// Admin-only lens: Consensus = agreement-weighted (what everyone sees / prices);
-// Model = the pure model, no admin tilt. Every number (value, points, floor,
-// ceiling, stats, week-by-week) follows the choice.
-type BoardValueView = 'consensus' | 'model';
 
 /* Board order is the default and is the board's own ranking. The other
    options are user-initiated lenses on columns already displayed; none of
@@ -191,20 +154,6 @@ function statValue(value: unknown, digits = 2) {
  *  that the raw weekly rows don't. */
 function weeklyStatKey(seasonKey: string): string {
   return seasonKey.replace(/_adj$/, '');
-}
-
-function clampRating(value: number) {
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function ratingSummary(value: number) {
-  if (value > 50) return `Agreement ${value} · lifts him vs The Gods' number.`;
-  if (value < 50) return `Agreement ${value} · pushes him down vs The Gods' number.`;
-  return `Agreement ${value} · aligned with The Gods' number.`;
-}
-
-function saveConfirmation(value: number) {
-  return `Saved ${value}. The board reprices in a few seconds.`;
 }
 
 function scoringLabel(scoring: string | undefined) {
@@ -307,33 +256,27 @@ function WeeklyProjectionStrip({
   scoring,
   currentWeek,
   playoffWeekStart,
-  delta = 0,
 }: {
   projection: ProjectionPlayer | null;
   fallbackWeekly: Record<string, number> | null | undefined;
   scoring: string | undefined;
   currentWeek: number | null;
   playoffWeekStart: number | null;
-  delta?: number;
 }) {
   const [openWeek, setOpenWeek] = useState<number | null>(null);
   const fields = WEEKLY_SCORING_FIELDS[scoring ?? 'ppr'] ?? WEEKLY_SCORING_FIELDS.ppr;
-  const suf = tiltSuffix(scoring);
   const pos = projection?.position ?? 'RB';
 
   const byWeek = new Map<number, WeekColumn>();
   for (const row of projection?.weekly ?? []) {
     const week = num(row.week);
     if (week == null) continue;
-    // Consensus tilt lands on the week's stats and re-scores the weekly point;
-    // floor/ceiling scale by the same proportion. delta 0 = raw model.
-    const rawPts = num(row[fields.pts]);
-    const pts = delta ? num(adjustFP(pos, rawPts, row, suf, 'weekly', delta)) : rawPts;
+    const pts = num(row[fields.pts]);
     byWeek.set(week, {
       week,
       pts,
-      floor: delta ? num(scaleBound(num(row[fields.floor]), rawPts, pts)) : num(row[fields.floor]),
-      ceiling: delta ? num(scaleBound(num(row[fields.ceiling]), rawPts, pts)) : num(row[fields.ceiling]),
+      floor: num(row[fields.floor]),
+      ceiling: num(row[fields.ceiling]),
       opponent: typeof row.opponent === 'string' ? row.opponent : null,
       home: row.game_location == null ? null : Number(row.game_location) === 1,
       row,
@@ -448,7 +391,7 @@ function WeeklyProjectionStrip({
                 return (
                   <div className="board-card__pill" key={stat.key} role="listitem">
                     <span className="board-card__pill-label">{stat.label}</span>
-                    <span className="board-card__pill-value">{statValue(tiltStat(pos, wkKey, raw, delta))}</span>
+                    <span className="board-card__pill-value">{statValue(raw)}</span>
                   </div>
                 );
               })}
@@ -490,25 +433,8 @@ export function MyBoardPage() {
   const [projectionData, setProjectionData] = useState<ProjectionDataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
+  const [reloadToken] = useState(0);
   const [voteOpen, setVoteOpen] = useState(false);
-  const { user } = useAuth();
-  const userId = user?.id ?? null;
-  const isAdmin = isAgreementAdmin(user?.email);
-  // Whether the agreement tilt is live server-side (mirrors ODDS_CONSENSUS, from the board
-  // payload). Assume OFF until it loads so non-admins default to the pure model (the book's mode).
-  const [consensusEnabled, setConsensusEnabled] = useState(false);
-  // Admins can flip Consensus/Model; non-admins follow the server flag: Consensus only when it's on.
-  const [boardView, setBoardView] = useState<BoardValueView>('consensus');
-  const effectiveView: BoardValueView = isAdmin
-    ? boardView
-    : consensusEnabled
-      ? 'consensus'
-      : 'model';
-  const [agreeSaved, setAgreeSaved] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<Record<string, 'saving' | 'ok' | 'err'>>({});
-  const [saveMessages, setSaveMessages] = useState<Record<string, string>>({});
-  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const activeView = parseView(searchParams.get('view'));
   const activePosition = parsePosition(searchParams.get('pos'));
   const activeSort = parseSort(searchParams.get('sort'));
@@ -516,7 +442,6 @@ export function MyBoardPage() {
   const [searchDraft, setSearchDraft] = useState(query);
   const deferredQuery = useDeferredValue(searchDraft.trim().toLowerCase());
   const scoring = bootstrap?.league.scoringFamily;
-  const tiltScoring = tiltSuffix(scoring);
   const numTeams = bootstrap?.league.totalTeams ?? 12;
   const sheetStatColumns =
     activePosition === 'ALL' ? [] : POSITION_STAT_COLUMNS[activePosition as Position];
@@ -531,7 +456,7 @@ export function MyBoardPage() {
   useEffect(() => {
     let alive = true;
     setError(null);
-    fetchBoard(800, scoring, true) // model-only: show pure combined-file numbers, no agreement tilt
+    fetchBoard(800, scoring, true)
       .then((payload) => {
         if (!alive) return;
         if (!payload.available) {
@@ -544,7 +469,6 @@ export function MyBoardPage() {
           return;
         }
         setUnavailable(false);
-        setConsensusEnabled(payload.consensusEnabled ?? false);
         setBoard(payload.rankings);
       })
       .catch((err) => {
@@ -573,68 +497,6 @@ export function MyBoardPage() {
     };
   }, [reloadToken]);
 
-  // Agreement edits have no realtime push: the editor's own tab updates instantly
-  // on save (reloadToken), but other open boards would sit stale until reload. Poll
-  // the (light) full-consensus map every 15s and merge it in, so an admin's edits
-  // converge onto EVERY open board within ~15s. Also cures the 2s server cache
-  // masking rapid successive edits on the editor's own tab.
-  useEffect(() => {
-    let alive = true;
-    const pull = () => {
-      fetch(apiUrl('/api/projections/consensus?full=1'))
-        .then((r) => (r.ok ? r.json() : null))
-        .then((payload: { consensus?: Record<string, Record<string, { avg: number; n: number }>> } | null) => {
-          if (!alive || !payload?.consensus) return;
-          const map = payload.consensus;
-          setProjectionData((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  players: prev.players.map((p) => ({
-                    ...p,
-                    consensus: map[p.position]?.[p.name] ?? null,
-                  })),
-                }
-              : prev,
-          );
-        })
-        .catch(() => {});
-    };
-    const t = window.setInterval(pull, 15_000);
-    return () => {
-      alive = false;
-      window.clearInterval(t);
-    };
-  }, []);
-
-  /* Only admins edit agreement, so only admins need their saved values. The
-     server averages every collaborator's row per player; this shows yours. */
-  useEffect(() => {
-    if (!isAdmin || !userId) {
-      setAgreeSaved({});
-      return undefined;
-    }
-    let alive = true;
-    supabase
-      .from('olympus_agreement')
-      .select('position, player, score')
-      .eq('user_id', userId)
-      .then(({ data, error: loadError }) => {
-        if (!alive || loadError || !data || !board) return;
-        const byIdentity = new Map<string, string>();
-        for (const row of data) byIdentity.set(`${row.position}::${row.player}`, String(row.score));
-        const next: Record<string, string> = {};
-        for (const row of board) {
-          const hit = byIdentity.get(`${row.position}::${row.name}`);
-          if (hit != null) next[row.playerId] = hit;
-        }
-        setAgreeSaved(next);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [board, isAdmin, userId]);
-
   const projectionById = useMemo(
     () =>
       new Map(
@@ -654,55 +516,22 @@ export function MyBoardPage() {
     [projectionData],
   );
 
-  // Per-player consensus tilt: tiltFromConsensus(avg), where avg is the admin
-  // agreement raters' score (via /api/projections). The board always shows the
-  // agreement-weighted numbers the book prices futures/matchups/trades on.
-  const deltaForRow = useCallback(
-    (row: BoardRow): { delta: number; projection: ProjectionPlayer | null } => {
+  const legacyValues = useMemo(
+    () =>
+      board?.length
+        ? computeLegacyAdjustedValues(board, numTeams, bootstrap?.league.rosterPositions)
+        : new Map<string, { adjustedValue: number; vor: number }>(),
+    [board, bootstrap?.league.rosterPositions, numTeams],
+  );
+
+  const mergedRows = useMemo(() => {
+    const rows = (board ?? []).map((row) => {
       const projection =
         projectionById.get(row.playerId)
         ?? projectionByIdentity.get(`${row.position}::${row.name}`)
         ?? null;
-      const delta =
-        effectiveView === 'model' ? 0 : tiltFromConsensus(projection?.consensus?.avg ?? null);
-      return { delta, projection };
-    },
-    [projectionById, projectionByIdentity, effectiveView],
-  );
-
-  // The board is fetched as raw model (model=1). In Consensus view we apply the
-  // SAME agreement tilt the pricing engine uses — stat-by-stat, cascaded into the
-  // season point/floor/ceiling — so the board's Consensus numbers match what
-  // simulates futures/matchups/trades. VOR/value then derive from the tilted set.
-  const tiltedBoard = useMemo(() => {
-    if (!board) return [] as BoardRow[];
-    return board.map((row) => {
-      const { delta, projection } = deltaForRow(row);
-      if (!delta || !projection) return row;
-      const total = adjustFP(row.position, row.seasonTotal, projection.season ?? {}, tiltScoring, 'season', delta);
-      if (total == null || !Number.isFinite(total)) return row;
-      return {
-        ...row,
-        seasonTotal: total,
-        floor: scaleBound(row.floor, row.seasonTotal, total) ?? row.floor,
-        ceiling: scaleBound(row.ceiling, row.seasonTotal, total) ?? row.ceiling,
-      };
-    });
-  }, [board, deltaForRow, tiltScoring]);
-
-  const legacyValues = useMemo(
-    () =>
-      tiltedBoard.length
-        ? computeLegacyAdjustedValues(tiltedBoard, numTeams, bootstrap?.league.rosterPositions)
-        : new Map<string, { adjustedValue: number; vor: number }>(),
-    [tiltedBoard, bootstrap?.league.rosterPositions, numTeams],
-  );
-
-  const mergedRows = useMemo(() => {
-    const rows = tiltedBoard.map((row) => {
-      const { delta, projection } = deltaForRow(row);
       const legacy = legacyValues.get(row.playerId) ?? { adjustedValue: 0, vor: 0 };
-      return { board: row, projection, adjustedValue: legacy.adjustedValue, vor: legacy.vor, delta };
+      return { board: row, projection, adjustedValue: legacy.adjustedValue, vor: legacy.vor };
     });
     // Rescale value 0-100 across the ENTIRE projected population: 100 = the best
     // value in the league, 0 = the worst. Monotonic with adjustedValue, so the
@@ -718,7 +547,7 @@ export function MyBoardPage() {
       ...r,
       scaledValue: span > 0 ? Number((((r.adjustedValue - min) / span) * 100).toFixed(2)) : 100,
     } satisfies MergedBoardPlayer));
-  }, [tiltedBoard, legacyValues, deltaForRow]);
+  }, [board, legacyValues, projectionById, projectionByIdentity]);
 
   const visibleRows = useMemo(() => {
     const filtered = mergedRows.filter((row) => {
@@ -774,62 +603,6 @@ export function MyBoardPage() {
     }, { replace: true });
   }
 
-  function readRating(playerId: string) {
-    return agreeSaved[playerId] ?? '';
-  }
-
-  /* Writes this admin's agreement score, then pings the server so the
-     agreement-weighted board and pricing recompute in seconds. The value is
-     stored and averaged server side; nothing is computed here. */
-  async function commitAgreementValue(player: MergedBoardPlayer, nextValue: string) {
-    if (!isAdmin) return;
-    const id = player.board.playerId;
-    const normalized = String(clampRating(Number(nextValue)));
-    if (readRating(id) === normalized) return;
-
-    setSaving((current) => ({ ...current, [id]: 'saving' }));
-    setSaveErrors((current) => {
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
-
-    if (!userId) {
-      setSaving((current) => ({ ...current, [id]: 'err' }));
-      setSaveErrors((current) => ({ ...current, [id]: 'Log in to save agreement.' }));
-      return;
-    }
-
-    const { error: writeError } = await supabase.from('olympus_agreement').upsert(
-      {
-        user_id: userId,
-        position: player.board.position,
-        player: player.board.name,
-        score: Number(normalized),
-      },
-      { onConflict: 'user_id,position,player' },
-    );
-
-    if (writeError) {
-      setSaving((current) => ({ ...current, [id]: 'err' }));
-      setSaveErrors((current) => ({ ...current, [id]: `Could not save: ${writeError.message}` }));
-      return;
-    }
-
-    setAgreeSaved((current) => ({ ...current, [id]: normalized }));
-    setSaving((current) => ({ ...current, [id]: 'ok' }));
-    setSaveMessages((current) => ({ ...current, [id]: saveConfirmation(Number(normalized)) }));
-    void fetch(apiUrl('/api/projections/refresh-adjusted'), { method: 'POST' }).catch(() => null);
-    setReloadToken((current) => current + 1);
-    window.setTimeout(() => {
-      setSaveMessages((current) => {
-        const next = { ...current };
-        delete next[id];
-        return next;
-      });
-    }, 2400);
-  }
-
   function toggleOpenPlayer(playerId: string) {
     setOpenPlayerId((current) => (current === playerId ? null : playerId));
   }
@@ -851,7 +624,7 @@ export function MyBoardPage() {
             Your league is still syncing, so the Board is waiting on league context before it can load.
           </SeasonalNotice>
         ) : null}
-        {bootstrap ? <p className="board-page__state">Loading Board…</p> : <RankingMechanic />}
+        {bootstrap ? <p className="board-page__state">Loading Board…</p> : null}
       </div>
     );
   }
@@ -878,35 +651,6 @@ export function MyBoardPage() {
               : `Updated ${formatUpdatedDate(projectionData.updatedAt)} · ${board.length} players`}
           </p>
         </div>
-        {isAdmin ? (
-          <div className="board-page__view-toggle" role="tablist" aria-label="Projection source (admin)">
-            {([
-              { key: 'consensus', label: 'Consensus' },
-              { key: 'model', label: 'Model' },
-            ] as Array<{ key: BoardValueView; label: string }>).map((option) => (
-              <button
-                aria-selected={boardView === option.key}
-                className={[
-                  'board-page__view-pill',
-                  boardView === option.key ? 'board-page__view-pill--active' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                key={option.key}
-                onClick={() => setBoardView(option.key)}
-                role="tab"
-                title={
-                  option.key === 'consensus'
-                    ? 'The numbers everyone sees, with admin edits applied. These are what price your league.'
-                    : 'The raw projections, before any admin edits.'
-                }
-                type="button"
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
         <div className="board-page__view-toggle" role="tablist" aria-label="Row density">
           {VIEW_OPTIONS.map((option) => (
             <button
@@ -1000,13 +744,6 @@ export function MyBoardPage() {
                 >
                   {isOpen ? (
                     <BoardPlayerCard
-                      admin={isAdmin ? {
-                        rating: readRating(player.board.playerId),
-                        savingState: saving[player.board.playerId],
-                        saveMessage: saveMessages[player.board.playerId] ?? '',
-                        saveError: saveErrors[player.board.playerId] ?? '',
-                        onCommit: (value: number) => void commitAgreementValue(player, String(value)),
-                      } : null}
                       currentWeek={bootstrap?.week ?? null}
                       playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
                       scoring={scoring}
@@ -1141,7 +878,7 @@ export function MyBoardPage() {
                         <td className="board-page__td board-page__td--num">{fmtNumber(player.board.ceiling)}</td>
                         {sheetStatColumns.map((column) => (
                           <td className="board-page__td board-page__td--num" key={column.key}>
-                            {statValue(tiltStat(player.board.position, column.key, player.projection?.season[column.key], player.delta))}
+                            {statValue(player.projection?.season[column.key])}
                           </td>
                         ))}
                       </tr>
@@ -1152,13 +889,6 @@ export function MyBoardPage() {
                             colSpan={columnCountForSheet(sheetStatColumns.length)}
                           >
                             <BoardPlayerCard
-                              admin={isAdmin ? {
-                                rating: readRating(player.board.playerId),
-                                savingState: saving[player.board.playerId],
-                                saveMessage: saveMessages[player.board.playerId] ?? '',
-                                saveError: saveErrors[player.board.playerId] ?? '',
-                                onCommit: (value: number) => void commitAgreementValue(player, String(value)),
-                              } : null}
                               currentWeek={bootstrap?.week ?? null}
                               playoffWeekStart={bootstrap?.league.playoffWeekStart ?? null}
                               scoring={scoring}
@@ -1194,73 +924,6 @@ export function MyBoardPage() {
   );
 }
 
-/** Agreement is the collaborators' dial on Franco's number: 50 is aligned,
- *  higher lifts him, lower pushes him down. The server averages every
- *  collaborator's value and reweights the board from it. */
-function AgreementEditor({
-  rating,
-  savingState,
-  saveMessage,
-  saveError,
-  onCommit,
-}: {
-  rating: string;
-  savingState: 'saving' | 'ok' | 'err' | undefined;
-  saveMessage: string;
-  saveError: string;
-  onCommit: (value: number) => void;
-}) {
-  const saved = rating === '' ? 50 : clampRating(Number(rating));
-  const [draft, setDraft] = useState(saved);
-  useEffect(() => {
-    if (savingState === 'saving') return;
-    setDraft(saved);
-  }, [saved, savingState]);
-
-  return (
-    <div className="board-card__rating">
-      <div className="board-card__rating-head">
-        <div>
-          <p className="board-card__rating-label">Agreement · admin</p>
-          <p className="board-card__rating-copy">{ratingSummary(draft)}</p>
-        </div>
-        <span className="board-card__rating-chip">{draft}</span>
-      </div>
-      <div className="board-card__slider-wrap">
-        <span className="board-card__slider-end">Much lower</span>
-        <input
-          aria-label="Agreement score"
-          className="board-card__slider"
-          max={100}
-          min={0}
-          onChange={(event) => setDraft(clampRating(Number(event.currentTarget.value)))}
-          onMouseUp={(event) => onCommit(clampRating(Number(event.currentTarget.value)))}
-          onKeyUp={(event) => onCommit(clampRating(Number(event.currentTarget.value)))}
-          onTouchEnd={(event) => onCommit(clampRating(Number(event.currentTarget.value)))}
-          type="range"
-          value={draft}
-        />
-        <span className="board-card__slider-end">Much higher</span>
-      </div>
-      <div className="board-card__rating-actions">
-        <button
-          className="board-card__rating-reset"
-          onClick={() => {
-            setDraft(50);
-            onCommit(50);
-          }}
-          type="button"
-        >
-          Reset to 50
-        </button>
-        {savingState === 'saving' ? <span className="board-card__save-note">Saving…</span> : null}
-        {saveMessage ? <span className="board-card__save-note board-card__save-note--ok">{saveMessage}</span> : null}
-        {saveError ? <span className="board-card__save-note board-card__save-note--error">{saveError}</span> : null}
-      </div>
-    </div>
-  );
-}
-
 export function BoardPlayerCard({
   player,
   currentWeek,
@@ -1269,7 +932,6 @@ export function BoardPlayerCard({
   mode,
   rank,
   onClose,
-  admin,
 }: {
   player: MergedBoardPlayer;
   currentWeek: number | null;
@@ -1278,13 +940,6 @@ export function BoardPlayerCard({
   mode: 'standalone' | 'embedded';
   rank: number;
   onClose: () => void;
-  admin?: {
-    rating: string;
-    savingState: 'saving' | 'ok' | 'err' | undefined;
-    saveMessage: string;
-    saveError: string;
-    onCommit: (value: number) => void;
-  } | null;
 }) {
   const projection = player.projection;
   const matchup = nextMatchup(projection, currentWeek);
@@ -1377,20 +1032,17 @@ export function BoardPlayerCard({
 
       <WeeklyProjectionStrip
         currentWeek={currentWeek}
-        delta={player.delta}
         fallbackWeekly={player.board.weekly}
         playoffWeekStart={playoffWeekStart}
         projection={player.projection}
         scoring={scoring}
       />
 
-      {admin ? <AgreementEditor {...admin} /> : null}
-
       <div className="board-card__stat-strip" role="list" aria-label="Player stat summary">
         {stats.map((stat) => (
           <div className="board-card__pill" key={stat.key} role="listitem">
             <span className="board-card__pill-label">{stat.label}</span>
-            <span className="board-card__pill-value">{statValue(tiltStat(player.board.position, stat.key, projection?.season[stat.key], player.delta))}</span>
+            <span className="board-card__pill-value">{statValue(projection?.season[stat.key])}</span>
           </div>
         ))}
       </div>

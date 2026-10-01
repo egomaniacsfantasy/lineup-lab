@@ -1,82 +1,30 @@
 /**
- * The single source of truth for pricing/simulation: LIVE agreement-weighted,
- * per-player, per-week projections, keyed by provider (Sleeper/ESPN) id.
+ * The single source of truth for pricing/simulation: the MODEL's per-player,
+ * per-week projections, keyed by provider (Sleeper/ESPN) id.
  *
  *   model weekly numbers (combined workbooks, loadFromRepo)
- *   + live consensus (Supabase olympus_agreement)
- *   -> per-week adjusted mean + floor/ceiling (agreementTilt)
+ *   -> per-week mean + floor/ceiling, exactly as the model produced them
  *   -> mapped onto provider ids (reusing the last import's confirmed crosswalk)
  *
  * The pricing engine consumes these instead of the stale admin snapshot, so the
  * matchup/league/futures/trade numbers all match the Projections page and update
- * the moment the model or the votes change. NOTHING here touches the workbooks.
+ * the moment the model changes. NOTHING here touches the workbooks.
+ *
+ * There is NO consensus/agreement input (removed 2026-10-01, user): nothing a person
+ * types can move a projection, a price or a simulation. Every number served is the
+ * workbook number.
  */
 
 import { loadProjections } from './loadFromRepo.js';
 import { getActiveProjections } from './store.js';
 import { normalizeName } from './importer.js';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
-import { getSupabaseAdmin } from '../services/supabaseAdmin.js';
-import { tiltFromConsensus, adjustFP, scaleBound } from './agreementTilt.js';
 
 const Z80 = 1.2815515594; // 80% interval half-width in sigmas (matches our weekly CI)
 
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
-}
-
-// The last consensus we successfully read. On a timeout/error we reuse THIS instead
-// of dropping to no-consensus, so the +/-10% agreement tilt can't flip on and off
-// between 60s refreshes -- that flip reshuffled every team's odds on reload.
-let _lastGoodConsensus = null;
-
-/** Average agreement score per player: { position: { name: avg } }. */
-async function loadConsensus() {
-  const admin = getSupabaseAdmin();
-  if (!admin) return _lastGoodConsensus ?? {};
-  // Never let a slow/hung DB call stall league pricing — time out to no-consensus.
-  const timeout = new Promise((resolve) =>
-    setTimeout(() => resolve({ data: null, error: { message: 'consensus timeout' } }), 4000),
-  );
-  const { data, error } = await Promise.race([
-    admin.from('olympus_agreement').select('position, player, score'),
-    timeout,
-  ]);
-  if (error) {
-    console.error('[adjusted] consensus read failed:', error.message ?? error);
-    return _lastGoodConsensus ?? {};   // keep the tilt stable across a transient failure
-  }
-  const acc = {};
-  for (const row of data ?? []) {
-    const s = Number(row.score);
-    if (!Number.isFinite(s)) continue;
-    (acc[row.position] ??= {});
-    (acc[row.position][row.player] ??= { sum: 0, n: 0 });
-    acc[row.position][row.player].sum += s;
-    acc[row.position][row.player].n += 1;
-  }
-  const out = {};
-  for (const pos of Object.keys(acc)) {
-    out[pos] = {};
-    for (const pl of Object.keys(acc[pos])) {
-      const { sum, n } = acc[pos][pl];
-      out[pos][pl] = sum / n;
-    }
-  }
-  // Only a real, non-empty read updates the fallback (an empty success shouldn't
-  // wipe a good consensus we could reuse on the next timeout).
-  if (Object.keys(out).length > 0) _lastGoodConsensus = out;
-  return out;
-}
-
-// Shared across the three scoring formats so a warm cycle hits Supabase once.
-let _consensusMemo = { at: 0, data: null };
-async function loadConsensusCached() {
-  if (_consensusMemo.data && Date.now() - _consensusMemo.at < 30_000) return _consensusMemo.data;
-  const data = await loadConsensus();
-  _consensusMemo = { at: Date.now(), data };
-  return data;
 }
 
 /**
@@ -130,23 +78,6 @@ async function buildProviderIndex() {
  * { playerId, name, position, team, mean, stdev, weekly:{week:pts},
  *   weeklyCI:{week:{floor,ceiling}}, floor, ceiling, seasonTotal, depthRank }.
  */
-// Consensus (agreement) tilt for pricing/sims/futures is HARDCODED OFF (user 2026-09-22):
-// everything the book prices/simulates on -- trades, pricing, championship/playoff odds,
-// the predictor, and the rankings default -- runs on the PURE MODEL numbers, permanently,
-// so the trade analyzer and the season simulation can never diverge. This ignores the
-// ODDS_CONSENSUS env var on purpose (was: `process.env.ODDS_CONSENSUS === '1'`); to ever
-// re-enable the agreement tilt, restore that env gate here (a code change + redeploy).
-// The Supabase fetch is kept entirely OFF the pricing request path (see
-// getAdjustedProjections): consensus only ever loads in the background, so a slow or
-// hung DB call can never stall league pricing.
-const CONSENSUS_ENABLED = false;
-
-/** Whether the agreement/consensus tilt is active for pricing (and, via the board's
- *  consensusEnabled flag, the board's non-admin view). Mirrors ODDS_CONSENSUS. */
-export function isConsensusEnabled() {
-  return CONSENSUS_ENABLED;
-}
-
 // One cache per scoring format: '' = PPR, '_half' = half-PPR, '_nonppr' = standard.
 export const SCORING_SUFFIXES = ['', '_half', '_nonppr'];
 const _caches = new Map(); // suf -> { at, data, refreshing }
@@ -156,34 +87,25 @@ function _cacheFor(suf) {
   return e;
 }
 
-/** Kick off a background compute (WITH consensus) for one scoring format. */
+/** Kick off a background recompute for one scoring format. */
 function _refreshInBackground(suf) {
   const e = _cacheFor(suf);
   if (e.refreshing) return;
   e.refreshing = true;
-  _computeAdjusted(CONSENSUS_ENABLED, suf)
+  _computeAdjusted(suf)
     .then((d) => {
-      // Never let a refresh that came back WITHOUT consensus overwrite a warm build
-      // that HAS it -- that on/off flip is what jumped the odds on reload.
-      if (e.data && (e.data.consensusCount ?? 0) > 0 && (d.consensusCount ?? 0) === 0) {
-        e.at = Date.now();          // mark fresh so we don't retry-hammer
-        e.refreshing = false;
-        console.log(`[adjusted:${suf || 'ppr'}] kept warm consensus build (refresh had none)`);
-        return;
-      }
       e.at = Date.now();
       e.data = d;
       e.refreshing = false;
-      console.log(`[adjusted:${suf || 'ppr'}] refreshed: ${d.matched}/${d.total} matched, ${d.consensusCount} consensus`);
+      console.log(`[adjusted:${suf || 'ppr'}] refreshed: ${d.matched}/${d.total} matched`);
     })
     .catch((err) => { e.refreshing = false; console.error(`[adjusted:${suf || 'ppr'}] bg refresh failed`, err); });
 }
 
 /**
- * The pricing path calls this and it NEVER awaits Supabase:
+ * The pricing path calls this:
  *  - warm cache -> return it instantly (refresh in background if stale)
- *  - cold cache -> return a model-only build instantly (no network) AND trigger
- *    the background consensus refresh; once that lands, later calls include it.
+ *  - cold cache -> build once (no network); concurrent cold callers share the build.
  * `suf` selects the scoring format ('' PPR | '_half' | '_nonppr').
  */
 export async function getAdjustedProjections(suf = '') {
@@ -192,34 +114,30 @@ export async function getAdjustedProjections(suf = '') {
     if (Date.now() - e.at >= 60_000) _refreshInBackground(suf);
     return e.data;
   }
-  // Cold cache: build WITH consensus so the VERY FIRST request already uses the
-  // consensus-weighted values -- no one-time model-only view that would read
-  // differently from every later (warm) request. The consensus read is time-bounded
-  // (4s) and falls back to last-good/model-only, so this can't hang. Concurrent cold
-  // callers share the one in-flight build.
+  // Cold cache: concurrent cold callers share the one in-flight build.
   if (!e.coldBuild) {
-    e.coldBuild = _computeAdjusted(CONSENSUS_ENABLED, suf)
+    e.coldBuild = _computeAdjusted(suf)
       .then((d) => { e.data = d; e.at = Date.now(); e.coldBuild = null; return d; })
       .catch((err) => {
         e.coldBuild = null;
-        console.error(`[adjusted:${suf || 'ppr'}] cold consensus build failed; using model-only`, err);
-        return _computeAdjusted(false, suf);
+        console.error(`[adjusted:${suf || 'ppr'}] cold build failed; retrying once`, err);
+        return _computeAdjusted(suf);
       });
   }
   return e.coldBuild;
 }
 
 /**
- * Model-only projections (NO agreement/consensus tilt) for one scoring format —
+ * The model's projections for one scoring format —
  * i.e. exactly the combined-file numbers. The board reads this so its displayed
- * projected points / floor / ceiling / weekly match the source sheet; the
- * agreement tilt stays reserved for pricing/trades. Cached briefly; no network.
+ * projected points / floor / ceiling / weekly match the source sheet.
+ * Cached briefly; no network.
  */
 const _modelCaches = new Map(); // suf -> { at, data }
 export async function getModelProjections(suf = '') {
   const e = _modelCaches.get(suf);
   if (e && e.data && Date.now() - e.at < 60_000) return e.data;
-  const data = await _computeAdjusted(false, suf); // consensus off -> delta 0 -> pure model
+  const data = await _computeAdjusted(suf);
   _modelCaches.set(suf, { at: Date.now(), data });
   return data;
 }
@@ -230,12 +148,10 @@ export async function warmAdjustedProjections() {
 }
 
 /**
- * Force a fresh consensus read + recompute of every scoring format. Call this
- * right after an agreement value is edited so the change is reflected in the
- * board / pricing within seconds, not on the next ~60s lazy background refresh.
+ * Force a recompute of every scoring format (e.g. right after the workbooks are
+ * re-imported), instead of waiting for the next ~60s lazy background refresh.
  */
 export function invalidateAdjusted() {
-  _consensusMemo = { at: 0, data: null }; // drop the 30s consensus memo -> re-read Supabase
   _modelCaches.clear(); // pure-model board cache also refreshes on re-import
   for (const suf of SCORING_SUFFIXES) {
     _cacheFor(suf).at = 0; // mark stale so any reader also refreshes
@@ -257,25 +173,22 @@ function ceilCol(pos, suf) {
   return RECEIVING.has(pos) ? `fantasy_pts_ceiling${suf}` : 'fantasy_pts_ceiling';
 }
 
-async function _computeAdjusted(withConsensus, suf = '') {
+async function _computeAdjusted(suf = '') {
   const dataset = loadProjections();
-  const consensus = withConsensus ? await loadConsensusCached() : {};
   const idx = await buildProviderIndex();
 
   const projections = [];
   let matched = 0;
   for (const p of dataset.players) {
     const pos = p.position;
-    const avg = consensus[pos]?.[p.name];
-    const delta = tiltFromConsensus(avg);
 
     // Season point + bounds for the requested scoring format.
     const seasonPtRaw = RECEIVING.has(pos) ? (num(p.season[`fantasy_pts${suf}`]) ?? p.point) : p.point;
     const seasonFloorRaw = RECEIVING.has(pos) ? (num(p.season[`fantasy_pts_floor${suf}`]) ?? p.floor) : p.floor;
     const seasonCeilRaw = RECEIVING.has(pos) ? (num(p.season[`fantasy_pts_ceiling${suf}`]) ?? p.ceiling) : p.ceiling;
-    const seasonPoint = adjustFP(pos, seasonPtRaw, p.season, 'season', delta, suf);
-    const seasonFloor = scaleBound(seasonFloorRaw, seasonPtRaw, seasonPoint);
-    const seasonCeil = scaleBound(seasonCeilRaw, seasonPtRaw, seasonPoint);
+    const seasonPoint = num(seasonPtRaw);
+    const seasonFloor = num(seasonFloorRaw);
+    const seasonCeil = num(seasonCeilRaw);
 
     // Per-week adjusted mean + CI, in the league's scoring format.
     const wCol = fpCol(pos, suf);
@@ -290,9 +203,9 @@ async function _computeAdjusted(withConsensus, suf = '') {
       if (!Number.isFinite(wk)) continue;
       const wStored = num(w[wCol]);
       if (wStored == null) continue;
-      const wAdj = adjustFP(pos, wStored, w, 'weekly', delta, suf);
-      const wFloor = scaleBound(num(w[wFloorCol]), wStored, wAdj);
-      const wCeil = scaleBound(num(w[wCeilCol]), wStored, wAdj);
+      const wAdj = wStored;
+      const wFloor = num(w[wFloorCol]);
+      const wCeil = num(w[wCeilCol]);
       const key = String(wk);
       weekly[key] = Number(wAdj.toFixed(2));
       weeklyCI[key] = { floor: wFloor, ceiling: wCeil };
@@ -348,14 +261,12 @@ async function _computeAdjusted(withConsensus, suf = '') {
   }
 
   const basis = suf === '_half' ? 'half-ppr' : suf === '_nonppr' ? 'standard' : 'ppr';
-  const consensusCount = Object.values(consensus).reduce((a, m) => a + Object.keys(m).length, 0);
   const result = {
-    version: `${idx?.version ?? 'noimport'}:adj:${basis}:${consensusCount}`,
+    version: `${idx?.version ?? 'noimport'}:adj:${basis}:0`,
     meta: { scoringBasis: basis, source: 'live-adjusted' },
     projections,
     matched,
     total: dataset.players.length,
-    consensusCount,
   };
   return result;
 }

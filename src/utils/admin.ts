@@ -1,11 +1,7 @@
 /**
- * Agreement editing is limited to the three collaborators who own the model.
- *
- * This is a UI gate only. It decides what the app shows, not what the database
- * accepts: anyone who knows the table name could still write to Supabase
- * directly. Real enforcement has to be a row-level-security policy on
- * `olympus_agreement` restricting writes to these user ids, which is server
- * side and Franco's call.
+ * The site's admins (admin tab, autopilot tools). The name is historical: these
+ * accounts once also edited per-player agreement scores, a feature removed 2026-10-01.
+ * UI gate only; it decides what the app shows.
  */
 export const AGREEMENT_ADMIN_EMAILS = [
   'andrevlahakis@gmail.com',

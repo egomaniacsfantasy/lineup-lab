@@ -34,7 +34,7 @@ import {
 } from '../live/liveEngine.js';
 import { SEASON_ANCHORS, computeSeasonState, resolveFantasyWeek, isPreseason, resolvePricingWeek } from '../config/season.js';
 import { getActiveProjections } from '../projections/store.js';
-import { getAdjustedProjections, getModelProjections, isConsensusEnabled } from '../projections/adjusted.js';
+import { getAdjustedProjections, getModelProjections } from '../projections/adjusted.js';
 import { restOfSeasonPoints } from '../projections/restOfSeason.js';
 import {
   getFinalNflTeams,
@@ -278,12 +278,11 @@ apiRouter.get('/nfl/schedule', async (req, res) => {
 /** Active projection model served as a ranking board ("Odds Gods model"). */
 apiRouter.get('/rankings', async (req, res, next) => {
   try {
-    // Prefer the SAME set pricing/trades use: agreement-weighted (90/10) and
-    // scoring-specific (PPR / half / standard, from ?scoring=). Falls back to the
+    // The SAME set pricing/trades use: the pure model, scoring-specific
+    // (PPR / half / standard, from ?scoring=). Falls back to the
     // raw snapshot only if the adjusted set is unavailable.
     const suf = scoringSuffix(String(req.query.scoring ?? ''));
-    // The board asks for ?model=1 so it shows the pure combined-file numbers
-    // (no agreement tilt). Pricing/trades still use the agreement-weighted set.
+    // ?model=1 is kept for old clients; both paths are the pure model now.
     const modelOnly = String(req.query.model ?? '') === '1';
     let active = null;
     let source = 'Odds Gods model';
@@ -291,7 +290,7 @@ apiRouter.get('/rankings', async (req, res, next) => {
       const adjusted = modelOnly ? await getModelProjections(suf) : await getAdjustedProjections(suf);
       if (adjusted && adjusted.matched > 0) {
         active = adjusted;
-        source = modelOnly ? 'Odds Gods model' : 'Odds Gods model (agreement-weighted)';
+        source = 'Odds Gods model';
       }
     } catch (err) {
       console.error('[rankings] adjusted projections failed; using snapshot', err);
@@ -350,11 +349,9 @@ apiRouter.get('/rankings', async (req, res, next) => {
       });
 
     // Never let a browser serve a stale board (e.g. a raw-projection response
-    // cached before the agreement-weighted set was live).
+    // cached before the live set was available).
     res.set('Cache-Control', 'no-store');
-    // consensusEnabled drives the board's non-admin view: when the agreement tilt is
-    // off (ODDS_CONSENSUS != 1), non-admins see the pure model, matching how the book prices.
-    res.json({ available: true, source, version: active.version, consensusEnabled: isConsensusEnabled(), rankings });
+    res.json({ available: true, source, version: active.version, rankings });
   } catch (error) {
     next(error);
   }

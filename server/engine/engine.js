@@ -693,7 +693,7 @@ export function computeInputsHash({ projectionVersion, teams, week, overlay }) {
 // Seed hash for the sim's RANDOM stream. It deliberately EXCLUDES
 // projectionVersion (unlike computeInputsHash, which identifies a cache/record
 // state). Reason: projectionVersion churns constantly — it ends in
-// `:consensusCount`, and flips on the model-only->consensus warmup — so if the
+// a counter that used to change between builds — so if the
 // seed tracked it, every version bump would reshuffle the entire common-random-
 // number stream and re-roll every team's title odds from scratch, making the
 // displayed championship % (and every trade delta) jump on refresh. Keying the
@@ -1128,7 +1128,7 @@ export function priceLeague(ctx) {
 
   // Phase 1: per-player week-specific means for EVERY rostered player in the
   // league (not just the user's team), so both lineups — yours AND your
-  // opponent's — display our consensus-adjusted week value instead of falling
+  // opponent's — display our model's week value instead of falling
   // back to the provider's number.
   for (const id of new Set(teams.flatMap((t) => t.players))) {
     const dist = playerDistribution(id, projectionMap, catalog[id], week);
