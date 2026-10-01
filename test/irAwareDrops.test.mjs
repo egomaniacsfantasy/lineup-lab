@@ -75,3 +75,34 @@ test('two stashes returning the same week force two drops that week, none now', 
   assert.ok(plan.deferred.every((d) => d.week === 3), 'both fire at the shared return week');
   assert.equal(plan.totalDrops, 2);
 });
+
+test('a drop he already faces is not charged to the trade (1-for-1, full roster + IR stash)', () => {
+  /* The bug: a manager with a full active roster and Goedert on IR ran a 1-for-1 and
+     was told to "drop X when Goedert returns". That drop is his with or without the
+     deal -- so the trade neither shows it nor loses the player in the after-sim. */
+  const team = { players: ['B', 'E', 'G', 'D'], reserve: ['D'] }; // 3 active (full) + D on IR
+  const afterPlayers = ['B', 'E', 'F', 'D']; // give G, get F: still 3 active + D
+  const droppableIds = ['B', 'E', 'D'];
+  const plan = planIrAwareDrops({ ...common, team, afterPlayers, droppableIds });
+
+  assert.equal(plan.immediateDrops.length, 0);
+  assert.equal(plan.deferred.length, 0, 'the return-week drop is standing, not caused by the trade');
+  assert.equal(Object.keys(plan.dropSchedule).length, 0, 'so the after-sim keeps the same bodies the before-sim has');
+  assert.equal(plan.totalDrops, 0);
+  assert.equal(plan.standingDeferred, 1, 'it is still recorded as a drop he faces anyway');
+});
+
+test('a trade that adds a body on top of a standing drop still shows its own drop', () => {
+  const team = { players: ['B', 'E', 'G', 'D'], reserve: ['D'] }; // full + D on IR
+  const afterPlayers = ['B', 'E', 'F', 'D', 'H']; // give G, get F,H (+1 body)
+  const projMap2 = new Map(projectionMap);
+  projMap2.set('H', flat(7, 7, 7));
+  const catalog2 = { ...catalog, H: { position: 'RB' } };
+  const plan = planIrAwareDrops({
+    ...common, projectionMap: projMap2, catalog: catalog2,
+    team, afterPlayers, droppableIds: ['B', 'E', 'D'],
+  });
+  assert.equal(plan.immediateDrops.length, 1, 'the extra body needs a drop now');
+  assert.equal(plan.deferred.length, 0, 'the return-week drop is still the standing one');
+  assert.equal(plan.totalDrops, 1);
+});

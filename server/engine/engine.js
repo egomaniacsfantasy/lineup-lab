@@ -2568,6 +2568,7 @@ function firstProjectedWeek(playerId, projectionMap, fromWeek, lastWeek) {
 export function planIrAwareDrops({
   team, afterPlayers, droppableIds, maxRoster, targetStart, lastWeek,
   slotLabels, projectionMap, catalog, dropWeeks, replacementFor, userDropsOverride = null,
+  _standingOnly = false,
 }) {
   const reserveSet = new Set((team.reserve ?? []).map(String));
   // IR players the manager has stashed AND still owns after the trade.
@@ -2622,13 +2623,42 @@ export function planIrAwareDrops({
     }
   }
 
+  // STANDING drops are not the trade's doing. A manager with a player stashed on IR
+  // and a full active roster must drop someone the week that player returns, trade or
+  // no trade. Charging that to the trade is wrong twice: the panel told a manager
+  // making a 1-for-1 to "drop X when Goedert returns" as if the deal caused it, and
+  // the after-sim lost a player the before-sim (and the hub's odds) keep. So plan the
+  // same roster with NO trade, and keep only the deferred drops beyond what he already
+  // faced at each return. A deal that adds a body still shows (and simulates) its drop.
+  let tradeDeferred = deferred;
+  let standingCount = 0;
+  if (!_standingOnly && Array.isArray(team.players)) {
+    const standing = planIrAwareDrops({
+      team, afterPlayers: team.players, droppableIds: team.players, maxRoster, targetStart, lastWeek,
+      slotLabels, projectionMap, catalog, dropWeeks, replacementFor, _standingOnly: true,
+    });
+    standingCount = standing.deferred.length;
+    const owed = {};
+    for (const d of standing.deferred) owed[String(d.triggerId)] = (owed[String(d.triggerId)] ?? 0) + 1;
+    const seen = {};
+    tradeDeferred = deferred.filter((d) => {
+      const k = String(d.triggerId);
+      seen[k] = (seen[k] ?? 0) + 1;
+      return seen[k] > (owed[k] ?? 0);
+    });
+  }
+  const tradeSchedule = {};
+  for (const d of tradeDeferred) tradeSchedule[String(d.id)] = dropSchedule[String(d.id)];
+
   return {
     finalPlayers: afterPlayers.filter((id) => !immediateSet.has(String(id))),
-    dropSchedule,
+    dropSchedule: tradeSchedule,
     immediateDrops,
     immediateNeed,
-    deferred,
-    totalDrops: immediateDrops.length + deferred.length,
+    deferred: tradeDeferred,
+    // drops he faces at an IR return with or without this trade (not shown, not simulated)
+    standingDeferred: standingCount,
+    totalDrops: immediateDrops.length + tradeDeferred.length,
   };
 }
 
