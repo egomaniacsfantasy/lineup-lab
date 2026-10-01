@@ -147,7 +147,7 @@ export function TradeFinder({
   const [minGain, setMinGain] = useState(DEFAULT_MIN_GAIN);
   const [maxLoss, setMaxLoss] = useState<number | null>(DEFAULT_MAX_PARTNER_LOSS);
   /* Managers are scanned one at a time; this is where the walk has got to. */
-  const [progress, setProgress] = useState<{ done: number; total: number; name: string | null } | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number; name: string | null; shape: string | null } | null>(null);
   const [picker, setPicker] = useState<Slot | null>(null);
   const [suggestions, setSuggestions] = useState<TradeSuggestion[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -207,16 +207,27 @@ export function TradeFinder({
     setShowAll(false);
     setTicketOpen(false);
     setSuggestions([]);
-    setProgress({ done: 0, total: requests.length, name: null });
+    setProgress({ done: 0, total: requests.length, name: null, shape: null });
     window.setTimeout(() => resultsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60);
     let failed = 0;
-    /* One manager at a time, the way the sender walks them. Deals land on the
-       board as each manager finishes instead of after the whole league. */
+    /* One manager and one shape at a time. Deals land on the board as each
+       search finishes instead of after the whole league. */
     for (const [index, request] of requests.entries()) {
       if (runRef.current !== runId) return;
-      setProgress({ done: index, total: requests.length, name: partnerById.get(request.partnerRosterId)?.teamName ?? null });
+      setProgress({
+        done: index,
+        total: requests.length,
+        name: partnerById.get(request.partnerRosterId)?.teamName ?? null,
+        shape: FINDER_SHAPES.find((entry) => entry.id === request.shape)?.label ?? null,
+      });
       try {
-        const response = await fetchTradeFinder(leagueId, { userId, ...request, readsByRoster });
+        const response = await fetchTradeFinder(leagueId, {
+          userId,
+          partnerRosterId: request.partnerRosterId,
+          rules: request.rules,
+          shapes: request.shapes,
+          readsByRoster,
+        });
         if (runRef.current !== runId) return;
         if (!response.available) {
           setError(response.reason === 'no_projections'
@@ -236,7 +247,7 @@ export function TradeFinder({
     if (failed > 0) {
       setError(failed === requests.length
         ? 'The scan did not finish.'
-        : `${failed} of ${requests.length} managers could not be scanned. Run it again to retry them.`);
+        : `${failed} of ${requests.length} searches did not finish. Run it again to retry them.`);
     }
     setProgress(null);
     setScannedAt(Date.now());
@@ -655,14 +666,14 @@ export function TradeFinder({
           </div>
           <p className="trade-finder__shape-note">
             {query.shapes.length === 0
-              ? 'Any package, 1 for 1 up to 3 for 3. Pick one or more to see only those.'
+              ? 'Every package size, 1 for 1 up to 3 for 3. Pick one or more to search only those (faster).'
               : `Only ${shapesWords(query.shapes)}. The first number is what you send.`}
           </p>
           <div className="trade-finder__ticket-foot">
             {loading ? (
               <SimulationLoader
                 label={progress && progress.total > 1
-                  ? `Scanning manager ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${progress.name ? `: ${progress.name}` : ''}`
+                  ? `Search ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${progress.name ? `: ${progress.name}` : ''}${progress.shape ? `, ${progress.shape}` : ''}`
                   : `Scanning ${describeQuery(query, names(query)).toLowerCase()}`}
                 size="compact"
                 variant="scan"
@@ -734,7 +745,7 @@ Pick any number of managers, positions, players and shapes, or nothing at all: l
                   value={maxLoss == null ? MAX_LOSS_SLIDER_TOP : maxLoss}
                 />
                 <span className="trade-finder__floor-note">
-                  {progress ? `${progress.done} of ${progress.total} managers scanned` : 'Title odds, in points'}
+                  {progress ? `${progress.done} of ${progress.total} searches done` : 'Title odds, in points'}
                 </span>
               </div>
 

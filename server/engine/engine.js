@@ -3346,8 +3346,13 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       l.push(c);
       byShape.set(c.size, l);
     }
+    // The Trades-tab finder asks for ONE shape per request, so a shape's candidates never
+    // depend on which other shapes were picked (adding a shape can only add deals). The
+    // background sender asks for every shape at once and splits one budget between them.
     const LIGHT_BUDGET = 60;
-    const quota = Math.max(6, Math.min(20, Math.floor(LIGHT_BUDGET / Math.max(1, byShape.size))));
+    const quota = sizes.length === 1
+      ? 14
+      : Math.max(6, Math.min(20, Math.floor(LIGHT_BUDGET / Math.max(1, byShape.size))));
     const lineupMean = (ids) => bestLineupDistribution(ids, slotLabels, projectionMap, catalog, null).mean;
     const partnerTeam = list[0]?.partner ?? null;
     const myLineupBefore = lineupMean(userTeam.players);
@@ -3418,7 +3423,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
      full analyzer count below. What is finally shown is always the full-count number. */
   if (perShape && finalists.length) {
     const LIGHT_SIMS = 600;
-    const FULL_CAP = 10;
+    const FULL_CAP = sizes.length === 1 ? 5 : 10;
     const lightBaseline = simulateSeason({ ...base, sims: LIGHT_SIMS });
     const screened = [];
     let n = 0;

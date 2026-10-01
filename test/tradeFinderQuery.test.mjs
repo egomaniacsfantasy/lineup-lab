@@ -73,25 +73,32 @@ test('every leg takes several picks, and an emptied leg is open again', () => {
   assert.deepEqual(togglePartner([4, 7], 4), [7]);
 });
 
-test('the ticket becomes one sender-rules request per manager', () => {
+test('the ticket becomes one sender-rules request per manager per shape', () => {
   const teams = [team(1, ['mine'], true), team(2, ['a']), team(3, ['b']), team(4, ['c'])];
   const requests = queryToRequests({
     partnerRosterIds: [4, 2],
     send: { kind: 'position', positions: ['RB', 'WR'] },
     get: { kind: 'position', positions: ['TE'] },
-    shapes: ['1-1', '2-1'],
+    shapes: ['2-1', '1-1'],
   }, teams);
-  assert.deepEqual(requests.map((request) => request.partnerRosterId), [2, 4], 'only the picked managers, one request each');
+  /* Only the picked managers; each shape is its own search, so picking another
+     shape can only add deals, never change what a shape already found. */
+  assert.deepEqual(
+    requests.map((request) => [request.partnerRosterId, request.shape]),
+    [[2, '1-1'], [2, '2-1'], [4, '1-1'], [4, '2-1']],
+  );
   assert.deepEqual(requests[0].rules, {
     giveAllow: [], getAllow: [], givePositions: ['RB', 'WR'], getPositions: ['TE'],
   });
-  assert.deepEqual(requests[0].shapes, [{ give: 1, get: 1 }, { give: 2, get: 1 }]);
+  assert.deepEqual(requests[0].shapes, [{ give: 1, get: 1 }]);
+  assert.deepEqual(requests[1].shapes, [{ give: 2, get: 1 }]);
 
-  /* Nothing picked anywhere = every manager, no limits, every shape. */
+  /* Nothing picked anywhere = every manager, no limits, and every shape on the ticket. */
   const open = queryToRequests(EMPTY_QUERY, teams);
-  assert.deepEqual(open.map((request) => request.partnerRosterId), [2, 3, 4]);
+  assert.equal(open.length, 3 * FINDER_SHAPES.length);
+  assert.deepEqual([...new Set(open.map((request) => request.partnerRosterId))], [2, 3, 4]);
+  assert.deepEqual(open.slice(0, FINDER_SHAPES.length).map((request) => request.shape), FINDER_SHAPES.map((shape) => shape.id));
   assert.deepEqual(open[0].rules, { giveAllow: [], getAllow: [], givePositions: [], getPositions: [] });
-  assert.deepEqual(open[0].shapes, []);
 });
 
 test('a pool of players you want narrows the scan to the managers who own them', () => {

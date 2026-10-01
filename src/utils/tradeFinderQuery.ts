@@ -166,11 +166,24 @@ export function queryToShapes(query: FinderQuery) {
     .filter((sizes): sizes is { give: number; get: number } => sizes != null);
 }
 
-/** One scan request per manager: the client walks these one at a time. */
+/**
+ * One scan request per manager PER SHAPE; the client walks them one at a time.
+ *
+ * A shape is searched by itself so its deals never depend on which other shapes
+ * were picked: adding a shape can only add deals, never take one away. (Searched
+ * together, the shapes shared one budget and "Any" found fewer deals than picking
+ * three shapes did.) No shape picked = every shape on the ticket.
+ */
 export function queryToRequests(query: FinderQuery, teams: ApiTeam[]) {
   const rules = queryToRules(query);
-  const shapes = queryToShapes(query);
-  return partnersToScan(query, teams).map((partnerRosterId) => ({ partnerRosterId, rules, shapes }));
+  const shapes = query.shapes.length ? orderedShapes(query.shapes) : FINDER_SHAPES.map((entry) => entry.id);
+  return partnersToScan(query, teams).flatMap((partnerRosterId) =>
+    shapes.map((shape) => ({
+      partnerRosterId,
+      rules,
+      shape,
+      shapes: [shapeSizes(shape)].filter((sizes): sizes is { give: number; get: number } => sizes != null),
+    })));
 }
 
 /**
