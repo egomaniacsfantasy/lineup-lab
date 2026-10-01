@@ -3011,6 +3011,7 @@ export function computeLineupMoves(rosterSlots, optimalAssignments, lockedIds = 
  * `sender` (the automated trade sender; absent for the UI finder) narrows the SAME
  * per-manager search to the user's standing rules instead of pinned targets:
  *   giveAllow     ids I'm willing to give (empty = any of mine)
+ *   getAllow      ids I'm willing to receive (empty = any of theirs)
  *   protect       ids I never give
  *   givePositions / getPositions   positions allowed on each side (empty = any)
  *   minYouDelta   keep a trade only if MY title % rises at least this much (pts)
@@ -3026,9 +3027,11 @@ export function computeLineupMoves(rosterSlots, optimalAssignments, lockedIds = 
  * the same kind as `position`: they narrow which combos get simmed and change
  * nothing about how a combo is valued. `givePosition` keeps only trades that
  * send at least one of the user's players at that position; `shape` is
- * `{ give, get }` package sizes and keeps only that one shape.
+ * `{ give, get }` package sizes and keeps only that one shape. `shapes` is the
+ * same filter for SEVERAL sizes at once (`[{ give, get }, ...]`, empty = every
+ * size); it wins over `shape` when both are given.
  */
-export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, givePosition = null, shape = null, givePlayerIds = [], getPlayerIds = [], readsByRoster = {}, sender = null } = {}) {
+export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, position = null, givePosition = null, shape = null, shapes = null, givePlayerIds = [], getPlayerIds = [], readsByRoster = {}, sender = null } = {}) {
   const active = ctx.projections ?? getActiveProjections();
   if (!active) return { available: false, reason: 'no_projections' };
   const { league, teams, week, catalog, scheduleWeeks, overlay } = ctx;
@@ -3202,6 +3205,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // Sender rules filter each side's pool BEFORE the top-9 cut, so an allowed
   // deeper player can still be offered.
   const senderGiveAllow = new Set((sender?.giveAllow ?? []).map(String));
+  const senderGetAllow = new Set((sender?.getAllow ?? []).map(String));
   const senderProtect = new Set((sender?.protect ?? []).map(String));
   const senderGivePos = sender?.givePositions?.length ? sender.givePositions : null;
   const senderGetPos = sender?.getPositions?.length ? sender.getPositions : null;
@@ -3213,6 +3217,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       if (senderGiveAllow.size && !senderGiveAllow.has(String(id))) return false;
       return !senderGivePos || senderGivePos.includes(pos);
     }
+    if (senderGetAllow.size && !senderGetAllow.has(String(id))) return false;
     return !senderGetPos || senderGetPos.includes(pos);
   };
   const tradeable = (team) => team.players
@@ -3241,10 +3246,11 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // roster still produces balanced combos. Candidate generation is cheap (no sims); the
   // gap-sort + fairness ranking still pick the best few to actually simulate.
   const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3], [3, 2], [2, 3], [3, 1], [1, 3]];
-  const shapeGive = Number(shape?.give);
-  const shapeGet = Number(shape?.get);
-  const sizes = shapeGive >= 1 && shapeGet >= 1
-    ? SIZES.filter(([k, j]) => k === shapeGive && j === shapeGet)
+  const wantedShapes = (Array.isArray(shapes) && shapes.length ? shapes : shape ? [shape] : [])
+    .map((sh) => [Number(sh?.give), Number(sh?.get)])
+    .filter(([k, j]) => k >= 1 && j >= 1);
+  const sizes = wantedShapes.length
+    ? SIZES.filter(([k, j]) => wantedShapes.some(([wk, wj]) => wk === k && wj === j))
     : SIZES;
   const giveTargetPos = givePosition && ['QB', 'RB', 'WR', 'TE'].includes(givePosition) ? givePosition : null;
 

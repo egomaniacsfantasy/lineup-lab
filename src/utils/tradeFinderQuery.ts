@@ -3,12 +3,17 @@ import type { ApiCatalogPlayer, ApiTeam, LeaguePricing, TradeSuggestion } from '
 /**
  * The finder's ticket: one question with three blanks and a shape.
  *
- * "Get me an RB", "who wants my WR", "what does Bijan cost", "deal with
- * Hermes" are not different features. They are the same search with a
- * different blank pinned, and every one of them maps onto a parameter the
- * engine's finder already accepts. This module is the pure half of that: the
- * query shape, the request it becomes, how a result set is read back against
- * it, and the roster facts the starting points are built from. No React.
+ * The ticket is the trade sender's standing rules, asked on demand. Every blank
+ * is a POOL, "any of these", and an empty pool means no limit:
+ *   - partners: the managers to scan (none picked = every manager);
+ *   - you send: positions or players of yours that may go (every player sent
+ *     comes from the pool);
+ *   - you get: positions or players of theirs you would take (every player
+ *     received comes from the pool);
+ *   - shapes: the package sizes allowed.
+ * Each manager is then scanned one at a time by the same per-manager search the
+ * sender runs, at the analyzer's full sim count. This module is the pure half:
+ * the query shape, the requests it becomes, and how results are read back. No React.
  */
 
 export type FinderPosition = 'QB' | 'RB' | 'WR' | 'TE';
@@ -20,96 +25,200 @@ export function isFinderPosition(value: string | null | undefined): value is Fin
 
 export type SlotPick =
   | { kind: 'any' }
-  | { kind: 'position'; position: FinderPosition }
-  | { kind: 'player'; id: string };
+  | { kind: 'position'; positions: FinderPosition[] }
+  | { kind: 'player'; ids: string[] };
 
 export const ANY_PICK: SlotPick = { kind: 'any' };
 
-export type FinderShape = 'any' | '1-1' | '2-1' | '1-2' | '2-2';
+/** An emptied pool is no limit at all, so it reads (and sends) as "any". */
+export function normalizePick(pick: SlotPick): SlotPick {
+  if (pick.kind === 'position') {
+    const positions = FINDER_POSITIONS.filter((position) => pick.positions.includes(position));
+    return positions.length ? { kind: 'position', positions } : ANY_PICK;
+  }
+  if (pick.kind === 'player') {
+    const ids = [...new Set(pick.ids.map(String))];
+    return ids.length ? { kind: 'player', ids } : ANY_PICK;
+  }
+  return ANY_PICK;
+}
+
+/** Add or remove one position from a leg. Picking a position replaces a player pool. */
+export function togglePosition(pick: SlotPick, position: FinderPosition): SlotPick {
+  const current = pick.kind === 'position' ? pick.positions : [];
+  const next = current.includes(position) ? current.filter((p) => p !== position) : [...current, position];
+  return normalizePick({ kind: 'position', positions: next });
+}
+
+/** Add or remove one player from a leg. Picking a player replaces a position pool. */
+export function togglePlayer(pick: SlotPick, id: string): SlotPick {
+  const current = pick.kind === 'player' ? pick.ids : [];
+  const next = current.includes(id) ? current.filter((p) => p !== id) : [...current, id];
+  return normalizePick({ kind: 'player', ids: next });
+}
+
+export type FinderShape = '1-1' | '2-1' | '1-2' | '2-2' | '2-3' | '3-2' | '3-3';
 
 /** Read as "you send N for M": the first number is always yours. */
-export const FINDER_SHAPES: { id: FinderShape; label: string; sizes: { give: number; get: number } | null }[] = [
-  { id: 'any', label: 'Any', sizes: null },
+export const FINDER_SHAPES: { id: FinderShape; label: string; sizes: { give: number; get: number } }[] = [
   { id: '1-1', label: '1 for 1', sizes: { give: 1, get: 1 } },
   { id: '2-1', label: '2 for 1', sizes: { give: 2, get: 1 } },
   { id: '1-2', label: '1 for 2', sizes: { give: 1, get: 2 } },
   { id: '2-2', label: '2 for 2', sizes: { give: 2, get: 2 } },
+  { id: '2-3', label: '2 for 3', sizes: { give: 2, get: 3 } },
+  { id: '3-2', label: '3 for 2', sizes: { give: 3, get: 2 } },
+  { id: '3-3', label: '3 for 3', sizes: { give: 3, get: 3 } },
 ];
 
 export function shapeSizes(shape: FinderShape) {
   return FINDER_SHAPES.find((entry) => entry.id === shape)?.sizes ?? null;
 }
 
+function orderedShapes(shapes: FinderShape[]): FinderShape[] {
+  return FINDER_SHAPES.map((entry) => entry.id).filter((id) => shapes.includes(id));
+}
+
+/** Add or remove one package size. None picked = any size. */
+export function toggleShape(shapes: FinderShape[], shape: FinderShape): FinderShape[] {
+  return orderedShapes(shapes.includes(shape) ? shapes.filter((s) => s !== shape) : [...shapes, shape]);
+}
+
+export function togglePartner(partnerRosterIds: number[], rosterId: number): number[] {
+  return partnerRosterIds.includes(rosterId)
+    ? partnerRosterIds.filter((id) => id !== rosterId)
+    : [...partnerRosterIds, rosterId];
+}
+
 export interface FinderQuery {
-  partnerRosterId: number | null;
+  /** Managers to scan. Empty = every manager. */
+  partnerRosterIds: number[];
   send: SlotPick;
   get: SlotPick;
-  shape: FinderShape;
+  /** Package sizes allowed. Empty = any size. */
+  shapes: FinderShape[];
 }
 
 export const EMPTY_QUERY: FinderQuery = {
-  partnerRosterId: null,
+  partnerRosterIds: [],
   send: ANY_PICK,
   get: ANY_PICK,
-  shape: 'any',
+  shapes: [],
 };
 
-export const DEFAULT_ACCEPT_FLOOR = 40;
+/* The sender's two thresholds, with the sender's own defaults: keep a deal only
+   if your title odds rise at least this much, and theirs fall at most this much. */
+export const DEFAULT_MIN_GAIN = 1;
+export const DEFAULT_MAX_PARTNER_LOSS = 3;
 
 export function isEmptyQuery(query: FinderQuery) {
-  return query.partnerRosterId == null
+  return query.partnerRosterIds.length === 0
     && query.send.kind === 'any'
     && query.get.kind === 'any'
-    && query.shape === 'any';
+    && query.shapes.length === 0;
 }
 
 /**
- * Every blank filled with an exact player is not a search, it is a trade.
- * The finder hands that to the builder and prices it rather than scanning
- * for throw-ins nobody asked for.
+ * Every blank filled with one exact player is not a search, it is a trade.
+ * The finder hands that to the builder and prices it rather than scanning.
  */
 export function isExactTrade(query: FinderQuery) {
-  return query.partnerRosterId != null
-    && query.send.kind === 'player'
-    && query.get.kind === 'player'
-    && query.shape === '1-1';
+  return query.partnerRosterIds.length === 1
+    && query.send.kind === 'player' && query.send.ids.length === 1
+    && query.get.kind === 'player' && query.get.ids.length === 1
+    && query.shapes.length === 1 && query.shapes[0] === '1-1';
 }
 
-export function queryToRequest(query: FinderQuery) {
+/**
+ * The managers a ticket scans, in roster order. A get-player pool narrows it to
+ * the managers who own one of those players (nobody else can deliver them).
+ */
+export function partnersToScan(query: FinderQuery, teams: ApiTeam[]): number[] {
+  const wanted = query.get.kind === 'player' ? query.get.ids : null;
+  return teams
+    .filter((team) => !team.isUser)
+    .filter((team) => query.partnerRosterIds.length === 0 || query.partnerRosterIds.includes(team.rosterId))
+    .filter((team) => !wanted || team.players.some((id) => wanted.includes(id)))
+    .map((team) => team.rosterId);
+}
+
+export interface FinderRules {
+  giveAllow: string[];
+  getAllow: string[];
+  givePositions: FinderPosition[];
+  getPositions: FinderPosition[];
+}
+
+/** The pools as the sender's rules (empty array = no limit on that pool). */
+export function queryToRules(query: FinderQuery): FinderRules {
   return {
-    partnerRosterId: query.partnerRosterId,
-    position: query.get.kind === 'position' ? query.get.position : null,
-    givePosition: query.send.kind === 'position' ? query.send.position : null,
-    givePlayerIds: query.send.kind === 'player' ? [query.send.id] : [],
-    getPlayerIds: query.get.kind === 'player' ? [query.get.id] : [],
-    shape: shapeSizes(query.shape),
+    giveAllow: query.send.kind === 'player' ? query.send.ids : [],
+    getAllow: query.get.kind === 'player' ? query.get.ids : [],
+    givePositions: query.send.kind === 'position' ? query.send.positions : [],
+    getPositions: query.get.kind === 'position' ? query.get.positions : [],
   };
 }
 
+export function queryToShapes(query: FinderQuery) {
+  return query.shapes
+    .map((shape) => shapeSizes(shape))
+    .filter((sizes): sizes is { give: number; get: number } => sizes != null);
+}
+
+/** One scan request per manager: the client walks these one at a time. */
+export function queryToRequests(query: FinderQuery, teams: ApiTeam[]) {
+  const rules = queryToRules(query);
+  const shapes = queryToShapes(query);
+  return partnersToScan(query, teams).map((partnerRosterId) => ({ partnerRosterId, rules, shapes }));
+}
+
 /**
- * A pinned get-player fixes the partner: only one manager owns him. Picking
- * him sets the partner, and changing the partner drops a get-player who is
- * not on that roster. This keeps the ticket from ever asking the engine for
- * Hermes Express's player from Apollo Archers.
+ * Keep the ticket answerable: a send pool only holds your players, a get pool
+ * only players an opponent owns, and when managers are picked, only players on
+ * THEIR rosters. Anything else is dropped rather than asked for.
  */
 export function reconcileQuery(query: FinderQuery, teams: ApiTeam[]): FinderQuery {
-  if (query.get.kind !== 'player') return query;
-  const owner = teams.find((team) => !team.isUser && team.players.includes(query.get.kind === 'player' ? query.get.id : ''));
-  if (!owner) return { ...query, get: ANY_PICK };
-  if (query.partnerRosterId != null && query.partnerRosterId !== owner.rosterId) {
-    return { ...query, get: ANY_PICK };
-  }
-  return { ...query, partnerRosterId: owner.rosterId };
+  const user = teams.find((team) => team.isUser) ?? null;
+  const opponents = teams.filter((team) => !team.isUser);
+  const partnerRosterIds = query.partnerRosterIds.filter((id) => opponents.some((team) => team.rosterId === id));
+  const pool = partnerRosterIds.length ? opponents.filter((team) => partnerRosterIds.includes(team.rosterId)) : opponents;
+  const send = query.send.kind === 'player'
+    ? normalizePick({ kind: 'player', ids: query.send.ids.filter((id) => user?.players.includes(id)) })
+    : normalizePick(query.send);
+  const get = query.get.kind === 'player'
+    ? normalizePick({ kind: 'player', ids: query.get.ids.filter((id) => pool.some((team) => team.players.includes(id))) })
+    : normalizePick(query.get);
+  return { partnerRosterIds, send, get, shapes: orderedShapes(query.shapes) };
 }
 
 export function suggestionSizes(suggestion: Pick<TradeSuggestion, 'give' | 'get'>) {
   return { give: suggestion.give.length, get: suggestion.get.length };
 }
 
-export function matchesShape(suggestion: Pick<TradeSuggestion, 'give' | 'get'>, shape: FinderShape) {
-  const sizes = shapeSizes(shape);
-  if (!sizes) return true;
-  return suggestion.give.length === sizes.give && suggestion.get.length === sizes.get;
+export function matchesShapes(suggestion: Pick<TradeSuggestion, 'give' | 'get'>, shapes: FinderShape[]) {
+  if (shapes.length === 0) return true;
+  return shapes.some((shape) => {
+    const sizes = shapeSizes(shape);
+    return sizes != null && suggestion.give.length === sizes.give && suggestion.get.length === sizes.get;
+  });
+}
+
+/**
+ * The sender's keep rule: your title odds rise (by at least `minGain` points)
+ * and the partner's fall by at most `maxPartnerLoss` points (null = no limit).
+ */
+export function passesLimits(
+  suggestion: Pick<TradeSuggestion, 'youDelta' | 'partnerDelta'>,
+  minGain: number,
+  maxPartnerLoss: number | null,
+) {
+  if (!(suggestion.youDelta > 0) || suggestion.youDelta < minGain) return false;
+  return maxPartnerLoss == null || suggestion.partnerDelta >= -maxPartnerLoss;
+}
+
+/** Ranked the way the sender ranks: your title gain, biggest first. */
+export function rankDeals<T extends { suggestion: Pick<TradeSuggestion, 'youDelta' | 'partnerDelta'> }>(entries: T[]): T[] {
+  return [...entries].sort((a, b) =>
+    b.suggestion.youDelta - a.suggestion.youDelta || b.suggestion.partnerDelta - a.suggestion.partnerDelta);
 }
 
 export function sizesLabel(sizes: { give: number; get: number }) {
@@ -117,46 +226,58 @@ export function sizesLabel(sizes: { give: number; get: number }) {
 }
 
 /**
- * What the results page leads with. Whatever the ticket pinned is the
- * header, said once; whatever it left open is what varies row to row.
+ * What the results page leads with. A leg pinned to ONE player is the header,
+ * said once; anything wider varies row to row.
  */
 export type FinderLayout = 'get-player' | 'send-player' | 'both-players' | 'open';
 
+export function pinnedPlayer(pick: SlotPick): string | null {
+  return pick.kind === 'player' && pick.ids.length === 1 ? pick.ids[0] : null;
+}
+
 export function finderLayout(query: FinderQuery): FinderLayout {
-  if (query.get.kind === 'player' && query.send.kind === 'player') return 'both-players';
-  if (query.get.kind === 'player') return 'get-player';
-  if (query.send.kind === 'player') return 'send-player';
+  const get = pinnedPlayer(query.get);
+  const send = pinnedPlayer(query.send);
+  if (get && send) return 'both-players';
+  if (get) return 'get-player';
+  if (send) return 'send-player';
   return 'open';
 }
 
-/** Ranked the way the finder scores: your title gain weighted by the chance
- *  they say yes. A steal nobody accepts sits under a fair deal that lands. */
-export function finderScore(youDelta: number, acceptance: number) {
-  return youDelta * (Math.max(0, Math.min(100, acceptance)) / 100);
+export interface QueryNames {
+  partners?: string[];
+  sendPlayers?: string[];
+  getPlayers?: string[];
 }
 
-export interface QueryNames {
-  partner?: string | null;
-  sendPlayer?: string | null;
-  getPlayer?: string | null;
+function listWords(words: string[], limit = 2) {
+  if (words.length <= limit) return words.join(' or ');
+  return `${words.slice(0, limit).join(', ')} or ${words.length - limit} more`;
+}
+
+export function pickWords(pick: SlotPick, names: string[] | undefined) {
+  if (pick.kind === 'player') {
+    return names?.length ? listWords(names) : `${pick.ids.length} ${pick.ids.length === 1 ? 'player' : 'players'}`;
+  }
+  if (pick.kind === 'position') return pick.positions.length === 1 ? `a ${pick.positions[0]}` : pick.positions.join(' or ');
+  return 'anything';
+}
+
+export function partnersWords(query: FinderQuery, names: string[] | undefined) {
+  if (query.partnerRosterIds.length === 0) return 'anyone';
+  if (names?.length) return listWords(names);
+  return `${query.partnerRosterIds.length} ${query.partnerRosterIds.length === 1 ? 'manager' : 'managers'}`;
+}
+
+export function shapesWords(shapes: FinderShape[]) {
+  if (shapes.length === 0) return 'any shape';
+  return shapes.map((shape) => FINDER_SHAPES.find((entry) => entry.id === shape)?.label ?? shape).join(' or ');
 }
 
 /** The ask in one sentence, for the results eyebrow and the empty state. */
 export function describeQuery(query: FinderQuery, names: QueryNames = {}) {
-  const partner = query.partnerRosterId != null ? (names.partner ?? 'that manager') : 'anyone';
-  const send = query.send.kind === 'player'
-    ? (names.sendPlayer ?? 'that player')
-    : query.send.kind === 'position'
-      ? `a ${query.send.position}`
-      : 'anything';
-  const get = query.get.kind === 'player'
-    ? (names.getPlayer ?? 'that player')
-    : query.get.kind === 'position'
-      ? `a ${query.get.position}`
-      : 'anything';
-  const sizes = shapeSizes(query.shape);
-  const shape = sizes ? `, ${sizesLabel(sizes)}` : '';
-  return `With ${partner}, send ${send}, get ${get}${shape}`;
+  const shape = query.shapes.length ? `, ${shapesWords(query.shapes)}` : '';
+  return `With ${partnersWords(query, names.partners)}, send ${pickWords(query.send, names.sendPlayers)}, get ${pickWords(query.get, names.getPlayers)}${shape}`;
 }
 
 /* ── Starting points ────────────────────────────────────────────────────── */
@@ -265,7 +386,7 @@ export function deriveStartingPoints({
       title: `Upgrade ${upgrade}`,
       detail: `Your ${slotOrdinal(upgrade, read.slots)} projects ${read.weakestStarter.toFixed(1)}. The league's projects ${leagueWeakest[upgrade].toFixed(1)}.`,
       badge: { kind: 'position', position: upgrade },
-      query: { get: { kind: 'position', position: upgrade } },
+      query: { get: { kind: 'position', positions: [upgrade] } },
     });
   }
 
@@ -282,7 +403,7 @@ export function deriveStartingPoints({
       title: `Sell from ${sell} depth`,
       detail: `You carry ${read.rostered}, ${read.rostered - read.slots} ride the bench.`,
       badge: { kind: 'position', position: sell },
-      query: { send: { kind: 'position', position: sell } },
+      query: { send: { kind: 'position', positions: [sell] } },
     });
   }
 
@@ -305,9 +426,9 @@ export function deriveStartingPoints({
         detail: `Deep at ${upgrade}, thin at ${sell}. Your mirror.`,
         badge: { kind: 'team', rosterId: mirror.team.rosterId },
         query: {
-          partnerRosterId: mirror.team.rosterId,
-          send: { kind: 'position', position: sell },
-          get: { kind: 'position', position: upgrade },
+          partnerRosterIds: [mirror.team.rosterId],
+          send: { kind: 'position', positions: [sell] },
+          get: { kind: 'position', positions: [upgrade] },
         },
       });
     }

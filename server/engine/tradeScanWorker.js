@@ -60,7 +60,7 @@ function priceIncoming(ctx, incoming) {
   });
 }
 
-async function scanManagers({ ctx, partnerRosterIds, sender, recheck, incoming }) {
+async function scanManagers({ ctx, partnerRosterIds, sender, recheck, incoming, shapes = null, readsByRoster = {} }) {
   const rechecked = recheckOffers(ctx, recheck);
   const incomingPriced = priceIncoming(ctx, incoming);
   const suggestions = [];
@@ -68,7 +68,9 @@ async function scanManagers({ ctx, partnerRosterIds, sender, recheck, incoming }
   for (const partnerRosterId of partnerRosterIds) {
     const t0 = Date.now();
     try {
-      const res = await suggestTrades(ctx, { maxSim: 20, partnerRosterId, sender });
+      // `shapes` / `readsByRoster` come only from the Trades-tab finder (same scan,
+      // narrowed to the package sizes asked for); the background sender leaves them unset.
+      const res = await suggestTrades(ctx, { maxSim: 20, partnerRosterId, sender, shapes, readsByRoster });
       const found = res?.suggestions ?? [];
       suggestions.push(...found);
       perManager.push({ partnerRosterId, found: found.length, ms: Date.now() - t0 });

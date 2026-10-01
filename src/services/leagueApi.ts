@@ -1037,6 +1037,34 @@ export interface TradeSuggestions {
   suggestions?: TradeSuggestion[];
   debug?: Record<string, number>;
 }
+/**
+ * The Trades-tab finder: ONE manager per call, scanned on the trade sender's
+ * logic (per-manager search at the analyzer's sim count, kept only if your title
+ * odds rise, ranked by your gain). The client walks the managers it was asked
+ * for one at a time. Every pool is "any of these"; an empty pool is no limit.
+ */
+export function fetchTradeFinder(
+  leagueId: string,
+  body: {
+    userId: string;
+    partnerRosterId: number;
+    rules: {
+      giveAllow: string[];
+      getAllow: string[];
+      givePositions: string[];
+      getPositions: string[];
+    };
+    shapes: { give: number; get: number }[];
+    readsByRoster?: Record<number, { friendliness: number; relationship: number }>;
+  },
+): Promise<TradeSuggestions> {
+  return get<TradeSuggestions>(`/api/league/${leagueId}/trade-finder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export function fetchTradeSuggestions(
   leagueId: string,
   body: {

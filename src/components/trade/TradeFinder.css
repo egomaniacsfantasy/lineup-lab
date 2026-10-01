@@ -1160,3 +1160,33 @@
   .trade-finder__leg,
   .trade-finder__start { transition: none; }
 }
+
+/* Eight shape buttons (Any + seven sizes) do not fit one row; two rows of four. */
+.trade-finder__seg--wrap {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* The picker keeps several picks, so it closes on Done rather than on a tap. */
+.trade-finder__sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.trade-finder__sheet-done {
+  min-height: 40px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.trade-finder__sheet-done:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }

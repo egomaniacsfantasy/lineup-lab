@@ -1499,6 +1499,22 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
     return bundle.suggestions;
   }
 
+  /* The Trades-tab finder asks one manager per call. Answer with that manager's
+     share of the same fixture deals (narrowed to the shapes asked for, as the
+     engine would), so walking the league adds each deal once. */
+  if (endpoint === 'trade-finder' && method === 'POST') {
+    const asked = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+    const shapes: { give: number; get: number }[] = Array.isArray(asked.shapes) ? asked.shapes : [];
+    return {
+      ...bundle.suggestions,
+      suggestions: (bundle.suggestions.suggestions ?? [])
+        .filter((deal) => deal.partnerRosterId === Number(asked.partnerRosterId))
+        .filter((deal) => deal.youDelta > 0)
+        .filter((deal) => shapes.length === 0
+          || shapes.some((shape) => shape.give === deal.give.length && shape.get === deal.get.length)),
+    };
+  }
+
   const body =
     typeof init?.body === 'string'
       ? JSON.parse(init.body)

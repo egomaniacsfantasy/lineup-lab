@@ -2,21 +2,31 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   ANY_PICK,
+  DEFAULT_MAX_PARTNER_LOSS,
+  DEFAULT_MIN_GAIN,
   EMPTY_QUERY,
   FINDER_SHAPES,
   deriveStartingPoints,
   describeQuery,
   finderLayout,
   isExactTrade,
-  matchesShape,
-  queryToRequest,
+  matchesShapes,
+  partnersToScan,
+  passesLimits,
+  queryToRequests,
+  rankDeals,
   reconcileQuery,
+  togglePartner,
+  togglePlayer,
+  togglePosition,
+  toggleShape,
 } from '../src/utils/tradeFinderQuery.ts';
 
 /**
- * The finder's ticket is one question with three blanks and a shape. Every
- * prompt a manager brings maps onto a parameter the engine already accepts;
- * these pin the mapping and the roster facts the starting points read.
+ * The finder's ticket is the trade sender's rules asked on demand: every blank
+ * is a pool ("any of these", empty = no limit) and takes several picks. These
+ * pin the pools, the per-manager requests they become, the sender's keep rule
+ * and ranking, and the roster facts the starting points read.
  */
 
 const team = (rosterId, players, isUser = false) => ({
@@ -36,77 +46,134 @@ const team = (rosterId, players, isUser = false) => ({
   division: null,
 });
 
-test('the shape row offers 2 for 2, and the first number is what you send', () => {
-  const twoForTwo = FINDER_SHAPES.find((shape) => shape.id === '2-2');
-  assert.deepEqual(twoForTwo?.sizes, { give: 2, get: 2 });
-  const twoForOne = FINDER_SHAPES.find((shape) => shape.id === '2-1');
-  assert.deepEqual(twoForOne?.sizes, { give: 2, get: 1 });
+test('the shape row offers every size up to 3 for 3, and the first number is what you send', () => {
+  assert.deepEqual(FINDER_SHAPES.map((shape) => shape.label),
+    ['1 for 1', '2 for 1', '1 for 2', '2 for 2', '2 for 3', '3 for 2', '3 for 3']);
+  assert.deepEqual(FINDER_SHAPES.find((shape) => shape.id === '2-1')?.sizes, { give: 2, get: 1 });
+  assert.deepEqual(FINDER_SHAPES.find((shape) => shape.id === '2-3')?.sizes, { give: 2, get: 3 });
 });
 
-test('each leg becomes the engine parameter it stands for', () => {
-  const request = queryToRequest({
-    partnerRosterId: 4,
-    send: { kind: 'position', position: 'WR' },
-    get: { kind: 'player', id: 'p9' },
-    shape: '2-1',
-  });
-  assert.deepEqual(request, {
-    partnerRosterId: 4,
-    position: null,
-    givePosition: 'WR',
-    givePlayerIds: [],
-    getPlayerIds: ['p9'],
-    shape: { give: 2, get: 1 },
-  });
-  const upgrade = queryToRequest({ ...EMPTY_QUERY, get: { kind: 'position', position: 'RB' } });
-  assert.equal(upgrade.position, 'RB');
-  assert.equal(upgrade.givePosition, null);
-  assert.equal(upgrade.shape, null);
+test('every leg takes several picks, and an emptied leg is open again', () => {
+  /* Positions: any number of the four. */
+  let send = togglePosition(ANY_PICK, 'WR');
+  send = togglePosition(send, 'RB');
+  assert.deepEqual(send, { kind: 'position', positions: ['RB', 'WR'] }, 'kept in QB/RB/WR/TE order');
+  assert.deepEqual(togglePosition(togglePosition(send, 'RB'), 'WR'), ANY_PICK, 'removing the last pick reopens the leg');
+
+  /* Players: any number, and picking a player replaces a position pool. */
+  let get = togglePlayer({ kind: 'position', positions: ['TE'] }, 'p1');
+  get = togglePlayer(get, 'p2');
+  assert.deepEqual(get, { kind: 'player', ids: ['p1', 'p2'] });
+  assert.deepEqual(togglePlayer(get, 'p1'), { kind: 'player', ids: ['p2'] });
+
+  /* Shapes and managers toggle the same way. */
+  assert.deepEqual(toggleShape(toggleShape([], '2-2'), '1-1'), ['1-1', '2-2']);
+  assert.deepEqual(toggleShape(['1-1', '2-2'], '1-1'), ['2-2']);
+  assert.deepEqual(togglePartner(togglePartner([], 4), 7), [4, 7]);
+  assert.deepEqual(togglePartner([4, 7], 4), [7]);
 });
 
-test('a pinned get-player fixes the partner to whoever owns him', () => {
+test('the ticket becomes one sender-rules request per manager', () => {
+  const teams = [team(1, ['mine'], true), team(2, ['a']), team(3, ['b']), team(4, ['c'])];
+  const requests = queryToRequests({
+    partnerRosterIds: [4, 2],
+    send: { kind: 'position', positions: ['RB', 'WR'] },
+    get: { kind: 'position', positions: ['TE'] },
+    shapes: ['1-1', '2-1'],
+  }, teams);
+  assert.deepEqual(requests.map((request) => request.partnerRosterId), [2, 4], 'only the picked managers, one request each');
+  assert.deepEqual(requests[0].rules, {
+    giveAllow: [], getAllow: [], givePositions: ['RB', 'WR'], getPositions: ['TE'],
+  });
+  assert.deepEqual(requests[0].shapes, [{ give: 1, get: 1 }, { give: 2, get: 1 }]);
+
+  /* Nothing picked anywhere = every manager, no limits, every shape. */
+  const open = queryToRequests(EMPTY_QUERY, teams);
+  assert.deepEqual(open.map((request) => request.partnerRosterId), [2, 3, 4]);
+  assert.deepEqual(open[0].rules, { giveAllow: [], getAllow: [], givePositions: [], getPositions: [] });
+  assert.deepEqual(open[0].shapes, []);
+});
+
+test('a pool of players you want narrows the scan to the managers who own them', () => {
+  const teams = [team(1, ['mine'], true), team(2, ['x']), team(3, ['y']), team(4, ['z'])];
+  const query = { ...EMPTY_QUERY, get: { kind: 'player', ids: ['x', 'z'] } };
+  assert.deepEqual(partnersToScan(query, teams), [2, 4]);
+  assert.deepEqual(queryToRequests(query, teams)[0].rules.getAllow, ['x', 'z']);
+});
+
+test('the ticket never asks for a player the picked managers do not own', () => {
   const teams = [team(1, ['mine'], true), team(2, ['theirs']), team(3, ['other'])];
-  const pinned = reconcileQuery({ ...EMPTY_QUERY, get: { kind: 'player', id: 'theirs' } }, teams);
-  assert.equal(pinned.partnerRosterId, 2);
-  /* Switching to a manager who does not own him drops the player, never the
-     manager: the ticket must not ask the engine for an impossible trade. */
-  const switched = reconcileQuery({ ...pinned, partnerRosterId: 3 }, teams);
-  assert.deepEqual(switched.get, ANY_PICK);
-  assert.equal(switched.partnerRosterId, 3);
+  const wide = reconcileQuery({ ...EMPTY_QUERY, get: { kind: 'player', ids: ['theirs', 'other'] } }, teams);
+  assert.deepEqual(wide.get, { kind: 'player', ids: ['theirs', 'other'] }, 'with anyone, every opponent player is fair');
+  /* Narrowing to one manager drops the players he does not own, never the manager. */
+  const narrowed = reconcileQuery({ ...wide, partnerRosterIds: [3] }, teams);
+  assert.deepEqual(narrowed.get, { kind: 'player', ids: ['other'] });
+  assert.deepEqual(narrowed.partnerRosterIds, [3]);
+  /* A send pool only ever holds your own players. */
+  const send = reconcileQuery({ ...EMPTY_QUERY, send: { kind: 'player', ids: ['mine', 'theirs'] } }, teams);
+  assert.deepEqual(send.send, { kind: 'player', ids: ['mine'] });
 });
 
 test('every leg exact is a trade to price, not a search', () => {
   const exact = {
-    partnerRosterId: 2,
-    send: { kind: 'player', id: 'a' },
-    get: { kind: 'player', id: 'b' },
-    shape: '1-1',
+    partnerRosterIds: [2],
+    send: { kind: 'player', ids: ['a'] },
+    get: { kind: 'player', ids: ['b'] },
+    shapes: ['1-1'],
   };
   assert.equal(isExactTrade(exact), true);
-  assert.equal(isExactTrade({ ...exact, shape: 'any' }), false, 'any shape allows throw-ins, so it is still a search');
+  assert.equal(isExactTrade({ ...exact, shapes: [] }), false, 'any shape allows throw-ins, so it is still a search');
+  assert.equal(isExactTrade({ ...exact, shapes: ['1-1', '2-1'] }), false);
   assert.equal(isExactTrade({ ...exact, send: ANY_PICK }), false);
+  assert.equal(isExactTrade({ ...exact, get: { kind: 'player', ids: ['b', 'c'] } }), false, 'a pool of two is a search');
+  assert.equal(isExactTrade({ ...exact, partnerRosterIds: [2, 3] }), false);
 });
 
-test('a shape filter keeps only that package size', () => {
+test('picked shapes keep only those package sizes', () => {
   const twoForTwo = { give: [{ id: 'a' }, { id: 'b' }], get: [{ id: 'c' }, { id: 'd' }] };
   const oneForOne = { give: [{ id: 'a' }], get: [{ id: 'c' }] };
-  assert.equal(matchesShape(twoForTwo, '2-2'), true);
-  assert.equal(matchesShape(oneForOne, '2-2'), false);
-  assert.equal(matchesShape(oneForOne, 'any'), true);
+  const threeForThree = { give: [{ id: 'a' }, { id: 'b' }, { id: 'e' }], get: [{ id: 'c' }, { id: 'd' }, { id: 'f' }] };
+  assert.equal(matchesShapes(twoForTwo, ['2-2']), true);
+  assert.equal(matchesShapes(oneForOne, ['2-2']), false);
+  assert.equal(matchesShapes(oneForOne, ['1-1', '2-1']), true, 'several shapes at once');
+  assert.equal(matchesShapes(threeForThree, ['1-1', '2-1']), false, 'a 3 for 3 cannot crowd out the sizes asked for');
+  assert.equal(matchesShapes(threeForThree, []), true, 'no shape picked = any size');
 });
 
-test('the pinned leg is the header, the open leg is the row', () => {
-  assert.equal(finderLayout({ ...EMPTY_QUERY, get: { kind: 'player', id: 'x' } }), 'get-player');
-  assert.equal(finderLayout({ ...EMPTY_QUERY, send: { kind: 'player', id: 'x' } }), 'send-player');
-  assert.equal(finderLayout({ ...EMPTY_QUERY, get: { kind: 'position', position: 'RB' } }), 'open');
+test('the keep rule and ranking are the trade sender\'s, not an acceptance estimate', () => {
+  assert.equal(DEFAULT_MIN_GAIN, 1);
+  assert.equal(DEFAULT_MAX_PARTNER_LOSS, 3);
+  const deal = (youDelta, partnerDelta) => ({ suggestion: { youDelta, partnerDelta } });
+  /* Kept only if your title odds rise at least X and theirs fall at most Y. */
+  assert.equal(passesLimits({ youDelta: 2.1, partnerDelta: -1.2 }, 1, 3), true);
+  assert.equal(passesLimits({ youDelta: 0.4, partnerDelta: -0.2 }, 1, 3), false, 'under your minimum gain');
+  assert.equal(passesLimits({ youDelta: 4, partnerDelta: -3.5 }, 1, 3), false, 'they lose more than your limit');
+  assert.equal(passesLimits({ youDelta: 4, partnerDelta: -3.5 }, 1, null), true, 'no limit on their loss');
+  assert.equal(passesLimits({ youDelta: -0.5, partnerDelta: 2 }, 0, null), false, 'a deal that lowers your odds is never kept');
+  /* Ranked by your title gain, biggest first. */
+  const ranked = rankDeals([deal(1.4, -0.8), deal(2.2, 0.4), deal(2.1, -1.2)]);
+  assert.deepEqual(ranked.map((entry) => entry.suggestion.youDelta), [2.2, 2.1, 1.4]);
+});
+
+test('a leg pinned to one player is the header; anything wider is the row', () => {
+  assert.equal(finderLayout({ ...EMPTY_QUERY, get: { kind: 'player', ids: ['x'] } }), 'get-player');
+  assert.equal(finderLayout({ ...EMPTY_QUERY, send: { kind: 'player', ids: ['x'] } }), 'send-player');
+  assert.equal(finderLayout({ ...EMPTY_QUERY, get: { kind: 'player', ids: ['x', 'y'] } }), 'open');
+  assert.equal(finderLayout({ ...EMPTY_QUERY, get: { kind: 'position', positions: ['RB'] } }), 'open');
 });
 
 test('the ask reads back as one sentence', () => {
   const text = describeQuery(
-    { partnerRosterId: 2, send: { kind: 'position', position: 'WR' }, get: { kind: 'player', id: 'x' }, shape: '2-1' },
-    { partner: 'Hermes Express', getPlayer: 'Bijan Robinson' },
+    { partnerRosterIds: [2], send: { kind: 'position', positions: ['WR'] }, get: { kind: 'player', ids: ['x'] }, shapes: ['2-1'] },
+    { partners: ['Hermes Express'], getPlayers: ['Bijan Robinson'] },
   );
   assert.equal(text, 'With Hermes Express, send a WR, get Bijan Robinson, 2 for 1');
+  const wide = describeQuery(
+    { partnerRosterIds: [2, 3, 4], send: { kind: 'position', positions: ['RB', 'WR'] }, get: ANY_PICK, shapes: ['1-1', '2-2'] },
+    { partners: ['Hermes Express', 'Apollo Archers', 'Ares'] },
+  );
+  assert.equal(wide, 'With Hermes Express, Apollo Archers or 1 more, send RB or WR, get anything, 1 for 1 or 2 for 2');
+  assert.equal(describeQuery(EMPTY_QUERY), 'With anyone, send anything, get anything');
 });
 
 test('starting points come from roster facts, and name the mirror manager', () => {
@@ -141,22 +208,22 @@ test('starting points come from roster facts, and name the mirror manager', () =
   /* Your RB2 projects 6 against a league median of 10.5: that is the upgrade. */
   const upgrade = points.find((point) => point.id === 'upgrade-RB');
   assert.ok(upgrade, `expected an RB upgrade, got ${points.map((p) => p.id).join(', ')}`);
-  assert.deepEqual(upgrade.query, { get: { kind: 'position', position: 'RB' } });
+  assert.deepEqual(upgrade.query, { get: { kind: 'position', positions: ['RB'] } });
   assert.match(upgrade.detail, /RB2 projects 6\.0/);
 
   /* Four receivers for two slots: sell from WR. */
   const sell = points.find((point) => point.id === 'sell-WR');
   assert.ok(sell, 'expected a WR sell');
-  assert.deepEqual(sell.query, { send: { kind: 'position', position: 'WR' } });
+  assert.deepEqual(sell.query, { send: { kind: 'position', positions: ['WR'] } });
   assert.match(sell.detail, /carry 4, 2 ride the bench/);
 
   /* Team 2 is deep at RB and thin at WR: the mirror, with both legs filled. */
   const mirror = points.find((point) => point.id === 'mirror-2');
   assert.ok(mirror, 'expected team 2 as the mirror');
   assert.deepEqual(mirror.query, {
-    partnerRosterId: 2,
-    send: { kind: 'position', position: 'WR' },
-    get: { kind: 'position', position: 'RB' },
+    partnerRosterIds: [2],
+    send: { kind: 'position', positions: ['WR'] },
+    get: { kind: 'position', positions: ['RB'] },
   });
 
   /* Without per-player means there are no facts, so there are no points. */

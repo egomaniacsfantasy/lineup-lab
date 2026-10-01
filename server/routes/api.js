@@ -2304,6 +2304,79 @@ apiRouter.post('/league/:leagueId/trade-counter', async (req, res, next) => {
   }
 });
 
+/**
+ * The Trades-tab finder, on the TRADE SENDER's logic. One opposing manager per
+ * request (the client walks the managers it was asked for, one at a time), scanned
+ * exactly as the sender scans him: the pinned per-manager search at the full
+ * analyzer sim count, in the scan worker so the event loop stays free, kept only if
+ * the user's title odds rise (by at least `minYouDelta`) and the partner's fall by
+ * at most `maxPartnerLoss`, ranked by the user's title gain. No league-wide light
+ * sweep and no acceptance model in the selection: every number is the analyzer's.
+ *
+ * Body: { userId, partnerRosterId, rules: { giveAllow, getAllow, givePositions,
+ * getPositions, minYouDelta, maxPartnerLoss }, shapes: [{ give, get }], readsByRoster }.
+ * Each pool is "any of these" (empty = no limit): every player sent is from the
+ * give pools, every player received is from the get pools.
+ */
+apiRouter.post('/league/:leagueId/trade-finder', async (req, res, next) => {
+  try {
+    const provider = getProvider(req);
+    const { leagueId } = req.params;
+    const { userId } = req.body ?? {};
+    const partnerRosterId = Number(req.body?.partnerRosterId);
+    if (!Number.isFinite(partnerRosterId)) {
+      res.status(400).json({ error: 'bad_request', message: 'partnerRosterId is required.' });
+      return;
+    }
+    const POS = ['QB', 'RB', 'WR', 'TE'];
+    const ids = (v) => (Array.isArray(v) ? [...new Set(v.map(String))].slice(0, 60) : []);
+    const positions = (v) => (Array.isArray(v) ? [...new Set(v.filter((p) => POS.includes(p)))] : []);
+    const r = req.body?.rules ?? {};
+    const minYou = Number(r.minYouDelta);
+    const maxLoss = Number(r.maxPartnerLoss);
+    const sender = {
+      giveAllow: ids(r.giveAllow),
+      getAllow: ids(r.getAllow),
+      protect: [],
+      givePositions: positions(r.givePositions),
+      getPositions: positions(r.getPositions),
+      minYouDelta: Number.isFinite(minYou) && minYou > 0 ? minYou : 0,
+      ...(Number.isFinite(maxLoss) && maxLoss >= 0 ? { maxPartnerLoss: maxLoss } : {}),
+    };
+    const shapes = (Array.isArray(req.body?.shapes) ? req.body.shapes : [])
+      .map((sh) => ({ give: Number(sh?.give), get: Number(sh?.get) }))
+      .filter((sh) => sh.give >= 1 && sh.give <= 3 && sh.get >= 1 && sh.get <= 3);
+    const readsByRoster = req.body?.readsByRoster ?? {};
+
+    const ctx = await assembleLeagueCtx(provider, leagueId, userId, TRADE_OVERLAY, getFinalNflTeams());
+    if (!ctx.teams.some((t) => t.isUser)) { res.json({ available: false, reason: 'team_not_found' }); return; }
+    if (!ctx.projections) { res.json({ available: false, reason: 'no_projections' }); return; }
+
+    const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
+    const sig = crypto.createHash('sha1').update(JSON.stringify({ sender, shapes, readsByRoster })).digest('hex').slice(0, 12);
+    const key = `agg:trade-finder:${leagueId}:${userId}:${partnerRosterId}:${sig}:${ctx.projections.version}:${build}:${finalTeamsSignature()}`;
+    const result = await cached(key, 5 * 60_000, async () => {
+      const { suggestions, perManager } = await runTradeScan({
+        // Only the plain-data fields the sim reads cross the thread boundary
+        // (the same set the background sender hands over).
+        ctx: {
+          league: ctx.league, teams: ctx.teams, week: ctx.week, catalog: ctx.catalog,
+          scheduleWeeks: ctx.scheduleWeeks, overlay: null, projections: ctx.projections, matchups: ctx.matchups,
+          liveLocks: ctx.liveLocks, priorFinalMatchups: ctx.priorFinalMatchups,
+        },
+        partnerRosterIds: [partnerRosterId],
+        sender,
+        shapes,
+        readsByRoster,
+      });
+      return { available: true, suggestions, debug: perManager?.[0] ?? null };
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 /** "Managers you match with": sim-scored trade suggestions (Δ championship % for
  *  both sides). The client applies acceptance + ranks by yourΔc × P(accept). */
 apiRouter.post('/league/:leagueId/trade-suggestions', async (req, res, next) => {
