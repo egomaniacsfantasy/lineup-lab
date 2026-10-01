@@ -3456,7 +3456,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   let re = 0;
   let finalErrors = 0;
   for (const c of finalists) {
-    if (Date.now() - t0 > 25_000) break;   // return what we have before the client's 30s abort
+    if (Date.now() - t0 > 22_000) break;   // return what we have well before the client's 30s abort
     let ev;
     try { ev = evalTrade(c.give, c.get, c.partner, FINDER_SIMS, finalBaseline); }
     catch { finalErrors += 1; continue; }
