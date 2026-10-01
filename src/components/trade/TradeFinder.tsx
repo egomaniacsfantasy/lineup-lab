@@ -12,8 +12,6 @@ import {
   type PricedFuture,
   type TradeSuggestion,
 } from '../../services/leagueApi';
-import { acceptanceProbability } from '../../utils/tradeAcceptance';
-import { formatAcceptancePercent, getAcceptanceLingo } from '../../utils/acceptanceLingo';
 import { tradeSignature } from '../../utils/tradeMarket';
 import { deltaTone, signedPct } from '../../utils/tradeVerdict';
 import { formatProbOrOdds } from '../../utils/formatOdds';
@@ -61,8 +59,8 @@ import './TradeFinder.css';
  * The search is the sender's: each manager is scanned one at a time by the
  * per-manager search at the analyzer's full sim count, a deal is kept only if
  * your title odds rise (by your minimum) and theirs fall by no more than your
- * limit, and deals rank by your title gain. The acceptance read is shown on a
- * row but never decides what is found or how it ranks.
+ * limit, and deals rank by your title gain. There is no "chance they accept"
+ * number anywhere: a deal is shown with what it does to each side's title odds.
  *
  * The results read the ticket back: a leg pinned to one player is the header,
  * said once, and each row is only what varied.
@@ -100,7 +98,6 @@ export interface TradeFinderProps {
 interface ResultEntry {
   suggestion: TradeSuggestion;
   signature: string;
-  acceptance: number;
 }
 
 /* The top of the "they lose at most" slider means no limit. */
@@ -256,22 +253,17 @@ export function TradeFinder({
     if (!suggestions || !ranQuery) return [];
     return rankDeals(suggestions
       .filter((suggestion) => matchesShapes(suggestion, ranQuery.shapes))
-      .map((suggestion) => {
-        const read = readsByRoster[suggestion.partnerRosterId] ?? { friendliness: 5, relationship: 5 };
-        return {
-          suggestion,
-          signature: tradeSignature({
-            leagueId,
-            partnerRosterId: suggestion.partnerRosterId,
-            givePlayerIds: suggestion.give.map((asset) => asset.id),
-            getPlayerIds: suggestion.get.map((asset) => asset.id),
-          }),
-          /* Shown on the row as a read. It never filters or ranks. */
-          acceptance: acceptanceProbability(suggestion.partnerDelta, read.friendliness, read.relationship),
-        };
-      })
+      .map((suggestion) => ({
+        suggestion,
+        signature: tradeSignature({
+          leagueId,
+          partnerRosterId: suggestion.partnerRosterId,
+          givePlayerIds: suggestion.give.map((asset) => asset.id),
+          getPlayerIds: suggestion.get.map((asset) => asset.id),
+        }),
+      }))
       .filter((entry) => !dismissedSignatures.has(entry.signature)));
-  }, [dismissedSignatures, leagueId, ranQuery, readsByRoster, suggestions]);
+  }, [dismissedSignatures, leagueId, ranQuery, suggestions]);
 
   /* The sender's keep rule, applied to what the scan returned: your title odds
      rise at least `minGain`, theirs fall at most `maxLoss`. */
@@ -497,7 +489,6 @@ export function TradeFinder({
   const renderDeal = (entry: ResultEntry, index: number) => {
     const { suggestion } = entry;
     const partner = partnerById.get(suggestion.partnerRosterId);
-    const band = getAcceptanceLingo(entry.acceptance);
     const sizes = suggestionSizes(suggestion);
     const pinnedGet = ranQuery ? pinnedPlayer(ranQuery.get) : null;
     const pinnedSend = ranQuery ? pinnedPlayer(ranQuery.send) : null;
@@ -534,12 +525,6 @@ export function TradeFinder({
           <span className="trade-finder__deal-tags">
             <span className="trade-finder__tag">{sizesLabel(sizes)}</span>
             {!partnerPinned ? <span className="trade-finder__tag trade-finder__tag--partner">{partner?.teamName ?? suggestion.partnerName}</span> : null}
-            <span className="trade-finder__tag trade-finder__tag--accept">
-              {band?.label ?? 'Read'} {formatAcceptancePercent(entry.acceptance)}
-            </span>
-            <span aria-hidden="true" className="trade-finder__track">
-              <span className="trade-finder__fill" style={{ width: `${Math.max(0, Math.min(100, entry.acceptance))}%` }} />
-            </span>
           </span>
           <span className="trade-finder__deal-price">
             <span className="trade-finder__tag">Your title</span>

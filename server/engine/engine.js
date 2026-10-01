@@ -3292,7 +3292,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
             const afterPos = positionStarterMean(userAfter, targetPos, slotLabels, projectionMap, catalog);
             if (afterPos <= beforePos + 0.1) continue; // must upgrade that position's starters
           }
-          scored.push({ partner: opp, give, get, gap: Math.abs(gv - tv), edge: tv - gv });
+          scored.push({ partner: opp, give, get, gap: Math.abs(gv - tv), edge: tv - gv, ratio: r, size: `${k}-${j}` });
         }
       }
     }
@@ -3319,11 +3319,91 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   }
   // Each manager contributes its K fairest-by-value trades, interleaved round-robin so
   // a time cut-off still leaves every manager represented rather than starving the tail.
-  const perMgr = [...byMgr.values()].map((list) =>
-    [...list].sort((a, b) => a.gap - b.gap).slice(0, K_PER_MGR));
-  const finalists = [];
-  for (let i = 0; i < K_PER_MGR; i += 1) {
-    for (const list of perMgr) if (list[i]) finalists.push(list[i]);
+  /* A PINNED manager (the Trades-tab finder and the trade sender) is searched SHAPE BY
+     SHAPE. It used to take that manager's K most value-balanced packages across every
+     shape at once, which broke in two ways:
+       - with many shapes allowed, thousands of 3-for-3 / 3-for-2 combos sum to nearly
+         the same projected points, so they took every slot and the 1-for-1s and
+         2-for-1s were never looked at -- "Any" found FEWER deals than picking shapes;
+       - an equal-points swap is, almost by construction, a trade that barely helps
+         anyone, so most of the slots were spent on packages that could not win.
+     Now every allowed shape gets its own quota. Half of each quota goes to the packages
+     that lift BOTH teams' starting lineups the most (ranked by the smaller of the two
+     lifts: a real trade is one where each side gets better where it is thin), the other
+     half to the most balanced on VALUE OVER REPLACEMENT. Two things were tried and are
+     wrong, both because they pick robberies (three bench bodies for his best receiver):
+     ranking by MY lift alone, and "balanced" meaning raw projected points summed, under
+     which three 6-point bench players equal one 18-point star. Still no sim here:
+     this only decides what is worth simming. The season sim alone decides what a trade
+     is worth. */
+  const perShape = scopedPartnerId != null && !hasTarget;
+  let finalists = [];
+  if (perShape) {
+    const list = [...byMgr.values()][0] ?? [];
+    const byShape = new Map();
+    for (const c of list) {
+      const l = byShape.get(c.size) ?? [];
+      l.push(c);
+      byShape.set(c.size, l);
+    }
+    const LIGHT_BUDGET = 60;
+    const quota = Math.max(6, Math.min(20, Math.floor(LIGHT_BUDGET / Math.max(1, byShape.size))));
+    const lineupMean = (ids) => bestLineupDistribution(ids, slotLabels, projectionMap, catalog, null).mean;
+    const partnerTeam = list[0]?.partner ?? null;
+    const myLineupBefore = lineupMean(userTeam.players);
+    const theirLineupBefore = partnerTeam ? lineupMean(partnerTeam.players) : 0;
+    // The smaller of the two starting-lineup lifts (points per week): positive only when
+    // the package makes BOTH lineups better.
+    const mutualLift = (c) => {
+      const mine = userTeam.players.filter((id) => !c.give.includes(id)).concat(c.get);
+      const theirs = c.partner.players.filter((id) => !c.get.includes(id)).concat(c.give);
+      return Math.min(lineupMean(mine) - myLineupBefore, lineupMean(theirs) - theirLineupBefore);
+    };
+    const picked = [];
+    for (const shapeList of byShape.values()) {
+      // Balance is RELATIVE to what changes hands, and a package that moves no real
+      // value is skipped: otherwise bench-for-bench swaps (zero value each way, so a
+      // "perfect" balance) take every slot.
+      const fair = shapeList
+        .map((c) => {
+          const total = sumValue(c.give) + sumValue(c.get);
+          return { c, total, rel: Math.abs(valueGapOf(c.give, c.get)) / Math.max(1, total) };
+        })
+        .filter((x) => x.total > 0)
+        .sort((x, y) => x.rel - y.rel || y.total - x.total || x.c.gap - y.c.gap)
+        .map((x) => x.c);
+      const half = Math.ceil(quota / 2);
+      const chosen = fair.slice(0, half);
+      const taken = new Set(chosen.map(dedupeKey));
+      // Mutual lift, over the 600 most balanced packages of this shape.
+      const lifted = fair
+        .filter((c) => !taken.has(dedupeKey(c)))
+        .slice(0, 600)
+        .map((c) => ({ c, lift: mutualLift(c) }))
+        .filter((x) => x.lift > 0)
+        .sort((x, y) => y.lift - x.lift || x.c.gap - y.c.gap);
+      for (const { c } of lifted) {
+        if (chosen.length >= quota) break;
+        chosen.push(c);
+      }
+      // A thin shape (few lift candidates) tops up with the next most balanced.
+      for (const c of fair) {
+        if (chosen.length >= quota) break;
+        if (!chosen.includes(c)) chosen.push(c);
+      }
+      picked.push(chosen);
+    }
+    // Round-robin across shapes so a time cut-off still leaves every shape represented.
+    const longest = Math.max(0, ...picked.map((l) => l.length));
+    for (let i = 0; i < longest; i += 1) {
+      for (const l of picked) if (l[i]) finalists.push(l[i]);
+    }
+  } else {
+    const perMgr = [...byMgr.values()].map((list) =>
+      [...list].sort((a, b) => a.gap - b.gap).slice(0, K_PER_MGR));
+    for (let i = 0; i < K_PER_MGR; i += 1) {
+      for (const list of perMgr) if (list[i]) finalists.push(list[i]);
+    }
   }
 
   // ── Sim ONLY the finalists, at a light count — fast enough to cover every manager
@@ -3332,13 +3412,46 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // A single clicked manager is only ~K trades, so sim it at the FULL analyzer count —
   // its numbers then MATCH the Build-a-Trade analyzer exactly. The all-managers sweep
   // stays a light, fast scan (hence approximate, clearly a quick read).
+  /* Per-shape search = more candidates than can be simmed at the analyzer's count inside
+     one request, so it is screened first: every finalist gets a light 600-sim read (same
+     seed, CRN), and only the ones that look like they raise MY title odds go on to the
+     full analyzer count below. What is finally shown is always the full-count number. */
+  if (perShape && finalists.length) {
+    const LIGHT_SIMS = 600;
+    const FULL_CAP = 10;
+    const lightBaseline = simulateSeason({ ...base, sims: LIGHT_SIMS });
+    const screened = [];
+    let n = 0;
+    for (const c of finalists) {
+      if (Date.now() - t0 > 11_000) break;
+      let ev;
+      try { ev = evalTrade(c.give, c.get, c.partner, LIGHT_SIMS, lightBaseline); } catch { continue; }
+      n += 1;
+      if (n % 6 === 0) await yieldToLoop();
+      if (sender && ev.userDropShort) continue;
+      screened.push({ c, you: ev.youDelta, partner: ev.partnerDelta });
+    }
+    // Which ones earn the full-count sim. NOT simply "my biggest gain": that fills every
+    // slot with robberies nobody would accept. A package is scored by my gain, capped by
+    // what the partner keeps (his change plus the loss I would ask him to swallow), so a
+    // deal that helps me AND leaves him whole outranks one that guts him. 600 sims is a
+    // noisy read of a small edge, so a package just under zero still gets its look; the
+    // real cut (my title odds must RISE) is applied on the full-count number.
+    const tolerance = Number.isFinite(Number(sender?.maxPartnerLoss)) ? Number(sender.maxPartnerLoss) : 3;
+    const mutual = (x) => Math.min(x.you, x.partner + tolerance);
+    finalists = screened
+      .filter((x) => x.you > -0.5)
+      .sort((x, y) => mutual(y) - mutual(x) || y.you - x.you)
+      .slice(0, FULL_CAP)
+      .map((x) => x.c);
+  }
   const FINDER_SIMS = scopedPartnerId != null ? TRADE_SIMS : 600;
   const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS });
   const suggestions = [];
   let re = 0;
   let finalErrors = 0;
   for (const c of finalists) {
-    if (Date.now() - t0 > 26_000) break;   // return what we have before the client's 30s abort
+    if (Date.now() - t0 > 25_000) break;   // return what we have before the client's 30s abort
     let ev;
     try { ev = evalTrade(c.give, c.get, c.partner, FINDER_SIMS, finalBaseline); }
     catch { finalErrors += 1; continue; }

@@ -141,7 +141,8 @@ test('picked shapes keep only those package sizes', () => {
 });
 
 test('the keep rule and ranking are the trade sender\'s, not an acceptance estimate', () => {
-  assert.equal(DEFAULT_MIN_GAIN, 1);
+  /* Opens on every deal that helps you at all, minus what guts the other side. */
+  assert.equal(DEFAULT_MIN_GAIN, 0);
   assert.equal(DEFAULT_MAX_PARTNER_LOSS, 3);
   const deal = (youDelta, partnerDelta) => ({ suggestion: { youDelta, partnerDelta } });
   /* Kept only if your title odds rise at least X and theirs fall at most Y. */

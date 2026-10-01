@@ -19,8 +19,8 @@ import { chromium } from 'playwright';
  *   Henry+McBride for Nacua+Bowers   you +2.2  them +0.4   (2 for 2)
  *   Lamb for Gibbs                   you +0.4  them -0.2
  *
- * The sender's defaults (you gain at least 1.0, they lose at most 3.0) show three
- * and leave the +0.4 deal outside the limits.
+ * The board opens on every deal that helps you (minimum gain 0, they lose at most
+ * 3.0), so all four show. There is no "chance they accept" number anywhere.
  */
 
 const cwd = process.cwd();
@@ -117,23 +117,29 @@ test('the ticket sits beside the builder, and the builder is still there', async
   }
 });
 
-test('the limits are the trade sender\'s, and they hide only what falls outside them', async () => {
+test('every deal that helps you shows, ranked by your gain, with no acceptance number', async () => {
   const page = await openMarket({ width: 390, height: 844 });
   try {
     await findAndSettle(page);
 
-    /* The sender's defaults: your title rises at least 1.0, theirs falls at most 3.0.
-       Of the four deals that help you, the +0.4 one is under the minimum. */
+    /* Opens on everything that helps you: minimum gain 0, they lose at most 3.0. */
     const minGain = page.locator('#trade-finder-min-gain');
     const maxLoss = page.locator('#trade-finder-max-loss');
-    assert.equal(await minGain.inputValue(), '1');
+    assert.equal(await minGain.inputValue(), '0');
     assert.equal(await maxLoss.inputValue(), '3');
-    assert.equal(await page.locator('.trade-finder__deal').count(), 3);
-    assert.match(await page.locator('.trade-finder__floor-note').first().innerText(), /1 outside your limits/);
+    assert.equal(await page.locator('.trade-finder__deal').count(), 4);
+    assert.match(await page.locator('.trade-finder__floor-note').first().innerText(), /Nothing hidden/);
 
-    /* Ranked by your title gain, biggest first: +2.2, +2.1, +1.4. */
+    /* Ranked by your title gain, biggest first. */
     const gains = await page.locator('.trade-finder__deal .trade-finder__num--lead').allTextContents();
-    assert.deepEqual(gains.map((text) => Number(text.replace(/[^0-9.+-]/g, ''))), [2.2, 2.1, 1.4]);
+    assert.deepEqual(gains.map((text) => Number(text.replace(/[^0-9.+-]/g, ''))), [2.2, 2.1, 1.4, 0.4]);
+
+    /* A deal that lowers your title odds is never on the board at all, and no row
+       carries a guess at whether the other manager says yes. */
+    const board = await page.locator('.trade-finder__rows').innerText();
+    assert.doesNotMatch(board, /Justin Jefferson/);
+    assert.doesNotMatch(board, /coin flip|unlikely|likely|long shot|lock/i, 'an acceptance read is back on the rows');
+    assert.equal(await page.locator('.trade-finder__tag--accept, .trade-finder__track').count(), 0);
 
     /* The ticket folds into the strip on a phone; the ask reads back. */
     assert.equal(await page.locator('.trade-finder__ticket').evaluate((el) => el.checkVisibility()), false);
@@ -142,11 +148,10 @@ test('the limits are the trade sender\'s, and they hide only what falls outside 
       ['anyone', 'send anything', 'get anything', 'any shape'],
     );
 
-    /* Dropping the minimum to zero shows every deal that helps you. A deal that
-       lowers your title odds is never on the board at all. */
-    await minGain.fill('0');
-    assert.equal(await page.locator('.trade-finder__deal').count(), 4);
-    assert.doesNotMatch(await page.locator('.trade-finder__rows').innerText(), /Justin Jefferson/);
+    /* The two limits narrow it: a minimum gain of 1.0 hides the +0.4 deal. */
+    await minGain.fill('1');
+    assert.equal(await page.locator('.trade-finder__deal').count(), 3);
+    assert.match(await page.locator('.trade-finder__floor-note').first().innerText(), /1 outside your limits/);
 
     /* Raising it past the best deal leaves the empty state with a way out. */
     await minGain.fill('5');

@@ -105,9 +105,11 @@ export const EMPTY_QUERY: FinderQuery = {
   shapes: [],
 };
 
-/* The sender's two thresholds, with the sender's own defaults: keep a deal only
-   if your title odds rise at least this much, and theirs fall at most this much. */
-export const DEFAULT_MIN_GAIN = 1;
+/* The sender's two thresholds: keep a deal only if your title odds rise at least
+   this much, and theirs fall at most this much. The finder opens on every deal
+   that helps you at all (minimum 0), with the sender's default limit on what the
+   other side gives up, so the board is not led by robberies nobody would take. */
+export const DEFAULT_MIN_GAIN = 0;
 export const DEFAULT_MAX_PARTNER_LOSS = 3;
 
 export function isEmptyQuery(query: FinderQuery) {
