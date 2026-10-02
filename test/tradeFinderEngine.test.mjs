@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { suggestTrades } from '../server/engine/engine.js';
+import { simulateSeason, suggestTrades } from '../server/engine/engine.js';
 import { runTradeScan } from '../server/engine/tradeScanWorker.js';
 
 /**
@@ -139,4 +139,34 @@ test('a manager with nothing that helps you returns nothing (no filler deal)', a
     sender: { ...openRules, minYouDelta: 50 }, // no deal lifts a title by 50 points
   });
   assert.deepEqual(res.suggestions, []);
+});
+
+test('reusing the simulated scores of unchanged teams changes no number', () => {
+  /* A trade changes two teams; the other teams' scores for every sim and week are the
+     baseline's, so they are computed once and reused. That is only allowed if the
+     result is identical to simulating the whole league again. */
+  const projectionMap = new Map(projections.map((p) => [p.playerId, p]));
+  const slotLabels = SLOTS;
+  const base = { league: ctx.league, teams, scheduleWeeks, week: 1, projectionMap, catalog, slotLabels, seed: 987654321, sims: 1500 };
+  const a = teams[0].players[2];
+  const b = teams[1].players[5];
+  const traded = teams.map((t) => (t.rosterId === 1
+    ? { ...t, players: [...t.players.filter((id) => id !== a), b] }
+    : t.rosterId === 2
+      ? { ...t, players: [...t.players.filter((id) => id !== b), a] }
+      : t));
+
+  const plainBefore = simulateSeason(base);
+  const plainAfter = simulateSeason({ ...base, teams: traded });
+
+  const scoreCache = new Map();
+  const cachedBefore = simulateSeason({ ...base, scoreCache, cacheWrite: true });
+  const filled = scoreCache.size;
+  const cachedAfter = simulateSeason({ ...base, teams: traded, scoreCache });
+
+  assert.deepEqual(cachedBefore, plainBefore, 'the baseline is the same with the cache');
+  assert.deepEqual(cachedAfter, plainAfter, 'the traded league is the same with the cache');
+  assert.ok(filled > 0, 'the baseline filled the cache');
+  assert.equal(scoreCache.size, filled, 'a trade run reads the cache and adds nothing to it');
+  assert.notDeepEqual(plainAfter, plainBefore, 'the trade does move the odds');
 });

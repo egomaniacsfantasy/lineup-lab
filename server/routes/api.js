@@ -3,6 +3,7 @@
  * The client only ever talks to these routes - never to provider APIs.
  */
 import crypto from 'node:crypto';
+import os from 'node:os';
 import { Router } from 'express';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
 import { createEspnProvider, espnConnect } from '../providers/espnProvider.js';
@@ -197,6 +198,8 @@ apiRouter.get('/health', (_req, res) => {
     gameWindow: isGameWindow(),
     // Deployed commit (Render sets RENDER_GIT_COMMIT) so we can confirm what's live.
     commit: process.env.RENDER_GIT_COMMIT ?? 'local',
+    // Cores this instance can run trade-scan workers on (sizing parallel scans).
+    cpus: os.availableParallelism?.() ?? os.cpus().length,
   });
 });
 

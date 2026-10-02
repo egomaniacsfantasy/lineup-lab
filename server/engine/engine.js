@@ -2077,11 +2077,56 @@ function weekPairs(weekEntry) {
  * seeds a real bracket and simulates the playoffs. Returns per-team playoff %,
  * championship %, average final seed, and projected record.
  */
+/** What a team-week's score draw depends on, besides (seed, sim, week, rosterId): the
+ *  starters' distributions, in draw order. Two runs with the same signature draw the
+ *  same scores, bit for bit. */
+function paramsSignature(params) {
+  if (!params || !params.players) return 'none';
+  let sig = '';
+  for (const p of params.players) sig += `${p.mean},${p.sigmaDown},${p.sigmaUp};`;
+  return sig;
+}
+
+/**
+ * `scoreCache` (optional, a Map shared by a set of runs on ONE league context):
+ * a team-week's simulated scores depend only on its starters' distributions and its
+ * own random stream, so they are computed once and reused by every run that leaves
+ * that team-week unchanged. A trade changes two teams; the other ten teams' scores,
+ * for every sim and every week, are the baseline's. Evaluating a trade then costs
+ * the two traded teams' draws plus the standings and bracket, instead of the whole
+ * league again. Results are identical to an uncached run (same values, same order
+ * of arithmetic). `cacheWrite` stores what this run computes (the baseline does).
+ */
 export function simulateSeason(ctx) {
-  const { teams, week, seed = 1, sims = SEASON_SIMS } = ctx;
+  const { teams, week, seed = 1, sims = SEASON_SIMS, scoreCache = null, cacheWrite = false } = ctx;
   const setup = seasonSetup(ctx);
   const { regularWeeks, rosterIds, remaining, paramsBy, playoff } = setup;
   const paramsFor = (id, wk) => paramsBy.get(id)?.get(wk);
+
+  let scoreOf = (id, wk, sim) => drawTeamScoreCRN(paramsFor(id, wk), seed, sim, wk, id);
+  if (scoreCache) {
+    const weeks = [...new Set([...remaining.map((w) => w.week), ...(playoff.playoffWeeks ?? [])])];
+    const table = new Map();
+    for (const id of rosterIds) {
+      const byWeek = new Map();
+      for (const wk of weeks) {
+        const params = paramsFor(id, wk);
+        const key = `${seed}|${sims}|${id}|${wk}|${paramsSignature(params)}`;
+        let scores = scoreCache.get(key);
+        if (!scores) {
+          scores = new Float64Array(sims);
+          for (let sim = 0; sim < sims; sim += 1) scores[sim] = drawTeamScoreCRN(params, seed, sim, wk, id);
+          if (cacheWrite) scoreCache.set(key, scores);
+        }
+        byWeek.set(wk, scores);
+      }
+      table.set(id, byWeek);
+    }
+    scoreOf = (id, wk, sim) => {
+      const scores = table.get(id)?.get(wk);
+      return scores ? scores[sim] : drawTeamScoreCRN(paramsFor(id, wk), seed, sim, wk, id);
+    };
+  }
 
   const playoffCounts = new Map(rosterIds.map((id) => [id, 0]));
   const titleCounts = new Map(rosterIds.map((id) => [id, 0]));
@@ -2090,14 +2135,29 @@ export function simulateSeason(ctx) {
   const currentWeekWins = new Map(rosterIds.map((id) => [id, 0]));
   const currentWeekTeams = new Set();
 
-  for (let sim = 0; sim < sims; sim += 1) {
-    const wins = new Map(teams.map((t) => [t.rosterId, t.record?.wins ?? 0]));
-    const pf = new Map(teams.map((t) => [t.rosterId, t.pointsFor ?? 0]));
+  // Hoisted out of the per-sim loop: none of these depend on `sim`. (The pairings were
+  // rebuilt, and the tiebreak coin re-derived, on every one of the sims.)
+  const startWins = teams.map((t) => [t.rosterId, t.record?.wins ?? 0]);
+  const startPf = teams.map((t) => [t.rosterId, t.pointsFor ?? 0]);
+  const pairsByWeek = remaining.map((weekEntry) => ({ week: weekEntry.week, pairs: weekPairs(weekEntry) }));
+  // Tiebreak for exact wins+PF ties. Sim-INVARIANT (no `sim` term): a fixed per-team
+  // value so a tie resolves the same way in every sim. Otherwise a per-sim coin flips
+  // seeds ~50/50 on ties — mainly forced-point ties in the Predictor, and (with
+  // divisions) a flipped division winner cascades the whole seed block — keeping a
+  // fully-decided season off 0/100. Exact ties are astronomically rare in a real
+  // simulated season (float PF), so this barely touches Futures.
+  const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, 0, 0, id))()]));
+  const wins = new Map();
+  const pf = new Map();
 
-    for (const weekEntry of remaining) {
-      for (const [aId, bId] of weekPairs(weekEntry)) {
-        const sa = drawTeamScoreCRN(paramsFor(aId, weekEntry.week), seed, sim, weekEntry.week, aId);
-        const sb = drawTeamScoreCRN(paramsFor(bId, weekEntry.week), seed, sim, weekEntry.week, bId);
+  for (let sim = 0; sim < sims; sim += 1) {
+    for (const [id, w] of startWins) wins.set(id, w);
+    for (const [id, p] of startPf) pf.set(id, p);
+
+    for (const weekEntry of pairsByWeek) {
+      for (const [aId, bId] of weekEntry.pairs) {
+        const sa = scoreOf(aId, weekEntry.week, sim);
+        const sb = scoreOf(bId, weekEntry.week, sim);
         pf.set(aId, (pf.get(aId) ?? 0) + sa);
         pf.set(bId, (pf.get(bId) ?? 0) + sb);
         if (sa > sb) wins.set(aId, wins.get(aId) + 1);
@@ -2112,17 +2172,10 @@ export function simulateSeason(ctx) {
     }
 
     rosterIds.forEach((id) => winSums.set(id, winSums.get(id) + wins.get(id)));
-    // Tiebreak for exact wins+PF ties. Sim-INVARIANT (no `sim` term): a fixed per-team
-    // value so a tie resolves the same way in every sim. Otherwise a per-sim coin flips
-    // seeds ~50/50 on ties — mainly forced-point ties in the Predictor, and (with
-    // divisions) a flipped division winner cascades the whole seed block — keeping a
-    // fully-decided season off 0/100. Exact ties are astronomically rare in a real
-    // simulated season (float PF), so this barely touches Futures.
-    const coin = new Map(rosterIds.map((id) => [id, mulberry32(streamSeed(seed, 0, 0, id))()]));
     const { standings, seeded } = seedStandings(rosterIds, wins, pf, coin, playoff);
     standings.forEach((id, i) => seedSums.set(id, seedSums.get(id) + (i + 1)));
     seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
-    const champion = runBracket(seeded, playoff, (id, wk) => drawTeamScoreCRN(paramsFor(id, wk), seed, sim, wk, id));
+    const champion = runBracket(seeded, playoff, (id, wk) => scoreOf(id, wk, sim));
     if (champion != null) titleCounts.set(champion, titleCounts.get(champion) + 1);
   }
 
@@ -2735,8 +2788,8 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   // Same-seed CRN comparison.
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
-  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
-  const baseline = simulateSeason({ ...base, sims: TRADE_SIMS });
+  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed, scoreCache: new Map() };
+  const baseline = simulateSeason({ ...base, sims: TRADE_SIMS, cacheWrite: true });
   // Refresh each traded team's CURRENT-WEEK starters to the best lineup its NEW roster
   // can field. Without this the sim's current week keeps the pre-trade starters (and even
   // a player you just traded away), so the this-week win% never moves no matter the deal.
@@ -2856,7 +2909,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
 
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
-  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
+  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed, scoreCache: new Map() };
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
   const optimalStarters = (playerIds) =>
     optimalAssign(playerIds, slotLabels, projectionMap, catalog, week).map((a) => a.playerId).filter(Boolean);
@@ -2901,7 +2954,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
   const SEARCH_SIMS = 3000;
   const FAIR_TOL = 2;      // within ±2 championship pts of target = already fair
 
-  const baseline = simulateSeason({ ...base, sims: SEARCH_SIMS });
+  const baseline = simulateSeason({ ...base, sims: SEARCH_SIMS, cacheWrite: true });
   const b0 = evalTrade(give, get, SEARCH_SIMS, baseline);
   const imbalance0 = b0.youDelta - b0.partnerDelta;
   if (Math.abs(imbalance0 - target) <= FAIR_TOL) {
@@ -3081,7 +3134,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
 
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
-  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
+  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed, scoreCache: new Map() };
   const replacementFor = replacementLevels(teams, projectionMap, catalog);
 
   // Best current-week lineup a roster can field — so the after-trade current week
@@ -3351,7 +3404,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     // background sender asks for every shape at once and splits one budget between them.
     const LIGHT_BUDGET = 60;
     const quota = sizes.length === 1
-      ? 14
+      ? 24
       : Math.max(6, Math.min(20, Math.floor(LIGHT_BUDGET / Math.max(1, byShape.size))));
     const lineupMean = (ids) => bestLineupDistribution(ids, slotLabels, projectionMap, catalog, null).mean;
     const partnerTeam = list[0]?.partner ?? null;
@@ -3423,8 +3476,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
      full analyzer count below. What is finally shown is always the full-count number. */
   if (perShape && finalists.length) {
     const LIGHT_SIMS = 600;
-    const FULL_CAP = sizes.length === 1 ? 5 : 10;
-    const lightBaseline = simulateSeason({ ...base, sims: LIGHT_SIMS });
+    const FULL_CAP = sizes.length === 1 ? 8 : 12;
+    const lightBaseline = simulateSeason({ ...base, sims: LIGHT_SIMS, cacheWrite: true });
     const screened = [];
     let n = 0;
     for (const c of finalists) {
@@ -3451,7 +3504,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       .map((x) => x.c);
   }
   const FINDER_SIMS = scopedPartnerId != null ? TRADE_SIMS : 600;
-  const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS });
+  const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS, cacheWrite: true });
   const suggestions = [];
   let re = 0;
   let finalErrors = 0;
@@ -3506,7 +3559,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     for (let i = 0; i < REFINE_PER_MGR; i += 1) {
       for (const l of perMgrTop) if (l[i]) refineOrder.push(l[i]);
     }
-    const fullBaseline = simulateSeason({ ...base, sims: TRADE_SIMS });
+    const fullBaseline = simulateSeason({ ...base, sims: TRADE_SIMS, cacheWrite: true });
     const refined = [];
     for (const s of refineOrder) {
       if (Date.now() - t0 > 25_000) break;   // client aborts at 30s — return the exact ones we have
@@ -3689,7 +3742,7 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   // CI, summed, compared — so a trade reads identically on every surface. The
   // market-lane pass (computeMovers) shares its season baseline via `baseline`
   // so the always-on lanes don't re-sim the pre-trade league once per lane.
-  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed };
+  const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed, scoreCache: new Map() };
   const futuresBefore = baseline ?? simulateSeason({ ...base, sims });
   // Swap goes live at targetStart: weeks before it keep the pre-trade pool (carried as
   // playersBefore), weeks at/after use the post-trade pool. targetStart == week is the
