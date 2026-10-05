@@ -209,45 +209,58 @@ export function TradeFinder({
     setSuggestions([]);
     setProgress({ done: 0, total: requests.length, name: null, shape: null });
     window.setTimeout(() => resultsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60);
+    const failedManagers = new Set<string>();
     let failed = 0;
+    const pause = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     /* One manager and one shape at a time. Deals land on the board as each
-       search finishes instead of after the whole league. */
+       search finishes instead of after the whole league.
+
+       A search that fails is retried, then SKIPPED -- never the end of the walk.
+       It used to stop the whole scan at the first "unavailable" answer, which is
+       what the server says for a few seconds while it restarts (it restarts on
+       every projections push), so "everyone" died after a manager or two. */
     for (const [index, request] of requests.entries()) {
       if (runRef.current !== runId) return;
+      const managerName = partnerById.get(request.partnerRosterId)?.teamName ?? null;
       setProgress({
         done: index,
         total: requests.length,
-        name: partnerById.get(request.partnerRosterId)?.teamName ?? null,
+        name: managerName,
         shape: FINDER_SHAPES.find((entry) => entry.id === request.shape)?.label ?? null,
       });
-      try {
-        const response = await fetchTradeFinder(leagueId, {
-          userId,
-          partnerRosterId: request.partnerRosterId,
-          rules: request.rules,
-          shapes: request.shapes,
-          readsByRoster,
-        });
+      let response: Awaited<ReturnType<typeof fetchTradeFinder>> | null = null;
+      for (let attempt = 0; attempt < 3 && !response; attempt += 1) {
+        if (attempt > 0) await pause(4000 * attempt);
         if (runRef.current !== runId) return;
-        if (!response.available) {
-          setError(response.reason === 'no_projections'
-            ? 'Trades price once projections are imported.'
-            : 'The book could not scan right now.');
-          break;
+        try {
+          const answer = await fetchTradeFinder(leagueId, {
+            userId,
+            partnerRosterId: request.partnerRosterId,
+            rules: request.rules,
+            shapes: request.shapes,
+            readsByRoster,
+          });
+          if (runRef.current !== runId) return;
+          if (answer.available) response = answer;
+        } catch {
+          if (runRef.current !== runId) return;
         }
-        const found = response.suggestions ?? [];
-        if (found.length) setSuggestions((current) => [...(current ?? []), ...found]);
-        if (response.debug) console.info('[trade-finder]', response.debug);
-      } catch {
-        if (runRef.current !== runId) return;
-        failed += 1;
       }
+      if (!response) {
+        failed += 1;
+        if (managerName) failedManagers.add(managerName);
+        continue;
+      }
+      const found = response.suggestions ?? [];
+      if (found.length) setSuggestions((current) => [...(current ?? []), ...found]);
+      if (response.debug) console.info('[trade-finder]', response.debug);
     }
     if (runRef.current !== runId) return;
     if (failed > 0) {
+      const who = [...failedManagers];
       setError(failed === requests.length
-        ? 'The scan did not finish.'
-        : `${failed} of ${requests.length} searches did not finish. Run it again to retry them.`);
+        ? 'The scan did not finish. The site may be restarting; try again in a minute.'
+        : `${failed} of ${requests.length} searches did not finish${who.length ? ` (${who.slice(0, 3).join(', ')}${who.length > 3 ? ` and ${who.length - 3} more` : ''})` : ''}. Run it again to retry them.`);
     }
     setProgress(null);
     setScannedAt(Date.now());

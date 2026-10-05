@@ -219,3 +219,28 @@ test('every leg takes several picks: managers, positions and shapes', async () =
     await page.close();
   }
 });
+
+test('one manager failing never stops the scan of everyone else', async () => {
+  /* The bug: the walk stopped at the first "unavailable" answer (the server says that
+     for a few seconds while it restarts), so "everyone" died after a manager or two. */
+  const page = await openMarket({ width: 1280, height: 1000 });
+  try {
+    /* Only the 1 for 1 shape, so the walk is one search per manager. */
+    await page.locator('.trade-finder__ticket .trade-finder__seg-btn', { hasText: '1 for 1' }).click();
+
+    /* A manager that fails once is retried and still counted. */
+    await page.evaluate(() => { window.__finderFailOnce = 2; });
+    await findAndSettle(page);
+    assert.equal(await page.locator('.trade-finder__deal').count(), 3, 'every 1 for 1 deal, including the retried manager');
+    assert.equal(await page.locator('.trade-finder__error').count(), 0);
+
+    /* A manager that keeps failing is skipped and named; everyone after him still scans. */
+    await page.evaluate(() => { window.__finderFailAlways = 2; });
+    await findAndSettle(page);
+    const board = await page.locator('.trade-finder__rows').innerText();
+    assert.match(board, /Gibbs/, 'the managers after the failed one were still scanned');
+    assert.match(await page.locator('.trade-finder__error').innerText(), /did not finish/);
+  } finally {
+    await page.close();
+  }
+});

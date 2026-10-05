@@ -1504,6 +1504,16 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
      engine would), so walking the league adds each deal once. */
   if (endpoint === 'trade-finder' && method === 'POST') {
     const asked = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+    /* Test hooks: a manager whose search answers "unavailable" (as the server does
+       for a few seconds while it restarts), once or every time. */
+    const hooks = window as unknown as { __finderFailOnce?: number; __finderFailAlways?: number };
+    if (hooks.__finderFailAlways === Number(asked.partnerRosterId)) {
+      return { available: false, reason: 'no_projections', suggestions: [] };
+    }
+    if (hooks.__finderFailOnce === Number(asked.partnerRosterId)) {
+      hooks.__finderFailOnce = undefined;
+      return { available: false, reason: 'no_projections', suggestions: [] };
+    }
     const shapes: { give: number; get: number }[] = Array.isArray(asked.shapes) ? asked.shapes : [];
     return {
       ...bundle.suggestions,
