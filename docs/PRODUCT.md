@@ -402,30 +402,56 @@ admins.
 
 ## 4.5 Trades (`/market`) — two views
 
-**Trade finder.** A ticket, not a menu: three legs and a shape. *Partner*
-(anyone, or one manager), *You send* and *You get* (anything, a position, or
-a named player), and *Shape* (any, 1 for 1, 2 for 1, 1 for 2, 2 for 2, read as
-send-for-get). Every prompt a manager brings is the same ticket with a
-different leg pinned: "get me an RB" pins the get leg to a position, "what
-does Bijan cost" pins it to a player (which fixes the partner to his owner),
-"who wants my WR" pins the send leg, "deal with Hermes" pins the partner. All
-four map onto parameters the engine's finder already takes. Under the ticket,
-three *starting points* are derived from roster facts and pricing's
-per-player means rather than a fixed list: the starting slot furthest under
-the league median (upgrade), the position with the most bench bodies (sell),
-and the manager whose surplus and shortage mirror yours.
+**Trade finder.** A ticket on the left, the board on the right.
 
-Results read the ticket back. Whatever was pinned is the header, said once
-(the player with his owner and projection, or the position pair with what
-your starter projects now); each row is only what varied, with your title
-delta, theirs, the package shape and the acceptance read. An **acceptance
-floor** slider (default 40%) hides deals under it and says how many it hid;
-the empty state names the ask and offers a way out (drop the floor, any
-shape, anyone). Rows rank by your title gain weighted by the chance they say
-yes. Opening a row lands it in Build trades, filled in. Every leg exact is a
-trade rather than a search: the button reads Price and hands it to the
-builder. On a phone the ticket folds into a chip strip once results are up;
-at 1024px and wider it is a left rail beside a two-up card grid.
+The ticket is three legs and a shape: *Partner*, *You send*, *You get*
+(anything, a position, or named players), and *Shape* (any size, or any of
+1 for 1 up to 3 for 3, read as send-for-get). A leg takes one pick with one
+tap and the sheet closes; the pick sits on the leg as a chip with its own
+cross, and a dashed "+" reopens the sheet to add more, so multi-select exists
+without a Done button. A pinned player you want fixes the partner to his
+owner. Three *starting points* under the ticket are derived from roster
+facts: the starting slot furthest under the league median, the position with
+the most bench bodies, and the manager whose surplus and shortage mirror
+yours.
+
+The board answers the ticket two ways, and says which:
+
+- **Nothing named** (open, or only managers, positions and shapes) reads the
+  **background scan**: every other manager, scanned on the sender's
+  per-manager search with no rules, keeping every deal that lifts your title
+  odds. It is there before the finger lifts, stamped "Scanned 7:40 PM, after
+  a projections update", with Scan again beside it. The scan runs for anyone
+  who has opened the Trades tab: on first look (the board shows the scan as a
+  screen, every manager's crest, until it lands), thirty minutes after a
+  projections push settles, and every three hours; a board nobody has opened
+  in two weeks stops being kept warm. Same worker, same sim count, same
+  context as the analyzer, so a board deal prices as the analyzer prices it.
+- **A named player** on either leg walks the league live, one request per
+  manager who can deliver him, two at a time. The walk is the screen while it
+  runs: each manager's crest lights as it is done, the current one named,
+  "Manager 4 of 11, 7 deals found so far", one bar, and Stop and show what's
+  found. Nothing lands until it finishes, so the board never moves under you.
+
+Deals are **lanes**, one per player you would land, the same five columns
+every time: what you get, the shape, what you send, your title, and who. The
+best package leads and the other ways to get him fold under it. A deal that
+brings a second player shows him smaller beside the headline with a word for
+what he is; three bench pieces read as one unit. Swings under a point of
+title odds (the engine's sampling noise) sit below a line that calls them
+ties rather than being ranked. A lane **opens in place**: both players large
+with rest-of-season per game and the lineup consequence (your RB2 now; who
+starts instead), your title with playoffs and this week, his side with a
+plain-language read on what he is playing for, "Will he take it" as a word,
+the other packages, and Dismiss, Share and Build, which exist only there.
+
+**Limits** live behind a button. Out of the box the board shows deals that
+lift both sides (your title rises at least 0, theirs falls at most nothing)
+and hides lopsided deals: a manager out of the race has no title odds to
+lose, so a robbery of him passes the title slider and is caught on roster
+value instead (four points a game). The sheet loosens or tightens all three
+and resets with the ask, so one search's slider never quietly filters the
+next.
 
 **Build trades.** A two-sided builder. Your roster by position on the left;
 pick a manager to open theirs on the right. "Price this trade" returns both
@@ -447,13 +473,13 @@ labels say "this week" rather than claiming a season read.
 
 Both views are unreachable in dynasty and keeper leagues.
 
-*Backing:* `src/components/trade/TradeFinder.tsx`, the pure query and
-starting-point logic in `src/utils/tradeFinderQuery.ts`, and `POST
-/api/league/:id/trade-suggestions`, which takes `partnerRosterId`,
-`position` (upgrade this position), `givePosition` (send one from this
-position), `givePlayerIds`, `getPlayerIds` and `shape`. Acceptance is priced
-on the client from your saved read on each manager, so a league-wide scan
-grades the way the builder does for one.
+*Backing:* `src/components/trade/TradeFinder.tsx`, the pure query, board and
+deal-reading logic in `src/utils/tradeFinderQuery.ts`, `GET
+/api/league/:id/trade-board` and `POST .../trade-board/scan` over
+`server/engine/tradeBoardStore.js` (the scan runs in the sender's worker,
+`runTradeBoardSweep` on the sender's tick), and `POST
+/api/league/:id/trade-finder` for the live walk. Fixture flags `?boardScanning`
+and `?slowFinder` reach the two waiting states.
 
 ## 4.6 Board (`/rankings`)
 
@@ -1318,3 +1344,13 @@ and adding before it is used.
     covered by `test/leaguePicker.test.mjs`. And without an account (fixtures
     only; the app sits behind sign-in) leagues ticked on in the sheet last
     the session, since the list is rebuilt from account rows on load.
+29. **The trade board is desktop-first and the phone has not been reviewed.**
+    The lanes stack at narrow widths and the sheets become bottom sheets, but
+    nobody has looked at the board on a phone since the lanes replaced the
+    cards (user: desktop only for now, 2026-10-05). Related and open: the
+    board is registered for a manager only when they open the Trades tab, so
+    the first open shows the scan as a screen for about a minute rather than
+    a board; the trade sender's own UI (autopilot, offers) is still there and
+    the user considers it a side project to remove; and the live walk's
+    acceptance word reads from your saved manager reads, which only the
+    builder's scouting panel sets, so most lanes say "Unread" until then.

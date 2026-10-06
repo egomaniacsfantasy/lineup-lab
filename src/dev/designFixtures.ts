@@ -1585,11 +1585,39 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
   /* The Trades-tab finder asks one manager per call. Answer with that manager's
      share of the same fixture deals (narrowed to the shapes asked for, as the
      engine would), so walking the league adds each deal once. */
+  /* The board: the fixture's deals as a scan that already ran. ?boardScanning
+     answers as a first look whose scan is still running, and flips to a
+     finished scan on the third poll, so the waiting state can be looked at
+     and the hand-off from scanning to board can be asserted. "Scan again"
+     restarts that count. */
+  if (endpoint === 'trade-board' && method === 'GET') {
+    const hooks = window as unknown as { __boardPolls?: number };
+    const wantsScanning = window.location.search.includes('boardScanning');
+    hooks.__boardPolls = (hooks.__boardPolls ?? 0) + 1;
+    const scanning = wantsScanning && hooks.__boardPolls < 3;
+    return {
+      available: true,
+      suggestions: scanning ? [] : (bundle.suggestions.suggestions ?? []).filter((deal) => deal.youDelta > 0),
+      lastScan: scanning ? null : { at: Date.UTC(2026, 9, 5, 19, 40), reason: 'recurring', week: WEEK, managers: 5, ms: 31_000, error: null },
+      scanning,
+    };
+  }
+  if (endpoint === 'trade-board' && parts[4] === 'scan' && method === 'POST') {
+    const hooks = window as unknown as { __boardPolls?: number };
+    hooks.__boardPolls = 0;
+    return { scanning: true };
+  }
+
   if (endpoint === 'trade-finder' && method === 'POST') {
     const asked = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
     /* Test hooks: a manager whose search answers "unavailable" (as the server does
        for a few seconds while it restarts), once or every time. */
-    const hooks = window as unknown as { __finderFailOnce?: number; __finderFailAlways?: number };
+    const hooks = window as unknown as { __finderFailOnce?: number; __finderFailAlways?: number; __finderDelayMs?: number };
+    /* A walk that answers instantly cannot be watched. ?slowFinder (or the
+       hook) holds each manager's answer for a moment, so the scan screen is
+       reachable by hand and the hand-off to the board can be asserted. */
+    const delay = hooks.__finderDelayMs ?? (window.location.search.includes('slowFinder') ? 1500 : 0);
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
     if (hooks.__finderFailAlways === Number(asked.partnerRosterId)) {
       return { available: false, reason: 'no_projections', suggestions: [] };
     }

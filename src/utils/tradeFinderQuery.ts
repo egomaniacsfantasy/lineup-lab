@@ -1,4 +1,5 @@
 import type { ApiCatalogPlayer, ApiTeam, TradeSuggestion } from '../services/leagueApi';
+import { getAcceptanceLingo, type AcceptanceLingoTone } from './acceptanceLingo.ts';
 
 /**
  * The finder's ticket: one question with three blanks and a shape.
@@ -110,7 +111,62 @@ export const EMPTY_QUERY: FinderQuery = {
    that helps you at all (minimum 0), with the sender's default limit on what the
    other side gives up, so the board is not led by robberies nobody would take. */
 export const DEFAULT_MIN_GAIN = 0;
-export const DEFAULT_MAX_PARTNER_LOSS = 3;
+/* Zero: the other side gives up no title odds, which is "deals that lift both
+   sides", the thing the product claims to find. The sheet can loosen it. */
+export const DEFAULT_MAX_PARTNER_LOSS = 0;
+
+/** The limits the board applies, kept behind a button. They reset with the ask. */
+export interface FinderLimits {
+  minGain: number;
+  /** null = no limit. */
+  maxLoss: number | null;
+  /** Hide deals where the other side gives up far more roster value than title
+   *  odds can register, which is every robbery of a team already out. */
+  hideLopsided: boolean;
+}
+export const DEFAULT_LIMITS: FinderLimits = { minGain: DEFAULT_MIN_GAIN, maxLoss: DEFAULT_MAX_PARTNER_LOSS, hideLopsided: true };
+
+export function limitsChanged(limits: FinderLimits) {
+  return limits.minGain !== DEFAULT_LIMITS.minGain
+    || limits.maxLoss !== DEFAULT_LIMITS.maxLoss
+    || limits.hideLopsided !== DEFAULT_LIMITS.hideLopsided;
+}
+
+/** Under this many percentage points of title odds, a swing is sampling noise
+ *  (measured: standard deviation near 1pp at 4,000 sims), so the board shows
+ *  it as a tie rather than ranking it. */
+export const NOISE_PP = 1;
+export function withinNoise(youDelta: number) {
+  return youDelta < NOISE_PP;
+}
+
+/**
+ * Which asks the last background scan can answer by itself. The board scanned
+ * every manager with no pools, so a manager, a position or a shape is a filter
+ * over it. A named player is not: the scan's candidate budget may never have
+ * tried him, so that ask walks the league live.
+ */
+export function servedByBoard(query: FinderQuery) {
+  return query.send.kind !== 'player' && query.get.kind !== 'player';
+}
+
+/** The board's deals that fit the ticket: every player sent from the send
+ *  pool, every player received from the get pool, the partner picked, the
+ *  shape picked. The same rule the live search applies, applied after. */
+export function boardMatches(
+  suggestion: Pick<TradeSuggestion, 'give' | 'get' | 'partnerRosterId'>,
+  query: FinderQuery,
+  players: Record<string, { position: string }>,
+) {
+  if (query.partnerRosterIds.length && !query.partnerRosterIds.includes(suggestion.partnerRosterId)) return false;
+  if (!matchesShapes(suggestion, query.shapes)) return false;
+  const fits = (assets: { id: string }[], pick: SlotPick) => {
+    if (pick.kind === 'position') return assets.every((asset) => pick.positions.includes(players[asset.id]?.position as FinderPosition));
+    if (pick.kind === 'player') return assets.every((asset) => pick.ids.includes(asset.id));
+    return true;
+  };
+  return fits(suggestion.give, query.send) && fits(suggestion.get, query.get);
+}
 
 export function isEmptyQuery(query: FinderQuery) {
   return query.partnerRosterIds.length === 0
@@ -579,4 +635,110 @@ export function positionSublines({
     };
   }
   return out;
+}
+
+/* ── Reading a deal ──────────────────────────────────────────────────────── */
+
+/** The player a deal is about: the incoming player worth the most from here. */
+export function headlinePlayer(suggestion: Pick<TradeSuggestion, 'get'>, values: PlayerValues | null): string {
+  const best = [...suggestion.get].sort((a, b) => (values?.[b.id]?.mean ?? 0) - (values?.[a.id]?.mean ?? 0))[0];
+  return best?.id ?? '';
+}
+
+/** Players on one side, the most valuable first. */
+export function orderAssets<T extends { id: string }>(assets: T[], values: PlayerValues | null): T[] {
+  return [...assets].sort((a, b) => (values?.[b.id]?.mean ?? 0) - (values?.[a.id]?.mean ?? 0));
+}
+
+export interface DealGroup<T> {
+  headlineId: string;
+  best: T;
+  others: T[];
+}
+
+/**
+ * One lane per player you would land. The best package for him leads; the
+ * other ways to get him fold under it. Groups rank by their best deal.
+ */
+export function groupDeals<T extends { suggestion: Pick<TradeSuggestion, 'get' | 'youDelta' | 'partnerDelta'> }>(
+  entries: T[],
+  values: PlayerValues | null,
+): DealGroup<T>[] {
+  const ranked = rankDeals(entries);
+  const groups = new Map<string, DealGroup<T>>();
+  for (const entry of ranked) {
+    const id = headlinePlayer(entry.suggestion, values);
+    const group = groups.get(id);
+    if (group) group.others.push(entry);
+    else groups.set(id, { headlineId: id, best: entry, others: [] });
+  }
+  return [...groups.values()];
+}
+
+export type Standing = 'contender' | 'bubble' | 'out';
+
+/** What a manager is playing for, from his playoff odds. */
+export function standingOf(playoffProb: number | null | undefined): Standing {
+  if (playoffProb == null) return 'bubble';
+  if (playoffProb >= 60) return 'contender';
+  if (playoffProb >= 15) return 'bubble';
+  return 'out';
+}
+
+/** Roster value the OTHER side gains per game: what they receive minus what
+ *  they send, in rest-of-season points per game. Negative = they give up value. */
+export function partnerValueDelta(suggestion: Pick<TradeSuggestion, 'give' | 'get'>, values: PlayerValues | null) {
+  const sum = (assets: { id: string }[]) => assets.reduce((total, asset) => total + (values?.[asset.id]?.mean ?? 0), 0);
+  return sum(suggestion.give) - sum(suggestion.get);
+}
+
+/** The value gap at which a deal stops being a trade and becomes a favour.
+ *  Four points a game is roughly a starter for a bench piece. */
+export const LOPSIDED_PPG = 4;
+
+/**
+ * A deal title odds cannot see. A team already out of the race has no title
+ * odds to lose, so "their title falls at most 0" is satisfied by handing over
+ * a starter for a bench piece. Roster value catches it when title odds do not.
+ */
+export function isLopsided(valueDelta: number) {
+  return valueDelta <= -LOPSIDED_PPG;
+}
+
+/**
+ * A lopsided deal is a no; otherwise the acceptance model's word, read from
+ * the one band map so the vocabulary cannot drift (a lopsided deal borrows
+ * the band a 35% read falls in rather than naming it here).
+ */
+export function acceptanceWord(lopsided: boolean, acceptance: number | null): { word: string; tone: AcceptanceLingoTone } {
+  const band = getAcceptanceLingo(lopsided ? 35 : acceptance);
+  if (!band) return { word: 'Unread', tone: 'neutral' };
+  return { word: band.label, tone: band.tone };
+}
+
+/**
+ * What sending a player does to your lineup: the slot he holds at his
+ * position by rest-of-season value, and who would start instead.
+ */
+export function sendConsequence(
+  playerId: string,
+  team: Pick<ApiTeam, 'players'>,
+  players: Record<string, ApiCatalogPlayer>,
+  values: PlayerValues | null,
+  rosterPositions: string[] | null | undefined,
+): { slot: string | null; replacement: { id: string; name: string; perGame: number } | null } {
+  const position = players[playerId]?.position;
+  if (!isFinderPosition(position)) return { slot: null, replacement: null };
+  const slots = (rosterPositions ?? []).filter((entry) => entry === position).length;
+  const ranked = team.players
+    .filter((id) => players[id]?.position === position)
+    .sort((a, b) => (values?.[b]?.mean ?? 0) - (values?.[a]?.mean ?? 0));
+  const rank = ranked.indexOf(playerId) + 1;
+  if (rank === 0) return { slot: null, replacement: null };
+  const starter = slots > 0 && rank <= slots;
+  const next = starter ? ranked[slots] ?? null : null;
+  return {
+    slot: starter ? `${position}${rank}` : 'bench',
+    replacement: next ? { id: next, name: players[next]?.name ?? next, perGame: values?.[next]?.mean ?? 0 } : null,
+  };
 }

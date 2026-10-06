@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getAcceptanceLingo } from '../src/utils/acceptanceLingo.ts';
 import {
   ANY_PICK,
   DEFAULT_MAX_PARTNER_LOSS,
@@ -20,6 +21,19 @@ import {
   togglePlayer,
   togglePosition,
   toggleShape,
+  DEFAULT_LIMITS,
+  LOPSIDED_PPG,
+  NOISE_PP,
+  acceptanceWord,
+  boardMatches,
+  groupDeals,
+  headlinePlayer,
+  isLopsided,
+  partnerValueDelta,
+  sendConsequence,
+  servedByBoard,
+  standingOf,
+  withinNoise,
 } from '../src/utils/tradeFinderQuery.ts';
 
 /**
@@ -148,9 +162,11 @@ test('picked shapes keep only those package sizes', () => {
 });
 
 test('the keep rule and ranking are the trade sender\'s, not an acceptance estimate', () => {
-  /* Opens on every deal that helps you at all, minus what guts the other side. */
+  /* Opens on every deal that helps you at all and costs the other side no
+     title odds: deals that lift both sides, which is what the product claims
+     to find. The limits sheet loosens it. */
   assert.equal(DEFAULT_MIN_GAIN, 0);
-  assert.equal(DEFAULT_MAX_PARTNER_LOSS, 3);
+  assert.equal(DEFAULT_MAX_PARTNER_LOSS, 0);
   const deal = (youDelta, partnerDelta) => ({ suggestion: { youDelta, partnerDelta } });
   /* Kept only if your title odds rise at least X and theirs fall at most Y. */
   assert.equal(passesLimits({ youDelta: 2.1, partnerDelta: -1.2 }, 1, 3), true);
@@ -236,4 +252,94 @@ test('starting points come from roster facts, and name the mirror manager', () =
 
   /* Without per-player means there are no facts, so there are no points. */
   assert.deepEqual(deriveStartingPoints({ teams, players, playerMeans: null, rosterPositions }), []);
+});
+
+/* ── The board, and how a deal is read ──
+   The open ask is answered from a background scan that already ran; a named
+   player walks the league live. Deals group by the player you would land,
+   swings under a point are ties, and a robbery of a team that is out is
+   caught on roster value because title odds cannot see it. */
+
+const deal = (partnerRosterId, give, get, youDelta, partnerDelta = 0) => ({
+  partnerRosterId,
+  partnerName: `Team ${partnerRosterId}`,
+  give: give.map((id) => ({ id, name: id })),
+  get: get.map((id) => ({ id, name: id })),
+  youDelta,
+  partnerDelta,
+});
+
+test('managers, positions and shapes are answered from the board; a named player is not', () => {
+  assert.equal(servedByBoard(EMPTY_QUERY), true);
+  assert.equal(servedByBoard({ ...EMPTY_QUERY, partnerRosterIds: [2], get: { kind: 'position', positions: ['RB'] }, shapes: ['1-1'] }), true);
+  assert.equal(servedByBoard({ ...EMPTY_QUERY, get: { kind: 'player', ids: ['x'] } }), false);
+  assert.equal(servedByBoard({ ...EMPTY_QUERY, send: { kind: 'player', ids: ['x'] } }), false);
+});
+
+test('the board is filtered by the ticket the way the live search would be', () => {
+  const players = { a: { position: 'RB' }, b: { position: 'WR' }, c: { position: 'TE' }, d: { position: 'RB' } };
+  const rbForTe = deal(2, ['c'], ['a'], 2);
+  const rbAndWrForTe = deal(2, ['c'], ['a', 'b'], 2);
+  const otherManager = deal(3, ['c'], ['d'], 2);
+  const wantRBs = { ...EMPTY_QUERY, get: { kind: 'position', positions: ['RB'] } };
+  assert.equal(boardMatches(rbForTe, wantRBs, players), true);
+  /* Every player received must come from the pool: a WR rider fails it. */
+  assert.equal(boardMatches(rbAndWrForTe, wantRBs, players), false);
+  assert.equal(boardMatches(otherManager, { ...wantRBs, partnerRosterIds: [2] }, players), false);
+  assert.equal(boardMatches(rbForTe, { ...EMPTY_QUERY, shapes: ['2-1'] }, players), false);
+});
+
+test('deals group under the player you would land, best package first', () => {
+  const values = { hall: { mean: 18 }, kittle: { mean: 11 }, pollard: { mean: 7 }, brown: { mean: 16 } };
+  const entries = [
+    { suggestion: deal(2, ['kittle', 'pollard'], ['hall'], 1.3) },
+    { suggestion: deal(2, ['kittle'], ['hall'], 1.4) },
+    { suggestion: deal(3, ['kittle'], ['brown', 'pollard'], 1.5) },
+  ];
+  const groups = groupDeals(entries, values);
+  assert.deepEqual(groups.map((group) => group.headlineId), ['brown', 'hall']);
+  const hall = groups.find((group) => group.headlineId === 'hall');
+  assert.equal(hall.best.suggestion.youDelta, 1.4);
+  assert.equal(hall.others.length, 1);
+  /* The headline is the most valuable incoming player, not the first listed. */
+  assert.equal(headlinePlayer(deal(3, [], ['pollard', 'brown'], 1), values), 'brown');
+});
+
+test('under a point of title odds is a tie, and the default limits lift both sides', () => {
+  assert.equal(withinNoise(0.9), true);
+  assert.equal(withinNoise(NOISE_PP), false);
+  assert.deepEqual(DEFAULT_LIMITS, { minGain: 0, maxLoss: 0, hideLopsided: true });
+});
+
+test('a robbery of a team that is out is caught on roster value, not title odds', () => {
+  const values = { lamb: { mean: 16.8 }, coker: { mean: 6.1 } };
+  /* Frank is 0-3; his title odds cannot fall, so partnerDelta reads 0. */
+  const robbery = deal(2, ['coker'], ['lamb'], 5.8, 0);
+  const gap = partnerValueDelta(robbery, values);
+  assert.equal(Number(gap.toFixed(1)), -10.7);
+  assert.equal(isLopsided(gap), true);
+  assert.equal(isLopsided(-LOPSIDED_PPG + 0.1), false);
+  assert.equal(standingOf(5), 'out');
+  assert.equal(standingOf(40), 'bubble');
+  assert.equal(standingOf(80), 'contender');
+  /* The words come from the shared band map, never from here. */
+  assert.equal(acceptanceWord(true, 90).tone, 'bad', 'a lopsided deal reads as a no whatever the model says');
+  assert.deepEqual(acceptanceWord(true, 90), { word: getAcceptanceLingo(35).label, tone: 'bad' });
+  assert.deepEqual(acceptanceWord(false, 72), { word: getAcceptanceLingo(72).label, tone: 'good' });
+  assert.deepEqual(acceptanceWord(false, null), { word: 'Unread', tone: 'neutral' });
+});
+
+test('sending a starter names who starts instead; sending a bench piece costs the lineup nothing', () => {
+  const players = {
+    te1: { id: 'te1', name: 'Kittle', team: null, position: 'TE', status: null, injuryStatus: null },
+    te2: { id: 'te2', name: 'McBride', team: null, position: 'TE', status: null, injuryStatus: null },
+  };
+  const values = { te1: { mean: 11.2 }, te2: { mean: 9.4 } };
+  const myTeam = { players: ['te1', 'te2'] };
+  const slots = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX'];
+  assert.deepEqual(sendConsequence('te1', myTeam, players, values, slots), {
+    slot: 'TE1',
+    replacement: { id: 'te2', name: 'McBride', perGame: 9.4 },
+  });
+  assert.deepEqual(sendConsequence('te2', myTeam, players, values, slots), { slot: 'bench', replacement: null });
 });

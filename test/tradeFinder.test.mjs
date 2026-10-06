@@ -5,22 +5,13 @@ import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
 /**
- * The trade finder as a ticket, rendered against the fixture league.
+ * The trade finder: a ticket, and a board served from the background scan.
  *
- * The fixture holds five deals across two managers (rosters 2 and 3) and
- * answers each per-manager scan with that manager's share, so what these prove
- * is the client half: the ticket sits beside the builder, every leg takes
- * several picks, the board is filtered and ranked the trade sender's way, and
- * picked shapes narrow it to those package sizes.
- *
- *   McLaurin for London              you +2.1  them -1.2
- *   McBride for Bowers               you +1.4  them -0.8
- *   Bijan+Kelce+Aubrey for JJ        you -2.7  them +1.9   (lowers your odds: never shown)
- *   Henry+McBride for Nacua+Bowers   you +2.2  them +0.4   (2 for 2)
- *   Lamb for Gibbs                   you +0.4  them -0.2
- *
- * The board opens on every deal that helps you (minimum gain 0, they lose at most
- * 3.0), so all four show. There is no "chance they accept" number anywhere.
+ * Rendered against the fixture league. Its board answers with five deals as
+ * a scan that already ran (four help you; three cost the other side title
+ * odds, one lifts both), its live search answers per manager, and two flags
+ * make the waiting states reachable: ?boardScanning (a first look whose scan
+ * is still running) and ?slowFinder (a live walk that takes a moment).
  */
 
 const cwd = process.cwd();
@@ -74,42 +65,38 @@ test.after(async () => {
   if (vite && ownsVite) vite.kill('SIGTERM');
 });
 
-async function openMarket(viewport) {
+async function openMarket(viewport, search = '') {
   const page = await browser.newPage({ viewport, colorScheme: 'dark' });
-  await page.goto(`${baseUrl}/design/market`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${baseUrl}/design/market${search}`, { waitUntil: 'domcontentloaded' });
   await page.locator('.trade-finder__ticket').waitFor({ state: 'visible' });
   return page;
 }
 
-/* The walk scans one manager per call; the board is settled once it says when it scanned. */
-async function findAndSettle(page) {
-  await page.locator('.trade-finder__find').click();
-  await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
-  await page.waitForFunction(() => /scanned/.test(document.querySelector('.trade-finder__rows-meta')?.textContent ?? ''));
-}
+const DESKTOP = { width: 1280, height: 1000 };
 
-test('the ticket sits beside the builder, and the builder is still there', async () => {
-  const page = await openMarket({ width: 390, height: 844 });
+test('the board is there on arrival, from a scan that already ran, with the ticket beside the builder', async () => {
+  const page = await openMarket(DESKTOP);
   try {
-    const tabs = page.locator('.trade-cc__view');
-    assert.deepEqual(await tabs.allTextContents(), ['Trade finder', 'Build trades']);
-
-    /* Three legs and a shape, and every size up to 3 for 3 is one of the shapes. */
+    assert.deepEqual(await page.locator('.trade-cc__view').allTextContents(), ['Trade finder', 'Build trades']);
     assert.deepEqual(
       await page.locator('.trade-finder__leg-label').allTextContents(),
       ['Partner', 'You send', 'You get', 'Shape'],
     );
-    assert.deepEqual(
-      await page.locator('.trade-finder__ticket .trade-finder__seg-btn').allTextContents(),
-      ['Any', '1 for 1', '2 for 1', '1 for 2', '2 for 2', '2 for 3', '3 for 2', '3 for 3'],
-    );
 
-    /* Starting points come from the fixture roster, not a fixed list. */
-    const starts = await page.locator('.trade-finder__start-title').allTextContents();
-    assert.ok(starts.length >= 2, `expected roster-derived starting points, got ${starts.join(' | ')}`);
-    assert.ok(starts.some((text) => /^Upgrade /.test(text)), starts.join(' | '));
+    /* No search ran. The board came from the last scan, and says when. */
+    const board = page.locator('.trade-finder__board');
+    await board.waitFor({ state: 'visible' });
+    assert.match(await page.locator('.trade-finder__board-title').innerText(), /the board/i);
+    assert.match(await page.locator('.trade-finder__board-head').innerText(), /Scanned \d{1,2}:\d{2}/);
+    assert.equal(await page.locator('.trade-finder__find').innerText(), 'Show the board');
 
-    await tabs.nth(1).click();
+    /* Out of the box: deals that lift both sides. The fixture has one. */
+    assert.equal(await page.locator('.trade-finder__lane').count(), 1);
+    assert.match(await page.locator('.trade-finder__lane').first().innerText(), /Puka Nacua/);
+    assert.match(await board.innerText(), /3 outside your limits/);
+
+    /* The builder is still the other tab. */
+    await page.locator('.trade-cc__view').nth(1).click();
     assert.equal(await page.locator('.trade-cc__builder').evaluate((el) => el.checkVisibility()), true);
     assert.equal(await page.locator('.trade-cc__finder').evaluate((el) => el.checkVisibility()), false);
   } finally {
@@ -117,66 +104,81 @@ test('the ticket sits beside the builder, and the builder is still there', async
   }
 });
 
-test('every deal that helps you shows, ranked by your gain, with no acceptance number', async () => {
-  const page = await openMarket({ width: 390, height: 844 });
+test('a first look waits on the scan as a screen, then hands over to the board', async () => {
+  const page = await openMarket(DESKTOP, '?boardScanning');
   try {
-    await findAndSettle(page);
+    const scan = page.locator('.trade-finder__scan');
+    await scan.waitFor({ state: 'visible' });
+    assert.match(await scan.innerText(), /scanning every manager for the first time/i);
+    /* Every manager is on the screen, not a spinner. */
+    assert.equal(await page.locator('.trade-finder__scan-team').count(), 5);
+    assert.equal(await page.locator('.trade-finder__lane').count(), 0);
 
-    /* Opens on everything that helps you: minimum gain 0, they lose at most 3.0. */
-    const minGain = page.locator('#trade-finder-min-gain');
-    const maxLoss = page.locator('#trade-finder-max-loss');
-    assert.equal(await minGain.inputValue(), '0');
-    assert.equal(await maxLoss.inputValue(), '3');
-    assert.equal(await page.locator('.trade-finder__deal').count(), 4);
-    assert.match(await page.locator('.trade-finder__floor-note').first().innerText(), /Nothing hidden/);
-
-    /* Ranked by your title gain, biggest first. */
-    const gains = await page.locator('.trade-finder__deal .trade-finder__num--lead').allTextContents();
-    assert.deepEqual(gains.map((text) => Number(text.replace(/[^0-9.+-]/g, ''))), [2.2, 2.1, 1.4, 0.4]);
-
-    /* A deal that lowers your title odds is never on the board at all, and no row
-       carries a guess at whether the other manager says yes. */
-    const board = await page.locator('.trade-finder__rows').innerText();
-    assert.doesNotMatch(board, /Justin Jefferson/);
-    assert.doesNotMatch(board, /coin flip|unlikely|likely|long shot|lock/i, 'an acceptance read is back on the rows');
-    assert.equal(await page.locator('.trade-finder__tag--accept, .trade-finder__track').count(), 0);
-
-    /* The ticket folds into the strip on a phone; the ask reads back. */
-    assert.equal(await page.locator('.trade-finder__ticket').evaluate((el) => el.checkVisibility()), false);
-    assert.deepEqual(
-      await page.locator('.trade-finder__summary .trade-finder__chip--static').allTextContents(),
-      ['anyone', 'send anything', 'get anything', 'any shape'],
-    );
-
-    /* The two limits narrow it: a minimum gain of 1.0 hides the +0.4 deal. */
-    await minGain.fill('1');
-    assert.equal(await page.locator('.trade-finder__deal').count(), 3);
-    assert.match(await page.locator('.trade-finder__floor-note').first().innerText(), /1 outside your limits/);
-
-    /* Raising it past the best deal leaves the empty state with a way out. */
-    await minGain.fill('5');
-    assert.equal(await page.locator('.trade-finder__deal').count(), 0);
-    assert.match(await page.locator('.trade-finder__empty-head').innerText(), /4 deals help you, but outside your limits/);
-    await page.locator('.trade-finder__loosen .trade-finder__chip', { hasText: 'Show every deal that helps me' }).click();
-    assert.equal(await page.locator('.trade-finder__deal').count(), 4);
+    /* The fixture's third poll answers as a finished scan. */
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible', timeout: 20_000 });
+    assert.equal(await page.locator('.trade-finder__scan').count(), 0);
+    assert.equal(await page.locator('.trade-finder__lane').count(), 1);
   } finally {
     await page.close();
   }
 });
 
-test('a shape narrows the board to that package, and the lead deal opens in the builder', async () => {
-  const page = await openMarket({ width: 1280, height: 1000 });
+test('limits live behind a button, start at both sides lifted, and reset with the ask', async () => {
+  const page = await openMarket(DESKTOP);
   try {
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    /* No slider on the board itself. */
+    assert.equal(await page.locator('.trade-finder__board input[type=range]').count(), 0);
+
+    await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).click();
+    const sheet = page.locator('.trade-finder__sheet--limits');
+    await sheet.waitFor({ state: 'visible' });
+    assert.match(await sheet.locator('label[for=trade-finder-max-loss]').innerText(), /nothing/);
+    assert.equal(await sheet.locator('#trade-finder-min-gain').inputValue(), '0');
+
+    /* All the way right is no limit: every deal that helps you. */
+    await sheet.locator('#trade-finder-max-loss').fill('10');
+    assert.match(await sheet.locator('label[for=trade-finder-max-loss]').innerText(), /any/);
+    await sheet.locator('.trade-finder__find').click();
+    await sheet.waitFor({ state: 'detached' });
+    assert.equal(await page.locator('.trade-finder__lane').count(), 4);
+    assert.match(await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).innerText(), /1/);
+
+    /* A new ask resets them, so one search's slider never filters the next. */
     await page.locator('.trade-finder__ticket .trade-finder__seg-btn', { hasText: '2 for 2' }).click();
-    await findAndSettle(page);
+    await page.locator('.trade-finder__find').click();
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.trade-finder__lane').count(), 1);
+    assert.doesNotMatch(await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).innerText(), /1/);
+  } finally {
+    await page.close();
+  }
+});
 
-    const deals = page.locator('.trade-finder__deal');
-    assert.equal(await deals.count(), 1);
-    assert.match(await deals.first().innerText(), /2 for 2/i);
-    assert.match(await deals.first().innerText(), /Puka Nacua/);
+test('a lane opens in place with both faces, the lineup cost, and Build', async () => {
+  const page = await openMarket(DESKTOP);
+  try {
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    const lane = page.locator('.trade-finder__lane').first();
+    /* Five columns, every lane: get, swap, send, price. */
+    assert.equal(await lane.locator('.trade-finder__side--get').count(), 1);
+    assert.equal(await lane.locator('.trade-finder__side--send').count(), 1);
+    assert.match(await lane.locator('.trade-finder__swap-col').innerText(), /2 for 2/i);
+    /* No action buttons on a closed lane. */
+    assert.equal(await lane.locator('.trade-finder__act').count(), 0);
 
-    /* Opening it lands on Build trades with both sides filled in. */
-    await deals.first().locator('.trade-finder__deal-open').click();
+    await lane.locator('.trade-finder__lane-main').click();
+    const open = lane.locator('.trade-finder__open');
+    await open.waitFor({ state: 'visible' });
+    assert.match(await open.locator('.trade-finder__open-name').first().innerText(), /puka nacua/i);
+    assert.match(await open.innerText(), /you send/i);
+    assert.match(await open.innerText(), /will he take it/i);
+    /* The get face is the biggest thing on the lane. */
+    const xl = await open.locator('.trade-finder__face--xl').first().evaluate((el) => el.getBoundingClientRect().width);
+    const lg = await open.locator('.trade-finder__face--lg').first().evaluate((el) => el.getBoundingClientRect().width);
+    assert.ok(xl > lg && lg >= 60, `faces ${xl} and ${lg}`);
+
+    await open.locator('.trade-finder__act--primary').click();
     await page.locator('.trade-cc__builder').waitFor({ state: 'visible' });
     const selected = await page.locator('.trade-cc__asset-name').allTextContents();
     assert.deepEqual(selected.sort(), ['Brock Bowers', 'Derrick Henry', 'Puka Nacua', 'Trey McBride']);
@@ -185,61 +187,124 @@ test('a shape narrows the board to that package, and the lead deal opens in the 
   }
 });
 
-test('every leg takes several picks: managers, positions and shapes', async () => {
-  const page = await openMarket({ width: 1280, height: 1000 });
+test('a leg closes on the pick, shows it as a chip, and adds more through its plus', async () => {
+  const page = await openMarket(DESKTOP);
   try {
-    /* Two managers. The sheet stays open while you pick and closes on Done. */
-    await page.locator('.trade-finder__leg').nth(0).click();
-    const managers = page.locator('.trade-finder__sheet .trade-finder__item');
-    await managers.nth(0).click();
-    await managers.nth(1).click();
-    assert.equal(await page.locator('.trade-finder__sheet .trade-finder__item--on').count(), 2);
-    await page.locator('.trade-finder__sheet-done').click();
-    assert.match(await page.locator('.trade-finder__leg').nth(0).innerText(), /2 managers/);
+    const partnerLeg = page.locator('.trade-finder__leg').nth(0);
+    await partnerLeg.locator('.trade-finder__leg-open').click();
+    const sheet = page.locator('.trade-finder__sheet');
+    await sheet.waitFor({ state: 'visible' });
+    /* One pick, and the sheet is gone. No Done button to find. */
+    assert.equal(await sheet.locator('.trade-finder__sheet-done').count(), 0);
+    await sheet.locator('.trade-finder__item').first().click();
+    await sheet.waitFor({ state: 'detached' });
+    assert.equal(await partnerLeg.locator('.trade-finder__chip--leg').count(), 1);
 
-    /* Two positions to send. */
-    await page.locator('.trade-finder__leg').nth(1).click();
-    await page.locator('.trade-finder__sheet .trade-finder__tile', { hasText: 'RB' }).click();
-    await page.locator('.trade-finder__sheet .trade-finder__tile', { hasText: 'WR' }).click();
-    assert.equal(await page.locator('.trade-finder__sheet .trade-finder__tile--on').count(), 2);
-    await page.locator('.trade-finder__sheet-done').click();
-    assert.match(await page.locator('.trade-finder__leg').nth(1).innerText(), /RB, WR/);
+    /* The plus opens it again for more, and that one stays open. */
+    await partnerLeg.locator('.trade-finder__leg-add').click();
+    await sheet.waitFor({ state: 'visible' });
+    await sheet.locator('.trade-finder__item').nth(1).click();
+    assert.equal(await sheet.count(), 1);
+    await sheet.locator('.trade-finder__sheet-done').click();
+    assert.equal(await partnerLeg.locator('.trade-finder__chip--leg').count(), 2);
 
-    /* Two shapes at once; "Any" switches off, and clears them again. */
-    const shapeButtons = page.locator('.trade-finder__ticket .trade-finder__seg-btn');
-    await shapeButtons.filter({ hasText: '1 for 1' }).click();
-    await shapeButtons.filter({ hasText: '2 for 2' }).click();
-    assert.deepEqual(
-      await page.locator('.trade-finder__ticket .trade-finder__seg-btn--on').allTextContents(),
-      ['1 for 1', '2 for 2'],
-    );
-    await shapeButtons.filter({ hasText: 'Any' }).click();
-    assert.deepEqual(await page.locator('.trade-finder__ticket .trade-finder__seg-btn--on').allTextContents(), ['Any']);
+    /* The chip's own cross removes it. */
+    await partnerLeg.locator('.trade-finder__chip-x').first().click();
+    assert.equal(await partnerLeg.locator('.trade-finder__chip--leg').count(), 1);
   } finally {
     await page.close();
   }
 });
 
-test('one manager failing never stops the scan of everyone else', async () => {
-  /* The bug: the walk stopped at the first "unavailable" answer (the server says that
-     for a few seconds while it restarts), so "everyone" died after a manager or two. */
-  const page = await openMarket({ width: 1280, height: 1000 });
+test('a named player walks the league live, as a screen, and deals land together', async () => {
+  const page = await openMarket(DESKTOP, '?slowFinder');
   try {
-    /* Only the 1 for 1 shape, so the walk is one search per manager. */
-    await page.locator('.trade-finder__ticket .trade-finder__seg-btn', { hasText: '1 for 1' }).click();
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    /* Pin a player you want: the search is live and narrows to his owner. */
+    await page.locator('.trade-finder__leg').nth(2).locator('.trade-finder__leg-open').click();
+    const sheet = page.locator('.trade-finder__sheet');
+    await sheet.locator('.trade-finder__seg-btn', { hasText: 'A player' }).click();
+    await sheet.locator('.trade-finder__search input').fill('London');
+    await sheet.locator('.trade-finder__item', { hasText: 'Drake London' }).first().click();
+    await sheet.waitFor({ state: 'detached' });
+    assert.equal(await page.locator('.trade-finder__find').innerText(), 'Find trades');
+    await page.locator('.trade-finder__find').click();
 
-    /* A manager that fails once is retried and still counted. */
-    await page.evaluate(() => { window.__finderFailOnce = 2; });
-    await findAndSettle(page);
-    assert.equal(await page.locator('.trade-finder__deal').count(), 3, 'every 1 for 1 deal, including the retried manager');
-    assert.equal(await page.locator('.trade-finder__error').count(), 0);
+    const scan = page.locator('.trade-finder__scan');
+    await scan.waitFor({ state: 'visible' });
+    /* The fixture puts London on four rosters, so four managers can deliver
+       him; the walk takes them two at a time. */
+    assert.match(await scan.innerText(), /Searching 4 managers/i);
+    assert.equal(await page.locator('.trade-finder__scan-team').count(), 4);
+    const now = await page.locator('.trade-finder__scan-team--now').count();
+    assert.ok(now >= 1 && now <= 2, `${now} in flight`);
+    /* Nothing lands while it runs. */
+    assert.equal(await page.locator('.trade-finder__lane').count(), 0);
 
-    /* A manager that keeps failing is skipped and named; everyone after him still scans. */
-    await page.evaluate(() => { window.__finderFailAlways = 2; });
-    await findAndSettle(page);
-    const board = await page.locator('.trade-finder__rows').innerText();
-    assert.match(board, /Gibbs/, 'the managers after the failed one were still scanned');
-    assert.match(await page.locator('.trade-finder__error').innerText(), /did not finish/);
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible', timeout: 15_000 });
+    assert.match(await page.locator('.trade-finder__board-title').innerText(), /to get drake london/i);
+    assert.match(await page.locator('.trade-finder__board-head').innerText(), /Searched 4 managers just now/);
+    /* The fixture's London deal costs Hermes title odds, so it is outside the
+       default limit and the board says so rather than showing nothing. */
+    assert.match(await page.locator('.trade-finder__board').innerText(), /outside your limits/);
+  } finally {
+    await page.close();
+  }
+});
+
+test('the player list values a player by the rest of his season, and says so', async () => {
+  const page = await openMarket(DESKTOP);
+  try {
+    await page.locator('.trade-finder__leg').nth(2).locator('.trade-finder__leg-open').click();
+    const sheet = page.locator('.trade-finder__sheet');
+    await sheet.waitFor({ state: 'visible' });
+    await sheet.locator('.trade-finder__seg-btn', { hasText: 'A player' }).click();
+    const rows = sheet.locator('.trade-finder__item');
+    await rows.first().waitFor({ state: 'visible' });
+    await page.waitForFunction(
+      () => /rest of season/i.test(document.querySelector('.trade-finder__list-caption')?.textContent ?? ''),
+    );
+    /* Every other week projects 80% of week 8 on the fixture, so a player is
+       worth 0.82 of his week 8 number per game; the top is 32.5, not 39.6. */
+    const values = (await sheet.locator('.trade-finder__item-mean').allTextContents()).map(Number);
+    assert.equal(values[0], 32.5);
+    assert.deepEqual(values, [...values].sort((a, b) => b - a));
+    const ranks = await sheet.locator('.trade-finder__item .trade-finder__rank').allTextContents();
+    assert.equal(ranks.length, values.length);
+    assert.equal(ranks[0], 'WR1');
+  } finally {
+    await page.close();
+  }
+});
+
+test('a manager who does not answer is retried, then skipped and named; the walk carries on', async () => {
+  const page = await openMarket(DESKTOP);
+  try {
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    /* Pin one of YOUR players: every manager is walked for what he brings back. */
+    await page.locator('.trade-finder__leg').nth(1).locator('.trade-finder__leg-open').click();
+    const sheet = page.locator('.trade-finder__sheet');
+    await sheet.locator('.trade-finder__seg-btn', { hasText: 'A player' }).click();
+    await sheet.locator('.trade-finder__item').first().click();
+    await sheet.waitFor({ state: 'detached' });
+
+    /* Hermes (2) fails once, as the server does while it restarts; Apollo (3)
+       fails every time. */
+    await page.evaluate(() => {
+      const hooks = window;
+      hooks.__finderFailOnce = 2;
+      hooks.__finderFailAlways = 3;
+    });
+    await page.locator('.trade-finder__find').click();
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible', timeout: 20_000 });
+    const head = await page.locator('.trade-finder__board-head').innerText();
+    assert.match(head, /Searched 5 managers just now/);
+    assert.match(head, /1 did not answer/);
+    /* Hermes answered on the retry, so his deals are on the board. */
+    await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).click();
+    await page.locator('.trade-finder__sheet--limits #trade-finder-max-loss').fill('10');
+    await page.locator('.trade-finder__sheet--limits .trade-finder__find').click();
+    assert.match(await page.locator('.trade-finder__lanes').innerText(), /Hermes Express/);
   } finally {
     await page.close();
   }

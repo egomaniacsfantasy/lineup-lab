@@ -1,69 +1,91 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { resolveApiUrl } from '../../services/apiBase.ts';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
-import { SimulationLoader } from '../ui/SimulationLoader';
 import { toPlayer } from '../../adapters/connectedLeague';
 import {
+  fetchBoard,
+  fetchTradeBoard,
   fetchTradeFinder,
+  requestTradeBoardScan,
   type ApiTeam,
   type LeagueBootstrap,
   type LeaguePricing,
   type PricedFuture,
+  type TradeBoardScan,
   type TradeSuggestion,
 } from '../../services/leagueApi';
 import { tradeSignature } from '../../utils/tradeMarket';
+import { acceptanceProbability } from '../../utils/tradeAcceptance';
 import { deltaTone, signedPct } from '../../utils/tradeVerdict';
 import { formatProbOrOdds } from '../../utils/formatOdds';
 import {
   ANY_PICK,
-  DEFAULT_MAX_PARTNER_LOSS,
-  DEFAULT_MIN_GAIN,
+  DEFAULT_LIMITS,
   EMPTY_QUERY,
   FINDER_POSITIONS,
   FINDER_SHAPES,
+  NOISE_PP,
+  acceptanceWord,
+  boardMatches,
+  buildOutlooks,
   deriveStartingPoints,
   describeQuery,
-  finderLayout,
+  groupDeals,
   isExactTrade,
-  matchesShapes,
+  isLopsided,
+  limitsChanged,
+  orderAssets,
+  outlookValues,
+  partnerValueDelta,
+  partnersToScan,
   partnersWords,
   passesLimits,
   pickWords,
   pinnedPlayer,
   positionSublines,
-  queryToRequests,
-  rankDeals,
+  queryToRules,
+  queryToShapes,
   reconcileQuery,
+  sendConsequence,
+  servedByBoard,
   shapesWords,
   sizesLabel,
+  standingOf,
   suggestionSizes,
   togglePartner,
   togglePlayer,
   togglePosition,
   toggleShape,
+  withinNoise,
+  type FinderLimits,
+  type FinderPosition,
   type FinderQuery,
+  type PlayerOutlook,
+  type PlayerValues,
   type SlotPick,
   type StartingPoint,
+  type ValueBasis,
 } from '../../utils/tradeFinderQuery';
 import './TradeFinder.css';
 
 /**
- * The trade finder as a ticket, on the trade sender's logic.
+ * The trade finder: a ticket on the left, the board on the right.
  *
- * Three legs and a shape: who with, what you send, what you get, and the
- * package sizes. Every leg is a pool ("any of these") and takes several picks:
- * several managers, several positions, several players, several shapes. Left
- * open, a leg is no limit.
+ * The ticket is three legs and a shape: who with, what you send, what you
+ * get, the package sizes. Each leg takes one pick with one tap, or several
+ * through its "+". The board answers the ticket:
  *
- * The search is the sender's: each manager is scanned one at a time by the
- * per-manager search at the analyzer's full sim count, a deal is kept only if
- * your title odds rise (by your minimum) and theirs fall by no more than your
- * limit, and deals rank by your title gain. There is no "chance they accept"
- * number anywhere: a deal is shown with what it does to each side's title odds.
+ *  - Nothing pinned, or only managers, positions and shapes: the BOARD, a
+ *    background scan of every manager that already ran, filtered to the ask.
+ *    It is there before the finger lifts, stamped with when it was scanned.
+ *  - A named player on either leg: a live WALK of the managers who can
+ *    deliver him, one request each, two at a time. The walk is the screen
+ *    while it runs; deals land together when it finishes.
  *
- * The results read the ticket back: a leg pinned to one player is the header,
- * said once, and each row is only what varied.
+ * Deals are lanes, one per player you would land, the best package first
+ * and the other ways to get him folded under it. A lane opens in place.
+ * Swings under a point of title odds are shown as ties, below a line.
  */
 
 type Slot = 'partner' | 'send' | 'get';
@@ -98,10 +120,32 @@ export interface TradeFinderProps {
 interface ResultEntry {
   suggestion: TradeSuggestion;
   signature: string;
+  acceptance: number | null;
+  /** Roster value the other side gains per game; negative = gives up. */
+  valueDelta: number;
+  lopsided: boolean;
 }
 
-/* The top of the "they lose at most" slider means no limit. */
-const MAX_LOSS_SLIDER_TOP = 10;
+interface Group {
+  headlineId: string;
+  best: ResultEntry;
+  others: ResultEntry[];
+}
+
+interface WalkState {
+  running: boolean;
+  done: number;
+  total: number;
+  current: number[];
+  found: number;
+  suggestions: TradeSuggestion[] | null;
+  failed: string[];
+}
+
+const WALK_CONCURRENCY = 2;
+const BOARD_POLL_MS = 4000;
+const BOARD_POLL_LIMIT = 45;
+const MAX_VISIBLE = 8;
 
 function initials(name: string) {
   return name
@@ -112,13 +156,25 @@ function initials(name: string) {
     .join('') || 'TM';
 }
 
-function formatScannedAt(value: number | null) {
+function clockOf(value: number | null | undefined) {
   if (!value) return null;
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(value));
 }
 
 function recordText(record: { wins: number; losses: number; ties?: number }) {
   return record.ties ? `${record.wins}-${record.losses}-${record.ties}` : `${record.wins}-${record.losses}`;
+}
+
+function surname(name: string) {
+  return name.split(' ').slice(-1)[0];
+}
+
+function TeamAvatar({ team, size }: { team: ApiTeam; size: 'sm' | 'md' | 'lg' }) {
+  return (
+    <span aria-hidden="true" className={`trade-finder__avatar trade-finder__avatar--${size}`}>
+      {team.avatarUrl ? <img alt="" src={resolveApiUrl(team.avatarUrl) ?? undefined} /> : <span>{initials(team.teamName)}</span>}
+    </span>
+  );
 }
 
 export function TradeFinder({
@@ -140,29 +196,91 @@ export function TradeFinder({
   busy,
 }: TradeFinderProps) {
   const [query, setQuery] = useState<FinderQuery>(EMPTY_QUERY);
-  /* The query the results belong to. The ticket can be edited while results
-     from the last run are still on screen, so the header reads the run, not
-     the draft. */
+  /* The ask the board is answering. Null until the first Find; the board then
+     shows the open ask, every deal, which is what nothing pinned means. */
   const [ranQuery, setRanQuery] = useState<FinderQuery | null>(null);
-  const [minGain, setMinGain] = useState(DEFAULT_MIN_GAIN);
-  const [maxLoss, setMaxLoss] = useState<number | null>(DEFAULT_MAX_PARTNER_LOSS);
-  /* Managers are scanned one at a time; this is where the walk has got to. */
-  const [progress, setProgress] = useState<{ done: number; total: number; name: string | null; shape: string | null } | null>(null);
-  const [picker, setPicker] = useState<Slot | null>(null);
-  const [suggestions, setSuggestions] = useState<TradeSuggestion[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [scannedAt, setScannedAt] = useState<number | null>(null);
+  const [limits, setLimits] = useState<FinderLimits>(DEFAULT_LIMITS);
+  const [limitsOpen, setLimitsOpen] = useState(false);
+  const [picker, setPicker] = useState<{ slot: Slot; multi: boolean } | null>(null);
   const [ticketOpen, setTicketOpen] = useState(true);
   const [showAll, setShowAll] = useState(false);
-  const runRef = useRef(0);
-  const resultsRef = useRef<HTMLDivElement | null>(null);
+  const [opened, setOpened] = useState<string | null>(null);
+
+  /* The background scan. */
+  const [board, setBoard] = useState<{ suggestions: TradeSuggestion[]; lastScan: TradeBoardScan | null; scanning: boolean } | null>(null);
+  const [boardError, setBoardError] = useState<string | null>(null);
+  const pollRef = useRef(0);
+
+  /* The live walk, for a named player. */
+  const [walk, setWalk] = useState<WalkState>({ running: false, done: 0, total: 0, current: [], found: 0, suggestions: null, failed: [] });
+  const walkRef = useRef(0);
 
   const teams = bootstrap.teams;
   const players = bootstrap.players;
   const partnerById = useMemo(() => new Map(partners.map((team) => [team.rosterId, team])), [partners]);
-  const meanOf = (id: string) => pricing?.playerMeans?.[id]?.mean ?? null;
-  const ownerOf = (id: string) => teams.find((team) => team.players.includes(id)) ?? null;
+
+  /* ── What a player is worth from here ── */
+  const [outlooks, setOutlooks] = useState<Map<string, PlayerOutlook> | null>(null);
+  const scoringFamily = bootstrap.league.scoringFamily;
+  const leagueWeek = pricing?.week ?? bootstrap.week;
+  useEffect(() => {
+    let cancelled = false;
+    fetchBoard(800, scoringFamily)
+      .then((payload) => {
+        if (cancelled || !payload.available || payload.rankings.length === 0) return;
+        setOutlooks(buildOutlooks(payload.rankings, leagueWeek));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueWeek, scoringFamily]);
+  const basis: ValueBasis = outlooks ? 'ros' : 'week';
+  const values = useMemo<PlayerValues | null>(
+    () => (outlooks ? outlookValues(outlooks) : pricing?.playerMeans ?? null),
+    [outlooks, pricing?.playerMeans],
+  );
+  const valueOf = (id: string) => values?.[id]?.mean ?? null;
+  const valueLabel = basis === 'ros' ? 'A game, rest of season' : 'This week';
+
+  /* ── The board: load on arrival, poll while its scan runs ── */
+  const loadBoard = useCallback(async () => {
+    const pollId = pollRef.current + 1;
+    pollRef.current = pollId;
+    let polls = 0;
+    while (pollRef.current === pollId && polls < BOARD_POLL_LIMIT) {
+      polls += 1;
+      try {
+        const next = await fetchTradeBoard(leagueId, userId);
+        if (pollRef.current !== pollId) return;
+        setBoard({ suggestions: next.suggestions ?? [], lastScan: next.lastScan ?? null, scanning: next.scanning });
+        setBoardError(null);
+        if (!next.scanning) return;
+      } catch (cause) {
+        if (pollRef.current !== pollId) return;
+        setBoardError(cause instanceof Error && cause.message ? cause.message : 'The board could not be reached.');
+        return;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, BOARD_POLL_MS));
+    }
+  }, [leagueId, userId]);
+
+  useEffect(() => {
+    void loadBoard();
+    return () => {
+      pollRef.current += 1;
+    };
+  }, [loadBoard]);
+
+  const rescanBoard = async () => {
+    try {
+      await requestTradeBoardScan(leagueId, userId);
+      setBoard((current) => (current ? { ...current, scanning: true } : current));
+      void loadBoard();
+    } catch (cause) {
+      setBoardError(cause instanceof Error && cause.message ? cause.message : 'The scan could not start.');
+    }
+  };
 
   useEffect(() => {
     if (presetPartnerRosterId == null || !partnerById.has(presetPartnerRosterId)) return;
@@ -173,10 +291,11 @@ export function TradeFinder({
     () => deriveStartingPoints({
       teams,
       players,
-      playerMeans: pricing?.playerMeans,
+      playerMeans: values,
       rosterPositions: bootstrap.league.rosterPositions,
+      basis,
     }),
-    [bootstrap.league.rosterPositions, players, pricing?.playerMeans, teams],
+    [basis, bootstrap.league.rosterPositions, players, teams, values],
   );
 
   const names = (q: FinderQuery) => ({
@@ -188,7 +307,59 @@ export function TradeFinder({
   const update = (patch: Partial<FinderQuery>) =>
     setQuery((current) => reconcileQuery({ ...current, ...patch }, teams));
 
-  const exact = isExactTrade(query);
+  /* ── Running an ask ── */
+
+  const stopWalk = () => {
+    walkRef.current += 1;
+    setWalk((current) => ({ ...current, running: false, current: [], suggestions: current.suggestions ?? [] }));
+  };
+
+  const runWalk = async (next: FinderQuery) => {
+    const walkId = walkRef.current + 1;
+    walkRef.current = walkId;
+    const rules = queryToRules(next);
+    const shapes = queryToShapes(next);
+    const ids = partnersToScan(next, teams);
+    const found: TradeSuggestion[] = [];
+    const failed: string[] = [];
+    let done = 0;
+    const inFlight = new Set<number>();
+    setWalk({ running: true, done: 0, total: ids.length, current: [], found: 0, suggestions: null, failed: [] });
+    const scanOne = async (partnerRosterId: number) => {
+      inFlight.add(partnerRosterId);
+      setWalk((current) => ({ ...current, current: [...inFlight] }));
+      let answered = false;
+      for (let attempt = 0; attempt < 2 && !answered; attempt += 1) {
+        if (walkRef.current !== walkId) return;
+        try {
+          const answer = await fetchTradeFinder(leagueId, { userId, partnerRosterId, rules, shapes, readsByRoster });
+          if (walkRef.current !== walkId) return;
+          if (answer.available) {
+            found.push(...(answer.suggestions ?? []));
+            answered = true;
+          }
+        } catch {
+          if (walkRef.current !== walkId) return;
+        }
+      }
+      if (!answered) failed.push(partnerById.get(partnerRosterId)?.teamName ?? `manager ${partnerRosterId}`);
+      inFlight.delete(partnerRosterId);
+      done += 1;
+      /* Progress only. Deals land together at the end, so the board never
+         moves under the person reading it. */
+      setWalk((current) => ({ ...current, done, current: [...inFlight], found: found.length, suggestions: found.slice() }));
+    };
+    const queue = [...ids];
+    const workers = Array.from({ length: Math.min(WALK_CONCURRENCY, queue.length) }, async () => {
+      while (queue.length && walkRef.current === walkId) {
+        const id = queue.shift();
+        if (id != null) await scanOne(id);
+      }
+    });
+    await Promise.all(workers);
+    if (walkRef.current !== walkId) return;
+    setWalk({ running: false, done, total: ids.length, current: [], found: found.length, suggestions: found, failed });
+  };
 
   const run = async (next: FinderQuery = query) => {
     if (busy) return;
@@ -198,73 +369,18 @@ export function TradeFinder({
       onPriceExact({ partnerRosterId: next.partnerRosterIds[0], give: [exactSend], get: [exactGet] });
       return;
     }
-    const runId = runRef.current + 1;
-    runRef.current = runId;
-    const requests = queryToRequests(next, teams);
-    setLoading(true);
-    setError(null);
     setRanQuery(next);
+    setLimits(DEFAULT_LIMITS);
+    setOpened(null);
     setShowAll(false);
     setTicketOpen(false);
-    setSuggestions([]);
-    setProgress({ done: 0, total: requests.length, name: null, shape: null });
-    window.setTimeout(() => resultsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 60);
-    const failedManagers = new Set<string>();
-    let failed = 0;
-    const pause = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-    /* One manager and one shape at a time. Deals land on the board as each
-       search finishes instead of after the whole league.
-
-       A search that fails is retried, then SKIPPED -- never the end of the walk.
-       It used to stop the whole scan at the first "unavailable" answer, which is
-       what the server says for a few seconds while it restarts (it restarts on
-       every projections push), so "everyone" died after a manager or two. */
-    for (const [index, request] of requests.entries()) {
-      if (runRef.current !== runId) return;
-      const managerName = partnerById.get(request.partnerRosterId)?.teamName ?? null;
-      setProgress({
-        done: index,
-        total: requests.length,
-        name: managerName,
-        shape: FINDER_SHAPES.find((entry) => entry.id === request.shape)?.label ?? null,
-      });
-      let response: Awaited<ReturnType<typeof fetchTradeFinder>> | null = null;
-      for (let attempt = 0; attempt < 3 && !response; attempt += 1) {
-        if (attempt > 0) await pause(4000 * attempt);
-        if (runRef.current !== runId) return;
-        try {
-          const answer = await fetchTradeFinder(leagueId, {
-            userId,
-            partnerRosterId: request.partnerRosterId,
-            rules: request.rules,
-            shapes: request.shapes,
-            readsByRoster,
-          });
-          if (runRef.current !== runId) return;
-          if (answer.available) response = answer;
-        } catch {
-          if (runRef.current !== runId) return;
-        }
-      }
-      if (!response) {
-        failed += 1;
-        if (managerName) failedManagers.add(managerName);
-        continue;
-      }
-      const found = response.suggestions ?? [];
-      if (found.length) setSuggestions((current) => [...(current ?? []), ...found]);
-      if (response.debug) console.info('[trade-finder]', response.debug);
+    if (servedByBoard(next)) {
+      walkRef.current += 1;
+      setWalk((current) => ({ ...current, running: false, current: [], suggestions: null }));
+      if (!board) void loadBoard();
+    } else {
+      await runWalk(next);
     }
-    if (runRef.current !== runId) return;
-    if (failed > 0) {
-      const who = [...failedManagers];
-      setError(failed === requests.length
-        ? 'The scan did not finish. The site may be restarting; try again in a minute.'
-        : `${failed} of ${requests.length} searches did not finish${who.length ? ` (${who.slice(0, 3).join(', ')}${who.length > 3 ? ` and ${who.length - 3} more` : ''})` : ''}. Run it again to retry them.`);
-    }
-    setProgress(null);
-    setScannedAt(Date.now());
-    setLoading(false);
   };
 
   const applyStartingPoint = (point: StartingPoint) => {
@@ -273,11 +389,23 @@ export function TradeFinder({
     void run(next);
   };
 
-  const entries = useMemo<ResultEntry[]>(() => {
-    if (!suggestions || !ranQuery) return [];
-    return rankDeals(suggestions
-      .filter((suggestion) => matchesShapes(suggestion, ranQuery.shapes))
-      .map((suggestion) => ({
+  /* ── What the board shows ── */
+
+  const asked = ranQuery ?? EMPTY_QUERY;
+  const fromBoard = servedByBoard(asked);
+  const walking = !fromBoard && walk.running;
+  const sourceSuggestions = useMemo(() => {
+    if (fromBoard) return (board?.suggestions ?? []).filter((suggestion) => boardMatches(suggestion, asked, players));
+    /* While the walk runs the board stays empty: deals land together. */
+    return walk.running ? [] : walk.suggestions ?? [];
+  }, [asked, board?.suggestions, fromBoard, players, walk.running, walk.suggestions]);
+
+  const entries = useMemo<ResultEntry[]>(() => sourceSuggestions
+    .filter((suggestion) => suggestion.youDelta > 0)
+    .map((suggestion) => {
+      const read = readsByRoster[suggestion.partnerRosterId];
+      const valueDelta = partnerValueDelta(suggestion, values);
+      return {
         suggestion,
         signature: tradeSignature({
           leagueId,
@@ -285,77 +413,119 @@ export function TradeFinder({
           givePlayerIds: suggestion.give.map((asset) => asset.id),
           getPlayerIds: suggestion.get.map((asset) => asset.id),
         }),
-      }))
-      .filter((entry) => !dismissedSignatures.has(entry.signature)));
-  }, [dismissedSignatures, leagueId, ranQuery, suggestions]);
+        acceptance: read ? acceptanceProbability(suggestion.partnerDelta, read.friendliness, read.relationship) : null,
+        valueDelta,
+        lopsided: values != null && isLopsided(valueDelta),
+      };
+    })
+    .filter((entry) => !dismissedSignatures.has(entry.signature)), [dismissedSignatures, leagueId, readsByRoster, sourceSuggestions, values]);
 
-  /* The sender's keep rule, applied to what the scan returned: your title odds
-     rise at least `minGain`, theirs fall at most `maxLoss`. */
-  const withinLimits = entries.filter((entry) => passesLimits(entry.suggestion, minGain, maxLoss));
-  const outsideLimits = entries.length - withinLimits.length;
-  const MAX_VISIBLE = 8;
-  const visible = showAll ? withinLimits : withinLimits.slice(0, MAX_VISIBLE);
-  const hidden = withinLimits.length - visible.length;
-  const layout = ranQuery ? finderLayout(ranQuery) : 'open';
+  const kept = useMemo(() => entries.filter((entry) =>
+    passesLimits(entry.suggestion, limits.minGain, limits.maxLoss) && !(limits.hideLopsided && entry.lopsided)), [entries, limits]);
+  const outside = entries.length - kept.length;
+  const groups = useMemo<Group[]>(() => groupDeals(kept, values), [kept, values]);
+  const strong = groups.filter((group) => !withinNoise(group.best.suggestion.youDelta));
+  const ties = groups.filter((group) => withinNoise(group.best.suggestion.youDelta));
+  const visibleStrong = showAll ? strong : strong.slice(0, MAX_VISIBLE);
+  const visibleTies = showAll ? ties : ties.slice(0, Math.max(0, MAX_VISIBLE - visibleStrong.length));
+  const hidden = (strong.length - visibleStrong.length) + (ties.length - visibleTies.length);
+
+  const scanningBoard = fromBoard
+    && !boardError
+    && (board == null || (board.scanning && !board.lastScan?.at));
 
   /* ── Ticket legs ── */
 
-  const legValue = (slot: Slot): { text: string; empty: boolean; badge?: ReactNode } => {
+  const legChips = (slot: Slot): { key: string; label: string; badge?: ReactNode; remove: () => void }[] => {
     if (slot === 'partner') {
-      const picked = query.partnerRosterIds.map((id) => partnerById.get(id)).filter((team): team is ApiTeam => Boolean(team));
-      if (picked.length === 0) return { text: 'Anyone', empty: true };
-      if (picked.length === 1) return { text: picked[0].teamName, empty: false, badge: <TeamAvatar team={picked[0]} size="sm" /> };
-      return { text: `${picked.length} managers`, empty: false, badge: <TeamAvatar team={picked[0]} size="sm" /> };
+      return query.partnerRosterIds
+        .map((id) => partnerById.get(id))
+        .filter((team): team is ApiTeam => Boolean(team))
+        .map((team) => ({
+          key: `p-${team.rosterId}`,
+          label: team.teamName,
+          badge: <TeamAvatar size="sm" team={team} />,
+          remove: () => update({ partnerRosterIds: togglePartner(query.partnerRosterIds, team.rosterId) }),
+        }));
     }
     const pick = slot === 'send' ? query.send : query.get;
+    const set = (next: SlotPick) => update(slot === 'send' ? { send: next } : { get: next });
     if (pick.kind === 'position') {
-      const one = pick.positions.length === 1 ? pick.positions[0] : null;
-      return {
-        text: one
-          ? (slot === 'send' ? `Your ${one}s` : `Their ${one}s`)
-          : pick.positions.join(', '),
-        empty: false,
-        badge: <span className="trade-finder__pos trade-finder__pos--on">{one ?? pick.positions.length}</span>,
-      };
+      return pick.positions.map((position) => ({
+        key: `pos-${position}`,
+        label: slot === 'send' ? `Your ${position}s` : `Their ${position}s`,
+        badge: <span className="trade-finder__pos trade-finder__pos--on">{position}</span>,
+        remove: () => set(togglePosition(pick, position)),
+      }));
     }
     if (pick.kind === 'player') {
-      const first = pick.ids[0];
-      const player = players[first];
-      return {
-        text: pick.ids.length === 1 ? (player?.name ?? first) : `${pick.ids.length} players`,
-        empty: false,
+      return pick.ids.map((id) => ({
+        key: `pl-${id}`,
+        label: players[id]?.name ?? id,
         badge: (
           <PlayerHeadshot
             className="trade-finder__leg-headshot"
             fallbackClassName="trade-finder__leg-headshot-fallback"
             imageClassName="trade-finder__leg-headshot-image"
-            player={toPlayer(first, players)}
+            player={toPlayer(id, players)}
           />
         ),
-      };
+        remove: () => set(togglePlayer(pick, id)),
+      }));
     }
-    return { text: 'Anything', empty: true };
+    return [];
   };
 
   const renderLeg = (slot: Slot, label: string) => {
-    const value = legValue(slot);
+    const chips = legChips(slot);
+    const empty = chips.length === 0;
     return (
-      <button
-        aria-haspopup="dialog"
-        className="trade-finder__leg"
-        disabled={busy}
-        onClick={() => setPicker(slot)}
-        type="button"
-      >
+      <div className={['trade-finder__leg', empty ? 'trade-finder__leg--empty' : ''].filter(Boolean).join(' ')}>
         <span className="trade-finder__leg-label">{label}</span>
-        <span className={['trade-finder__leg-value', value.empty ? 'trade-finder__leg-value--empty' : ''].filter(Boolean).join(' ')}>
-          {value.badge}
-          <span className="trade-finder__leg-text">{value.text}</span>
+        <span className="trade-finder__leg-value">
+          {empty ? (
+            <button
+              aria-haspopup="dialog"
+              className="trade-finder__leg-open"
+              disabled={busy}
+              onClick={() => setPicker({ slot, multi: false })}
+              type="button"
+            >
+              <span className="trade-finder__leg-text trade-finder__leg-text--empty">{slot === 'partner' ? 'Anyone' : 'Anything'}</span>
+              <svg aria-hidden="true" className="trade-finder__caret" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 16 16">
+                <path d="M6 4l4 4-4 4" />
+              </svg>
+            </button>
+          ) : (
+            <>
+              {chips.map((chip) => (
+                <span className="trade-finder__chip trade-finder__chip--on trade-finder__chip--leg" key={chip.key}>
+                  {chip.badge}
+                  <span className="trade-finder__chip-text">{chip.label}</span>
+                  <button
+                    aria-label={`Remove ${chip.label}`}
+                    className="trade-finder__chip-x"
+                    disabled={busy}
+                    onClick={chip.remove}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <button
+                aria-label={`Add another to ${label.toLowerCase()}`}
+                className="trade-finder__leg-add"
+                disabled={busy}
+                onClick={() => setPicker({ slot, multi: true })}
+                type="button"
+              >
+                +
+              </button>
+            </>
+          )}
         </span>
-        <svg aria-hidden="true" className="trade-finder__caret" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 16 16">
-          <path d="M6 4l4 4-4 4" />
-        </svg>
-      </button>
+      </div>
     );
   };
 
@@ -366,238 +536,350 @@ export function TradeFinder({
     { text: shapesWords(ranQuery.shapes), on: ranQuery.shapes.length > 0 },
   ] : [];
 
-  /* ── Results header: the pinned leg, said once ── */
+  /* ── Faces ── */
 
-  const renderPinnedPlayer = (id: string, eyebrow: string) => {
+  const face = (id: string, size: 'xl' | 'lg' | 'md' | 'sm') => (
+    <PlayerHeadshot
+      className={`trade-finder__face trade-finder__face--${size}`}
+      fallbackClassName="trade-finder__face-fallback"
+      imageClassName="trade-finder__face-image"
+      key={id}
+      player={toPlayer(id, players)}
+    />
+  );
+
+  const rankOf = (id: string) => {
+    const outlook = outlooks?.get(id);
+    return outlook ? `${outlook.position}${outlook.positionRank}` : null;
+  };
+
+  const playerMeta = (id: string) => {
     const player = players[id];
-    const owner = ownerOf(id);
-    const mean = meanOf(id);
-    const future = owner ? futuresByRoster.get(owner.rosterId) : null;
-    return (
-      <div className="trade-finder__pinned">
-        <PlayerHeadshot
-          className="trade-finder__pinned-headshot"
-          fallbackClassName="trade-finder__pinned-headshot-fallback"
-          imageClassName="trade-finder__pinned-headshot-image"
-          player={toPlayer(id, players)}
-        />
-        <span className="trade-finder__pinned-copy">
-          <span className="trade-finder__eyebrow">{eyebrow}</span>
-          <span className="trade-finder__pinned-name">{player?.name ?? id}</span>
-          <span className="trade-finder__pinned-meta">
-            {player?.position ? <span className="trade-finder__pos">{player.position}</span> : null}
-            {[player?.team, owner && !owner.isUser
-              ? `owned by ${owner.teamName}, ${recordText(owner.record)}${future?.championOdds != null ? `, title ${formatProbOrOdds(future.titleProb)}` : ''}`
-              : null].filter(Boolean).join(' · ')}
-          </span>
-        </span>
-        {mean != null ? (
-          <span className="trade-finder__pinned-stat">
-            <span className="trade-finder__tag">Proj</span>
-            <span className="trade-finder__num">{mean.toFixed(1)}</span>
-          </span>
-        ) : null}
-      </div>
-    );
+    const value = valueOf(id);
+    return [
+      player?.team,
+      rankOf(id),
+      value != null ? `${value.toFixed(1)} ${basis === 'ros' ? 'a game' : 'this week'}` : null,
+      player?.byeWeek != null && player.byeWeek >= leagueWeek ? `bye ${player.byeWeek}` : null,
+    ].filter(Boolean).join(' · ');
   };
 
-  const renderPositionHead = (q: FinderQuery) => {
-    const sub = positionSublines({
-      team: userTeam,
-      players,
-      playerMeans: pricing?.playerMeans,
-      rosterPositions: bootstrap.league.rosterPositions,
-    });
-    const side = (pick: SlotPick, eyebrow: string, tone: 'get' | 'send') => {
-      const positions = pick.kind === 'position' ? pick.positions : [];
-      const position = positions.length === 1 ? positions[0] : null;
-      const glyph = pick.kind === 'position'
-        ? positions.join('/')
-        : pick.kind === 'player'
-          ? `${pick.ids.length}`
-          : 'Any';
+  /* ── One lane ── */
+
+  const renderSide = (assets: TradeSuggestion['give'], tone: 'get' | 'send') => {
+    const ordered = orderAssets(assets, values);
+    const lead = ordered[0];
+    if (!lead) return null;
+    const extras = ordered.slice(1);
+    const leadPlayer = players[lead.id];
+    if (tone === 'send' && extras.length >= 2) {
+      /* Three bench pieces read as one unit, not three rows. */
       return (
-        <span className={`trade-finder__pair-side trade-finder__pair-side--${tone}`}>
-          <span className="trade-finder__eyebrow">{eyebrow}</span>
-          <span className={['trade-finder__pair-glyph', pick.kind === 'any' ? 'trade-finder__pair-glyph--open' : ''].filter(Boolean).join(' ')}>
-            {glyph}
-          </span>
-          <span className="trade-finder__pair-sub">
-            {position
-              ? tone === 'get'
-                ? (sub[position].starter ? `Your ${sub[position].starter} now` : `${sub[position].rostered} rostered`)
-                : `${sub[position].rostered} rostered`
-              : pick.kind === 'position'
-                ? 'Any of these positions'
-                : pick.kind === 'player'
-                  ? 'Any of the players you picked'
-                  : tone === 'get' ? 'Whatever lifts your title' : 'Whatever they will take'}
-          </span>
-        </span>
-      );
-    };
-    const partner = q.partnerRosterIds.length === 1 ? partnerById.get(q.partnerRosterIds[0]) : null;
-    return (
-      <div className="trade-finder__pair">
-        {side(q.get, 'You get', 'get')}
-        <svg aria-hidden="true" className="trade-finder__swap" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
-          <path d="M7 16h14m0 0l-3-3m3 3l-3 3M17 8H3m0 0l3-3M3 8l3 3" />
-        </svg>
-        {side(q.send, 'You send', 'send')}
-        {partner ? (
-          <span className="trade-finder__pair-partner">
-            <TeamAvatar team={partner} size="sm" />
-            <span>with {partner.teamName}</span>
-          </span>
-        ) : q.partnerRosterIds.length > 1 ? (
-          <span className="trade-finder__pair-partner">
-            <span>with {q.partnerRosterIds.length} managers</span>
-          </span>
-        ) : null}
-      </div>
-    );
-  };
-
-  const renderHead = () => {
-    if (!ranQuery) return null;
-    const getId = pinnedPlayer(ranQuery.get);
-    const sendId = pinnedPlayer(ranQuery.send);
-    if (layout === 'get-player' && getId) return renderPinnedPlayer(getId, 'To get');
-    if (layout === 'send-player' && sendId) return renderPinnedPlayer(sendId, 'To move');
-    if (layout === 'both-players' && getId && sendId) {
-      return (
-        <div className="trade-finder__pinned-stack">
-          {renderPinnedPlayer(getId, 'To get')}
-          {renderPinnedPlayer(sendId, 'For')}
-        </div>
-      );
-    }
-    return renderPositionHead(ranQuery);
-  };
-
-  const rowsEyebrow = layout === 'get-player'
-    ? 'What it costs you'
-    : layout === 'send-player'
-      ? 'What he brings back'
-      : layout === 'both-players'
-        ? 'With a throw-in'
-        : ranQuery?.get.kind === 'position' && ranQuery.get.positions.length === 1
-          ? `Best ${ranQuery.get.positions[0]} you can land`
-          : 'Deals the book likes';
-
-  /* ── One deal ── */
-
-  const renderAssets = (assets: TradeSuggestion['give'], omit: string | null, lead: boolean) => {
-    const shown = assets.filter((asset) => asset.id !== omit);
-    if (shown.length === 0) return null;
-    return shown.map((asset, index) => {
-      const player = players[asset.id];
-      return (
-        <span
-          className={['trade-finder__who', lead && index === 0 ? 'trade-finder__who--lead' : ''].filter(Boolean).join(' ')}
-          key={asset.id}
-        >
-          <PlayerHeadshot
-            className="trade-finder__who-headshot"
-            fallbackClassName="trade-finder__who-headshot-fallback"
-            imageClassName="trade-finder__who-headshot-image"
-            player={toPlayer(asset.id, players)}
-          />
-          <span className="trade-finder__who-name">{asset.name}</span>
-          {player?.position ? <span className="trade-finder__pos">{player.position}</span> : null}
-        </span>
-      );
-    });
-  };
-
-  const renderDeal = (entry: ResultEntry, index: number) => {
-    const { suggestion } = entry;
-    const partner = partnerById.get(suggestion.partnerRosterId);
-    const sizes = suggestionSizes(suggestion);
-    const pinnedGet = ranQuery ? pinnedPlayer(ranQuery.get) : null;
-    const pinnedSend = ranQuery ? pinnedPlayer(ranQuery.send) : null;
-    const partnerPinned = ranQuery?.partnerRosterIds.length === 1;
-    const getAssets = renderAssets(suggestion.get, pinnedGet, layout !== 'get-player');
-    const sendAssets = renderAssets(suggestion.give, pinnedSend, layout === 'get-player');
-    const youTone = deltaTone(suggestion.youDelta);
-    const themTone = deltaTone(suggestion.partnerDelta);
-    return (
-      <article
-        className={['trade-finder__deal', index === 0 ? 'trade-finder__deal--lead' : ''].filter(Boolean).join(' ')}
-        key={entry.signature}
-      >
-        <button
-          aria-label={`Build this trade with ${partner?.teamName ?? suggestion.partnerName}`}
-          className="trade-finder__deal-open"
-          disabled={busy}
-          onClick={() => onBuild(suggestion)}
-          type="button"
-        >
-          <span className="trade-finder__deal-sides">
-            {layout === 'get-player' ? (
-              <>
-                {sendAssets}
-                {getAssets ? <span className="trade-finder__for">plus {getAssets}</span> : null}
-              </>
-            ) : (
-              <>
-                {getAssets}
-                {sendAssets ? <span className="trade-finder__for"><span className="trade-finder__for-word">for</span>{sendAssets}</span> : null}
-              </>
-            )}
-          </span>
-          <span className="trade-finder__deal-tags">
-            <span className="trade-finder__tag">{sizesLabel(sizes)}</span>
-            {!partnerPinned ? <span className="trade-finder__tag trade-finder__tag--partner">{partner?.teamName ?? suggestion.partnerName}</span> : null}
-          </span>
-          <span className="trade-finder__deal-price">
-            <span className="trade-finder__tag">Your title</span>
-            <span className={`trade-finder__num trade-finder__num--lead trade-finder__num--${youTone}`}>{signedPct(suggestion.youDelta)}</span>
-            <span className="trade-finder__num trade-finder__num--them">
-              them <span className={`trade-finder__num--${themTone}`}>{signedPct(suggestion.partnerDelta)}</span>
+        <span className="trade-finder__side trade-finder__side--send">
+          <span className="trade-finder__faces">{ordered.map((asset) => face(asset.id, 'md'))}</span>
+          <span className="trade-finder__who">
+            <span className="trade-finder__who-name trade-finder__who-name--group">
+              {ordered.map((asset) => surname(players[asset.id]?.name ?? asset.name)).join(', ')}
+            </span>
+            <span className="trade-finder__who-meta">
+              {ordered.map((asset) => rankOf(asset.id) ?? players[asset.id]?.position ?? '').filter(Boolean).join(' · ')}
             </span>
           </span>
-        </button>
-        <span className="trade-finder__deal-actions">
-          <button className="trade-finder__deal-action" onClick={() => onShare(suggestion)} type="button">Share</button>
-          <button
-            aria-label="Dismiss this deal"
-            className="trade-finder__deal-action"
-            onClick={() => onDismiss(entry.signature)}
-            type="button"
-          >
-            Dismiss
-          </button>
         </span>
+      );
+    }
+    return (
+      <span className={`trade-finder__side trade-finder__side--${tone}`}>
+        <span className="trade-finder__faces">
+          {face(lead.id, tone === 'get' ? 'lg' : 'md')}
+          {extras.map((asset) => face(asset.id, 'sm'))}
+        </span>
+        <span className="trade-finder__who">
+          <span className={['trade-finder__who-name', tone === 'get' ? 'trade-finder__who-name--lead' : ''].filter(Boolean).join(' ')}>
+            {leadPlayer?.name ?? lead.name}
+          </span>
+          <span className="trade-finder__who-meta">
+            {leadPlayer?.position ? <span className="trade-finder__pos">{leadPlayer.position}</span> : null}
+            {playerMeta(lead.id)}
+          </span>
+          {extras.map((asset) => (
+            <span className="trade-finder__who-extra" key={asset.id}>
+              + {players[asset.id]?.name ?? asset.name}
+              {rankOf(asset.id) ? `, ${rankOf(asset.id)}` : players[asset.id]?.position ? `, ${players[asset.id].position}` : ''}
+            </span>
+          ))}
+        </span>
+      </span>
+    );
+  };
+
+  const standingLine = (entry: ResultEntry) => {
+    const partner = partnerById.get(entry.suggestion.partnerRosterId);
+    const future = futuresByRoster.get(entry.suggestion.partnerRosterId);
+    const standing = standingOf(future?.playoffProb ?? null);
+    const name = partner?.teamName ?? entry.suggestion.partnerName;
+    const record = partner ? recordText(partner.record) : null;
+    const gives = entry.valueDelta < 0 ? `gives up ${Math.abs(entry.valueDelta).toFixed(1)}` : `gains ${entry.valueDelta.toFixed(1)}`;
+    if (standing === 'out') {
+      return `${name} is ${record ?? 'out'} and out of the race, so his title odds cannot move. On roster value he ${gives} a game.${entry.lopsided ? ' Expect a no.' : ''}`;
+    }
+    if (standing === 'bubble') {
+      return `${name} is ${record ?? 'on the bubble'} and fighting for a playoff spot. On roster value he ${gives} a game.`;
+    }
+    return `${name} is ${record ?? 'contending'} and contending, so his title odds are the real price. On roster value he ${gives} a game.`;
+  };
+
+  const renderOpen = (group: Group) => {
+    const { suggestion } = group.best;
+    const getOrdered = orderAssets(suggestion.get, values);
+    const sendOrdered = orderAssets(suggestion.give, values);
+    const headline = getOrdered[0];
+    const sendLead = sendOrdered[0];
+    const headlineRow = headline ? players[headline.id] : null;
+    const sendRow = sendLead ? players[sendLead.id] : null;
+    const partner = partnerById.get(suggestion.partnerRosterId);
+    const future = futuresByRoster.get(suggestion.partnerRosterId);
+    const sub = positionSublines({ team: userTeam, players, playerMeans: values, rosterPositions: bootstrap.league.rosterPositions });
+    const headlinePos = headlineRow?.position;
+    const mySlot = headlinePos && (FINDER_POSITIONS as string[]).includes(headlinePos) ? sub[headlinePos as FinderPosition].starter : null;
+    const consequence = sendLead ? sendConsequence(sendLead.id, userTeam, players, values, bootstrap.league.rosterPositions) : null;
+    const word = acceptanceWord(group.best.lopsided, group.best.acceptance);
+    const extraLines = (list: typeof getOrdered) => list.slice(1).map((asset) => (
+      <span className="trade-finder__who-extra" key={asset.id}>
+        + {players[asset.id]?.name ?? asset.name}{rankOf(asset.id) ? `, ${rankOf(asset.id)}` : players[asset.id]?.position ? `, ${players[asset.id].position}` : ''}
+      </span>
+    ));
+    return (
+      <div className="trade-finder__open" id={`deal-${group.best.signature}`}>
+        <div className="trade-finder__open-pair">
+          <div className="trade-finder__open-side">
+            {headline ? face(headline.id, 'xl') : null}
+            <span className="trade-finder__open-copy">
+              <span className="trade-finder__eyebrow">You get</span>
+              <span className="trade-finder__open-name">{headlineRow?.name ?? headline?.name}</span>
+              <span className="trade-finder__who-meta">
+                {headlinePos ? <span className="trade-finder__pos">{headlinePos}</span> : null}
+                {headline ? playerMeta(headline.id) : null}
+              </span>
+              {extraLines(getOrdered)}
+              <span className="trade-finder__open-stats">
+                {headline && valueOf(headline.id) != null ? (
+                  <span className="trade-finder__stat"><span className="trade-finder__tag">{valueLabel}</span><span className="trade-finder__num">{valueOf(headline.id)!.toFixed(1)}</span></span>
+                ) : null}
+                {mySlot ? (
+                  <span className="trade-finder__stat"><span className="trade-finder__tag">Your {mySlot.split(' ')[0]} now</span><span className="trade-finder__num trade-finder__num--dim">{mySlot.split(' ')[1]}</span></span>
+                ) : null}
+                <span className="trade-finder__stat"><span className="trade-finder__tag">Owner</span><span className="trade-finder__stat-text">{partner?.teamName ?? suggestion.partnerName}{partner ? `, ${recordText(partner.record)}` : ''}</span></span>
+              </span>
+            </span>
+          </div>
+          <div className="trade-finder__open-side trade-finder__open-side--send">
+            {sendLead ? face(sendLead.id, 'lg') : null}
+            <span className="trade-finder__open-copy">
+              <span className="trade-finder__eyebrow">You send</span>
+              <span className="trade-finder__open-name trade-finder__open-name--send">{sendRow?.name ?? sendLead?.name}</span>
+              <span className="trade-finder__who-meta">
+                {sendRow?.position ? <span className="trade-finder__pos">{sendRow.position}</span> : null}
+                {sendLead ? playerMeta(sendLead.id) : null}
+              </span>
+              {extraLines(sendOrdered)}
+              <span className="trade-finder__open-stats">
+                {sendLead && valueOf(sendLead.id) != null ? (
+                  <span className="trade-finder__stat"><span className="trade-finder__tag">{valueLabel}</span><span className="trade-finder__num">{valueOf(sendLead.id)!.toFixed(1)}</span></span>
+                ) : null}
+                {consequence?.slot ? (
+                  <span className="trade-finder__stat">
+                    <span className="trade-finder__tag">{consequence.slot === 'bench' ? 'His slot' : 'Who starts instead'}</span>
+                    <span className="trade-finder__stat-text">
+                      {consequence.slot === 'bench'
+                        ? 'Bench. Nothing leaves your lineup.'
+                        : consequence.replacement
+                          ? `${consequence.replacement.name}, ${consequence.replacement.perGame.toFixed(1)}`
+                          : `Your ${consequence.slot}, with nobody behind him`}
+                    </span>
+                  </span>
+                ) : null}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div className="trade-finder__open-numbers">
+          <div className="trade-finder__open-number">
+            <span className="trade-finder__tag">Your title</span>
+            <span className={`trade-finder__num trade-finder__num--big trade-finder__num--${deltaTone(suggestion.youDelta)}`}>{signedPct(suggestion.youDelta)}</span>
+            <span className="trade-finder__who-meta">
+              {suggestion.youPlayoffDelta != null ? <>Playoffs <span className={`trade-finder__num--${deltaTone(suggestion.youPlayoffDelta)}`}>{signedPct(suggestion.youPlayoffDelta)}</span></> : null}
+              {suggestion.youWeekDelta != null ? <> · this week <span className={`trade-finder__num--${deltaTone(suggestion.youWeekDelta)}`}>{signedPct(suggestion.youWeekDelta)}</span></> : null}
+            </span>
+          </div>
+          <div className="trade-finder__open-number">
+            <span className="trade-finder__tag">His side</span>
+            <span className={`trade-finder__num trade-finder__num--big trade-finder__num--${deltaTone(suggestion.partnerDelta)}`}>{signedPct(suggestion.partnerDelta)}</span>
+            <span className="trade-finder__who-meta">{values ? standingLine(group.best) : `${partner?.teamName ?? suggestion.partnerName}${future ? `, title ${formatProbOrOdds(future.titleProb)}` : ''}`}</span>
+          </div>
+          <div className="trade-finder__open-number">
+            <span className="trade-finder__tag">Will he take it</span>
+            <span className={`trade-finder__word trade-finder__word--${word.tone}`}>{word.word}</span>
+            <span className="trade-finder__who-meta">
+              {group.best.lopsided
+                ? 'Lopsided on value. The analyzer can find the throw-in that evens it.'
+                : group.best.acceptance != null
+                  ? 'From your read on him and what the deal does to his side.'
+                  : 'No read on this manager yet.'}
+            </span>
+          </div>
+        </div>
+
+        <div className="trade-finder__open-foot">
+          <div className="trade-finder__alts">
+            <span className="trade-finder__tag">{group.others.length ? `${group.others.length} other ${group.others.length === 1 ? 'way' : 'ways'} to get him` : 'The only package the book found for him'}</span>
+            {group.others.map((other) => {
+              const otherWord = acceptanceWord(other.lopsided, other.acceptance);
+              const give = orderAssets(other.suggestion.give, values);
+              const get = orderAssets(other.suggestion.get, values);
+              return (
+                <button className="trade-finder__alt" key={other.signature} onClick={() => onBuild(other.suggestion)} type="button">
+                  <span className="trade-finder__alt-who">
+                    <span className="trade-finder__faces trade-finder__faces--tight">{give.map((asset) => face(asset.id, 'sm'))}</span>
+                    <span>{give.map((asset) => surname(players[asset.id]?.name ?? asset.name)).join(' + ')}</span>
+                    {get.length > 1 ? <span className="trade-finder__who-meta">with {get.slice(1).map((asset) => players[asset.id]?.name ?? asset.name).join(', ')}</span> : null}
+                    <span className="trade-finder__tag">{sizesLabel(suggestionSizes(other.suggestion))}</span>
+                  </span>
+                  <span className={`trade-finder__num trade-finder__num--${deltaTone(other.suggestion.youDelta)}`}>{signedPct(other.suggestion.youDelta)}</span>
+                  <span className={`trade-finder__who-meta trade-finder__word--${otherWord.tone}`}>{otherWord.word}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="trade-finder__open-actions">
+            <button className="trade-finder__act" onClick={() => onDismiss(group.best.signature)} type="button">Dismiss</button>
+            <button className="trade-finder__act" onClick={() => onShare(suggestion)} type="button">Share</button>
+            <button className="trade-finder__act trade-finder__act--primary" disabled={busy} onClick={() => onBuild(suggestion)} type="button">Build this trade</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderLane = (group: Group, index: number, tie: boolean) => {
+    const { suggestion } = group.best;
+    const partner = partnerById.get(suggestion.partnerRosterId);
+    const isOpen = opened === group.best.signature;
+    return (
+      <article
+        className={[
+          'trade-finder__lane',
+          index === 0 && !tie ? 'trade-finder__lane--lead' : '',
+          isOpen ? 'trade-finder__lane--open' : '',
+          tie ? 'trade-finder__lane--tie' : '',
+        ].filter(Boolean).join(' ')}
+        key={group.best.signature}
+      >
+        <button
+          aria-controls={`deal-${group.best.signature}`}
+          aria-expanded={isOpen}
+          className="trade-finder__lane-main"
+          onClick={() => setOpened(isOpen ? null : group.best.signature)}
+          type="button"
+        >
+          {renderSide(suggestion.get, 'get')}
+          <span className="trade-finder__swap-col">
+            <svg aria-hidden="true" className="trade-finder__swap" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M7 16h14m0 0l-3-3m3 3l-3 3M17 8H3m0 0l3-3M3 8l3 3" />
+            </svg>
+            <span className="trade-finder__tag">{sizesLabel(suggestionSizes(suggestion))}</span>
+          </span>
+          {renderSide(suggestion.give, 'send')}
+          <span className="trade-finder__lane-price">
+            <span className={`trade-finder__num trade-finder__num--lead trade-finder__num--${tie ? 'dim' : deltaTone(suggestion.youDelta)}`}>{signedPct(suggestion.youDelta)}</span>
+            <span className="trade-finder__who-meta">
+              {partner ? `${partner.teamName}, ${recordText(partner.record)}` : suggestion.partnerName} · them{' '}
+              <span className={`trade-finder__num--${deltaTone(suggestion.partnerDelta)}`}>{signedPct(suggestion.partnerDelta)}</span>
+              {group.others.length ? ` · ${group.others.length + 1} ways` : ''}
+            </span>
+          </span>
+          <span aria-hidden="true" className="trade-finder__chev">{isOpen ? '▾' : '›'}</span>
+        </button>
+        {isOpen ? renderOpen(group) : null}
       </article>
     );
   };
 
-  /* ── Empty state, with the way out ── */
+  /* ── The scan, as a screen ── */
+
+  const renderScan = (kind: 'board' | 'walk') => {
+    const ids = kind === 'walk' ? partnersToScan(asked, teams) : partners.map((team) => team.rosterId);
+    const current = kind === 'walk' ? new Set(walk.current) : new Set<number>();
+    const doneSet = new Set<number>();
+    if (kind === 'walk') {
+      let counted = 0;
+      for (const id of ids) {
+        if (current.has(id)) continue;
+        if (counted < walk.done) { doneSet.add(id); counted += 1; }
+      }
+    }
+    const currentNames = [...current].map((id) => partnerById.get(id)?.teamName).filter((name): name is string => Boolean(name));
+    const pct = ids.length ? Math.round((walk.done / ids.length) * 100) : 0;
+    return (
+      <section aria-live="polite" className="trade-finder__scan">
+        <span className="trade-finder__eyebrow">
+          {kind === 'walk'
+            ? `Searching ${ids.length === 1 ? 'one manager' : `${ids.length} managers`}: ${describeQuery(asked, names(asked)).toLowerCase()}`
+            : 'The book is scanning every manager for the first time'}
+        </span>
+        <div className={['trade-finder__scan-grid', kind === 'board' ? 'trade-finder__scan-grid--pulse' : ''].filter(Boolean).join(' ')}>
+          {ids.map((id) => {
+            const team = partnerById.get(id);
+            if (!team) return null;
+            const state = doneSet.has(id) ? 'done' : current.has(id) ? 'now' : 'todo';
+            return (
+              <span className={`trade-finder__scan-team trade-finder__scan-team--${state}`} key={id}>
+                <TeamAvatar size="lg" team={team} />
+                <span className="trade-finder__scan-name">{team.teamName}</span>
+              </span>
+            );
+          })}
+        </div>
+        <div className="trade-finder__scan-status">
+          <span className="trade-finder__scan-current">{kind === 'walk' ? (currentNames.join(' and ') || 'Starting') : 'About a minute'}</span>
+          <span className="trade-finder__who-meta">
+            {kind === 'walk'
+              ? <>Manager <span className="trade-finder__num">{Math.min(walk.done + walk.current.length, ids.length)} of {ids.length}</span> · <span className="trade-finder__num">{walk.found}</span> {walk.found === 1 ? 'deal' : 'deals'} found so far</>
+              : 'Every manager, every shape, at the analyzer\'s full sim count. After this it stays warm in the background.'}
+          </span>
+        </div>
+        <span className="trade-finder__scan-bar"><span style={{ width: `${kind === 'walk' ? pct : 0}%` }} /></span>
+        {kind === 'walk' ? (
+          <>
+            <p className="trade-finder__scan-note">Deals land together when the walk finishes, so the board never moves under you.</p>
+            <button className="trade-finder__act" onClick={stopWalk} type="button">Stop and show what's found</button>
+          </>
+        ) : null}
+      </section>
+    );
+  };
+
+  /* ── Empty state ── */
 
   const renderEmpty = () => {
-    if (!ranQuery) return null;
     const loosen: { label: string; apply: () => void }[] = [];
-    if (outsideLimits > 0) {
-      loosen.push({
-        label: 'Show every deal that helps me',
-        apply: () => { setMinGain(0); setMaxLoss(null); },
-      });
-    }
-    if (ranQuery.shapes.length > 0) loosen.push({ label: 'Any shape', apply: () => void run({ ...ranQuery, shapes: [] }) });
-    if (ranQuery.partnerRosterIds.length > 0) {
-      loosen.push({ label: 'Try anyone', apply: () => void run(reconcileQuery({ ...ranQuery, partnerRosterIds: [] }, teams)) });
-    }
-    if (ranQuery.send.kind !== 'any') loosen.push({ label: 'Send anything', apply: () => void run({ ...ranQuery, send: ANY_PICK }) });
-    if (ranQuery.get.kind !== 'any') loosen.push({ label: 'Get anything', apply: () => void run({ ...ranQuery, get: ANY_PICK }) });
+    if (outside > 0) loosen.push({ label: 'Show every deal that helps me', apply: () => setLimits({ minGain: 0, maxLoss: null, hideLopsided: false }) });
+    if (asked.shapes.length > 0) loosen.push({ label: 'Any shape', apply: () => void run({ ...asked, shapes: [] }) });
+    if (asked.partnerRosterIds.length > 0) loosen.push({ label: 'Try anyone', apply: () => void run(reconcileQuery({ ...asked, partnerRosterIds: [] }, teams)) });
+    if (asked.send.kind !== 'any') loosen.push({ label: 'Send anything', apply: () => void run({ ...asked, send: ANY_PICK }) });
+    if (asked.get.kind !== 'any') loosen.push({ label: 'Get anything', apply: () => void run({ ...asked, get: ANY_PICK }) });
     return (
       <div className="trade-finder__empty">
         <p className="trade-finder__empty-head">
-          {outsideLimits > 0
-            ? `${outsideLimits} ${outsideLimits === 1 ? 'deal helps' : 'deals help'} you, but outside your limits.`
-            : 'The book found nothing for that ask at a price that helps you.'}
+          {outside > 0
+            ? `${outside} ${outside === 1 ? 'deal helps' : 'deals help'} you, but outside your limits.`
+            : fromBoard && !ranQuery
+              ? 'The last scan found no deal that lifts your title odds.'
+              : 'The book found nothing for that ask at a price that helps you.'}
         </p>
-        <p className="trade-finder__empty-detail">{describeQuery(ranQuery, names(ranQuery))}.</p>
+        {ranQuery ? <p className="trade-finder__empty-detail">{describeQuery(ranQuery, names(ranQuery))}.</p> : null}
+        {!fromBoard && walk.failed.length ? <p className="trade-finder__empty-detail">{walk.failed.length} {walk.failed.length === 1 ? 'manager' : 'managers'} did not answer: {walk.failed.join(', ')}.</p> : null}
         {loosen.length ? (
           <div className="trade-finder__loosen">
             {loosen.map((option) => (
@@ -609,7 +891,37 @@ export function TradeFinder({
     );
   };
 
-  const findLabel = exact ? 'Price this trade' : 'Find trades';
+  /* ── Board header ── */
+
+  const scannedLine = () => {
+    if (!fromBoard) {
+      const walked = partnersToScan(asked, teams).length;
+      const failed = walk.failed.length ? ` ${walk.failed.length} did not answer.` : '';
+      return `Searched ${walked === 1 ? 'one manager' : `${walked} managers`} just now, at the analyzer's full sim count.${failed}`;
+    }
+    const at = clockOf(board?.lastScan?.at);
+    if (!at) return 'Every manager, every shape.';
+    const reason = board?.lastScan?.reason === 'projections_updated' ? ', after a projections update' : '';
+    return `Every manager, every shape. Scanned ${at}${reason}.${board?.scanning ? ' A fresh scan is running.' : ''}`;
+  };
+
+  const getPin = pinnedPlayer(asked.get);
+  const sendPin = pinnedPlayer(asked.send);
+  const boardTitle = !ranQuery || (asked.partnerRosterIds.length === 0 && asked.send.kind === 'any' && asked.get.kind === 'any')
+    ? 'The board'
+    : asked.get.kind === 'position' && asked.get.positions.length === 1
+      ? `Best ${asked.get.positions[0]} you can land`
+      : getPin
+        ? `To get ${players[getPin]?.name ?? 'him'}`
+        : sendPin
+          ? `What ${players[sendPin]?.name ?? 'he'} brings back`
+          : 'Deals the book likes';
+
+  const findLabel = isExactTrade(query) ? 'Price this trade' : servedByBoard(query) ? 'Show the board' : 'Find trades';
+  const limitCount = (limits.minGain !== DEFAULT_LIMITS.minGain ? 1 : 0)
+    + (limits.maxLoss !== DEFAULT_LIMITS.maxLoss ? 1 : 0)
+    + (limits.hideLopsided !== DEFAULT_LIMITS.hideLopsided ? 1 : 0);
+  const lanesShown = visibleStrong.length + visibleTies.length;
 
   return (
     <div className={['trade-finder', ticketOpen || !ranQuery ? '' : 'trade-finder--collapsed'].filter(Boolean).join(' ')}>
@@ -634,13 +946,7 @@ export function TradeFinder({
           <div className="trade-finder__ticket-head">
             <span className="trade-finder__ticket-title">Your ask</span>
             {ranQuery ? (
-              <button
-                className="trade-finder__ticket-clear"
-                onClick={() => { setQuery(EMPTY_QUERY); }}
-                type="button"
-              >
-                Clear
-              </button>
+              <button className="trade-finder__ticket-clear" onClick={() => { setQuery(EMPTY_QUERY); }} type="button">Clear</button>
             ) : (
               <span className="trade-finder__ticket-week">Week {bootstrap.week}</span>
             )}
@@ -679,121 +985,79 @@ export function TradeFinder({
           </div>
           <p className="trade-finder__shape-note">
             {query.shapes.length === 0
-              ? 'Every package size, 1 for 1 up to 3 for 3. Pick one or more to search only those (faster).'
+              ? 'Every package size, 1 for 1 up to 3 for 3.'
               : `Only ${shapesWords(query.shapes)}. The first number is what you send.`}
           </p>
           <div className="trade-finder__ticket-foot">
-            {loading ? (
-              <SimulationLoader
-                label={progress && progress.total > 1
-                  ? `Search ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${progress.name ? `: ${progress.name}` : ''}${progress.shape ? `, ${progress.shape}` : ''}`
-                  : `Scanning ${describeQuery(query, names(query)).toLowerCase()}`}
-                size="compact"
-                variant="scan"
-              />
+            {walking ? (
+              <button className="trade-finder__find trade-finder__find--quiet" onClick={stopWalk} type="button">Stop the search</button>
             ) : (
-              <button className="trade-finder__find" disabled={busy} onClick={() => void run()} type="button">
-                {findLabel}
-              </button>
+              <button className="trade-finder__find" disabled={busy} onClick={() => void run()} type="button">{findLabel}</button>
             )}
+            <p className="trade-finder__ticket-note">
+              {servedByBoard(query)
+                ? 'Nothing named reads the book\'s last scan of every manager, so there is nothing to wait for.'
+                : 'A named player is searched live, two managers at a time.'}
+            </p>
           </div>
         </section>
-
       </div>
 
-      {!ranQuery ? (
-        /* The results column before a first run. Only a wide screen shows it,
-           where an empty right half otherwise reads as something missing. */
-        <div aria-hidden="true" className="trade-finder__idle">
-          <span className="trade-finder__idle-glyph">?</span>
-          <p className="trade-finder__idle-head">Fill in as much or as little as you like.</p>
-          <p className="trade-finder__idle-body">
-Pick any number of managers, positions, players and shapes, or nothing at all: leave every leg open and the book scans every manager, one at a time. Every deal it returns raises your title odds and is priced exactly as the trade analyzer prices it.
-          </p>
-        </div>
-      ) : null}
-
-      {ranQuery ? (
-        <div className="trade-finder__results" ref={resultsRef}>
-          {loading && entries.length === 0 ? (
-            <SimulationLoader label={`Scanning ${describeQuery(ranQuery, names(ranQuery)).toLowerCase()}`} variant="scan" />
-          ) : (
-            <section aria-label="Deals" className={['trade-finder__board', loading ? 'trade-finder__board--stale' : ''].filter(Boolean).join(' ')}>
-              {renderHead()}
-
-              <div className="trade-finder__floor">
-                <label className="trade-finder__floor-label" htmlFor="trade-finder-min-gain">
-                  Your title rises at least <span className="trade-finder__num">{minGain.toFixed(1)}</span>
-                </label>
-                <input
-                  className="trade-finder__floor-input"
-                  id="trade-finder-min-gain"
-                  max={5}
-                  min={0}
-                  onChange={(event) => { setMinGain(Number(event.target.value)); setShowAll(false); }}
-                  step={0.5}
-                  type="range"
-                  value={minGain}
-                />
-                <span className="trade-finder__floor-note">
-                  {outsideLimits > 0 ? `${outsideLimits} outside your limits` : 'Nothing hidden'}
-                </span>
-              </div>
-              <div className="trade-finder__floor">
-                <label className="trade-finder__floor-label" htmlFor="trade-finder-max-loss">
-                  Their title falls at most <span className="trade-finder__num">{maxLoss == null ? 'any' : maxLoss.toFixed(1)}</span>
-                </label>
-                <input
-                  className="trade-finder__floor-input"
-                  id="trade-finder-max-loss"
-                  max={MAX_LOSS_SLIDER_TOP}
-                  min={0}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    setMaxLoss(value >= MAX_LOSS_SLIDER_TOP ? null : value);
-                    setShowAll(false);
-                  }}
-                  step={0.5}
-                  type="range"
-                  value={maxLoss == null ? MAX_LOSS_SLIDER_TOP : maxLoss}
-                />
-                <span className="trade-finder__floor-note">
-                  {progress ? `${progress.done} of ${progress.total} searches done` : 'Title odds, in points'}
-                </span>
-              </div>
-
-              <div className="trade-finder__rows-head">
-                <span className="trade-finder__eyebrow">{rowsEyebrow}</span>
-                <span className="trade-finder__rows-meta">
-                  {withinLimits.length} {withinLimits.length === 1 ? 'deal' : 'deals'}
-                  {scannedAt ? ` · scanned ${formatScannedAt(scannedAt)}` : ''}
-                </span>
-              </div>
-
-              {error ? <p className="trade-finder__error" role="status">{error}</p> : null}
-
-              {visible.length > 0 ? (
-                <div className="trade-finder__rows">
-                  {visible.map(renderDeal)}
-                </div>
-              ) : !error && !loading ? renderEmpty() : null}
-
-              {hidden > 0 ? (
-                <button className="trade-finder__more" onClick={() => setShowAll(true)} type="button">
-                  Show {hidden} more
+      <div className="trade-finder__results">
+        {walking ? renderScan('walk') : scanningBoard ? renderScan('board') : (
+          <section aria-label="Deals" className="trade-finder__board">
+            <div className="trade-finder__board-head">
+              <span className="trade-finder__board-title-wrap">
+                <span className="trade-finder__board-title">{boardTitle}</span>
+                <span className="trade-finder__who-meta">{scannedLine()}{boardError ? ` ${boardError}` : ''}</span>
+              </span>
+              <span className="trade-finder__board-tools">
+                <button
+                  aria-expanded={limitsOpen}
+                  className={['trade-finder__ghost', limitsChanged(limits) ? 'trade-finder__ghost--on' : ''].filter(Boolean).join(' ')}
+                  onClick={() => setLimitsOpen(true)}
+                  type="button"
+                >
+                  Limits{limitCount ? <span className="trade-finder__num"> {limitCount}</span> : null}
                 </button>
-              ) : null}
+                {fromBoard ? (
+                  <button className="trade-finder__ghost" disabled={Boolean(board?.scanning)} onClick={() => void rescanBoard()} type="button">
+                    {board?.scanning ? 'Scanning' : 'Scan again'}
+                  </button>
+                ) : (
+                  <button className="trade-finder__ghost" disabled={busy} onClick={() => void run(asked)} type="button">Search again</button>
+                )}
+              </span>
+            </div>
 
-              {dismissedSignatures.size > 0 ? (
-                <p className="trade-finder__restore">
-                  Dismissed deals ({dismissedSignatures.size}) ·{' '}
-                  <button className="trade-finder__restore-btn" onClick={onRestoreAll} type="button">Restore</button>
-                </p>
-              ) : null}
-            </section>
-          )}
-        </div>
-      ) : null}
+            {lanesShown > 0 ? (
+              <div className="trade-finder__lanes">
+                <div aria-hidden="true" className="trade-finder__lanes-head">
+                  <span className="trade-finder__tag">You get</span><span /><span className="trade-finder__tag">You send</span><span className="trade-finder__tag trade-finder__tag--right">Your title</span><span />
+                </div>
+                {visibleStrong.map((group, index) => renderLane(group, index, false))}
+                {visibleTies.length ? (
+                  <div className="trade-finder__divider">Under {NOISE_PP} point. The book calls these ties</div>
+                ) : null}
+                {visibleTies.map((group, index) => renderLane(group, index, true))}
+              </div>
+            ) : renderEmpty()}
+
+            {hidden > 0 ? (
+              <button className="trade-finder__more" onClick={() => setShowAll(true)} type="button">Show {hidden} more</button>
+            ) : null}
+            {outside > 0 && lanesShown > 0 ? (
+              <p className="trade-finder__restore">{outside} outside your limits.</p>
+            ) : null}
+            {dismissedSignatures.size > 0 ? (
+              <p className="trade-finder__restore">
+                Dismissed deals ({dismissedSignatures.size}) ·{' '}
+                <button className="trade-finder__restore-btn" onClick={onRestoreAll} type="button">Restore</button>
+              </p>
+            ) : null}
+          </section>
+        )}
+      </div>
 
       {startingPoints.length > 0 ? (
         <div className="trade-finder__starts">
@@ -801,7 +1065,7 @@ Pick any number of managers, positions, players and shapes, or nothing at all: l
           {startingPoints.map((point) => (
             <button
               className="trade-finder__start"
-              disabled={busy || loading}
+              disabled={busy || walking}
               key={point.id}
               onClick={() => applyStartingPoint(point)}
               type="button"
@@ -811,7 +1075,7 @@ Pick any number of managers, positions, players and shapes, or nothing at all: l
                   ? <span className="trade-finder__pos">{point.badge.position}</span>
                   : (() => {
                       const team = partnerById.get(point.badge.kind === 'team' ? point.badge.rosterId : -1);
-                      return team ? <TeamAvatar team={team} size="md" /> : null;
+                      return team ? <TeamAvatar size="md" team={team} /> : null;
                     })()}
               </span>
               <span className="trade-finder__start-copy">
@@ -828,44 +1092,130 @@ Pick any number of managers, positions, players and shapes, or nothing at all: l
 
       {picker ? (
         <FinderPicker
+          basis={basis}
           bootstrap={bootstrap}
           futuresByRoster={futuresByRoster}
+          multi={picker.multi}
           onClose={() => setPicker(null)}
           onPick={(patch) => update(patch)}
+          outlooks={outlooks}
           partners={partners}
-          pricing={pricing}
           query={query}
-          slot={picker}
+          slot={picker.slot}
           userTeam={userTeam}
+          values={values}
+          week={leagueWeek}
+        />
+      ) : null}
+
+      {limitsOpen ? (
+        <LimitsSheet
+          kept={groups.length}
+          limits={limits}
+          onChange={setLimits}
+          onClose={() => setLimitsOpen(false)}
         />
       ) : null}
     </div>
   );
 }
 
-/* ── The picker sheet: one for every leg ─────────────────────────────────── */
+/* ── Limits, behind a button ─────────────────────────────────────────────── */
 
-function TeamAvatar({ team, size }: { team: ApiTeam; size: 'sm' | 'md' }) {
-  return (
-    <span aria-hidden="true" className={`trade-finder__avatar trade-finder__avatar--${size}`}>
-      {team.avatarUrl ? <img alt="" src={resolveApiUrl(team.avatarUrl) ?? undefined} /> : <span>{initials(team.teamName)}</span>}
-    </span>
+const MAX_LOSS_TOP = 10;
+
+function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits; kept: number; onChange: (next: FinderLimits) => void; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return createPortal(
+    <div className="trade-finder__scrim" onClick={onClose} role="presentation">
+      <div aria-label="Limits" aria-modal="true" className="trade-finder__sheet trade-finder__sheet--limits" onClick={(event) => event.stopPropagation()} role="dialog">
+        <span aria-hidden="true" className="trade-finder__grip" />
+        <div className="trade-finder__sheet-head">
+          <span className="trade-finder__sheet-title">Limits</span>
+          <button className="trade-finder__sheet-any" onClick={() => onChange(DEFAULT_LIMITS)} type="button">Reset</button>
+        </div>
+        <p className="trade-finder__sheet-note">
+          Out of the box the board shows every deal that lifts both sides. These tighten it. They reset when you change the ask, so a slider from one search never quietly filters the next.
+        </p>
+        <div className="trade-finder__limit">
+          <label className="trade-finder__limit-label" htmlFor="trade-finder-min-gain">
+            <span>Your title rises at least</span>
+            <span className="trade-finder__num">{limits.minGain.toFixed(1)} pp</span>
+          </label>
+          <input
+            className="trade-finder__floor-input"
+            id="trade-finder-min-gain"
+            max={5}
+            min={0}
+            onChange={(event) => onChange({ ...limits, minGain: Number(event.target.value) })}
+            step={0.5}
+            type="range"
+            value={limits.minGain}
+          />
+          <span className="trade-finder__sheet-note">Under a point is sampling noise, and the board already sets those below a line.</span>
+        </div>
+        <div className="trade-finder__limit">
+          <label className="trade-finder__limit-label" htmlFor="trade-finder-max-loss">
+            <span>Their title falls at most</span>
+            <span className="trade-finder__num">{limits.maxLoss == null ? 'any' : limits.maxLoss === 0 ? 'nothing' : `${limits.maxLoss.toFixed(1)} pp`}</span>
+          </label>
+          <input
+            className="trade-finder__floor-input"
+            id="trade-finder-max-loss"
+            max={MAX_LOSS_TOP}
+            min={0}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              onChange({ ...limits, maxLoss: value >= MAX_LOSS_TOP ? null : value });
+            }}
+            step={0.5}
+            type="range"
+            value={limits.maxLoss == null ? MAX_LOSS_TOP : limits.maxLoss}
+          />
+          <span className="trade-finder__sheet-note">At nothing, only deals that lift both sides. All the way right, no limit.</span>
+        </div>
+        <label className="trade-finder__limit trade-finder__limit--toggle">
+          <input
+            checked={limits.hideLopsided}
+            onChange={(event) => onChange({ ...limits, hideLopsided: event.target.checked })}
+            type="checkbox"
+          />
+          <span>
+            <span className="trade-finder__limit-label"><span>Hide lopsided deals</span></span>
+            <span className="trade-finder__sheet-note">A manager who is out of the race has no title odds to lose, so a robbery of him passes the slider above. This catches it on roster value instead.</span>
+          </span>
+        </label>
+        <button className="trade-finder__find" onClick={onClose} type="button">Show {kept} {kept === 1 ? 'deal' : 'deals'}</button>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
+/* ── The picker sheet: one for every leg ─────────────────────────────────── */
+
 interface FinderPickerProps {
   slot: Slot;
+  /** Opened from a leg's "+": stays open and toggles. Otherwise one pick closes it. */
+  multi: boolean;
   query: FinderQuery;
   bootstrap: LeagueBootstrap;
-  pricing: LeaguePricing | null;
   userTeam: ApiTeam;
   partners: ApiTeam[];
   futuresByRoster: Map<number, PricedFuture>;
+  values: PlayerValues | null;
+  outlooks: Map<string, PlayerOutlook> | null;
+  basis: ValueBasis;
+  week: number;
   onPick: (patch: Partial<FinderQuery>) => void;
   onClose: () => void;
 }
 
-function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, futuresByRoster, onPick, onClose }: FinderPickerProps) {
+function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futuresByRoster, values, outlooks, basis, week, onPick, onClose }: FinderPickerProps) {
   const players = bootstrap.players;
   const current: SlotPick = slot === 'send' ? query.send : slot === 'get' ? query.get : ANY_PICK;
   const [mode, setMode] = useState<'position' | 'player'>(current.kind === 'player' ? 'player' : 'position');
@@ -879,13 +1229,13 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const pick = (patch: Partial<FinderQuery>) => {
+    onPick(patch);
+    if (!multi) onClose();
+  };
+
   const title = slot === 'partner' ? 'Partner' : slot === 'send' ? 'You send' : 'You get';
-  const sublines = positionSublines({
-    team: userTeam,
-    players,
-    playerMeans: pricing?.playerMeans,
-    rosterPositions: bootstrap.league.rosterPositions,
-  });
+  const sublines = positionSublines({ team: userTeam, players, playerMeans: values, rosterPositions: bootstrap.league.rosterPositions });
 
   const pool = useMemo(() => {
     const owners = slot === 'send'
@@ -898,22 +1248,14 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
       .flatMap((team) => team.players.map((id) => ({ id, team })))
       .filter(({ id }) => ['QB', 'RB', 'WR', 'TE'].includes(players[id]?.position ?? ''))
       .filter(({ id }) => !q || (players[id]?.name ?? '').toLowerCase().includes(q))
-      .map((entry) => ({ ...entry, mean: pricing?.playerMeans?.[entry.id]?.mean ?? null }))
+      .map((entry) => ({ ...entry, mean: values?.[entry.id]?.mean ?? null }))
       .sort((a, b) => (b.mean ?? -1) - (a.mean ?? -1))
       .slice(0, 40);
-  }, [partners, players, pricing?.playerMeans, query.partnerRosterIds, search, slot, userTeam]);
+  }, [partners, players, query.partnerRosterIds, search, slot, userTeam, values]);
 
-  /* Portaled to the body: the page's own stacking contexts otherwise trap a
-     fixed sheet under the tab bar, which is what a sheet is for escaping. */
   return createPortal(
     <div className="trade-finder__scrim" onClick={onClose} role="presentation">
-      <div
-        aria-label={title}
-        aria-modal="true"
-        className="trade-finder__sheet"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
+      <div aria-label={title} aria-modal="true" className="trade-finder__sheet" onClick={(event) => event.stopPropagation()} role="dialog">
         <span aria-hidden="true" className="trade-finder__grip" />
         <div className="trade-finder__sheet-head">
           <span className="trade-finder__sheet-title">{title}</span>
@@ -937,7 +1279,7 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
                   aria-pressed={on}
                   className={['trade-finder__item', on ? 'trade-finder__item--on' : ''].filter(Boolean).join(' ')}
                   key={team.rosterId}
-                  onClick={() => onPick({ partnerRosterIds: togglePartner(query.partnerRosterIds, team.rosterId) })}
+                  onClick={() => pick({ partnerRosterIds: togglePartner(query.partnerRosterIds, team.rosterId) })}
                   type="button"
                 >
                   <TeamAvatar size="md" team={team} />
@@ -947,9 +1289,7 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
                   </span>
                   <span className="trade-finder__item-stat">
                     <span className="trade-finder__tag">Title</span>
-                    <span className="trade-finder__price">
-                      {future?.championOdds != null ? formatProbOrOdds(future.titleProb) : 'Off board'}
-                    </span>
+                    <span className="trade-finder__price">{future?.championOdds != null ? formatProbOrOdds(future.titleProb) : 'Off board'}</span>
                   </span>
                 </button>
               );
@@ -967,7 +1307,7 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
                   role="radio"
                   type="button"
                 >
-                  {option === 'position' ? 'Positions' : 'Players'}
+                  {option === 'position' ? 'A position' : 'A player'}
                 </button>
               ))}
             </div>
@@ -983,21 +1323,19 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
                         aria-pressed={on}
                         className={['trade-finder__tile', on ? 'trade-finder__tile--on' : ''].filter(Boolean).join(' ')}
                         key={position}
-                        onClick={() => onPick(slot === 'send' ? { send: togglePosition(current, position) } : { get: togglePosition(current, position) })}
+                        onClick={() => pick(slot === 'send' ? { send: togglePosition(current, position) } : { get: togglePosition(current, position) })}
                         type="button"
                       >
                         <span className="trade-finder__tile-glyph">{position}</span>
-                        <span className="trade-finder__tile-sub">
-                          {slot === 'get' ? (sub.starter ?? `${sub.rostered} rostered`) : `${sub.rostered} rostered`}
-                        </span>
+                        <span className="trade-finder__tile-sub">{slot === 'get' ? (sub.starter ?? `${sub.rostered} rostered`) : `${sub.rostered} rostered`}</span>
                       </button>
                     );
                   })}
                 </div>
                 <p className="trade-finder__sheet-note">
                   {slot === 'get'
-                    ? 'Pick one or more. Every player you get comes from the positions you pick. Under each is what your starter projects now.'
-                    : 'Pick one or more. Every player you send comes from the positions you pick. Under each is how many you carry.'}
+                    ? `Every player you get comes from the position you pick. Under each is what your starter projects ${basis === 'ros' ? 'per game from here on' : 'this week'}.`
+                    : 'Every player you send comes from the position you pick. Under each is how many you carry.'}
                 </p>
               </>
             ) : (
@@ -1014,16 +1352,22 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
                     value={search}
                   />
                 </label>
+                <p className="trade-finder__list-caption">
+                  <span>{slot === 'send' ? 'Yours' : query.partnerRosterIds.length > 0 ? 'Theirs' : 'The league'}</span>
+                  <span>{basis === 'ros' ? 'Per game, rest of season' : 'Projected this week'}</span>
+                </p>
                 <div className="trade-finder__list">
                   {pool.map(({ id, team, mean }) => {
                     const player = players[id];
                     const on = current.kind === 'player' && current.ids.includes(id);
+                    const outlook = outlooks?.get(id) ?? null;
+                    const bye = player?.byeWeek != null && player.byeWeek >= week ? `Bye ${player.byeWeek}` : null;
                     return (
                       <button
                         aria-pressed={on}
                         className={['trade-finder__item', on ? 'trade-finder__item--on' : ''].filter(Boolean).join(' ')}
                         key={id}
-                        onClick={() => onPick(slot === 'send' ? { send: togglePlayer(current, id) } : { get: togglePlayer(current, id) })}
+                        onClick={() => pick(slot === 'send' ? { send: togglePlayer(current, id) } : { get: togglePlayer(current, id) })}
                         type="button"
                       >
                         <PlayerHeadshot
@@ -1035,10 +1379,15 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
                         <span className="trade-finder__item-copy">
                           <span className="trade-finder__item-name">{player?.name ?? id}</span>
                           <span className="trade-finder__item-meta">
-                            {[player?.position, player?.team, slot === 'get' && query.partnerRosterIds.length !== 1 ? team.teamName : null].filter(Boolean).join(' · ')}
+                            {[player?.position, player?.team, bye, slot === 'get' && query.partnerRosterIds.length !== 1 ? team.teamName : null].filter(Boolean).join(' · ')}
                           </span>
                         </span>
-                        {mean != null ? <span className="trade-finder__num trade-finder__item-mean">{mean.toFixed(1)}</span> : null}
+                        {mean != null ? (
+                          <span className="trade-finder__item-value">
+                            <span className="trade-finder__num trade-finder__item-mean">{mean.toFixed(1)}</span>
+                            {outlook ? <span className="trade-finder__rank">{outlook.position}{outlook.positionRank}</span> : null}
+                          </span>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -1048,18 +1397,20 @@ function FinderPicker({ slot, query, bootstrap, pricing, userTeam, partners, fut
             )}
           </>
         )}
-        <div className="trade-finder__sheet-foot">
-          <span className="trade-finder__sheet-note">
-            {slot === 'partner'
-              ? (query.partnerRosterIds.length === 0 ? 'Nobody picked: every manager is scanned.' : `${query.partnerRosterIds.length} picked. Tap again to remove.`)
-              : current.kind === 'position'
-                ? `${current.positions.length} picked. Tap again to remove.`
-                : current.kind === 'player'
-                  ? `${current.ids.length} picked. Tap again to remove.`
-                  : 'Nothing picked: anything goes.'}
-          </span>
-          <button className="trade-finder__sheet-done" onClick={onClose} type="button">Done</button>
-        </div>
+        {multi ? (
+          <div className="trade-finder__sheet-foot">
+            <span className="trade-finder__sheet-note">
+              {slot === 'partner'
+                ? (query.partnerRosterIds.length === 0 ? 'Nobody picked: every manager.' : `${query.partnerRosterIds.length} picked. Tap again to remove.`)
+                : current.kind === 'position'
+                  ? `${current.positions.length} picked. Tap again to remove.`
+                  : current.kind === 'player'
+                    ? `${current.ids.length} picked. Tap again to remove.`
+                    : 'Nothing picked: anything goes.'}
+            </span>
+            <button className="trade-finder__sheet-done" onClick={onClose} type="button">Done</button>
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body,

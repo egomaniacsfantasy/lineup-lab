@@ -1038,6 +1038,38 @@ export interface TradeSuggestions {
   debug?: Record<string, number>;
 }
 /**
+ * The trade board: every other manager, scanned in the background for deals
+ * that lift your title odds. Answered from the last scan, so the open ask on
+ * the Trades tab never waits. Asking for it registers you for the scan; the
+ * first look starts one and says so.
+ */
+export interface TradeBoardScan {
+  at: number;
+  reason: string;
+  week?: number | null;
+  managers?: number;
+  ms?: number;
+  error?: string | null;
+}
+export interface TradeBoard {
+  available: boolean;
+  suggestions: TradeSuggestion[];
+  lastScan: TradeBoardScan | null;
+  /** A scan is running now (or has never run). Poll until it lands. */
+  scanning: boolean;
+}
+export function fetchTradeBoard(leagueId: string, userId: string): Promise<TradeBoard> {
+  return get<TradeBoard>(`/api/league/${leagueId}/trade-board?userId=${encodeURIComponent(userId)}`);
+}
+export function requestTradeBoardScan(leagueId: string, userId: string): Promise<{ scanning: boolean }> {
+  return get<{ scanning: boolean }>(`/api/league/${leagueId}/trade-board/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId }),
+  });
+}
+
+/**
  * The Trades-tab finder: ONE manager per call, scanned on the trade sender's
  * logic (per-manager search at the analyzer's sim count, kept only if your title
  * odds rise, ranked by your gain). The client walks the managers it was asked

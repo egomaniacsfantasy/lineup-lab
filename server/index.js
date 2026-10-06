@@ -5,7 +5,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { apiRouter, runAutopilotSweep, runTradeSenderSweep, runTradeWatcher, runIncomingSweep } from './routes/api.js';
+import { apiRouter, runAutopilotSweep, runTradeSenderSweep, runTradeBoardSweep, runTradeWatcher, runIncomingSweep } from './routes/api.js';
 import { corsMiddleware } from './cors.js';
 import { adminRouter } from './routes/admin.js';
 import { assetsRouter } from './routes/assets.js';
@@ -169,6 +169,9 @@ const tradeSenderTick = async () => {
   if (tradeSweepRunning) return;
   tradeSweepRunning = true;
   try { await runTradeSenderSweep(); } catch (err) { console.error('[trade-sender] sweep failed', err); }
+  // The trade board rides the same tick: every manager who has opened the
+  // Trades tab keeps a fresh scan of every other manager.
+  try { await runTradeBoardSweep(); } catch (err) { console.error('[trade-board] sweep failed', err); }
   finally { tradeSweepRunning = false; }
 };
 setTimeout(() => { void tradeSenderTick(); }, 120_000).unref();

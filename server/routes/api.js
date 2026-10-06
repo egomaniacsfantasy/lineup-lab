@@ -16,6 +16,7 @@ import {
 import { classifyOffer, autoSendCandidates, incomingOffers, recommendIncoming } from '../engine/tradeWatch.js';
 import { TRADE_DROP_CONFIRMED, TRADE_RESPONSE_CONFIRMED } from '../providers/espnProvider.js';
 import { runTradeScan } from '../engine/tradeScanWorker.js';
+import { getTradeBoard, registerTradeBoard, setTradeBoard, listTradeBoards, boardKey } from '../engine/tradeBoardStore.js';
 import { projectionsFingerprint } from '../projections/loadFromRepo.js';
 import { withByeWeeks, byeWeekFor } from '../config/byes.js';
 import { cached, callLog, callsInLastMinute, invalidate } from '../cache.js';
@@ -1660,6 +1661,128 @@ export async function runTradeSenderSweep() {
     if (reason) await scanTradeSender(entry.leagueId, entry.userId, reason); // one at a time
   }
 }
+
+/* ── The trade board ────────────────────────────────────────────────────
+   The Trades tab's open question, answered from a scan that already ran.
+   Every manager who has opened the tab gets a board: every other manager
+   scanned on the sender's per-manager search with no rules at all (any
+   player, any position, any shape), keeping every deal that lifts their
+   title odds. The client applies its own limits. Same worker, same sim
+   count, same context as the finder and the analyzer, so a board deal
+   prices exactly as the analyzer prices it. */
+const BOARD_EVERY_MS = 3 * 60 * 60_000;
+const BOARD_RULES = {
+  partners: [], giveAllow: [], getAllow: [], protect: [],
+  givePositions: [], getPositions: [],
+  minYouDelta: 0,
+  // Keep everything that helps the manager; the client decides what the other
+  // side may give up. 100 points is "no limit" to a title probability.
+  maxPartnerLoss: 100,
+  reservedSlots: 0,
+};
+const boardScanning = new Set();
+
+async function scanTradeBoard(leagueId, userId, reason) {
+  const key = boardKey(leagueId, userId);
+  if (boardScanning.has(key)) return false;
+  const entry = getTradeBoard(leagueId, userId);
+  if (!entry) return false;
+  boardScanning.add(key);
+  const t0 = Date.now();
+  const fingerprint = getProjectionsMeta()?.fingerprint ?? null;
+  try {
+    const provider = buildHeadlessProvider(entry.provider ?? 'sleeper', entry.season);
+    const ctx = await buildTradeCtx(provider, String(leagueId), entry.userId);
+    const userTeam = ctx.teams.find((t) => t.isUser);
+    if (!userTeam) throw new Error('team_not_found');
+    if (!ctx.projections) throw new Error('no_projections');
+    const partnerRosterIds = ctx.teams.filter((t) => !t.isUser).map((t) => t.rosterId);
+    const { suggestions, perManager } = await runTradeScan({
+      ctx: {
+        league: ctx.league, teams: ctx.teams, week: ctx.week, catalog: ctx.catalog,
+        scheduleWeeks: ctx.scheduleWeeks, overlay: null, projections: ctx.projections, matchups: ctx.matchups,
+        liveLocks: ctx.liveLocks, priorFinalMatchups: ctx.priorFinalMatchups,
+      },
+      partnerRosterIds,
+      sender: BOARD_RULES,
+    });
+    setTradeBoard(leagueId, userId, {
+      suggestions,
+      lastScan: {
+        at: Date.now(), reason, fingerprint, ms: Date.now() - t0, week: ctx.week,
+        projectionsVersion: ctx.projections?.version ?? null,
+        managers: perManager.length, perManager, error: null,
+      },
+    });
+    console.log(`[trade-board] ${key}: ${suggestions.length} deal(s) from ${perManager.length} manager(s) in ${Date.now() - t0}ms (${reason})`);
+    return true;
+  } catch (err) {
+    setTradeBoard(leagueId, userId, {
+      lastScan: {
+        ...(entry.lastScan ?? {}), at: Date.now(), reason, fingerprint, ms: Date.now() - t0,
+        error: String(err?.message ?? err),
+      },
+    });
+    console.error(`[trade-board] ${key} scan failed: ${err?.message}`);
+    return false;
+  } finally {
+    boardScanning.delete(key);
+  }
+}
+
+/** Scheduled with the sender's sweep: every registered board whose turn it is. */
+export async function runTradeBoardSweep() {
+  const meta = getProjectionsMeta();
+  const now = Date.now();
+  if (meta?.changedAt && now - meta.changedAt < SENDER_QUIET_MS) return;
+  for (const entry of listTradeBoards(now)) {
+    const last = entry.lastScan;
+    const reason = !last?.at
+      ? 'first'
+      : meta?.fingerprint && last.fingerprint !== meta.fingerprint
+        ? 'projections_updated'
+        : now - last.at >= BOARD_EVERY_MS ? 'recurring' : null;
+    if (reason) await scanTradeBoard(entry.leagueId, entry.userId, reason); // one at a time
+  }
+}
+
+/** The board as it stands. Registers the manager, and starts the first scan. */
+apiRouter.get('/league/:leagueId/trade-board', async (req, res, next) => {
+  try {
+    const { leagueId } = req.params;
+    const userId = req.query.userId ? String(req.query.userId) : null;
+    if (!userId) { res.status(400).json({ error: 'bad_request', message: 'userId is required.' }); return; }
+    rememberOwnEspnCreds(req, leagueId);
+    const entry = registerTradeBoard(leagueId, {
+      userId,
+      provider: providerName(req),
+      season: req.query.season ? String(req.query.season) : null,
+    });
+    const key = boardKey(leagueId, userId);
+    if (!entry.lastScan?.at && !boardScanning.has(key)) void scanTradeBoard(leagueId, userId, 'first');
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      available: true,
+      suggestions: entry.suggestions ?? [],
+      lastScan: entry.lastScan ?? null,
+      scanning: boardScanning.has(key) || !entry.lastScan?.at,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** "Scan again": a fresh scan now, whatever the schedule says. */
+apiRouter.post('/league/:leagueId/trade-board/scan', (req, res) => {
+  const { leagueId } = req.params;
+  const userId = req.body?.userId ? String(req.body.userId) : null;
+  if (!userId) { res.status(400).json({ error: 'bad_request', message: 'userId is required.' }); return; }
+  rememberOwnEspnCreds(req, leagueId);
+  registerTradeBoard(leagueId, { userId, provider: providerName(req), season: req.body?.season ? String(req.body.season) : null });
+  const key = boardKey(leagueId, userId);
+  if (!boardScanning.has(key)) void scanTradeBoard(leagueId, userId, 'requested');
+  res.json({ scanning: true });
+});
 
 /** Settings, latest offers and the pickers' choices (my players, the managers). */
 apiRouter.get('/league/:leagueId/trade-sender', async (req, res, next) => {
