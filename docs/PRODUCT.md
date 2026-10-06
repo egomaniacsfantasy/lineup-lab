@@ -417,7 +417,7 @@ yours.
 
 The board answers the ticket two ways, and says which:
 
-- **Nothing named** (open, or only managers, positions and shapes) reads the
+- **Nothing on either leg** (open, or only managers and shapes) reads the
   **background scan**: every other manager, scanned on the sender's
   per-manager search with no rules, keeping every deal that lifts your title
   odds. It is there before the finger lifts, stamped "Scanned 7:40 PM, after
@@ -427,8 +427,14 @@ The board answers the ticket two ways, and says which:
   projections push settles, and every three hours; a board nobody has opened
   in two weeks stops being kept warm. Same worker, same sim count, same
   context as the analyzer, so a board deal prices as the analyzer prices it.
-- **A named player** on either leg walks the league live, one request per
-  manager who can deliver him, two at a time. The walk is the screen while it
+- **A position or a named player** on either leg walks the league live, one
+  request per manager who can deliver it, two at a time, with the position
+  or player as the engine's rule. A position is not a filter over the board:
+  the engine builds its candidates from the pools it is given, so "their RBs"
+  as a rule sims running-back packages the open scan never tried, and
+  filtering the open scan down to them left two or three deals (user,
+  2026-10-05). Managers and shapes are lossless filters, because the open
+  scan already covered every manager and every shape. The walk is the screen while it
   runs: each manager's crest lights as it is done, the current one named,
   "Manager 4 of 11, 7 deals found so far", one bar, and Stop and show what's
   found. Nothing lands until it finishes, so the board never moves under you.

@@ -269,9 +269,14 @@ const deal = (partnerRosterId, give, get, youDelta, partnerDelta = 0) => ({
   partnerDelta,
 });
 
-test('managers, positions and shapes are answered from the board; a named player is not', () => {
+test('managers and shapes are answered from the board; a position or a player walks live', () => {
   assert.equal(servedByBoard(EMPTY_QUERY), true);
-  assert.equal(servedByBoard({ ...EMPTY_QUERY, partnerRosterIds: [2], get: { kind: 'position', positions: ['RB'] }, shapes: ['1-1'] }), true);
+  assert.equal(servedByBoard({ ...EMPTY_QUERY, partnerRosterIds: [2], shapes: ['1-1'] }), true);
+  /* The engine builds candidates from the pools it is given, so a position
+     rule finds packages the open scan never simmed. Filtering the open scan
+     down to running backs left two or three deals; the live rule found many. */
+  assert.equal(servedByBoard({ ...EMPTY_QUERY, get: { kind: 'position', positions: ['RB'] } }), false);
+  assert.equal(servedByBoard({ ...EMPTY_QUERY, send: { kind: 'position', positions: ['WR'] } }), false);
   assert.equal(servedByBoard({ ...EMPTY_QUERY, get: { kind: 'player', ids: ['x'] } }), false);
   assert.equal(servedByBoard({ ...EMPTY_QUERY, send: { kind: 'player', ids: ['x'] } }), false);
 });

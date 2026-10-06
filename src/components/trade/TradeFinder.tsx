@@ -969,8 +969,8 @@ export function TradeFinder({
             )}
             <p className="trade-finder__ticket-note">
               {servedByBoard(query)
-                ? 'Nothing named reads the book\'s last scan of every manager, so there is nothing to wait for.'
-                : 'A named player is searched live, two managers at a time.'}
+                ? 'Nothing on either leg reads the book\'s last scan of every manager, so there is nothing to wait for.'
+                : 'A position or a player is searched live, two managers at a time, so the book builds its packages around it.'}
             </p>
           </div>
         </section>

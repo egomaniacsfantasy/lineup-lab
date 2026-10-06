@@ -141,13 +141,19 @@ export function withinNoise(youDelta: number) {
 }
 
 /**
- * Which asks the last background scan can answer by itself. The board scanned
- * every manager with no pools, so a manager, a position or a shape is a filter
- * over it. A named player is not: the scan's candidate budget may never have
- * tried him, so that ask walks the league live.
+ * Which asks the last background scan can answer by itself.
+ *
+ * The board scanned every manager and every shape with no pools, so a manager
+ * or a shape is a lossless filter over it: the same packages a live scan with
+ * that manager or that shape would have simmed. A position is NOT. The engine
+ * builds its candidates from the pools it is given, so "their RBs" as a rule
+ * sims running-back packages the open scan never tried; filtering the open
+ * scan down to running backs leaves two or three. A named player is the same.
+ * Both walk the league live, exactly the call the finder made before the
+ * board existed.
  */
 export function servedByBoard(query: FinderQuery) {
-  return query.send.kind !== 'player' && query.get.kind !== 'player';
+  return query.send.kind === 'any' && query.get.kind === 'any';
 }
 
 /** The board's deals that fit the ticket: every player sent from the send
