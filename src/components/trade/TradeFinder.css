@@ -1964,3 +1964,16 @@
 .trade-finder__find:not(:disabled):active {
   transform: translateY(1px);
 }
+
+/* 95% range next to a title change. */
+.trade-finder__ci {
+  margin-left: 4px;
+  color: var(--text-muted);
+  font-size: 0.6em;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.trade-finder__value { display: block; }
+.trade-finder__num--up { color: #22c55e; }
+.trade-finder__num--down { color: #ff6b6b; }

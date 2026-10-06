@@ -1,4 +1,4 @@
-import { type TradeAnalysis, type TradeSideDelta } from '../../services/leagueApi';
+import { type TradeAnalysis, type TradeSideDelta, type TradeValueLine } from '../../services/leagueApi';
 import { getAcceptanceLingo } from '../../utils/acceptanceLingo';
 import { acceptanceProbability } from '../../utils/tradeAcceptance';
 import { displayedDelta, displayedValue } from '../../utils/displayDelta';
@@ -119,10 +119,19 @@ function displayedMetric(value: number) {
   return displayedValue(value);
 }
 
+type CiKey = 'titleProb' | 'playoffProb' | 'expWins' | 'avgSeed';
+
+/** "+/- 1.2" in the row's own units (pp for percentages). */
+function Plus({ v, pct }: { v: number | null | undefined; pct: boolean }) {
+  if (v == null || !Number.isFinite(v)) return null;
+  return <span className="trade-analyzer-panel__ci">±{v.toFixed(pct ? 1 : 2)}</span>;
+}
+
 function SideCard({ side }: { side: TradeSideDelta }) {
-  const rows = [
-    { label: 'Championship', b: side.before.titleProb, a: side.after.titleProb, d: side.delta.titleProb, pct: true, lowerIsBetter: false },
-    { label: 'Make playoffs', b: side.before.playoffProb, a: side.after.playoffProb, d: side.delta.playoffProb, pct: true, lowerIsBetter: false },
+  const ci = side.ci ?? null;
+  const rows: { label: string; b: number; a: number; d: number; pct: boolean; lowerIsBetter: boolean; ciKey?: CiKey }[] = [
+    { label: 'Championship', b: side.before.titleProb, a: side.after.titleProb, d: side.delta.titleProb, pct: true, lowerIsBetter: false, ciKey: 'titleProb' },
+    { label: 'Make playoffs', b: side.before.playoffProb, a: side.after.playoffProb, d: side.delta.playoffProb, pct: true, lowerIsBetter: false, ciKey: 'playoffProb' },
     // Current-week matchup win % — only in-season (null off-season).
     ...(side.before.weekWinProb != null
       ? [{
@@ -134,10 +143,10 @@ function SideCard({ side }: { side: TradeSideDelta }) {
           lowerIsBetter: false,
         }]
       : []),
-    { label: 'Expected wins', b: side.before.expWins, a: side.after.expWins, d: side.delta.expWins, pct: false, lowerIsBetter: false },
+    { label: 'Expected wins', b: side.before.expWins, a: side.after.expWins, d: side.delta.expWins, pct: false, lowerIsBetter: false, ciKey: 'expWins' },
     // Avg seed: LOWER is better (the #1 seed beats the #6), so a drop is an
     // improvement — invert the chip so it reads green/+ when the seed goes down.
-    { label: 'Avg seed', b: side.before.avgSeed, a: side.after.avgSeed, d: side.delta.avgSeed, pct: false, lowerIsBetter: true },
+    { label: 'Avg seed', b: side.before.avgSeed, a: side.after.avgSeed, d: side.delta.avgSeed, pct: false, lowerIsBetter: true, ciKey: 'avgSeed' },
   ];
   return (
     <div className="trade-analyzer-panel__card">
@@ -149,6 +158,9 @@ function SideCard({ side }: { side: TradeSideDelta }) {
           const before = displayedMetric(r.b);
           const after = displayedMetric(r.a);
           const rowDelta = displayedDelta(r.b, r.a);
+          const dCi = ci && r.ciKey ? ci.delta[r.ciKey] : null;
+          // The change's own interval includes zero: the sim cannot tell it from no change.
+          const noise = dCi != null && Math.abs(r.d) <= dCi;
           return (
             <div
               key={r.label}
@@ -159,12 +171,17 @@ function SideCard({ side }: { side: TradeSideDelta }) {
             >
               <span className="trade-analyzer-panel__row-label">{r.label}</span>
               <span className="trade-analyzer-panel__row-val">
-                <span>{before.toFixed(1)}{r.pct ? '%' : ''}</span>
+                <span>{before.toFixed(1)}{r.pct ? '%' : ''}{ci && r.ciKey ? <Plus v={ci.before[r.ciKey]} pct={r.pct} /> : null}</span>
                 <span aria-hidden="true">→</span>
-                <span>{after.toFixed(1)}{r.pct ? '%' : ''}</span>
-                <span className="trade-analyzer-panel__delta-chip">
+                <span>{after.toFixed(1)}{r.pct ? '%' : ''}{ci && r.ciKey ? <Plus v={ci.after[r.ciKey]} pct={r.pct} /> : null}</span>
+                <span
+                  className={['trade-analyzer-panel__delta-chip', noise ? 'trade-analyzer-panel__delta-chip--noise' : ''].filter(Boolean).join(' ')}
+                  title={noise ? 'Within the simulation noise: the 95% range of this change includes zero.' : undefined}
+                >
                   <Delta v={r.lowerIsBetter ? -rowDelta : rowDelta} pct={r.pct} />
+                  {dCi != null ? <Plus v={dCi} pct={r.pct} /> : null}
                 </span>
+                {noise ? <span className="trade-analyzer-panel__noise">noise</span> : null}
               </span>
             </div>
           );
@@ -192,6 +209,34 @@ function DropsNote({ drops }: { drops: TradeAnalysis['drops'] }) {
   );
 }
 
+function pts(v: number) {
+  return Math.round(v).toLocaleString();
+}
+
+/** Rest-of-season projected points each side sends and receives (every player in the
+ *  deal, IR included, through the last playoff week), with 95% ranges. */
+function ValueLines({ result }: { result: TradeAnalysis }) {
+  const v = result.value;
+  if (!v || !result.you || !result.partner) return null;
+  const line = (name: string, x: TradeValueLine) => (
+    <p className="trade-analyzer-panel__value-row">
+      <span className="trade-analyzer-panel__value-team">{name}</span>
+      <span>sends <strong>{pts(x.sent)}</strong> <span className="trade-analyzer-panel__ci">±{pts(x.sentRange)}</span></span>
+      <span>gets <strong>{pts(x.received)}</strong> <span className="trade-analyzer-panel__ci">±{pts(x.receivedRange)}</span></span>
+      <span className={x.net >= 0 ? 'trade-analyzer-panel__value-net--up' : 'trade-analyzer-panel__value-net--down'}>
+        net <strong>{x.net > 0 ? '+' : ''}{pts(x.net)}</strong> <span className="trade-analyzer-panel__ci">±{pts(x.netRange)}</span>
+      </span>
+    </p>
+  );
+  return (
+    <div className="trade-analyzer-panel__value">
+      <p className="trade-analyzer-panel__value-heading">Projected points, rest of season</p>
+      {line(result.you.teamName, v.you)}
+      {line(result.partner.teamName, v.partner)}
+    </div>
+  );
+}
+
 function Results({
   result,
 }: {
@@ -200,6 +245,7 @@ function Results({
   const league = result.league ?? [];
   return (
     <div className="trade-analyzer-panel__results">
+      <ValueLines result={result} />
       <div className="trade-analyzer-panel__cards">
         <SideCard side={result.you!} />
         <SideCard side={result.partner!} />

@@ -41,6 +41,7 @@ import {
   partnersToScan,
   partnersWords,
   passesLimits,
+  passesPointsLimit,
   pickWords,
   pinnedPlayer,
   positionSublines,
@@ -421,11 +422,13 @@ export function TradeFinder({
     .filter((entry) => !dismissedSignatures.has(entry.signature)), [dismissedSignatures, leagueId, readsByRoster, sourceSuggestions, values]);
 
   const kept = useMemo(() => entries.filter((entry) =>
-    passesLimits(entry.suggestion, limits.minGain, limits.maxLoss) && !(limits.hideLopsided && entry.lopsided)), [entries, limits]);
+    passesLimits(entry.suggestion, limits.minGain, limits.maxLoss)
+    && !(limits.hideLopsided && entry.lopsided)
+    && passesPointsLimit(entry.suggestion.value?.net, limits.maxGiveUp)), [entries, limits]);
   const outside = entries.length - kept.length;
   const groups = useMemo<Group[]>(() => groupDeals(kept, values), [kept, values]);
-  const strong = groups.filter((group) => !withinNoise(group.best.suggestion.youDelta));
-  const ties = groups.filter((group) => withinNoise(group.best.suggestion.youDelta));
+  const strong = groups.filter((group) => !withinNoise(group.best.suggestion.youDelta, group.best.suggestion.youTitleCi));
+  const ties = groups.filter((group) => withinNoise(group.best.suggestion.youDelta, group.best.suggestion.youTitleCi));
   const visibleStrong = showAll ? strong : strong.slice(0, MAX_VISIBLE);
   const visibleTies = showAll ? ties : ties.slice(0, Math.max(0, MAX_VISIBLE - visibleStrong.length));
   const hidden = (strong.length - visibleStrong.length) + (ties.length - visibleTies.length);
@@ -678,7 +681,17 @@ export function TradeFinder({
         <div className="trade-finder__open-numbers">
           <div className="trade-finder__open-number">
             <span className="trade-finder__tag">Your title</span>
-            <span className={`trade-finder__num trade-finder__num--big trade-finder__num--${deltaTone(suggestion.youDelta)}`}>{signedPct(suggestion.youDelta)}</span>
+            <span className={`trade-finder__num trade-finder__num--big trade-finder__num--${deltaTone(suggestion.youDelta)}`}>
+              {signedPct(suggestion.youDelta)}
+              {suggestion.youTitleCi != null ? <span className="trade-finder__ci">±{suggestion.youTitleCi.toFixed(1)}</span> : null}
+            </span>
+            {suggestion.value ? (
+              <span className="trade-finder__who-meta trade-finder__value">
+                Projected pts, rest of season: send {Math.round(suggestion.value.sent)}, get {Math.round(suggestion.value.received)},{' '}
+                <span className={`trade-finder__num--${suggestion.value.net >= 0 ? 'up' : 'down'}`}>net {suggestion.value.net > 0 ? '+' : ''}{Math.round(suggestion.value.net)}</span>
+                <span className="trade-finder__ci">±{Math.round(suggestion.value.netRange)}</span>
+              </span>
+            ) : null}
             <span className="trade-finder__who-meta">
               {suggestion.youPlayoffDelta != null ? <>Playoffs <span className={`trade-finder__num--${deltaTone(suggestion.youPlayoffDelta)}`}>{signedPct(suggestion.youPlayoffDelta)}</span></> : null}
               {suggestion.youWeekDelta != null ? <> · this week <span className={`trade-finder__num--${deltaTone(suggestion.youWeekDelta)}`}>{signedPct(suggestion.youWeekDelta)}</span></> : null}
@@ -686,7 +699,10 @@ export function TradeFinder({
           </div>
           <div className="trade-finder__open-number">
             <span className="trade-finder__tag">His side</span>
-            <span className={`trade-finder__num trade-finder__num--big trade-finder__num--${deltaTone(suggestion.partnerDelta)}`}>{signedPct(suggestion.partnerDelta)}</span>
+            <span className={`trade-finder__num trade-finder__num--big trade-finder__num--${deltaTone(suggestion.partnerDelta)}`}>
+              {signedPct(suggestion.partnerDelta)}
+              {suggestion.partnerTitleCi != null ? <span className="trade-finder__ci">±{suggestion.partnerTitleCi.toFixed(1)}</span> : null}
+            </span>
             <span className="trade-finder__who-meta">{values ? standingLine(group.best) : `${partner?.teamName ?? suggestion.partnerName}${future ? `, title ${formatProbOrOdds(future.titleProb)}` : ''}`}</span>
           </div>
           <div className="trade-finder__open-number">
@@ -765,10 +781,14 @@ export function TradeFinder({
           </span>
           {renderSide(suggestion.give, 'send')}
           <span className="trade-finder__lane-price">
-            <span className={`trade-finder__num trade-finder__num--lead trade-finder__num--${tie ? 'dim' : deltaTone(suggestion.youDelta)}`}>{signedPct(suggestion.youDelta)}</span>
+            <span className={`trade-finder__num trade-finder__num--lead trade-finder__num--${tie ? 'dim' : deltaTone(suggestion.youDelta)}`}>
+              {signedPct(suggestion.youDelta)}
+              {suggestion.youTitleCi != null ? <span className="trade-finder__ci">±{suggestion.youTitleCi.toFixed(1)}</span> : null}
+            </span>
             <span className="trade-finder__who-meta">
               {partner ? `${partner.teamName}, ${recordText(partner.record)}` : suggestion.partnerName} · them{' '}
               <span className={`trade-finder__num--${deltaTone(suggestion.partnerDelta)}`}>{signedPct(suggestion.partnerDelta)}</span>
+              {suggestion.value ? <> · pts net <span className={`trade-finder__num--${suggestion.value.net >= 0 ? 'up' : 'down'}`}>{suggestion.value.net > 0 ? '+' : ''}{Math.round(suggestion.value.net)}</span></> : null}
               {group.others.length ? ` · ${group.others.length + 1} ways` : ''}
             </span>
           </span>
@@ -837,7 +857,7 @@ export function TradeFinder({
 
   const renderEmpty = () => {
     const loosen: { label: string; apply: () => void }[] = [];
-    if (outside > 0) loosen.push({ label: 'Show every deal that helps me', apply: () => setLimits({ minGain: 0, maxLoss: null, hideLopsided: false }) });
+    if (outside > 0) loosen.push({ label: 'Show every deal that helps me', apply: () => setLimits({ minGain: 0, maxLoss: null, hideLopsided: false, maxGiveUp: null }) });
     if (asked.shapes.length > 0) loosen.push({ label: 'Any shape', apply: () => void run({ ...asked, shapes: [] }) });
     if (asked.partnerRosterIds.length > 0) loosen.push({ label: 'Try anyone', apply: () => void run(reconcileQuery({ ...asked, partnerRosterIds: [] }, teams)) });
     if (asked.send.kind !== 'any') loosen.push({ label: 'Send anything', apply: () => void run({ ...asked, send: ANY_PICK }) });
@@ -893,7 +913,8 @@ export function TradeFinder({
   const findLabel = isExactTrade(query) ? 'Price this trade' : servedByBoard(query) ? 'Show the board' : 'Find trades';
   const limitCount = (limits.minGain !== DEFAULT_LIMITS.minGain ? 1 : 0)
     + (limits.maxLoss !== DEFAULT_LIMITS.maxLoss ? 1 : 0)
-    + (limits.hideLopsided !== DEFAULT_LIMITS.hideLopsided ? 1 : 0);
+    + (limits.hideLopsided !== DEFAULT_LIMITS.hideLopsided ? 1 : 0)
+    + (limits.maxGiveUp !== DEFAULT_LIMITS.maxGiveUp ? 1 : 0);
   const lanesShown = visibleStrong.length + visibleTies.length;
 
   return (
@@ -1096,6 +1117,7 @@ export function TradeFinder({
 /* ── Limits, behind a button ─────────────────────────────────────────────── */
 
 const MAX_LOSS_TOP = 10;
+const MAX_GIVE_TOP = 300;
 
 function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits; kept: number; onChange: (next: FinderLimits) => void; onClose: () => void }) {
   useEffect(() => {
@@ -1129,7 +1151,7 @@ function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits
             type="range"
             value={limits.minGain}
           />
-          <span className="trade-finder__sheet-note">Under a point is sampling noise, and the board already sets those below a line.</span>
+          <span className="trade-finder__sheet-note">A change inside its own range (the ± beside it) is sampling noise, and the board already sets those below a line.</span>
         </div>
         <div className="trade-finder__limit">
           <label className="trade-finder__limit-label" htmlFor="trade-finder-max-loss">
@@ -1150,6 +1172,26 @@ function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits
             value={limits.maxLoss == null ? MAX_LOSS_TOP : limits.maxLoss}
           />
           <span className="trade-finder__sheet-note">At nothing, only deals that lift both sides. All the way right, no limit.</span>
+        </div>
+        <div className="trade-finder__limit">
+          <label className="trade-finder__limit-label" htmlFor="trade-finder-max-give">
+            <span>You give up at most</span>
+            <span className="trade-finder__num">{limits.maxGiveUp == null ? 'any' : `${limits.maxGiveUp} pts`}</span>
+          </label>
+          <input
+            className="trade-finder__floor-input"
+            id="trade-finder-max-give"
+            max={MAX_GIVE_TOP}
+            min={0}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              onChange({ ...limits, maxGiveUp: value >= MAX_GIVE_TOP ? null : value });
+            }}
+            step={10}
+            type="range"
+            value={limits.maxGiveUp == null ? MAX_GIVE_TOP : limits.maxGiveUp}
+          />
+          <span className="trade-finder__sheet-note">Projected points over the rest of the season, net: what you get minus what you send, every player in the deal. All the way right, no limit.</span>
         </div>
         <label className="trade-finder__limit trade-finder__limit--toggle">
           <input

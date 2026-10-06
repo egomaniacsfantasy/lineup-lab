@@ -943,6 +943,22 @@ export interface TradeSideStat {
   // Current-week matchup win %. null off-season (no scheduled matchup).
   weekWinProb?: number | null;
 }
+/** 95% half-widths (same units as the numbers): the before run, the after run, and
+ *  the change measured season by season across the two runs. */
+export interface TradeCi {
+  before: TradeSideStat;
+  after: TradeSideStat;
+  delta: TradeSideStat;
+}
+/** Rest-of-season projected points a side sends and receives, with 95% ranges. */
+export interface TradeValueLine {
+  sent: number;
+  sentRange: number;
+  received: number;
+  receivedRange: number;
+  net: number;
+  netRange: number;
+}
 export interface TradeSideDelta {
   rosterId: number;
   teamName: string;
@@ -950,6 +966,7 @@ export interface TradeSideDelta {
   before: TradeSideStat;
   after: TradeSideStat;
   delta: TradeSideStat;
+  ci?: TradeCi | null;
 }
 export interface TradeAnalysis {
   available: boolean;
@@ -963,6 +980,7 @@ export interface TradeAnalysis {
     partner: { playerId: string; name: string; bye?: number | null; week?: number | null; whenReturns?: string | null }[];
   };
   warnings?: { you: string | null; partner: string | null };
+  value?: { you: TradeValueLine; partner: TradeValueLine };
   you?: TradeSideDelta;
   partner?: TradeSideDelta;
   // Every other team in the league, most-affected first (by |Δ championship %|).
@@ -1030,6 +1048,11 @@ export interface TradeSuggestion {
   partnerWeekDelta?: number | null;
   /** The engine's own acceptance read, from the reads the request carried. */
   acceptance?: number;
+  /** 95% half-width on each title change. */
+  youTitleCi?: number | null;
+  partnerTitleCi?: number | null;
+  /** Rest-of-season projected points you send / receive / net. */
+  value?: TradeValueLine;
 }
 export interface TradeSuggestions {
   available: boolean;
@@ -1085,6 +1108,8 @@ export function fetchTradeFinder(
       getAllow: string[];
       givePositions: string[];
       getPositions: string[];
+      /** You give up at most this many projected points (net, rest of season). */
+      maxNetPointsLoss?: number | null;
     };
     shapes: { give: number; get: number }[];
     readsByRoster?: Record<number, { friendliness: number; relationship: number }>;

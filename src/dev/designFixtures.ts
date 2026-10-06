@@ -1667,7 +1667,27 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
     return trade?.result ?? { available: false, reason: 'design_fixture_missing_trade' };
   }
   if (endpoint === 'trade-analyze' && method === 'POST') {
-    return trade?.analysis ?? { available: false, reason: 'design_fixture_missing_trade' };
+    const analysis = trade?.analysis;
+    if (!analysis?.available || !analysis.you || !analysis.partner) {
+      return analysis ?? { available: false, reason: 'design_fixture_missing_trade' };
+    }
+    /* The engine now puts a 95% range on every number and a rest-of-season points
+       line on each side. Fixture deals that predate that get representative ones,
+       so the panel renders the way it does against the real engine. */
+    const ci = (titleDelta: number) => ({
+      before: { titleProb: 1.2, playoffProb: 1.4, expWins: 0.05, avgSeed: 0.06 },
+      after: { titleProb: 1.2, playoffProb: 1.4, expWins: 0.05, avgSeed: 0.06 },
+      delta: { titleProb: Math.max(0.4, Math.abs(titleDelta) / 2), playoffProb: 0.6, expWins: 0.03, avgSeed: 0.03 },
+    });
+    return {
+      ...analysis,
+      value: analysis.value ?? {
+        you: { sent: 212, sentRange: 31, received: 236, receivedRange: 34, net: 24, netRange: 46 },
+        partner: { sent: 236, sentRange: 34, received: 212, receivedRange: 31, net: -24, netRange: 46 },
+      },
+      you: { ...analysis.you, ci: analysis.you.ci ?? ci(analysis.you.delta.titleProb) },
+      partner: { ...analysis.partner, ci: analysis.partner.ci ?? ci(analysis.partner.delta.titleProb) },
+    };
   }
   if (endpoint === 'trade-counter' && method === 'POST') {
     return trade?.counter ?? { available: true, needed: false };

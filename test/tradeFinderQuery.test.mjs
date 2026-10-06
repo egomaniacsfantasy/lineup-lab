@@ -34,6 +34,7 @@ import {
   servedByBoard,
   standingOf,
   withinNoise,
+  passesPointsLimit,
 } from '../src/utils/tradeFinderQuery.ts';
 
 /**
@@ -313,7 +314,7 @@ test('deals group under the player you would land, best package first', () => {
 test('under a point of title odds is a tie, and the default limits lift both sides', () => {
   assert.equal(withinNoise(0.9), true);
   assert.equal(withinNoise(NOISE_PP), false);
-  assert.deepEqual(DEFAULT_LIMITS, { minGain: 0, maxLoss: 0, hideLopsided: true });
+  assert.deepEqual(DEFAULT_LIMITS, { minGain: 0, maxLoss: 0, hideLopsided: true, maxGiveUp: null });
 });
 
 test('a robbery of a team that is out is caught on roster value, not title odds', () => {
@@ -347,4 +348,20 @@ test('sending a starter names who starts instead; sending a bench piece costs th
     replacement: { id: 'te2', name: 'McBride', perGame: 9.4 },
   });
   assert.deepEqual(sendConsequence('te2', myTeam, players, values, slots), { slot: 'bench', replacement: null });
+});
+
+test('the points limit: you give up at most N projected points, net', () => {
+  assert.equal(passesPointsLimit(-40, 50), true);
+  assert.equal(passesPointsLimit(-60, 50), false, 'giving up 60 net is past a 50 limit');
+  assert.equal(passesPointsLimit(25, 0), true, 'gaining points always passes');
+  assert.equal(passesPointsLimit(-500, null), true, 'no limit');
+  assert.equal(passesPointsLimit(undefined, 50), true, 'a deal from an older scan, with no value line, is kept');
+});
+
+test('a tie is a change inside its own interval; the fixed line only without one', () => {
+  assert.equal(withinNoise(0.5, 0.6), true, '+0.5 with a +/-0.6 range is noise');
+  assert.equal(withinNoise(0.8, 0.4), false, '+0.8 with a +/-0.4 range is real, though under 1pp');
+  assert.equal(withinNoise(1.5, 2.1), true, 'a wide range swallows even a larger change');
+  assert.equal(withinNoise(0.5), true, 'no interval: the old 1pp line');
+  assert.equal(withinNoise(1.2), false);
 });

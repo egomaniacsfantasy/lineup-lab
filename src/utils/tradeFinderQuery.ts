@@ -123,20 +123,38 @@ export interface FinderLimits {
   /** Hide deals where the other side gives up far more roster value than title
    *  odds can register, which is every robbery of a team already out. */
   hideLopsided: boolean;
+  /** You give up at most this many projected points, net, rest of season
+   *  (the engine's value line on each deal). null = no limit. */
+  maxGiveUp: number | null;
 }
-export const DEFAULT_LIMITS: FinderLimits = { minGain: DEFAULT_MIN_GAIN, maxLoss: DEFAULT_MAX_PARTNER_LOSS, hideLopsided: true };
+export const DEFAULT_LIMITS: FinderLimits = { minGain: DEFAULT_MIN_GAIN, maxLoss: DEFAULT_MAX_PARTNER_LOSS, hideLopsided: true, maxGiveUp: null };
 
 export function limitsChanged(limits: FinderLimits) {
   return limits.minGain !== DEFAULT_LIMITS.minGain
     || limits.maxLoss !== DEFAULT_LIMITS.maxLoss
-    || limits.hideLopsided !== DEFAULT_LIMITS.hideLopsided;
+    || limits.hideLopsided !== DEFAULT_LIMITS.hideLopsided
+    || limits.maxGiveUp !== DEFAULT_LIMITS.maxGiveUp;
 }
 
-/** Under this many percentage points of title odds, a swing is sampling noise
- *  (measured: standard deviation near 1pp at 4,000 sims), so the board shows
- *  it as a tie rather than ranking it. */
+/** The points limit: a deal whose net projected points (what you get minus what you
+ *  send, rest of season) is past -maxGiveUp is out. A deal without a value line
+ *  (an older scan) passes. */
+export function passesPointsLimit(net: number | null | undefined, maxGiveUp: number | null) {
+  if (maxGiveUp == null || net == null || !Number.isFinite(net)) return true;
+  return net >= -maxGiveUp;
+}
+
+/** Fallback when a deal carries no interval of its own (older scans): under this
+ *  many percentage points of title odds, a swing is treated as sampling noise. */
 export const NOISE_PP = 1;
-export function withinNoise(youDelta: number) {
+/**
+ * A swing the sim cannot tell from no change is a tie, not a ranking. With the
+ * deal's own 95% interval (`ci`, measured season by season across the before and
+ * after runs), it is a tie when the change sits inside it; without one, the old
+ * fixed 1pp line.
+ */
+export function withinNoise(youDelta: number, ci?: number | null) {
+  if (ci != null && Number.isFinite(ci)) return youDelta <= ci;
   return youDelta < NOISE_PP;
 }
 

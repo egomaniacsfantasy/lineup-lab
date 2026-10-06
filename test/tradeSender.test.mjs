@@ -98,20 +98,25 @@ test('worker scan walks managers one by one and matches the in-process finder', 
 });
 
 test('uneven packages: I receive more -> my worst unprotected player is dropped', async () => {
-  // My roster is 11 of 12 active. Pin a 1-for-3 (my WR5 for their three WRs): one
-  // body too many, so exactly one of mine is cut, and never a protected one.
+  // A full roster (12 of 12 active: the fixture's 11 plus one more bench WR). Pin a
+  // 1-for-2 (my WR5 for two of their WRs): one body too many, so exactly one of mine is
+  // cut, and never a protected one. (1-for-3 / 3-for-1 are no longer searched.)
+  const extra = P('WR', 4);
+  const fullCtx = { ...ctx, teams: ctx.teams.map((t) => (t.rosterId === you.rosterId ? { ...t, players: [...t.players, extra] } : t)) };
   const t2 = teams[1].players;
   const protect = [you.players[6]]; // my WR3 (6 ppg), a natural drop candidate, is protected
-  const res = await suggestTrades(ctx, {
-    maxSim: 20, partnerRosterId: 2, getPlayerIds: [t2[4], t2[5], t2[6]],
+  const res = await suggestTrades(fullCtx, {
+    maxSim: 20, partnerRosterId: 2, getPlayerIds: [t2[4], t2[5]],
     sender: { protect, giveAllow: [you.players[10]], minYouDelta: 0, maxPartnerLoss: 100 },
   });
-  const oneForThree = res.suggestions.find((s) => s.give.length === 1 && s.get.length === 3);
-  assert.ok(oneForThree, 'the pinned 1-for-3 clears the rules');
-  assert.equal(oneForThree.drops.you.length, 1, 'one body over -> one drop');
-  assert.ok(!protect.includes(oneForThree.drops.you[0].id), 'the protected player is not the drop');
+  const oneForTwo = res.suggestions.find((s) => s.give.length === 1 && s.get.length === 2);
+  assert.ok(oneForTwo, 'the pinned 1-for-2 clears the rules');
+  assert.equal(oneForTwo.drops.you.length, 1, 'one body over -> one drop');
+  assert.ok(!protect.includes(oneForTwo.drops.you[0].id), 'the protected player is not the drop');
   // Giving more than I get never makes ME drop (the partner settles his own overflow).
   for (const s of res.suggestions.filter((x) => x.give.length > x.get.length)) assert.equal(s.drops.you.length, 0);
+  // And no package is lopsided by more than one player.
+  for (const s of res.suggestions) assert.ok(Math.abs(s.give.length - s.get.length) <= 1);
 });
 
 test('parity with the Build-a-Trade analyzer, IR stash included', async () => {

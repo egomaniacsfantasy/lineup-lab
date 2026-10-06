@@ -383,3 +383,61 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/* 95% ranges: quiet, next to the number they qualify. */
+.trade-analyzer-panel__ci {
+  margin-left: 3px;
+  color: var(--text-muted, #8a8f98);
+  font-size: 0.78em;
+  font-weight: 600;
+}
+
+.trade-analyzer-panel__delta-chip--noise {
+  opacity: 0.6;
+}
+
+.trade-analyzer-panel__noise {
+  color: var(--text-muted, #8a8f98);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trade-analyzer-panel__value {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+}
+
+.trade-analyzer-panel__value-heading {
+  margin: 0 0 6px;
+  color: var(--text-muted, #8a8f98);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trade-analyzer-panel__value-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  margin: 0 0 4px;
+  color: var(--text-primary, #f4f5f2);
+  font-family: var(--font-num, monospace);
+  font-size: 13px;
+}
+
+.trade-analyzer-panel__value-team {
+  min-width: 0;
+  font-family: var(--font-ui, sans-serif);
+  font-weight: 700;
+}
+
+.trade-analyzer-panel__value-net--up strong { color: #22c55e; }
+.trade-analyzer-panel__value-net--down strong { color: #ff6b6b; }

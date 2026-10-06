@@ -2460,6 +2460,7 @@ apiRouter.post('/league/:leagueId/trade-finder', async (req, res, next) => {
     const r = req.body?.rules ?? {};
     const minYou = Number(r.minYouDelta);
     const maxLoss = Number(r.maxPartnerLoss);
+    const maxNet = r.maxNetPointsLoss == null || r.maxNetPointsLoss === '' ? NaN : Number(r.maxNetPointsLoss);
     const sender = {
       giveAllow: ids(r.giveAllow),
       getAllow: ids(r.getAllow),
@@ -2468,6 +2469,8 @@ apiRouter.post('/league/:leagueId/trade-finder', async (req, res, next) => {
       getPositions: positions(r.getPositions),
       minYouDelta: Number.isFinite(minYou) && minYou > 0 ? minYou : 0,
       ...(Number.isFinite(maxLoss) && maxLoss >= 0 ? { maxPartnerLoss: maxLoss } : {}),
+      // "I give up at most N projected points" (net, rest of season); screened before any sim.
+      ...(Number.isFinite(maxNet) && maxNet >= 0 ? { maxNetPointsLoss: maxNet } : {}),
     };
     const shapes = (Array.isArray(req.body?.shapes) ? req.body.shapes : [])
       .map((sh) => ({ give: Number(sh?.give), get: Number(sh?.get) }))

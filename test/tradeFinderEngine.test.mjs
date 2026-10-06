@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { simulateSeason, suggestTrades } from '../server/engine/engine.js';
+import { analyzeTrade, simulateSeason, suggestTrades } from '../server/engine/engine.js';
 import { runTradeScan } from '../server/engine/tradeScanWorker.js';
 
 /**
@@ -169,4 +169,40 @@ test('reusing the simulated scores of unchanged teams changes no number', () => 
   assert.ok(filled > 0, 'the baseline filled the cache');
   assert.equal(scoreCache.size, filled, 'a trade run reads the cache and adds nothing to it');
   assert.notDeepEqual(plainAfter, plainBefore, 'the trade does move the odds');
+});
+
+test('every analyzer number carries a 95% interval, and the change is measured season by season', () => {
+  const a = analyzeTrade(ctx, { partnerRosterId: 2, give: [you.players[2]], get: [wrRich.players[5]] });
+  for (const side of [a.you, a.partner]) {
+    for (const key of ['titleProb', 'playoffProb', 'expWins', 'avgSeed']) {
+      assert.ok(side.ci.before[key] >= 0 && side.ci.after[key] >= 0 && side.ci.delta[key] >= 0, `${key} has ranges`);
+    }
+    /* The before and after runs share every random draw, so the change's interval is
+       tighter than the two separate intervals combined would suggest. */
+    assert.ok(side.ci.delta.titleProb < side.ci.before.titleProb + side.ci.after.titleProb);
+  }
+  assert.ok(!JSON.stringify(a).includes('perSim'), 'per-season outcomes never reach the response');
+});
+
+test('the value line: rest-of-season points sent, received and net, with ranges', () => {
+  const give = [you.players[2]];
+  const get = [wrRich.players[5]];
+  const a = analyzeTrade(ctx, { partnerRosterId: 2, give, get });
+  const ppg = (id) => projections.find((p) => p.playerId === id).mean;
+  const weeks = 15; // weeks 1-14 plus the one playoff round of this 2-team bracket
+  assert.equal(a.value.you.sent, Number((ppg(give[0]) * weeks).toFixed(1)));
+  assert.equal(a.value.you.received, Number((ppg(get[0]) * weeks).toFixed(1)));
+  assert.equal(a.value.you.net, Number((a.value.you.received - a.value.you.sent).toFixed(1)));
+  assert.equal(a.value.partner.sent, a.value.you.received, 'the two sides mirror');
+  assert.ok(a.value.you.netRange > a.value.you.sentRange, 'the net range combines both sides');
+});
+
+test('"I give up at most N points" removes trades before they are simmed, and no 3-for-1 exists', async () => {
+  const res = await suggestTrades(ctx, {
+    maxSim: 20, partnerRosterId: 2, sender: { ...openRules, maxNetPointsLoss: 10 },
+  });
+  for (const s of res.suggestions) {
+    assert.ok(s.value.net >= -10, `${s.value.net} is past the limit`);
+    assert.ok(Math.abs(s.give.length - s.get.length) <= 1, 'no 3-for-1 / 1-for-3');
+  }
 });

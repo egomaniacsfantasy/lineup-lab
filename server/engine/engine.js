@@ -2098,10 +2098,19 @@ function paramsSignature(params) {
  * of arithmetic). `cacheWrite` stores what this run computes (the baseline does).
  */
 export function simulateSeason(ctx) {
-  const { teams, week, seed = 1, sims = SEASON_SIMS, scoreCache = null, cacheWrite = false } = ctx;
+  const { teams, week, seed = 1, sims = SEASON_SIMS, scoreCache = null, cacheWrite = false, perSim = false } = ctx;
   const setup = seasonSetup(ctx);
   const { regularWeeks, rosterIds, remaining, paramsBy, playoff } = setup;
   const paramsFor = (id, wk) => paramsBy.get(id)?.get(wk);
+  // perSim: keep every simulated season's outcome per team (made playoffs, won title,
+  // wins, final standing) so the trade tools can put a confidence interval on each
+  // number. Off for pricing/hub runs (no cost there).
+  const outcome = perSim
+    ? new Map(rosterIds.map((id) => [id, {
+      playoff: new Uint8Array(sims), title: new Uint8Array(sims),
+      wins: new Float32Array(sims), seed: new Uint8Array(sims),
+    }]))
+    : null;
 
   let scoreOf = (id, wk, sim) => drawTeamScoreCRN(paramsFor(id, wk), seed, sim, wk, id);
   if (scoreCache) {
@@ -2177,9 +2186,104 @@ export function simulateSeason(ctx) {
     seeded.forEach((id) => playoffCounts.set(id, playoffCounts.get(id) + 1));
     const champion = runBracket(seeded, playoff, (id, wk) => scoreOf(id, wk, sim));
     if (champion != null) titleCounts.set(champion, titleCounts.get(champion) + 1);
+    if (outcome) {
+      standings.forEach((id, i) => {
+        const o = outcome.get(id);
+        o.seed[sim] = i + 1;
+        o.wins[sim] = wins.get(id);
+      });
+      for (const id of seeded) outcome.get(id).playoff[sim] = 1;
+      if (champion != null && outcome.has(champion)) outcome.get(champion).title[sim] = 1;
+    }
   }
 
-  return buildSeasonResult(teams, { sims, regularWeeks, playoffCounts, titleCounts, winSums, seedSums, currentWeekWins, currentWeekTeams });
+  const result = buildSeasonResult(teams, { sims, regularWeeks, playoffCounts, titleCounts, winSums, seedSums, currentWeekWins, currentWeekTeams });
+  if (outcome) {
+    // Not enumerable: never serialized into an API response by accident.
+    for (const r of result) Object.defineProperty(r, 'perSim', { value: outcome.get(r.rosterId), enumerable: false });
+  }
+  return result;
+}
+
+/**
+ * 95% confidence intervals for a trade, from the per-sim outcomes of the before and
+ * after runs. The two runs play the SAME simulated seasons (same random draws), so the
+ * CHANGE is measured season by season: its interval comes from the spread of the
+ * per-season differences, which is much tighter than comparing two separate intervals
+ * (their errors move together and largely cancel). Returns half-widths in the units
+ * shown: probabilities in percentage points, wins in wins, seed in places.
+ */
+const Z95 = 1.959964;
+function halfWidth(values) {
+  const n = values.length;
+  if (n < 2) return 0;
+  let mean = 0;
+  for (let i = 0; i < n; i += 1) mean += values[i];
+  mean /= n;
+  let ss = 0;
+  for (let i = 0; i < n; i += 1) ss += (values[i] - mean) ** 2;
+  return Z95 * Math.sqrt(ss / (n - 1)) / Math.sqrt(n);
+}
+function diffHalfWidth(before, after) {
+  const n = Math.min(before.length, after.length);
+  const d = new Float64Array(n);
+  for (let i = 0; i < n; i += 1) d[i] = after[i] - before[i];
+  return halfWidth(d);
+}
+export function tradeConfidence(b, a) {
+  if (!b || !a) return null;
+  const round = (x, k) => Number(x.toFixed(k));
+  const one = (key, scale, digits) => ({
+    before: round(halfWidth(b[key]) * scale, digits),
+    after: round(halfWidth(a[key]) * scale, digits),
+    delta: round(diffHalfWidth(b[key], a[key]) * scale, digits),
+  });
+  const t = one('title', 100, 2);
+  const p = one('playoff', 100, 2);
+  const w = one('wins', 1, 2);
+  const s = one('seed', 1, 2);
+  return {
+    before: { titleProb: t.before, playoffProb: p.before, expWins: w.before, avgSeed: s.before },
+    after: { titleProb: t.after, playoffProb: p.after, expWins: w.after, avgSeed: s.after },
+    delta: { titleProb: t.delta, playoffProb: p.delta, expWins: w.delta, avgSeed: s.delta },
+  };
+}
+
+/**
+ * Rest-of-season projected points a trade moves: every player sent and received
+ * (IR players included -- their out-weeks are already 0 in the weekly projections),
+ * summed over `weeks`. The +/- is a 95% range from each player's weekly projection
+ * interval (floor/ceiling = an 80% band), treating weeks and players as independent.
+ */
+const Z80_RANGE = 1.2815515594;
+export function rosPointsLine(ids, projectionMap, weeks) {
+  let total = 0;
+  let variance = 0;
+  for (const id of ids) {
+    const p = projectionMap.get(id) ?? projectionMap.get(String(id));
+    const weekly = p?.weekly ?? {};
+    const ci = p?.weeklyCI ?? {};
+    for (const w of weeks) {
+      const mean = Number(weekly[w] ?? weekly[String(w)] ?? 0) || 0;
+      total += mean;
+      const band = ci[w] ?? ci[String(w)];
+      const lo = Number(band?.floor);
+      const hi = Number(band?.ceiling);
+      const sigma = Number.isFinite(lo) && Number.isFinite(hi) && hi > lo ? (hi - lo) / (2 * Z80_RANGE) : 0;
+      variance += sigma * sigma;
+    }
+  }
+  return { points: total, variance };
+}
+export function tradeValueLine(give, get, projectionMap, weeks) {
+  const sent = rosPointsLine(give, projectionMap, weeks);
+  const got = rosPointsLine(get, projectionMap, weeks);
+  const r = (x) => Number(x.toFixed(1));
+  return {
+    sent: r(sent.points), sentRange: r(Z95 * Math.sqrt(sent.variance)),
+    received: r(got.points), receivedRange: r(Z95 * Math.sqrt(got.variance)),
+    net: r(got.points - sent.points), netRange: r(Z95 * Math.sqrt(sent.variance + got.variance)),
+  };
 }
 
 /**
@@ -2789,7 +2893,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   const inputsHash = computeInputsHash({ projectionVersion: active.version, teams, week, overlay: overlay ?? null });
   const seed = parseInt(computeSeedHash({ teams, week, overlay }).slice(0, 8), 16);
   const base = { league, teams, scheduleWeeks, week, projectionMap, catalog, slotLabels, seed, scoreCache: new Map() };
-  const baseline = simulateSeason({ ...base, sims: TRADE_SIMS, cacheWrite: true });
+  const baseline = simulateSeason({ ...base, sims: TRADE_SIMS, cacheWrite: true, perSim: true });
   // Refresh each traded team's CURRENT-WEEK starters to the best lineup its NEW roster
   // can field. Without this the sim's current week keeps the pre-trade starters (and even
   // a player you just traded away), so the this-week win% never moves no matter the deal.
@@ -2823,7 +2927,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
         ? tradeSwap(t, partnerFinal, partnerPlan.dropSchedule)
         : t,
   );
-  const after = simulateSeason({ ...base, teams: tradedTeams, sims: TRADE_SIMS });
+  const after = simulateSeason({ ...base, teams: tradedTeams, sims: TRADE_SIMS, perSim: true });
 
   const find = (arr, id) => arr.find((f) => f.rosterId === id);
   const sideDelta = (team) => {
@@ -2845,6 +2949,8 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
         expWins: Number((a.expWins - b.expWins).toFixed(1)),
         weekWinProb: weekWinProbDelta(a, b),
       },
+      // 95% intervals: before, after, and the change (see tradeConfidence).
+      ci: tradeConfidence(b.perSim, a.perSim),
     };
   };
 
@@ -2864,6 +2970,12 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
     maxRoster,
     dropsNeeded: { you: userPlan.totalDrops, partner: partnerPlan.totalDrops },
     drops: { you: dropList(userPlan), partner: dropList(partnerPlan) },
+    // Rest-of-season projected points each side sends and receives (from the week the
+    // trade takes effect through the last playoff week), with 95% ranges.
+    value: {
+      you: tradeValueLine(give, get, projectionMap, dropWeeks),
+      partner: tradeValueLine(get, give, projectionMap, dropWeeks),
+    },
     warnings,
     you: sideDelta(userTeam),
     partner: sideDelta(partnerTeam),
@@ -3184,7 +3296,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
         : t.rosterId === partnerTeam.rosterId
           ? tradeSwap(t, partnerPlan)
           : t);
-    const after = simulateSeason({ ...base, teams: tradedTeams, sims });
+    const after = simulateSeason({ ...base, teams: tradedTeams, sims, perSim: Boolean(baseline[0]?.perSim) });
     const bu = baseline.find((f) => f.rosterId === userTeam.rosterId);
     const bp = baseline.find((f) => f.rosterId === partnerTeam.rosterId);
     const au = after.find((f) => f.rosterId === userTeam.rosterId);
@@ -3209,6 +3321,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       userDeferred: userPlan.deferred,
       // Not enough droppable bodies to make room now (every candidate protected).
       userDropShort: userPlan.immediateDrops.length < userPlan.immediateNeed,
+      // 95% half-widths on the two title changes (full-count runs only).
+      youTitleCi: tradeConfidence(bu.perSim, au.perSim)?.delta.titleProb ?? null,
+      partnerTitleCi: tradeConfidence(bp.perSim, ap.perSim)?.delta.titleProb ?? null,
     };
   };
 
@@ -3298,7 +3413,9 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // Every practical shape, including uneven ones (3-for-2, 3-for-1, etc.) so a lopsided
   // roster still produces balanced combos. Candidate generation is cheap (no sims); the
   // gap-sort + fairness ranking still pick the best few to actually simulate.
-  const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3], [3, 2], [2, 3], [3, 1], [1, 3]];
+  // No 3-for-1 / 1-for-3 (user 2026-10-06): packages that lopsided in player count are
+  // consolidation trades the sim misprices (it gives depth almost no value).
+  const SIZES = [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3], [3, 2], [2, 3]];
   const wantedShapes = (Array.isArray(shapes) && shapes.length ? shapes : shape ? [shape] : [])
     .map((sh) => [Number(sh?.give), Number(sh?.get)])
     .filter(([k, j]) => k >= 1 && j >= 1);
@@ -3306,6 +3423,16 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     ? SIZES.filter(([k, j]) => wantedShapes.some(([wk, wj]) => wk === k && wj === j))
     : SIZES;
   const giveTargetPos = givePosition && ['QB', 'RB', 'WR', 'TE'].includes(givePosition) ? givePosition : null;
+  // "I give up at most N projected points" (net, rest of season): a hard limit applied
+  // BEFORE any sim, so it also makes the search cheaper.
+  const maxNetLoss = Number.isFinite(Number(sender?.maxNetPointsLoss)) && sender?.maxNetPointsLoss != null
+    ? Math.max(0, Number(sender.maxNetPointsLoss)) : null;
+  const valueWeeks = dropWeeksFrom(week);
+  const rosOf = new Map();
+  const rosSum = (ids) => ids.reduce((acc, id) => {
+    if (!rosOf.has(id)) rosOf.set(id, rosPointsLine([id], projectionMap, valueWeeks).points);
+    return acc + rosOf.get(id);
+  }, 0);
 
   const t0 = Date.now();
   // Optional "upgrade this position" filter: only keep trades that raise the
@@ -3339,6 +3466,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
           // Must-include targets: the trade must contain every pinned player on
           // its side (multiple allowed on each side).
           if (giveMust.length && !giveMust.every((id) => give.map(String).includes(id))) continue;
+          if (maxNetLoss != null && rosSum(get) - rosSum(give) < -maxNetLoss) continue;
           if (getMust.length && !getMust.every((id) => get.map(String).includes(id))) continue;
           if (targetPos) {
             const userAfter = userTeam.players.filter((id) => !give.includes(id)).concat(get);
@@ -3504,7 +3632,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       .map((x) => x.c);
   }
   const FINDER_SIMS = scopedPartnerId != null ? TRADE_SIMS : 600;
-  const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS, cacheWrite: true });
+  const finalBaseline = simulateSeason({ ...base, sims: FINDER_SIMS, cacheWrite: true, perSim: FINDER_SIMS === TRADE_SIMS });
   const suggestions = [];
   let re = 0;
   let finalErrors = 0;
@@ -3533,6 +3661,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       partnerWeekDelta: partnerWeekDelta ?? null,
       acceptance: accept,
       score: Number((youDelta * (accept / 100)).toFixed(2)),
+      youTitleCi: ev.youTitleCi,
+      partnerTitleCi: ev.partnerTitleCi,
+      // Rest-of-season projected points sent / received / net, with 95% ranges.
+      value: tradeValueLine(c.give, c.get, projectionMap, valueWeeks),
       // Who each side cuts to fit an uneven package (rest-of-season worst player).
       // Yours go into the ESPN offer; theirs is only what we expect them to drop.
       drops: dropsView(ev),
@@ -3559,7 +3691,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     for (let i = 0; i < REFINE_PER_MGR; i += 1) {
       for (const l of perMgrTop) if (l[i]) refineOrder.push(l[i]);
     }
-    const fullBaseline = simulateSeason({ ...base, sims: TRADE_SIMS, cacheWrite: true });
+    const fullBaseline = simulateSeason({ ...base, sims: TRADE_SIMS, cacheWrite: true, perSim: true });
     const refined = [];
     for (const s of refineOrder) {
       if (Date.now() - t0 > 25_000) break;   // client aborts at 30s — return the exact ones we have
@@ -3573,6 +3705,8 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
       s.partnerPlayoffDelta = Number(ev.partnerPlayoffDelta.toFixed(1));
       s.youWeekDelta = ev.youWeekDelta ?? s.youWeekDelta;
       s.partnerWeekDelta = ev.partnerWeekDelta ?? s.partnerWeekDelta;
+      s.youTitleCi = ev.youTitleCi;
+      s.partnerTitleCi = ev.partnerTitleCi;
       s.drops = dropsView(ev);
       const read = readsByRoster[s.partnerRosterId] ?? {};
       s.acceptance = acceptanceProbability(s.partnerDelta, read.friendliness ?? 5, read.relationship ?? 5);
