@@ -18,9 +18,10 @@
   gap: 14px;
   width: 100%;
   max-width: min(100%, 720px);
-  max-height: min(80vh, 48rem);
+  max-height: min(80dvh, 48rem);
   margin: 0 auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--glass-border);
   border-bottom: none;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;

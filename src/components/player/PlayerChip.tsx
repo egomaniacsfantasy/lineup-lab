@@ -55,6 +55,9 @@ export function PlayerChip({
           <img
             alt=""
             className="player-chip__team"
+            height={32}
+            loading="lazy"
+            width={32}
             onError={(event) => {
               event.currentTarget.style.display = 'none';
             }}

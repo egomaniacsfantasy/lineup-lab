@@ -92,7 +92,7 @@ export function ScoutingCard({
         <div className={styles.inner}>
           <header className={styles.header}>
             <div className={styles.avatar}>
-              {display?.avatar_url ? <img alt="" src={display.avatar_url} /> : avatarInitials(display?.team_name ?? 'Team')}
+              {display?.avatar_url ? <img alt="" height={64} loading="lazy" src={display.avatar_url} width={64} /> : avatarInitials(display?.team_name ?? 'Team')}
             </div>
             <div className={styles.identity}>
               <p className={styles.eyebrow}>Your read</p>

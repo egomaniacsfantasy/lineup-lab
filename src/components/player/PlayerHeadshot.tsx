@@ -105,19 +105,27 @@ export function PlayerHeadshot({
           className={['player-headshot__image', imageClassName]
             .filter(Boolean)
             .join(' ')}
+          decoding="async"
+          height={96}
+          loading="lazy"
           onError={() => {
             cacheImageFailure(headshotUrl);
             setHasImageError(true);
           }}
           src={headshotUrl}
+          width={96}
         />
       )}
       {badgeUrl && !hasBadgeError ? (
         <img
           alt=""
           className="player-headshot__team"
+          decoding="async"
+          height={32}
+          loading="lazy"
           onError={() => setHasBadgeError(true)}
           src={badgeUrl}
+          width={32}
         />
       ) : null}
     </span>

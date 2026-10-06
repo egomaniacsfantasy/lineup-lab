@@ -25,6 +25,7 @@
      it. StaleSeasonNotice measures itself and publishes the height; it is 0
      whenever the bar is not on screen. */
   padding-top: calc(var(--shell-header-height) + var(--shell-notice-height, 0px));
+  scroll-padding-top: calc(var(--shell-header-height) + var(--shell-notice-height, 0px) + var(--space-sm));
   /* The bar sits below this in the flex column now rather than on top of it,
      so there is nothing to reserve space for. */
   padding-bottom: var(--space-md);
@@ -121,9 +122,11 @@
    against their own content, not against nothing. overscroll-behavior stops
    the scroll chaining to the document, and the document itself is fixed so
    there is nothing behind it to reveal. */
-html,
-body {
-  overscroll-behavior: none;
+@media (pointer: fine) {
+  html,
+  body {
+    overscroll-behavior: none;
+  }
 }
 
 @media (max-width: 1023px) {

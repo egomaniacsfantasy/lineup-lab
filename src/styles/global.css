@@ -2,7 +2,14 @@
 @import './reset.css';
 
 html {
+  color-scheme: dark;
   scroll-behavior: smooth;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 body {
@@ -93,6 +100,7 @@ body {
 
 a:focus-visible,
 button:focus-visible,
+[tabindex]:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
@@ -103,7 +111,7 @@ textarea:focus-visible {
 
 /* ── App Container ── */
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }

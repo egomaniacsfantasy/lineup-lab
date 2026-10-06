@@ -94,7 +94,7 @@ export function MobileHub() {
       <div className="mobile-hub mobile-hub--message">
         <SimulationLoader
           label={isLoading ? 'Pricing' : 'Loading'}
-          messages={['Reading your league...', 'Running the season...', 'Setting the price...']}
+          messages={['Reading your league…', 'Running the season…', 'Setting the price…']}
           size="compact"
           variant="scan"
         />
@@ -133,6 +133,7 @@ export function MobileHub() {
   return (
     <div className="mobile-hub">
       <header className="mobile-hub__head">
+        <h1 className="visually-hidden">Hub</h1>
         <img alt="" className="mobile-hub__mark" height={128} src="/og-mark.png" width={128} />
         {/* The league name is the switcher, because it is the only thing on
             this screen that names what you are looking at, and somebody in

@@ -164,10 +164,6 @@
   cursor: pointer;
 }
 
-.board-page__sort-select:focus {
-  outline: none;
-}
-
 .board-page__search {
   width: min(320px, 100%);
   padding: 10px 14px;
@@ -181,7 +177,6 @@
 
 .board-page__search:focus,
 .board-page__rating-input:focus {
-  outline: none;
   border-color: #e8541d;
 }
 
@@ -1492,4 +1487,20 @@
     flex: 1 1 0;
     justify-content: center;
   }
+}
+
+/* The control stays transparent on purpose; the list it opens is native and
+   needs its own surface or Windows paints it white. */
+.board-page__sort-select option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* The name is the row's keyboard control; it keeps the name's type and takes
+   the button chrome off. */
+.board-page__table-name-button {
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  letter-spacing: inherit;
 }

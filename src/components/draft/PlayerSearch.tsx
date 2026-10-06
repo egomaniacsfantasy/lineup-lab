@@ -40,7 +40,7 @@ export function PlayerSearch({
         className="player-search__input"
         id="player-search-input"
         onChange={(event) => onQueryChange(event.target.value)}
-        placeholder="Search player..."
+        placeholder="Search player…"
         type="text"
         value={query}
       />

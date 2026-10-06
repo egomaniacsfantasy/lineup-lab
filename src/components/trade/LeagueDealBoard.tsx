@@ -15,11 +15,11 @@ export interface LeagueDealRow {
 }
 
 const SCAN_LINES = [
-  'Pricing every roster in the league...',
-  'Working the phones...',
-  'Reading who needs what...',
-  'Testing who says yes...',
-  'Checking their depth charts...',
+  'Pricing every roster in the league…',
+  'Working the phones…',
+  'Reading who needs what…',
+  'Testing who says yes…',
+  'Checking their depth charts…',
 ];
 
 /**

@@ -3,9 +3,11 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useUrlParamState } from '../hooks/useUrlParamState';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { PlayerHeadshot } from '../components/player/PlayerHeadshot';
 import { PlayerVotePrompt } from '../components/votes/PlayerVotePrompt';
@@ -432,7 +434,10 @@ export function MyBoardPage() {
   const [board, setBoard] = useState<BoardRow[] | null>(null);
   const [projectionData, setProjectionData] = useState<ProjectionDataset | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
+  /* The open player is mirrored to the URL with the view, sort and search,
+     so a reload or a shared link lands on the same card. */
+  const [openPlayerId, setOpenPlayerId] = useUrlParamState('open');
+  const searchUrlTimer = useRef<number | null>(null);
   const [reloadToken] = useState(0);
   const [voteOpen, setVoteOpen] = useState(false);
   const activeView = parseView(searchParams.get('view'));
@@ -590,11 +595,16 @@ export function MyBoardPage() {
     if (openPlayerId && !visibleRows.some((row) => row.board.playerId === openPlayerId)) {
       setOpenPlayerId(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the setter is recreated each render; the inputs that matter are the two listed
   }, [openPlayerId, visibleRows]);
 
+  /* Built from the live location, not the router's functional updater: the
+     search box writes its value on a timer, and a timer set in one render
+     fires with that render's stale params, which dropped keys written in
+     between. */
   function updateSearchParam(next: Record<string, string | null>) {
-    setSearchParams((current) => {
-      const params = new URLSearchParams(current);
+    setSearchParams(() => {
+      const params = new URLSearchParams(window.location.search);
       Object.entries(next).forEach(([key, value]) => {
         if (!value) params.delete(key);
         else params.set(key, value);
@@ -604,7 +614,7 @@ export function MyBoardPage() {
   }
 
   function toggleOpenPlayer(playerId: string) {
-    setOpenPlayerId((current) => (current === playerId ? null : playerId));
+    setOpenPlayerId(openPlayerId === playerId ? null : playerId);
   }
 
 
@@ -708,13 +718,21 @@ export function MyBoardPage() {
             </select>
           </label>
           <input
+            aria-label="Search players"
+            autoComplete="off"
             className="board-page__search"
             onChange={(event) => {
               const nextValue = event.target.value;
               setSearchDraft(nextValue);
-              updateSearchParam({ q: nextValue || null });
+              /* The filter reads the draft at once; the URL is written after
+                 the typing pauses, so each keystroke is not a route update. */
+              if (searchUrlTimer.current) window.clearTimeout(searchUrlTimer.current);
+              searchUrlTimer.current = window.setTimeout(() => {
+                updateSearchParam({ q: nextValue || null });
+              }, 250);
             }}
             placeholder="Search players"
+            spellCheck={false}
             type="search"
             value={searchDraft}
           />
@@ -862,7 +880,20 @@ export function MyBoardPage() {
                             />
                             <span className="board-page__table-copy">
                               <span className="board-page__name-row">
-                                <span className="board-page__table-name">{player.board.name}</span>
+                                {/* The row itself takes a pointer click for
+                                    convenience; this is what the keyboard
+                                    reaches, so it is the control of record. */}
+                                <button
+                                  aria-expanded={isOpen}
+                                  className="board-page__table-name board-page__table-name-button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleOpenPlayer(player.board.playerId);
+                                  }}
+                                  type="button"
+                                >
+                                  {player.board.name}
+                                </button>
                               </span>
                               <span className="board-page__table-meta">
                                 {player.board.position} · {player.board.team}

@@ -93,7 +93,7 @@ function ComparePlayerCard({
           />
           {player.position !== 'DEF' ? (
             <span className="compare-widget__logo-badge">
-              <img alt="" className="compare-widget__logo-image" src={player.teamLogoUrl} />
+              <img alt="" className="compare-widget__logo-image" height={32} loading="lazy" src={player.teamLogoUrl} width={32} />
             </span>
           ) : null}
         </span>

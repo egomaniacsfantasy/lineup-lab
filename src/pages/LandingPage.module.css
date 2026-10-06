@@ -51,7 +51,7 @@
     transparent 70%
   );
   filter: blur(40px);
-  animation: drift 34s ease-in-out infinite alternate;
+  animation: drift 34s ease-in-out 6 alternate;
   pointer-events: none;
   will-change: transform;
 }
@@ -651,4 +651,8 @@
   .markRolling {
     animation: none;
   }
+}
+
+.go:not(:disabled):active {
+  transform: translateY(1px);
 }

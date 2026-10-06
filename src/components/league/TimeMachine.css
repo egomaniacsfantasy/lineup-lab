@@ -62,7 +62,7 @@
 }
 
 .time-machine__select:focus-visible {
-  outline: var(--focus-ring);
+  outline: 2px solid var(--amber-bright); outline-offset: 2px;
 }
 
 /* The quotable line. Sized to be read rather than skimmed. */

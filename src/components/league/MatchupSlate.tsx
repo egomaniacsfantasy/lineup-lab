@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNflGameStateForWeek } from '../../hooks/useNflGameState';
+import { useUrlParamState } from '../../hooks/useUrlParamState';
 import { anyStarted, scorelineFor, teamScored } from '../../utils/liveScoreline';
 import { americanOddsValue, formatAmericanOdds } from '../../utils/formatOdds';
 import {
@@ -351,7 +352,9 @@ export function MatchupSlate({
   );
 
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(rows[0]?.rowKey ?? null);
-  const [openedRowKey, setOpenedRowKey] = useState<string | null>(null);
+  /* The opened game is mirrored to the URL, so the dialog survives a reload
+     and a link to it opens on the game. */
+  const [openedRowKey, setOpenedRowKey] = useUrlParamState('game');
 
   useEffect(() => {
     if (!rows.some((row) => row.rowKey === selectedRowKey)) {

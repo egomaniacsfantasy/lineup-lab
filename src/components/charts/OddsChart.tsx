@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
@@ -517,7 +518,33 @@ export function OddsChart({
   const touchStartYRef = useRef(0);
   const touchLastXRef = useRef(0);
   const [selectedRangeId, setSelectedRangeId] = useState(defaultRangeId ?? rangeOptions?.at(-1)?.id ?? 'season');
-  const [scrubClientX, setScrubClientX] = useState<number | null>(null);
+  const [scrubRatio, setScrubRatio] = useState<number | null>(null);
+  const [plotWidth, setPlotWidth] = useState(0);
+
+  /* Measured once and on resize, never during render: the scrub used to call
+     getBoundingClientRect inside a memo on every pointer move. */
+  useEffect(() => {
+    const node = chartRef.current;
+    if (!node) return undefined;
+    setPlotWidth(node.getBoundingClientRect().width);
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) setPlotWidth(entry.contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  /* Pointer x to a 0..1 position across the plot. Reads layout, so it is only
+     ever called from an event handler. */
+  const ratioAt = (clientX: number) => {
+    const rect = chartRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return 0;
+    const left = (PLOT.left / 100) * rect.width;
+    const right = (PLOT.right / 100) * rect.width;
+    const localX = clamp(clientX - rect.left, left, right);
+    return (localX - left) / Math.max(1, right - left);
+  };
 
   const resolvedRanges = useMemo(
     () => materializedRanges(hero.points, rangeOptions),
@@ -554,13 +581,10 @@ export function OddsChart({
   const idleComparisonPoint = visibleComparison.at(-1) ?? null;
 
   const scrubbedHeroPoint = useMemo(() => {
-    if (scrubClientX == null || !chartRef.current || visibleHero.length === 0) return null;
-    const rect = chartRef.current.getBoundingClientRect();
-    const localX = clamp(scrubClientX - rect.left, (PLOT.left / 100) * rect.width, (PLOT.right / 100) * rect.width);
-    const ratio = (localX - (PLOT.left / 100) * rect.width) / (((PLOT.right - PLOT.left) / 100) * rect.width);
-    const targetX = bounds.minX + ratio * Math.max(1, bounds.maxX - bounds.minX);
+    if (scrubRatio == null || visibleHero.length === 0) return null;
+    const targetX = bounds.minX + scrubRatio * Math.max(1, bounds.maxX - bounds.minX);
     return snapPoint(visibleHero, targetX);
-  }, [bounds.maxX, bounds.minX, scrubClientX, visibleHero]);
+  }, [bounds.maxX, bounds.minX, scrubRatio, visibleHero]);
 
   const activeHeroPoint = scrubbedHeroPoint ?? idleHeroPoint;
   const activeComparisonPoint = activeHeroPoint && visibleComparison.length > 0
@@ -585,7 +609,7 @@ export function OddsChart({
     && Math.abs(comparisonEndpointTop - heroEndpointTop) < 10
       ? -10
       : 0;
-  const scrubActive = scrubClientX != null && activeHeroPoint != null;
+  const scrubActive = scrubRatio != null && activeHeroPoint != null;
   const bandFadeStart = visibleBand.length > 0 ? xCoord(visibleBand[0].x, bounds) : PLOT.left;
   const bandFadeInStart = Math.max(PLOT.left, bandFadeStart - 2);
   const bandFadeInEnd = Math.min(PLOT.right, bandFadeStart + 3);
@@ -619,7 +643,7 @@ export function OddsChart({
 
   const endScrub = () => {
     clearTouchHold();
-    setScrubClientX(null);
+    setScrubRatio(null);
   };
 
   const updateScrubFromPointer = (
@@ -631,7 +655,7 @@ export function OddsChart({
       if (event.pointerType !== 'mouse') {
         event.currentTarget.setPointerCapture(event.pointerId);
       }
-      setScrubClientX(event.clientX);
+      setScrubRatio(ratioAt(event.clientX));
     }
   };
 
@@ -642,7 +666,7 @@ export function OddsChart({
       touchLastXRef.current = event.clientX;
       clearTouchHold();
       touchHoldRef.current = window.setTimeout(() => {
-        setScrubClientX(touchLastXRef.current);
+        setScrubRatio(ratioAt(touchLastXRef.current));
       }, 180);
       return;
     }
@@ -652,7 +676,7 @@ export function OddsChart({
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'touch') {
       touchLastXRef.current = event.clientX;
-      if (scrubClientX == null) {
+      if (scrubRatio == null) {
         const horizontalDistance = Math.abs(event.clientX - touchStartXRef.current);
         const verticalDistance = Math.abs(event.clientY - touchStartYRef.current);
         if (verticalDistance > 8 && verticalDistance > horizontalDistance) {
@@ -664,10 +688,10 @@ export function OddsChart({
         }
         return;
       }
-      setScrubClientX(event.clientX);
+      setScrubRatio(ratioAt(event.clientX));
       return;
     }
-    setScrubClientX(event.clientX);
+    setScrubRatio(ratioAt(event.clientX));
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -676,26 +700,41 @@ export function OddsChart({
       return;
     }
     if (chartRef.current?.matches(':hover')) {
-      setScrubClientX(event.clientX);
+      setScrubRatio(ratioAt(event.clientX));
     } else {
-      setScrubClientX(null);
+      setScrubRatio(null);
     }
   };
 
   const handlePointerLeave = (event: ReactPointerEvent<HTMLDivElement>) => {
     clearTouchHold();
-    if (event.pointerType !== 'touch' || scrubClientX != null) {
-      setScrubClientX(null);
+    if (event.pointerType !== 'touch' || scrubRatio != null) {
+      setScrubRatio(null);
     }
   };
 
   const scrubLineLeft = activeHeroPoint ? `${xCoord(activeHeroPoint.x, bounds)}%` : null;
   const cursorDateStyle = useMemo(() => {
-    if (!chartRef.current || !activeHeroPoint || scrubClientX == null) return null;
-    const width = chartRef.current.getBoundingClientRect().width;
-    const x = (xCoord(activeHeroPoint.x, bounds) / 100) * width;
-    return { left: `${clamp(x, 48, width - 48)}px` };
-  }, [activeHeroPoint, bounds, scrubClientX]);
+    if (!activeHeroPoint || scrubRatio == null || plotWidth === 0) return null;
+    const x = (xCoord(activeHeroPoint.x, bounds) / 100) * plotWidth;
+    return { left: `${clamp(x, 48, plotWidth - 48)}px` };
+  }, [activeHeroPoint, bounds, plotWidth, scrubRatio]);
+
+  /* The keyboard scrub: arrows step point to point, Escape lets go. */
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (visibleHero.length === 0) return;
+    if (event.key === 'Escape') {
+      setScrubRatio(null);
+      return;
+    }
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const current = activeHeroPoint
+      ? visibleHero.findIndex((point) => point.x === activeHeroPoint.x)
+      : visibleHero.length - 1;
+    const next = clamp(current + (event.key === 'ArrowRight' ? 1 : -1), 0, visibleHero.length - 1);
+    setScrubRatio((visibleHero[next].x - bounds.minX) / Math.max(1, bounds.maxX - bounds.minX));
+  };
 
   return (
     <section className={['odds-chart', className].filter(Boolean).join(' ')}>
@@ -716,7 +755,7 @@ export function OddsChart({
                 key={range.id}
                 onClick={() => {
                   setSelectedRangeId(range.id);
-                  setScrubClientX(null);
+                  setScrubRatio(null);
                 }}
                 type="button"
               >
@@ -749,12 +788,17 @@ export function OddsChart({
 
       <div
         className={['odds-chart__plot', scrubActive ? 'odds-chart__plot--scrubbing' : ''].filter(Boolean).join(' ')}
+        aria-label="Line chart. Use the left and right arrow keys to read each point."
+        onBlur={() => setScrubRatio(null)}
+        onKeyDown={handleKeyDown}
         onPointerCancel={endScrub}
         onPointerDown={handlePointerDown}
         onPointerLeave={handlePointerLeave}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         ref={chartRef}
+        role="group"
+        tabIndex={0}
       >
         <svg
           aria-label={title}

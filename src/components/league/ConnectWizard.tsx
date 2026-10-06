@@ -54,7 +54,12 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
   );
 
   const resolveUsername = async () => {
-    if (username.trim().length === 0 || isLoading) return;
+    if (isLoading) return;
+    if (username.trim().length === 0) {
+      /* Pressing the button with nothing typed used to do nothing at all. */
+      setError('Enter your Sleeper username first.');
+      return;
+    }
     setIsLoading(true);
     setError(null);
 
@@ -115,9 +120,9 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
     <section aria-labelledby="connect-wizard-title" className="connect-wizard">
       <div className="connect-wizard__header">
         <p className="connect-wizard__kicker">Connect your league</p>
-        <h1 className="connect-wizard__title" id="connect-wizard-title">
+        <h2 className="connect-wizard__title" id="connect-wizard-title">
           One username. Your whole league, priced.
-        </h1>
+        </h2>
       </div>
 
       {step.name === 'username' ? (
@@ -132,10 +137,12 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
             <span className="connect-wizard__label">Sleeper username</span>
             <input
               autoCapitalize="none"
+              autoComplete="username"
               autoCorrect="off"
               className="connect-wizard__input"
               onChange={(event) => setUsername(event.target.value)}
               placeholder="The name you log in to Sleeper with"
+              spellCheck={false}
               type="text"
               value={username}
             />

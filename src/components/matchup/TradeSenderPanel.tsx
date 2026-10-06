@@ -72,6 +72,16 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
   const [replyNote, setReplyNote] = useState<{ id: string; text: string; error: boolean } | null>(null);
   const [autoError, setAutoError] = useState<string | null>(null);
 
+  /* Rules being edited are unsaved work; leaving the page should ask. */
+  useEffect(() => {
+    if (!editing) return undefined;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [editing]);
+
   const load = useCallback(async () => {
     try {
       const next = await getTradeSenderState(leagueId, userId);
@@ -100,7 +110,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
   }, [state?.myPlayers]);
 
   if (loadError && !state) return null;
-  if (!state || !draft) return <p className="trade-sender__note">Loading trade sender...</p>;
+  if (!state || !draft) return <p className="trade-sender__note">Loading trade sender…</p>;
 
   const toggleIn = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
 
@@ -331,7 +341,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
 
           <div className="trade-sender__actions">
             <button className="trade-sender__btn trade-sender__btn--go" disabled={saving} onClick={() => void saveRules()} type="button">
-              {saving ? 'Saving...' : 'Save rules and scan'}
+              {saving ? 'Saving…' : 'Save rules and scan'}
             </button>
             <button
               className="trade-sender__btn trade-sender__btn--ghost"
@@ -383,7 +393,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                       {o.recommendation === 'accept' ? 'Accept' : 'Decline'}: {REC_REASON[o.reason] ?? o.reason}
                     </p>
                   ) : (
-                    <p className="trade-sender__note">Pricing this offer...</p>
+                    <p className="trade-sender__note">Pricing this offer…</p>
                   )}
                   {!state.responseReady ? (
                     <p className="trade-sender__note">
@@ -526,7 +536,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                   }}
                   type="button"
                 >
-                  {sendingId === offer.id ? 'Sending...' : 'Send on ESPN'}
+                  {sendingId === offer.id ? 'Sending…' : 'Send on ESPN'}
                 </button>
               )}
 
@@ -568,7 +578,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                     onClick={() => void withdraw(r.espnTransactionId as string)}
                     type="button"
                   >
-                    {cancelingId === r.espnTransactionId ? 'Withdrawing...' : 'Withdraw'}
+                    {cancelingId === r.espnTransactionId ? 'Withdrawing…' : 'Withdraw'}
                   </button>
                 ) : null}
               </li>

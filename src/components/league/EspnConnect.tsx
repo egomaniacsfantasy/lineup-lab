@@ -81,7 +81,9 @@ function EspnPasswordFields({
         <input
           autoComplete="username"
           className="espn-connect__input"
+          inputMode="email"
           onChange={(event) => onEmail(event.target.value)}
+          spellCheck={false}
           type="email"
           value={email}
         />
@@ -429,9 +431,9 @@ export function EspnConnect({
     <section aria-labelledby="espn-connect-title" className="espn-connect">
       <div className="espn-connect__header">
         <p className="espn-connect__kicker">Connect ESPN</p>
-        <h1 className="espn-connect__title" id="espn-connect-title">
+        <h2 className="espn-connect__title" id="espn-connect-title">
           Bring your ESPN league in.
-        </h1>
+        </h2>
       </div>
 
       {step.name === 'league' ? (
@@ -454,7 +456,7 @@ export function EspnConnect({
                 setPrivateLeagueId('');
                 setPrivateSeason('');
               }}
-              placeholder="https://fantasy.espn.com/football/league?leagueId=..."
+              placeholder="https://fantasy.espn.com/football/league?leagueId=…"
               value={leagueInput}
             />
             <span className="espn-connect__hint">
@@ -485,7 +487,7 @@ export function EspnConnect({
               {isNativeEspnAuthAvailable() ? (
                 <div className="espn-connect__login-card">
                   <div className="espn-connect__login-brand">
-                    <img alt="ESPN" className="espn-connect__login-mark" src="/brand/espn-logo.png" />
+                    <img alt="ESPN" className="espn-connect__login-mark" height={28} src="/brand/espn-logo.png" width={110} />
                     <span className="espn-connect__login-lockup">Sign in</span>
                   </div>
                   <p className="espn-connect__cookies-note">
@@ -612,7 +614,7 @@ export function EspnConnect({
                         dark box reads exactly like phishing. Their mark, on
                         their red, at the top of the panel. */}
                     <div className="espn-connect__login-brand">
-                      <img alt="ESPN" className="espn-connect__login-mark" src="/brand/espn-logo.png" />
+                      <img alt="ESPN" className="espn-connect__login-mark" height={28} src="/brand/espn-logo.png" width={110} />
                       <span className="espn-connect__login-lockup">Sign in</span>
                     </div>
                     <p className="espn-connect__cookies-note">

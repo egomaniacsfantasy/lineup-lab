@@ -451,6 +451,7 @@
 .account-menu__section {
   max-height: 46vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .account-menu__section-count {

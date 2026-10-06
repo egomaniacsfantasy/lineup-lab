@@ -59,7 +59,7 @@ export function StandingsTable({
               <span className="standings__cell standings__cell--rank">{index + 1}</span>
               <span className="standings__cell standings__cell--team">
                 {team.avatarUrl ? (
-                  <img alt="" className="standings__avatar" src={resolveApiUrl(team.avatarUrl) ?? undefined} />
+                  <img alt="" className="standings__avatar" height={64} loading="lazy" src={resolveApiUrl(team.avatarUrl) ?? undefined} width={64} />
                 ) : (
                   <span className="standings__avatar standings__avatar--blank" aria-hidden="true" />
                 )}

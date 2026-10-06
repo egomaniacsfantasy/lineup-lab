@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import type { MatchupLine, RosterSlot } from '../../types';
 import { ComparisonCard } from './ComparisonCard';
+import { lockPageScroll } from '../../utils/lockPageScroll';
 import './DecisionDrawer.css';
 
 interface DecisionDrawerProps {
@@ -43,13 +44,9 @@ export function DecisionDrawer({
   const touchStartYRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const unlock = lockPageScroll();
     closeButtonRef.current?.focus();
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
+    return unlock;
   }, []);
 
   useEffect(() => {

@@ -39,7 +39,7 @@ export function AppHeader() {
   const scoringLabel = isSynced
     ? SCORING_LABELS[bootstrap.league.scoringFamily]
     : stored
-      ? '...'
+      ? '…'
       : SCORING_LABELS[MOCK_MATCHUP.scoringFormat];
   const displayedWeek = isSynced ? Math.max(bootstrap.week, nflWeek) : Math.max(1, nflWeek);
   const stateLabel = (STATE_LABELS[seasonState] ?? STATE_LABELS.IN_SEASON)(

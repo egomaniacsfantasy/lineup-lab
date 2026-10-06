@@ -4,8 +4,9 @@
   right: var(--space-xl);
   z-index: 40;
   width: min(440px, calc(100vw - var(--space-xl)));
-  max-height: calc(100vh - var(--shell-header-height) - var(--space-xl));
+  max-height: calc(100dvh - var(--shell-header-height) - var(--space-xl));
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);

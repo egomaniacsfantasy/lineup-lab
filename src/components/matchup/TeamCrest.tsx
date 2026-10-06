@@ -26,7 +26,7 @@ export function TeamCrest({
         aria-hidden="true"
         className={['olympus-crest', isUser ? 'olympus-crest--user' : ''].filter(Boolean).join(' ')}
       >
-        <img alt="" className="olympus-crest__avatar" src={resolveApiUrl(avatarUrl) ?? undefined} />
+        <img alt="" className="olympus-crest__avatar" height={64} loading="lazy" src={resolveApiUrl(avatarUrl) ?? undefined} width={64} />
       </span>
     );
   }

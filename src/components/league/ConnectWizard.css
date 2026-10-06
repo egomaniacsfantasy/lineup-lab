@@ -258,3 +258,7 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.connect-wizard__connect:not(:disabled):active {
+  transform: translateY(1px);
+}

@@ -172,7 +172,7 @@ function surname(name: string) {
 function TeamAvatar({ team, size }: { team: ApiTeam; size: 'sm' | 'md' | 'lg' }) {
   return (
     <span aria-hidden="true" className={`trade-finder__avatar trade-finder__avatar--${size}`}>
-      {team.avatarUrl ? <img alt="" src={resolveApiUrl(team.avatarUrl) ?? undefined} /> : <span>{initials(team.teamName)}</span>}
+      {team.avatarUrl ? <img alt="" height={64} loading="lazy" src={resolveApiUrl(team.avatarUrl) ?? undefined} width={64} /> : <span>{initials(team.teamName)}</span>}
     </span>
   );
 }

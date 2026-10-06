@@ -227,7 +227,9 @@ export function RosterList({
 
       <div className="roster-list__bench-header">
         <h3 className="roster-list__bench-label">Bench</h3>
-        <p className="roster-list__bench-meta">{bench.length} players</p>
+        <p className="roster-list__bench-meta">
+          {bench.length === 0 ? 'Nobody on the bench this week' : `${bench.length} players`}
+        </p>
       </div>
 
       <div className="roster-list__items roster-list__items--bench">

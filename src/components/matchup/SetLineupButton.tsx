@@ -105,7 +105,7 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
     <div className="set-lineup">
       {phase === 'idle' || phase === 'loading' ? (
         <button className="set-lineup__btn" disabled={phase === 'loading'} onClick={preview} type="button">
-          {phase === 'loading' ? 'Checking your lineup...' : 'Set optimal lineup on ESPN'}
+          {phase === 'loading' ? 'Checking your lineup…' : 'Set optimal lineup on ESPN'}
         </button>
       ) : null}
 
@@ -130,7 +130,7 @@ export function SetLineupButton({ leagueId, userId }: { leagueId: string; userId
         </div>
       ) : null}
 
-      {phase === 'applying' ? <p className="set-lineup__note">Applying to ESPN...</p> : null}
+      {phase === 'applying' ? <p className="set-lineup__note">Applying to ESPN…</p> : null}
 
       {(phase === 'done' || phase === 'error') && message ? (
         <div className={['set-lineup__result', phase === 'error' ? 'set-lineup__result--error' : ''].filter(Boolean).join(' ')}>

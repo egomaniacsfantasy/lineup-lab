@@ -64,6 +64,7 @@ export function PlayerDistribution({ playerId, week, name, onClose }: PlayerDist
   return createPortal(
     <div
       className="player-dist__scrim"
+      role="presentation"
       onClick={(e) => {
         e.stopPropagation();
         onClose();
@@ -85,7 +86,7 @@ export function PlayerDistribution({ playerId, week, name, onClose }: PlayerDist
           </button>
         </header>
 
-        {state === 'loading' && <p className="player-dist__msg">Pricing lines...</p>}
+        {state === 'loading' && <p className="player-dist__msg">Pricing lines…</p>}
         {state === 'error' && <p className="player-dist__msg">Could not load this player&apos;s odds.</p>}
         {state === 'ready' && dist && !dist.available && (
           <p className="player-dist__msg">

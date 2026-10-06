@@ -104,7 +104,7 @@ export function BetSlip({
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
-        <span className="bet-slip__count">{legs.length}</span>
+        <span aria-live="polite" className="bet-slip__count">{legs.length}</span>
         <span className="bet-slip__handle-label">
           {legs.length === 1 ? 'Single' : `${legs.length}-leg parlay`}
         </span>

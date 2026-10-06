@@ -54,6 +54,9 @@ export function TeamAvatar({ name, avatarUrl, className = '' }: TeamAvatarProps)
         <img
           alt=""
           className="team-avatar__image"
+          height={64}
+          loading="lazy"
+          width={64}
           onError={(event) => {
             /* A broken avatar falls back to the monogram rather than to a hole:
                hiding the image alone left an empty disc with no identity in it. */

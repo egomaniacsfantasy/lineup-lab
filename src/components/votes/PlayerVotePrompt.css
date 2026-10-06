@@ -100,12 +100,16 @@
     box-shadow 120ms ease;
 }
 
-.vote-prompt__card:hover,
-.vote-prompt__card:focus-visible {
+.vote-prompt__card:hover {
   border-color: rgba(232, 84, 29, 0.6);
-  outline: none;
   transform: translateY(-2px);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.vote-prompt__card:focus-visible {
+  border-color: rgba(232, 84, 29, 0.6);
+  outline: 2px solid var(--amber-bright);
+  outline-offset: 2px;
 }
 
 .vote-prompt__shot,

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useUrlParamState } from '../hooks/useUrlParamState';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
 import { LineChangeFlash } from '../components/matchup/LineChangeFlash';
 import { SeasonBand } from '../components/matchup/SeasonBand';
@@ -109,10 +110,10 @@ function formatProjection(value: number, known = true) {
 }
 
 const SUGGESTION_LOADING_MESSAGES = [
-  'Scanning the market...',
-  'Pricing every swap...',
-  'Looking for your edge...',
-  'Running the league 10,000 times...',
+  'Scanning the market…',
+  'Pricing every swap…',
+  'Looking for your edge…',
+  'Running the league 10,000 times…',
 ];
 
 
@@ -1777,13 +1778,20 @@ function MatchupLive({
      WeekAhead view, which is a different question and says so. There is no
      backwards: a played week is a result, not a price, and the Season tab is
      where results live. */
-  const [viewWeek, setViewWeek] = useState(matchup.week);
-  useEffect(() => { setViewWeek(matchup.week); }, [matchup.week]);
   const scheduledWeeks = useMemo(
     () => weeklyLines.map((line) => line.week).filter((week) => week >= matchup.week).sort((a, b) => a - b),
     [weeklyLines, matchup.week],
   );
   const lastWeek = scheduledWeeks.at(-1) ?? matchup.week;
+  /* The week being looked ahead to is mirrored to the URL, so a reload or a
+     shared link lands on the same week. Anything outside the scrubbable range
+     reads as the current week, which is what the bare URL means. */
+  const [weekParam, setWeekParam] = useUrlParamState('week');
+  const requestedWeek = Number(weekParam);
+  const viewWeek = weekParam != null && Number.isInteger(requestedWeek) && requestedWeek > matchup.week && requestedWeek <= lastWeek
+    ? requestedWeek
+    : matchup.week;
+  const setViewWeek = (week: number) => setWeekParam(week <= matchup.week ? null : String(week));
   const aheadLine = viewWeek === matchup.week
     ? null
     : weeklyLines.find((line) => line.week === viewWeek) ?? null;

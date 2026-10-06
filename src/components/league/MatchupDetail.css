@@ -32,7 +32,7 @@
 .matchup-modal__panel {
   position: relative;
   width: min(100%, 1120px);
-  max-height: calc(100vh - var(--space-2xl));
+  max-height: calc(100dvh - var(--space-2xl));
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-subtle);

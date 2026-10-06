@@ -53,12 +53,12 @@ function writeCache(key: string, deals: TradeSuggestion[]) {
    rest of the app already uses for a wait: a book working, not a spinner
    apologising. */
 const SCAN_LINES = [
-  'Pricing every roster in the league...',
-  'Working the phones...',
-  'Reading who needs what...',
-  'Testing who says yes...',
-  'Checking their depth charts...',
-  'Sounding out the market...',
+  'Pricing every roster in the league…',
+  'Working the phones…',
+  'Reading who needs what…',
+  'Testing who says yes…',
+  'Checking their depth charts…',
+  'Sounding out the market…',
 ];
 
 export function HubDeals() {

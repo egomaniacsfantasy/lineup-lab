@@ -4,8 +4,9 @@
   right: var(--space-xl);
   z-index: 42;
   width: min(460px, calc(100vw - var(--space-xl)));
-  max-height: calc(100vh - var(--shell-header-height) - var(--space-xl));
+  max-height: calc(100dvh - var(--shell-header-height) - var(--space-xl));
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
@@ -307,7 +308,7 @@
   .panel {
     inset: auto 10px 10px;
     width: auto;
-    max-height: calc(100vh - var(--shell-header-height) - 20px);
+    max-height: calc(100dvh - var(--shell-header-height) - 20px);
     transform: translateY(calc(100% + 16px));
   }
 

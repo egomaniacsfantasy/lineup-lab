@@ -22,8 +22,9 @@
   display: grid;
   gap: var(--space-lg);
   width: min(560px, calc(100vw - var(--space-xl)));
-  max-height: calc(100vh - var(--space-2xl));
+  max-height: calc(100dvh - var(--space-2xl));
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-xl);
   border: 1px solid color-mix(in srgb, var(--amber) 18%, var(--glass-border));
   border-radius: var(--radius-xl);
@@ -99,7 +100,7 @@
 }
 
 .bug-report__textarea:focus-visible {
-  outline: var(--focus-ring);
+  outline: 2px solid var(--amber-bright); outline-offset: 2px;
   border-color: color-mix(in srgb, var(--amber) 40%, var(--border-subtle));
 }
 

@@ -250,7 +250,7 @@
       color-mix(in srgb, var(--amber-bright, #ff8049) 11%, transparent),
       transparent 68%
     );
-  animation: connect-drift 38s ease-in-out infinite alternate;
+  animation: connect-drift 38s ease-in-out 6 alternate;
 }
 
 @keyframes connect-drift {

@@ -867,6 +867,7 @@
   max-height: 88vh;
   padding: 12px 16px calc(24px + env(safe-area-inset-bottom));
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-top: 1px solid var(--border-subtle);
   border-radius: 22px 22px 0 0;
   background: var(--bg-surface);
@@ -984,7 +985,6 @@
 }
 
 .trade-finder__search input::placeholder { color: var(--ink-3); }
-.trade-finder__search input:focus { outline: none; }
 .trade-finder__search:focus-within { border-color: color-mix(in srgb, var(--amber-bright) 40%, var(--border-subtle)); }
 
 .trade-finder__list {
@@ -1960,3 +1960,7 @@
 .trade-finder__open-name { font-size: 28px; }
 
 .trade-finder__alt-who .trade-finder__tag { padding: 0 2px; }
+
+.trade-finder__find:not(:disabled):active {
+  transform: translateY(1px);
+}

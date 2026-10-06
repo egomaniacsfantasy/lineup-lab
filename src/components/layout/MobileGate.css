@@ -51,7 +51,7 @@
     transparent 70%
   );
   filter: blur(28px);
-  animation: mobile-gate-drift 26s ease-in-out infinite alternate;
+  animation: mobile-gate-drift 26s ease-in-out 6 alternate;
   pointer-events: none;
   will-change: transform;
 }

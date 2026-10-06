@@ -109,7 +109,7 @@ export function WeekAhead({
         ) : (
           <p className="matchup-page__ahead-caption">
             {forkPending
-              ? 'Conditioning the season on both results...'
+              ? 'Conditioning the season on both results…'
               : 'The conditioned run is not available for this week.'}
           </p>
         )}

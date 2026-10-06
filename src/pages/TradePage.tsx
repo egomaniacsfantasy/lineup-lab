@@ -334,7 +334,6 @@ function TradeDealsView() {
   if (stored && !bootstrap) {
     return (
       <div className="trade-page">
-        <h1 className="visually-hidden">Market</h1>
         <SeasonalNotice>
           {isLoading
             ? 'Syncing your trade board…'
@@ -347,7 +346,6 @@ function TradeDealsView() {
   if (!bootstrap || !userTeam || !stored) {
     return (
       <div className="trade-page">
-        <h1 className="visually-hidden">Trade targets</h1>
         <TradeTargetsList groups={MOCK_TRADE_TARGET_GROUPS} />
       </div>
     );
@@ -359,7 +357,6 @@ function TradeDealsView() {
   if (!tradesSupported(bootstrap)) {
     return (
       <div className="trade-page">
-        <h1 className="visually-hidden">Market</h1>
         <SeasonalNotice>
           Trades are off for dynasty and keeper leagues. Draft picks and players
           held for future seasons are half of what changes hands here, and the
@@ -650,10 +647,13 @@ function TradeDealsView() {
     return (
       <>
         <input
+          aria-label="Search players"
+          autoComplete="off"
           className="trade-cc__pool-search"
           disabled={isPricing || counterLoading}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search players"
+          spellCheck={false}
           type="search"
           value={search}
         />
@@ -713,7 +713,7 @@ function TradeDealsView() {
   const renderTeamAvatar = (team: NonNullable<typeof selectedPartner>) => (
     <span className="trade-cc__team-avatar" aria-hidden="true">
       {team.avatarUrl ? (
-        <img alt="" src={resolveApiUrl(team.avatarUrl) ?? undefined} />
+        <img alt="" height={64} loading="lazy" src={resolveApiUrl(team.avatarUrl) ?? undefined} width={64} />
       ) : (
         <span>{initials(team.teamName)}</span>
       )}
@@ -765,7 +765,6 @@ function TradeDealsView() {
 
   return (
     <div className="trade-page">
-      <h1 className="visually-hidden">Market</h1>
 
       {tradeCard ? (
         <ShareCardPreview

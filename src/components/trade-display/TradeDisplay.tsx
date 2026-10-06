@@ -118,6 +118,9 @@ function AssetIcon({ asset }: { asset: TradeAssetItem }) {
         <img
           alt=""
           className="trade-display__asset-avatar-image"
+          height={96}
+          loading="lazy"
+          width={96}
           onError={() => setFailed(true)}
           src={asset.headshotUrl}
         />
@@ -125,7 +128,7 @@ function AssetIcon({ asset }: { asset: TradeAssetItem }) {
         <span className="trade-display__asset-avatar-fallback">{initials(asset.name)}</span>
       )}
       {asset.teamLogoUrl ? (
-        <img alt="" className="trade-display__asset-team" src={asset.teamLogoUrl} />
+        <img alt="" className="trade-display__asset-team" height={32} loading="lazy" src={asset.teamLogoUrl} width={32} />
       ) : null}
     </span>
   );

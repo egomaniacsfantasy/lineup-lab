@@ -48,7 +48,6 @@
 
 .league-peek__input:focus {
   border-color: var(--amber);
-  outline: none;
 }
 
 .league-peek__go {
@@ -370,4 +369,8 @@
 .league-peek__share:hover {
   border-color: var(--amber);
   color: var(--text-amber);
+}
+
+.league-peek__go:not(:disabled):active {
+  transform: translateY(1px);
 }

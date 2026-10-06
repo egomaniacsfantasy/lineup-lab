@@ -100,6 +100,9 @@ export function PlayerRow({
             <img
               alt=""
               className="player-row__logo-image"
+              height={32}
+              loading="lazy"
+              width={32}
               src={slot.starter.teamLogoUrl}
             />
           </span>

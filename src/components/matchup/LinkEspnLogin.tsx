@@ -60,7 +60,7 @@ export function LinkEspnLogin({ leagueId, userId, onLinked }: { leagueId: string
   return (
     <div className="link-espn">
       <button className="link-espn__btn" disabled={busy} onClick={() => void link()} type="button">
-        {busy ? 'Linking...' : 'Link my ESPN login'}
+        {busy ? 'Linking…' : 'Link my ESPN login'}
       </button>
       {message ? (
         <p className={`link-espn__note${message.error ? ' link-espn__note--error' : ''}`}>

@@ -449,5 +449,5 @@
 }
 
 .app-header__report:focus-visible {
-  outline: var(--focus-ring);
+  outline: 2px solid var(--amber-bright); outline-offset: 2px;
 }

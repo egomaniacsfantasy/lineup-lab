@@ -945,3 +945,7 @@
   background: color-mix(in srgb, var(--amber) 22%, transparent);
   color: var(--text-amber);
 }
+
+.trade-display__tPrimary:not(:disabled):active {
+  transform: translateY(1px);
+}

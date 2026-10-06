@@ -364,3 +364,7 @@
   .ldb__ghost-meta,
   .ldb__pulse { animation: none; }
 }
+
+.ldb__open:active {
+  transform: translateY(1px);
+}

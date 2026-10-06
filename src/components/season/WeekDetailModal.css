@@ -18,6 +18,7 @@
      and scroll inside instead. */
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   background: var(--bg-surface);

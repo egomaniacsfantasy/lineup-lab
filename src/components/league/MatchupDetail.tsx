@@ -15,6 +15,7 @@ import { useOddsFormat } from '../../contexts/OddsFormatContext';
 import { PlayerHeadshot } from '../player/PlayerHeadshot';
 import { TeamCrest } from '../matchup/TeamCrest';
 import { PlayerDistribution } from './PlayerDistribution';
+import { lockPageScroll } from '../../utils/lockPageScroll';
 import './MatchupDetail.css';
 /* The Hub's stylesheet, borrowed on purpose.
  *
@@ -106,13 +107,7 @@ export function MatchupDetail({
 
   /* The page behind must not scroll while this is over it, or dismissing the
      dialog returns you somewhere other than where you opened it. */
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
+  useEffect(() => lockPageScroll(), []);
 
   /* preventScroll, and then explicitly at the top.
    *

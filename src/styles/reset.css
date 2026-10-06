@@ -16,7 +16,7 @@ body {
   font-family: var(--font-sans);
   background-color: var(--bg);
   color: var(--text-primary);
-  min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
 }
 
@@ -43,6 +43,10 @@ img {
   display: block;
 }
 
+a, button, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
 input, select, textarea {
   font-family: inherit;
   font-size: inherit;
@@ -50,7 +54,6 @@ input, select, textarea {
   color: inherit;
   background: none;
   border: none;
-  outline: none;
 }
 
 /* ---------------------------------------------------------------------------

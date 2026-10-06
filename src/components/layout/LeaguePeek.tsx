@@ -69,9 +69,9 @@ export function LeaguePeek({
         <SimulationLoader
           label="Pricing"
           messages={[
-            'Finding your league...',
-            'Running the season...',
-            'Setting the price...',
+            'Finding your league…',
+            'Running the season…',
+            'Setting the price…',
           ]}
           size="compact"
           variant="scan"
@@ -269,10 +269,11 @@ export function LeaguePeek({
           id="peek-username"
           onChange={(event) => setUsername(event.target.value)}
           placeholder="Your Sleeper username"
+          required
           spellCheck={false}
           value={username}
         />
-        <button className="league-peek__go" disabled={username.trim().length === 0} type="submit">
+        <button className="league-peek__go" type="submit">
           Price my league
         </button>
         {stage.name === 'failed' ? (

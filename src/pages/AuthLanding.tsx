@@ -107,7 +107,7 @@ export function AuthLanding() {
     <div className="auth-landing">
       <div className="auth-landing__inner">
         <section className="auth-landing__panel">
-          <img alt="" className="auth-landing__mark" src="/og-logo.png" />
+          <img alt="" className="auth-landing__mark" fetchPriority="high" height={1254} src="/og-logo.png" width={1254} />
           <h1 className="auth-landing__wordmark">ODDS GODS</h1>
           {fromPeek ? (
             <p className="auth-landing__context">
@@ -149,8 +149,11 @@ export function AuthLanding() {
               <input
                 autoComplete="email"
                 className="auth-landing__input"
+                inputMode="email"
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@email.com"
+                required
+                spellCheck={false}
                 type="email"
                 value={email}
               />
@@ -160,8 +163,10 @@ export function AuthLanding() {
               <input
                 autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 className="auth-landing__input"
+                minLength={mode === 'signup' ? 6 : undefined}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                required
                 type="password"
                 value={password}
               />
@@ -169,9 +174,12 @@ export function AuthLanding() {
 
             {error ? <p className="auth-landing__error">{error}</p> : null}
 
+            {/* Live until the request starts. The fields carry the
+                validation, so an empty form says what is missing instead of
+                showing a button that looks broken. */}
             <button
               className="auth-landing__submit"
-              disabled={busy || !email || !password}
+              disabled={busy}
               type="submit"
             >
               {busy

@@ -62,7 +62,7 @@ interface GlossProps {
 export function Gloss({ term, children }: GlossProps) {
   const gloss = GLOSSES[term];
   const id = useId();
-  const triggerRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [placement, setPlacement] = useState<'above' | 'below'>('below');
@@ -117,7 +117,7 @@ export function Gloss({ term, children }: GlossProps) {
         .join(' ')}
       onMouseLeave={close}
     >
-      <span
+      <button
         aria-describedby={isOpen ? id : undefined}
         className="gloss__trigger"
         onBlur={close}
@@ -127,10 +127,10 @@ export function Gloss({ term, children }: GlossProps) {
         }}
         onMouseEnter={openWithDelay}
         ref={triggerRef}
-        tabIndex={0}
+        type="button"
       >
         {children}
-      </span>
+      </button>
       {isOpen ? (
         <span className="gloss__tooltip" id={id} role="tooltip">
           <span className="gloss__label">{gloss.label}</span>

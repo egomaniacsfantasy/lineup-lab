@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useUrlParamState } from '../hooks/useUrlParamState';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { LeagueFutures } from '../components/league/LeagueFutures';
@@ -149,7 +150,12 @@ export function LeaguePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [showWizard, setShowWizard] = useState(false);
   const [manualFlow, setManualFlow] = useState<ConnectFlow>('none');
-  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  /* The open week detail is mirrored to the URL beside the view, so a reload
+     or a shared link opens on the same week. */
+  const [weekParam, setWeekParam] = useUrlParamState('week');
+  const parsedWeek = Number(weekParam);
+  const selectedWeek = weekParam != null && Number.isInteger(parsedWeek) && parsedWeek > 0 ? parsedWeek : null;
+  const setSelectedWeek = (week: number | null) => setWeekParam(week == null ? null : String(week));
   const { user } = useAuth();
   const isAdmin = isAgreementAdmin(user?.email);
   const requestedView = parseLeagueView(searchParams.get('view'));
@@ -542,7 +548,7 @@ export function LeaguePage() {
               <p className="connect-page__kicker">
                 {isReconnectState ? 'Reconnect your league' : 'Welcome to Odds Gods'}
               </p>
-              <h1 className="connect-page__title">Choose a provider</h1>
+              <h2 className="connect-page__title">Choose a provider</h2>
             </section>
 
             <div className="connect-page__providers">

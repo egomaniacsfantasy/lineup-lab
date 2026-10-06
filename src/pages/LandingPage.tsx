@@ -122,7 +122,7 @@ function Window({
           top of it, so it is drawn at the size that makes it one. It is also
           what spins while the league is priced: the dice are literally the
           thing that rolls ten thousand times. */}
-      <img alt="" className={styles.mark} src={mark} />
+      <img alt="" className={styles.mark} fetchPriority="high" height={512} src={mark} width={512} />
       <p className={styles.wordmark}>Odds Gods</p>
 
       {/* Two tiers, because the sentence has two jobs.
@@ -159,10 +159,11 @@ function Window({
           onChange={(event) => setUsername(event.target.value)}
           placeholder="Your Sleeper username"
           ref={inputRef}
+          required
           spellCheck={false}
           value={username}
         />
-        <button className={styles.go} disabled={username.trim().length === 0} type="submit">
+        <button className={styles.go} type="submit">
           Price my league
         </button>
       </form>
@@ -207,7 +208,7 @@ function EspnDoor({ onBack }: { onBack: () => void }) {
      is the difference between a hurdle and a door. */
   return (
     <section className={styles.window}>
-      <img alt="" className={styles.markSmall} src={mark} />
+      <img alt="" className={styles.markSmall} height={512} src={mark} width={512} />
       <h1 className={styles.headline}>ESPN leagues connect after you make an account.</h1>
       <p className={styles.espnCopy}>
         It takes about two minutes and needs a computer, because ESPN requires a
@@ -245,7 +246,7 @@ function Pricing() {
   return (
     <section aria-busy="true" className={styles.window} role="status">
       {/* The same mark, rolling. */}
-      <img alt="" className={`${styles.mark} ${styles.markRolling}`} src={mark} />
+      <img alt="" className={`${styles.mark} ${styles.markRolling}`} height={512} src={mark} width={512} />
       <p className={styles.wordmark}>Odds Gods</p>
       <p className={styles.pricingLine}>{PRICING_LINES[index]}...</p>
     </section>
@@ -265,7 +266,7 @@ function WhichLeague({
 }) {
   return (
     <section className={styles.window}>
-      <img alt="" className={styles.markSmall} src={mark} />
+      <img alt="" className={styles.markSmall} height={512} src={mark} width={512} />
       <h1 className={styles.headline}>Which one is yours, {user}?</h1>
       <ul className={styles.leagues}>
         {leagues.map((league) => (
@@ -290,7 +291,7 @@ function Book({ league, username }: { league: PeekLeague; username: string }) {
   return (
     <section className={styles.book}>
       <header className={styles.bookHead}>
-        <img alt="" className={styles.markSmall} src={mark} />
+        <img alt="" className={styles.markSmall} height={512} src={mark} width={512} />
         <p className={styles.bookLeague}>{league.name}</p>
       </header>
 

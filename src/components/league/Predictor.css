@@ -280,7 +280,6 @@
 .predictor__score-input:focus {
   border-color: var(--amber);
   background: var(--bg);
-  outline: none;
 }
 
 /* The stepper arrows are noise on a field whose sensible values are all three
@@ -587,7 +586,7 @@
   text-transform: uppercase;
 }
 
-.predictor__weekselect:focus-visible { outline: var(--focus-ring); }
+.predictor__weekselect:focus-visible { outline: 2px solid var(--amber-bright); outline-offset: 2px; }
 
 .predictor__weekcount {
   color: var(--text-dim);
@@ -782,4 +781,9 @@
   .predictor__consequences-head .predictor__num:nth-of-type(2) {
     display: none;
   }
+}
+
+.predictor__weekselect option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
 }
