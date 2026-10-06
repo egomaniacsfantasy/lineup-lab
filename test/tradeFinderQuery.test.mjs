@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getAcceptanceLingo } from '../src/utils/acceptanceLingo.ts';
 import {
   ANY_PICK,
   DEFAULT_MAX_PARTNER_LOSS,
@@ -24,7 +23,6 @@ import {
   DEFAULT_LIMITS,
   LOPSIDED_PPG,
   NOISE_PP,
-  acceptanceWord,
   boardMatches,
   groupDeals,
   headlinePlayer,
@@ -163,11 +161,10 @@ test('picked shapes keep only those package sizes', () => {
 });
 
 test('the keep rule and ranking are the trade sender\'s, not an acceptance estimate', () => {
-  /* Opens on every deal that helps you at all and costs the other side no
-     title odds: deals that lift both sides, which is what the product claims
-     to find. The limits sheet loosens it. */
+  /* Opens on every deal that helps you at all and costs the other side at
+     most 2 points of title odds. The limits sheet changes it. */
   assert.equal(DEFAULT_MIN_GAIN, 0);
-  assert.equal(DEFAULT_MAX_PARTNER_LOSS, 0);
+  assert.equal(DEFAULT_MAX_PARTNER_LOSS, 2);
   const deal = (youDelta, partnerDelta) => ({ suggestion: { youDelta, partnerDelta } });
   /* Kept only if your title odds rise at least X and theirs fall at most Y. */
   assert.equal(passesLimits({ youDelta: 2.1, partnerDelta: -1.2 }, 1, 3), true);
@@ -314,7 +311,7 @@ test('deals group under the player you would land, best package first', () => {
 test('under a point of title odds is a tie, and the default limits lift both sides', () => {
   assert.equal(withinNoise(0.9), true);
   assert.equal(withinNoise(NOISE_PP), false);
-  assert.deepEqual(DEFAULT_LIMITS, { minGain: 0, maxLoss: 0, hideLopsided: true, maxGiveUp: null });
+  assert.deepEqual(DEFAULT_LIMITS, { minGain: 0, maxLoss: 2, hideLopsided: true, maxGiveUp: null });
 });
 
 test('a robbery of a team that is out is caught on roster value, not title odds', () => {
@@ -328,11 +325,14 @@ test('a robbery of a team that is out is caught on roster value, not title odds'
   assert.equal(standingOf(5), 'out');
   assert.equal(standingOf(40), 'bubble');
   assert.equal(standingOf(80), 'contender');
-  /* The words come from the shared band map, never from here. */
-  assert.equal(acceptanceWord(true, 90).tone, 'bad', 'a lopsided deal reads as a no whatever the model says');
-  assert.deepEqual(acceptanceWord(true, 90), { word: getAcceptanceLingo(35).label, tone: 'bad' });
-  assert.deepEqual(acceptanceWord(false, 72), { word: getAcceptanceLingo(72).label, tone: 'good' });
-  assert.deepEqual(acceptanceWord(false, null), { word: 'Unread', tone: 'neutral' });
+});
+
+test('the finder shows no acceptance estimate anywhere', async () => {
+  const { readFile } = await import('node:fs/promises');
+  for (const file of ['src/components/trade/TradeFinder.tsx', 'src/components/trade/TradeAnalyzerPanel.tsx']) {
+    const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /acceptanceProbability|getAcceptanceLingo|acceptanceWord|take it|accept\?/, `${file} shows acceptance`);
+  }
 });
 
 test('sending a starter names who starts instead; sending a bench piece costs the lineup nothing', () => {

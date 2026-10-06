@@ -16,7 +16,6 @@ import {
   type TradeSuggestion,
 } from '../../services/leagueApi';
 import { tradeSignature } from '../../utils/tradeMarket';
-import { acceptanceProbability } from '../../utils/tradeAcceptance';
 import { deltaTone, signedPct } from '../../utils/tradeVerdict';
 import { formatProbOrOdds } from '../../utils/formatOdds';
 import {
@@ -26,7 +25,6 @@ import {
   FINDER_POSITIONS,
   FINDER_SHAPES,
   NOISE_PP,
-  acceptanceWord,
   boardMatches,
   buildOutlooks,
   deriveStartingPoints,
@@ -121,7 +119,6 @@ export interface TradeFinderProps {
 interface ResultEntry {
   suggestion: TradeSuggestion;
   signature: string;
-  acceptance: number | null;
   /** Roster value the other side gains per game; negative = gives up. */
   valueDelta: number;
   lopsided: boolean;
@@ -404,7 +401,6 @@ export function TradeFinder({
   const entries = useMemo<ResultEntry[]>(() => sourceSuggestions
     .filter((suggestion) => suggestion.youDelta > 0)
     .map((suggestion) => {
-      const read = readsByRoster[suggestion.partnerRosterId];
       const valueDelta = partnerValueDelta(suggestion, values);
       return {
         suggestion,
@@ -414,12 +410,11 @@ export function TradeFinder({
           givePlayerIds: suggestion.give.map((asset) => asset.id),
           getPlayerIds: suggestion.get.map((asset) => asset.id),
         }),
-        acceptance: read ? acceptanceProbability(suggestion.partnerDelta, read.friendliness, read.relationship) : null,
         valueDelta,
         lopsided: values != null && isLopsided(valueDelta),
       };
     })
-    .filter((entry) => !dismissedSignatures.has(entry.signature)), [dismissedSignatures, leagueId, readsByRoster, sourceSuggestions, values]);
+    .filter((entry) => !dismissedSignatures.has(entry.signature)), [dismissedSignatures, leagueId, sourceSuggestions, values]);
 
   const kept = useMemo(() => entries.filter((entry) =>
     passesLimits(entry.suggestion, limits.minGain, limits.maxLoss)
@@ -604,7 +599,7 @@ export function TradeFinder({
     const record = partner ? recordText(partner.record) : null;
     const gives = entry.valueDelta < 0 ? `gives up ${Math.abs(entry.valueDelta).toFixed(1)}` : `gains ${entry.valueDelta.toFixed(1)}`;
     if (standing === 'out') {
-      return `${name} is ${record ?? 'out'} and out of the race, so his title odds cannot move. On roster value he ${gives} a game.${entry.lopsided ? ' Expect a no.' : ''}`;
+      return `${name} is ${record ?? 'out'} and out of the race, so his title odds cannot move. On roster value he ${gives} a game.`;
     }
     if (standing === 'bubble') {
       return `${name} is ${record ?? 'on the bubble'} and fighting for a playoff spot. On roster value he ${gives} a game.`;
@@ -619,7 +614,6 @@ export function TradeFinder({
     const partner = partnerById.get(suggestion.partnerRosterId);
     const future = futuresByRoster.get(suggestion.partnerRosterId);
     const sub = positionSublines({ team: userTeam, players, playerMeans: values, rosterPositions: bootstrap.league.rosterPositions });
-    const word = acceptanceWord(group.best.lopsided, group.best.acceptance);
 
     /* One block per player, the same block on both sides: face, name, line,
        and the stat that matters for that side. */
@@ -705,24 +699,12 @@ export function TradeFinder({
             </span>
             <span className="trade-finder__who-meta">{values ? standingLine(group.best) : `${partner?.teamName ?? suggestion.partnerName}${future ? `, title ${formatProbOrOdds(future.titleProb)}` : ''}`}</span>
           </div>
-          <div className="trade-finder__open-number">
-            <span className="trade-finder__tag">Will he take it</span>
-            <span className={`trade-finder__word trade-finder__word--${word.tone}`}>{word.word}</span>
-            <span className="trade-finder__who-meta">
-              {group.best.lopsided
-                ? 'Lopsided on value. The analyzer can find the throw-in that evens it.'
-                : group.best.acceptance != null
-                  ? 'From your read on him and what the deal does to his side.'
-                  : 'No read on this manager yet.'}
-            </span>
-          </div>
         </div>
 
         <div className="trade-finder__open-foot">
           <div className="trade-finder__alts">
             <span className="trade-finder__tag">{group.others.length ? `${group.others.length} other ${group.others.length === 1 ? 'package' : 'packages'} for the same player` : 'The only package the book found for him'}</span>
             {group.others.map((other) => {
-              const otherWord = acceptanceWord(other.lopsided, other.acceptance);
               const give = orderAssets(other.suggestion.give, values);
               const get = orderAssets(other.suggestion.get, values);
               return (
@@ -735,9 +717,7 @@ export function TradeFinder({
                     <span>{give.map((asset) => surname(players[asset.id]?.name ?? asset.name)).join(' + ')}</span>
                     <span className="trade-finder__tag">{sizesLabel(suggestionSizes(other.suggestion))}</span>
                   </span>
-                  <span className={`trade-finder__num trade-finder__num--${deltaTone(other.suggestion.youDelta)}`}>{signedPct(other.suggestion.youDelta)}</span>
-                  <span className={`trade-finder__who-meta trade-finder__word--${otherWord.tone}`}>{otherWord.word}</span>
-                </button>
+                  <span className={`trade-finder__num trade-finder__num--${deltaTone(other.suggestion.youDelta)}`}>{signedPct(other.suggestion.youDelta)}</span>                </button>
               );
             })}
           </div>

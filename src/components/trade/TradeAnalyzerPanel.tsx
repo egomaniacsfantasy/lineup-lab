@@ -1,15 +1,11 @@
 import { type TradeAnalysis, type TradeSideDelta, type TradeValueLine } from '../../services/leagueApi';
-import { getAcceptanceLingo } from '../../utils/acceptanceLingo';
-import { acceptanceProbability } from '../../utils/tradeAcceptance';
 import { displayedDelta, displayedValue } from '../../utils/displayDelta';
 
 /**
  * Season-simulation impact for the trade being built in the Deals "Build a
  * trade" panel. Everything DISPLAYED (Δ championship %, playoff %, exp wins,
- * seed, and the Overpay/Fair/Steal verdict) comes purely from the sim + the
- * players in the trade, independent of the sliders. The per-manager
- * friendliness/relationship read (set on the manager card) feeds ONLY the
- * "Will they accept?" logistic; it never touches the championship numbers.
+ * seed, the value line and the Overpay/Fair/Steal verdict) comes purely from
+ * the sim + the players in the trade. No acceptance estimate is shown.
  */
 
 
@@ -29,15 +25,14 @@ export function TradeAnalyzerPanel({
   analysis,
   analyzing,
   error,
-  friendliness,
-  relationship,
   showVerdict = true,
 }: {
   analysis: TradeAnalysis | null;
   analyzing: boolean;
   error: string | null;
-  friendliness: number;
-  relationship: number;
+  /** Unused since acceptance was removed; callers may still pass them. */
+  friendliness?: number;
+  relationship?: number;
   /** Retained for when the manager personas come back. */
   onEditRead?: () => void;
   showVerdict?: boolean;
@@ -49,10 +44,6 @@ export function TradeAnalyzerPanel({
 
   const ready = analysis?.available && analysis.you && analysis.partner;
   const v = ready ? verdict(analysis!.you!.delta.titleProb) : null;
-  const theirDelta = ready ? analysis!.partner!.delta.titleProb : 0;
-  const acceptPct = ready ? acceptanceProbability(theirDelta, friendliness, relationship) : 0;
-  const partnerName = ready ? analysis!.partner!.teamName : 'They';
-  const acceptance = getAcceptanceLingo(acceptPct);
   return (
     <div className="trade-analyzer-panel">
       {analyzing && !ready ? (
@@ -84,18 +75,6 @@ export function TradeAnalyzerPanel({
             </div>
           </div>
           ) : null}
-
-          <div className="trade-analyzer-panel__accept">
-            <div className="trade-analyzer-panel__accept-top">
-              <span className="trade-analyzer-panel__accept-label">Will {partnerName} accept?</span>
-              <span className="trade-analyzer-panel__accept-pct">{acceptPct}%</span>
-              <span className="trade-analyzer-panel__accept-band">{acceptance?.label ?? ''}</span>
-            </div>
-            {/* The manager personas are hidden for now. Friendliness and
-                relationship still feed acceptance at their neutral defaults;
-                what is gone is asking a first-time user to hand-tune two dials
-                they have no way to have an opinion about yet. */}
-          </div>
 
           <Results
             result={analysis!}

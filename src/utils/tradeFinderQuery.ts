@@ -1,5 +1,4 @@
 import type { ApiCatalogPlayer, ApiTeam, TradeSuggestion } from '../services/leagueApi';
-import { getAcceptanceLingo, type AcceptanceLingoTone } from './acceptanceLingo.ts';
 
 /**
  * The finder's ticket: one question with three blanks and a shape.
@@ -111,9 +110,9 @@ export const EMPTY_QUERY: FinderQuery = {
    that helps you at all (minimum 0), with the sender's default limit on what the
    other side gives up, so the board is not led by robberies nobody would take. */
 export const DEFAULT_MIN_GAIN = 0;
-/* Zero: the other side gives up no title odds, which is "deals that lift both
-   sides", the thing the product claims to find. The sheet can loosen it. */
-export const DEFAULT_MAX_PARTNER_LOSS = 0;
+/* The other side's title odds fall at most 2 points by default. The sheet can
+   tighten or loosen it. */
+export const DEFAULT_MAX_PARTNER_LOSS = 2;
 
 /** The limits the board applies, kept behind a button. They reset with the ask. */
 export interface FinderLimits {
@@ -727,17 +726,6 @@ export const LOPSIDED_PPG = 4;
  */
 export function isLopsided(valueDelta: number) {
   return valueDelta <= -LOPSIDED_PPG;
-}
-
-/**
- * A lopsided deal is a no; otherwise the acceptance model's word, read from
- * the one band map so the vocabulary cannot drift (a lopsided deal borrows
- * the band a 35% read falls in rather than naming it here).
- */
-export function acceptanceWord(lopsided: boolean, acceptance: number | null): { word: string; tone: AcceptanceLingoTone } {
-  const band = getAcceptanceLingo(lopsided ? 35 : acceptance);
-  if (!band) return { word: 'Unread', tone: 'neutral' };
-  return { word: band.label, tone: band.tone };
 }
 
 /**
