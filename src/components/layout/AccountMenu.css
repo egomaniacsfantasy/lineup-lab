@@ -360,6 +360,59 @@
   opacity: 1;
 }
 
+.account-menu__row-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+}
+
+/* Pin a league to the top. Quiet until the row is hovered, like remove, and
+   always showing once it is on: a pin you cannot see is not a pin. */
+.account-menu__league-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-3);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.account-menu__league-pin svg {
+  width: 14px;
+  height: 14px;
+}
+
+.account-menu__league-row:hover .account-menu__league-pin,
+.account-menu__league-pin:focus-visible,
+.account-menu__league-pin--on {
+  opacity: 1;
+}
+
+.account-menu__league-pin:hover {
+  color: var(--text-primary);
+}
+
+.account-menu__league-pin--on,
+.account-menu__league-pin--on:hover {
+  color: var(--text-amber);
+}
+
+/* A finger has no hover, so both tools were unreachable on a phone. */
+@media (hover: none) {
+  .account-menu__league-pin,
+  .account-menu__league-remove {
+    opacity: 1;
+  }
+}
+
 .account-menu__league-remove:hover {
   color: var(--red);
 }

@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
+import { LeagueChecklist } from './LeagueChecklist';
 import { consumePendingSleeper } from '../../utils/pendingSleeper';
 import {
   connectUsername,
@@ -15,12 +17,6 @@ import { isLeaguePreDraft } from '../../utils/preDraft';
 interface ConnectWizardProps {
   onConnected: (connection: StoredConnection) => void;
 }
-
-const SCORING_LABELS: Record<string, string> = {
-  ppr: 'PPR',
-  'half-ppr': 'Half PPR',
-  standard: 'Standard',
-};
 
 type Step =
   | { name: 'username' }
@@ -48,6 +44,14 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
   const [username, setUsername] = useState(() => consumePendingSleeper());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Sleeper leagues already in the switcher. Shown ticked and locked rather
+     than hidden, so somebody adding a league can see what they already have
+     and is not offered the same one twice. */
+  const { leagues: connected } = useLeagueConnection();
+  const alreadyHere = useMemo(
+    () => new Set(connected.filter((league) => league.provider === 'sleeper').map((league) => league.leagueId)),
+    [connected],
+  );
 
   const resolveUsername = async () => {
     if (username.trim().length === 0 || isLoading) return;
@@ -156,35 +160,18 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
             {step.leagues.length === 1 ? '1 league' : `${step.leagues.length} leagues`}
           </p>
           <p className="connect-wizard__step-hint">
-            Pick the ones you want priced. You can add the rest later.
+            Tick the ones you want here. The rest stay out of your way, and you can add
+            or remove any of them later.
           </p>
 
-          {step.leagues.map((league) => {
-            const isOn = selected.has(league.id);
-            return (
-              <button
-                aria-pressed={isOn}
-                className={['connect-wizard__league-row', isOn ? 'connect-wizard__league-row--on' : '']
-                  .filter(Boolean)
-                  .join(' ')}
-                disabled={isLoading}
-                key={league.id}
-                onClick={() => toggle(league.id)}
-                type="button"
-              >
-                <span aria-hidden="true" className="connect-wizard__tick">
-                  {isOn ? '✓' : ''}
-                </span>
-                <span className="connect-wizard__league-name">{league.name}</span>
-                <span className="connect-wizard__league-meta">
-                  {league.totalTeams} teams
-                  <span className="connect-wizard__scoring-badge">
-                    {SCORING_LABELS[league.scoringFamily]}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
+          <LeagueChecklist
+            disabled={isLoading}
+            leagues={step.leagues}
+            locked={alreadyHere}
+            lockedLabel="Already here"
+            onToggle={toggle}
+            selected={selected}
+          />
 
           <div className="connect-wizard__pick-actions">
             <button
@@ -193,7 +180,9 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
               onClick={() =>
                 void pickLeagues(
                   step.user,
-                  step.leagues.filter((league) => selected.has(league.id)),
+                  step.leagues.filter(
+                    (league) => selected.has(league.id) && !alreadyHere.has(league.id),
+                  ),
                 )
               }
               type="button"

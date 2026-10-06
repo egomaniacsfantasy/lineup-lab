@@ -21,6 +21,7 @@ import {
   type LeagueBootstrap,
   type LeaguePricing,
   type LineHistoryEntry,
+  type ProviderUser,
   type ScheduleWeek,
   apiUrl,
 } from '../services/leagueApi';
@@ -39,6 +40,13 @@ import {
   sameLeagueList,
   type DbLeagueRow,
 } from './leagueRows';
+import {
+  orderLeagues,
+  prunePinnedKeys,
+  readPinnedKeys,
+  togglePinnedKey,
+  writePinnedKeys,
+} from './leagueSelection';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
@@ -189,8 +197,27 @@ function applyApiContext(connection: StoredConnection | null) {
 
 interface LeagueConnectionValue {
   stored: StoredConnection | null;
-  /** Every league saved to this account; `stored` is the active one. */
+  /** Every league saved to this account, pinned ones first; `stored` is the
+   *  active one. */
   leagues: StoredConnection[];
+  /** Keys of the leagues pinned to the top of the switcher, in pin order. */
+  pinnedKeys: string[];
+  togglePin: (league: StoredConnection) => void;
+  /** The Sleeper username behind this account's leagues, when there is one. */
+  sleeperUsername: string | null;
+  /** The sheet where you tick which Sleeper leagues appear. `firstRun` is the
+   *  arrival from the anonymous peek, which closes itself when the account
+   *  only has the one league. */
+  leaguePicker: { open: boolean; firstRun: boolean };
+  openLeaguePicker: (options?: { firstRun?: boolean }) => void;
+  closeLeaguePicker: () => void;
+  /** Add and remove Sleeper leagues in one pass, without changing which
+   *  league is open unless the open one was removed. */
+  applySleeperSelection: (selection: {
+    user: ProviderUser;
+    add: ApiLeagueSummary[];
+    removeIds: string[];
+  }) => void;
   bootstrap: LeagueBootstrap | null;
   schedule: ScheduleWeek[] | null;
   pricing: LeaguePricing | null;
@@ -521,6 +548,8 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   /* Leagues removed in this session. See removeLeague: the row delete is async
      and the hydrate that follows would otherwise restore what was just removed. */
   const removedKeysRef = useRef<Set<string>>(readRemovedKeys());
+  const [pinnedKeys, setPinnedKeys] = useState<string[]>(readPinnedKeys);
+  const [leaguePicker, setLeaguePicker] = useState({ open: false, firstRun: false });
   const lastHydrateKeyRef = useRef<string | null>(null);
   const pricingRef = useRef<LeaguePricing | null>(null);
   const marketScanPromiseRef = useRef<Promise<LeaguePricing | null> | null>(null);
@@ -1113,6 +1142,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     }
 
     setLeagues(remaining);
+    /* A pin for a league that is gone would silently re-pin it if it were
+       ever added back. */
+    setPinnedKeys((current) => {
+      const pruned = prunePinnedKeys(current, remaining);
+      if (pruned.length === current.length) return current;
+      writePinnedKeys(pruned);
+      return pruned;
+    });
 
     const next = remaining[0] ?? null;
     if (next) {
@@ -1139,6 +1176,145 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   }, [leagues, activateLocal]);
 
   const disconnect = useCallback(() => removeLeague(stored), [removeLeague, stored]);
+
+  const togglePin = useCallback((league: StoredConnection) => {
+    setPinnedKeys((current) => {
+      const next = togglePinnedKey(current, leagueKey(league));
+      writePinnedKeys(next);
+      return next;
+    });
+  }, []);
+
+  const openLeaguePicker = useCallback((options?: { firstRun?: boolean }) => {
+    setLeaguePicker({ open: true, firstRun: Boolean(options?.firstRun) });
+  }, []);
+  const closeLeaguePicker = useCallback(
+    () => setLeaguePicker({ open: false, firstRun: false }),
+    [],
+  );
+
+  /**
+   * Save the ticks from the league sheet.
+   *
+   * `connect` adds a league and opens it, and `removeLeague` drops one at a
+   * time from a list captured when it was created, so calling it in a loop
+   * keeps only the last removal. Curating the list is neither: several
+   * leagues come and go at once and the one you are looking at stays open
+   * unless it was one of the ones unticked.
+   */
+  const applySleeperSelection = useCallback(
+    ({ user: sleeperUser, add, removeIds }: {
+      user: ProviderUser;
+      add: ApiLeagueSummary[];
+      removeIds: string[];
+    }) => {
+      const removeKeys = new Set(
+        removeIds.map((id) => leagueKey({ provider: 'sleeper', leagueId: id })),
+      );
+      const removing = leagues.filter((league) => removeKeys.has(leagueKey(league)));
+      const base: StoredConnection = {
+        provider: 'sleeper',
+        leagueId: '',
+        userId: sleeperUser.id,
+        username: sleeperUser.username,
+        displayName: sleeperUser.displayName,
+        allLeagueIds: [],
+        espnS2: null,
+        swid: null,
+      };
+      const adding = add
+        .map((league) => {
+          const summary = { id: league.id, name: league.name, season: league.season };
+          return connectionFromSummary(base, summary, [summary]);
+        })
+        .filter((connection) => !leagues.some((league) => leagueKey(league) === leagueKey(connection)));
+      if (removing.length === 0 && adding.length === 0) return;
+
+      /* Same tombstones removeLeague writes, and the same un-tombstoning
+         connect does, so a league ticked back on is not filtered out by a
+         note about having once been removed. */
+      for (const connection of adding) removedKeysRef.current.delete(leagueKey(connection));
+      for (const connection of removing) removedKeysRef.current.add(leagueKey(connection));
+      writeRemovedKeys(removedKeysRef.current);
+
+      const next = [
+        ...leagues.filter((league) => !removeKeys.has(leagueKey(league))),
+        ...adding,
+      ];
+      rememberLeagueNames(next);
+      setLeagues(next);
+      setPinnedKeys((current) => {
+        const pruned = prunePinnedKeys(current, next);
+        if (pruned.length === current.length) return current;
+        writePinnedKeys(pruned);
+        return pruned;
+      });
+
+      const accountId = userIdRef.current;
+      const saved: Promise<unknown> = accountId && adding.length > 0
+        ? upsertRows(adding.map((connection) => leagueRow(accountId, connection, false)))
+            .catch(() => undefined)
+        : Promise.resolve();
+      if (accountId) {
+        for (const gone of removing) {
+          void supabase
+            .from('olympus_leagues')
+            .delete()
+            .eq('user_id', accountId)
+            .eq('provider', gone.provider)
+            .eq('league_id', gone.leagueId)
+            .then(({ error: deleteError }) => {
+              if (deleteError) return;
+              removedKeysRef.current.delete(leagueKey(gone));
+              writeRemovedKeys(removedKeysRef.current);
+            });
+        }
+      }
+
+      const activeRemoved = stored != null && removeKeys.has(leagueKey(stored));
+      if (stored && !activeRemoved) return;
+
+      const fallback = next[0] ?? null;
+      if (fallback) {
+        /* Wait for the new rows before switching. Activating changes
+           `stored`, which re-reads the account, and a row that has not landed
+           yet would be missing from the list that read rebuilds. */
+        void saved.then(() => {
+          activateLocal(fallback);
+          if (userIdRef.current) void activateLeagueRow(userIdRef.current, fallback);
+        });
+        return;
+      }
+
+      applyApiContext(null);
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+      setStored(null);
+      setBootstrap(null);
+      setSchedule(null);
+      setPricing(null);
+      setPricingMeta(EMPTY_PRICING_META);
+      setLineHistory(null);
+      setError(null);
+      setErrorIsRetryable(false);
+    },
+    [activateLocal, leagues, stored],
+  );
+
+  /* The switcher's order: pinned first. The raw list keeps its own order,
+     because the hydrate compares it by index to decide whether anything
+     changed, and a list that reshuffles under it would never settle. */
+  const orderedLeagues = useMemo(() => orderLeagues(leagues, pinnedKeys), [leagues, pinnedKeys]);
+  const sleeperUsername = useMemo(
+    () =>
+      (stored?.provider === 'sleeper' && stored.username ? stored.username : null)
+      ?? leagues.find((league) => league.provider === 'sleeper' && league.username)?.username
+      ?? null,
+    [leagues, stored],
+  );
 
   /* Forget the team and drop the league out of the active slot. The connect
      flow already draws the picker for an ESPN league with nothing confirmed,
@@ -1288,7 +1464,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const value = useMemo(
     () => ({
       stored,
-      leagues,
+      leagues: orderedLeagues,
+      pinnedKeys,
+      togglePin,
+      sleeperUsername,
+      leaguePicker,
+      openLeaguePicker,
+      closeLeaguePicker,
+      applySleeperSelection,
       bootstrap,
       schedule,
       pricing,
@@ -1313,7 +1496,14 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     }),
     [
       stored,
-      leagues,
+      orderedLeagues,
+      pinnedKeys,
+      togglePin,
+      sleeperUsername,
+      leaguePicker,
+      openLeaguePicker,
+      closeLeaguePicker,
+      applySleeperSelection,
       bootstrap,
       schedule,
       pricing,

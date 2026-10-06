@@ -283,12 +283,12 @@ export function usePeek(area: string) {
               userId: user.id,
               username: account?.username ?? user.name,
               displayName: user.name,
-              allLeagueIds: (account?.leagues ?? [league]).map((entry) => entry.id),
-              allLeagues: (account?.leagues ?? [league]).map((entry) => ({
-                id: entry.id,
-                name: entry.name,
-                season: entry.season,
-              })),
+              /* The league that was looked at, and only that one. This used
+                 to carry every league on the Sleeper account, so picking one
+                 league to see priced and then signing up filled the switcher
+                 with all of them. The rest are offered on a sheet you tick. */
+              allLeagueIds: [league.id],
+              allLeagues: [{ id: league.id, name: league.name, season: league.season }],
               season: league.season ?? account?.season ?? undefined,
             },
             you,

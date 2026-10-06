@@ -94,6 +94,51 @@
   background: color-mix(in srgb, var(--amber) 10%, rgba(13, 15, 17, 0.78));
 }
 
+.mobile-hub__league-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px;
+}
+
+.mobile-hub__league-option {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The league already open: you, so amber. */
+.mobile-hub__league-option--open {
+  color: var(--text-amber);
+  font-weight: 700;
+}
+
+.mobile-hub__league-option--manage {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.mobile-hub__league-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  min-height: 46px;
+  border: 0;
+  background: rgba(13, 15, 17, 0.78);
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.mobile-hub__league-pin svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mobile-hub__league-pin--on {
+  color: var(--text-amber);
+}
+
 /* ── this week ────────────────────────────────────────────────────────── */
 
 .mobile-hub__game {

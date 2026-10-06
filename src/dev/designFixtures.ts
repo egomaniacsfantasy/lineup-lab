@@ -1242,14 +1242,30 @@ const BUNDLES = new Map<string, FixtureBundle>([
   [FIXTURE_IDS.league, buildBundle(FIXTURE_IDS.league, 'live')],
 ]);
 
+/**
+ * ?sleeper makes the fixture league a Sleeper one under the reserved handle.
+ *
+ * Choosing which Sleeper leagues appear, and adding more later, both hang off
+ * a Sleeper username: without one the entry to the league sheet is not drawn
+ * at all. The fixture league is an ESPN connection, so that whole surface
+ * was unreachable by hand and untestable. With the flag the connection
+ * carries the handle the fixture's /api/connect already answers to, and that
+ * answer grows two more leagues with ids of their own (see below), so a tick
+ * list has something to add that is not the league already open.
+ */
+function designSleeper() {
+  return typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).has('sleeper');
+}
+
 export function connectionForDesignScene(scene: DesignScene): StoredConnection {
   const leagueId = FIXTURE_IDS[scene];
   return {
-    provider: 'espn',
+    provider: designSleeper() ? 'sleeper' : 'espn',
     leagueId,
     leagueName: 'Odds Gods Design Replay',
     userId: 'andre-design-user',
-    username: 'andre',
+    username: designSleeper() ? DESIGN_HANDLE : 'andre',
     displayName: 'Andre',
     allLeagueIds: [leagueId],
     allLeagues: [{ id: leagueId, name: 'Odds Gods Design Replay', season: '2026' }],
@@ -1313,6 +1329,46 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
   const parts = url.pathname.split('/').filter(Boolean);
   if (parts[0] !== 'api') return null;
 
+  /* The board's rows, on the Trades scene only.
+     The finder's picker values a player by rest-of-season points per game,
+     which it reads off the board. Nothing here answered /api/rankings, so on
+     the fixture that request fell through to a dead proxy and the picker
+     quietly fell back to this week's number: the one state the change exists
+     to replace was the only state the fixture could show. Every other week
+     projects 80% of week 8 here, so the two figures are never equal and a
+     test can tell which one is on screen. Scoped to this scene because the
+     Board's own tests want the real sheet behind a real API. */
+  if (parts[1] === 'rankings' && window.location.pathname.startsWith('/design/market')) {
+    const rankings = ALL_PLAYER_IDS
+      .map((id) => {
+        const weekEight = getWeek8ReplayProjection(id);
+        const weekly: Record<string, number> = {};
+        for (let week = 1; week <= 17; week += 1) {
+          weekly[String(week)] = Number((week === WEEK ? weekEight : weekEight * 0.8).toFixed(2));
+        }
+        const remaining = Object.entries(weekly)
+          .filter(([week]) => Number(week) >= WEEK)
+          .reduce((total, [, points]) => total + points, 0);
+        return {
+          playerId: id,
+          name: PLAYER_CATALOG[id]?.name ?? id,
+          position: PLAYER_CATALOG[id]?.position ?? '',
+          team: PLAYER_CATALOG[id]?.team ?? '',
+          mean: Number(weekEight.toFixed(2)),
+          stdev: null,
+          floor: null,
+          ceiling: null,
+          seasonTotal: Number(remaining.toFixed(2)),
+          weekly,
+          tier: null,
+          derived: false,
+        };
+      })
+      .sort((a, b) => b.mean - a.mean)
+      .map((row, index) => ({ rank: index + 1, ...row }));
+    return { available: true, version: 'design', source: 'Odds Gods model', rankings };
+  }
+
   /* The phone's front door: a Sleeper username with no account behind it.
      Answering it here is what makes that screen designable and testable at
      all, the same gap that hid the Predictor's waiting state for weeks. Only
@@ -1321,6 +1377,33 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
   if (parts[1] === 'connect') {
     if (decodeURIComponent(parts[2] ?? '').toLowerCase() !== DESIGN_HANDLE) return null;
     await new Promise((resolve) => setTimeout(resolve, 700));
+    if (designSleeper()) {
+      /* The scene's own league first, so the sheet shows the open league
+         ticked, then two the account does not have yet. Their ids resolve to
+         no bundle on purpose: this fixture is for ticking leagues on and off
+         the list, not for opening them. */
+      const scene = window.location.pathname.split('/')[2] as DesignScene | undefined;
+      const sceneLeagueId = (scene && FIXTURE_IDS[scene]) || FIXTURE_IDS.league;
+      const entry = (id: string, name: string, totalTeams: number, scoringFamily: 'ppr' | 'half-ppr' | 'standard') => ({
+        id,
+        providerId: id,
+        name,
+        season: '2026',
+        totalTeams,
+        scoringFamily,
+        hasCustomScoring: false,
+        status: 'in_season',
+      });
+      return {
+        user: { id: 'andre-design-user', username: DESIGN_HANDLE, displayName: 'Andre', avatarUrl: null },
+        season: '2026',
+        leagues: [
+          entry(sceneLeagueId, 'Odds Gods Design Replay', 6, 'ppr'),
+          entry(`${sceneLeagueId}-tartarus`, 'Tartarus Dynasty', 10, 'half-ppr'),
+          entry(`${sceneLeagueId}-elysium`, 'Elysium Best Ball', 12, 'standard'),
+        ],
+      };
+    }
     const leagueId = FIXTURE_IDS.league;
     const bundle = (BUNDLES.get(leagueId)
       ?? BUNDLES.get(leagueId.replace(SUCCESSOR_SUFFIX, '')))!;

@@ -78,7 +78,7 @@ Rendered tests use Playwright against a Vite dev server:
 - Design fixtures at `/design/:scene` render real pages against a fixed
   fixture league, and are how layout is tested deterministically. Query flags:
   `?staleSeason`, `?notRolledOver`, `?syncing`, `?dynasty`, `?multiLeague`,
-  `?private`, `?slowForks`, `?tour`, `?desktop=1|0`.
+  `?private`, `?slowForks`, `?tour`, `?sleeper`, `?desktop=1|0`.
 
 ## Numbers that matter
 

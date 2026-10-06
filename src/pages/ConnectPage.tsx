@@ -5,6 +5,7 @@
  */
 import { consumeEspnIdentityRecheck } from '../contexts/LeagueConnectionContext';
 import { consumePendingConnection } from '../utils/pendingSleeper';
+import { narrowToLeague } from '../contexts/leagueSelection';
 import { ProviderMark } from '../components/league/ProviderMark';
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -21,7 +22,7 @@ const buildStamp = typeof __BUILD_STAMP__ === 'string' ? __BUILD_STAMP__ : 'dev'
 const IDENTITY_RECHECK = consumeEspnIdentityRecheck();
 
 export function ConnectPage() {
-  const { stored, connect } = useLeagueConnection();
+  const { stored, connect, openLeaguePicker } = useLeagueConnection();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -41,8 +42,20 @@ export function ConnectPage() {
     if (stored) return;
     const pending = consumePendingConnection();
     if (!pending) return;
-    connect(pending);
-  }, [connect, stored]);
+    /* Narrowed on the way in as well as at the source: a connection written
+       by an older build still carries every league on the account, and it
+       can sit in storage across a deploy. */
+    connect(pending.provider === 'sleeper'
+      ? narrowToLeague(pending, {
+          id: pending.leagueId,
+          name: pending.leagueName ?? pending.allLeagues?.find((l) => l.id === pending.leagueId)?.name ?? 'Sleeper league',
+          season: pending.season,
+        })
+      : pending);
+    /* They looked at one league. Ask about the others once; the sheet closes
+       itself when there are none. */
+    if (pending.provider === 'sleeper') openLeaguePicker({ firstRun: true });
+  }, [connect, openLeaguePicker, stored]);
 
   // already connected — straight to the board
   if (stored) {

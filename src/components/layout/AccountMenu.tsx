@@ -35,8 +35,10 @@ function leagueLabel(league: StoredConnection, activeName?: string | null) {
  */
 export function AccountMenu() {
   const { user, signOut } = useAuth();
-  const { leagues, stored, bootstrap, switchLeague, removeLeague, changeEspnTeam, refresh, isLoading, error } =
-    useLeagueConnection();
+  const {
+    leagues, stored, bootstrap, switchLeague, removeLeague, changeEspnTeam, refresh, isLoading, error,
+    pinnedKeys, togglePin, sleeperUsername, openLeaguePicker,
+  } = useLeagueConnection();
   const navigate = useNavigate();
   const { start: startTour } = useTour();
   const [open, setOpen] = useState(false);
@@ -170,11 +172,13 @@ export function AccountMenu() {
                    cannot be opened until its team is picked here. It used to
                    look like every other row and simply not respond. */
                 const needsPick = needsEspnTeamPick(league);
+                const isPinned = pinnedKeys.includes(key);
                 return (
                   <div
                     className={[
                       'account-menu__league-row',
                       isActive ? 'account-menu__league-row--active' : '',
+                      isPinned ? 'account-menu__league-row--pinned' : '',
                     ].filter(Boolean).join(' ')}
                     key={key}
                   >
@@ -238,15 +242,42 @@ export function AccountMenu() {
                         </button>
                       </span>
                     ) : (
-                      <button
-                        aria-label={`Remove ${title}`}
-                        className="account-menu__league-remove"
-                        onClick={() => setConfirmRemove(key)}
-                        title={`Remove ${title}`}
-                        type="button"
-                      >
-                        ×
-                      </button>
+                      <span className="account-menu__row-tools">
+                        {/* Pinned leagues sit at the top of this list and of
+                            the phone switcher, in the order they were pinned. */}
+                        <button
+                          aria-label={isPinned ? `Unpin ${title}` : `Pin ${title} to the top`}
+                          aria-pressed={isPinned}
+                          className={[
+                            'account-menu__league-pin',
+                            isPinned ? 'account-menu__league-pin--on' : '',
+                          ].filter(Boolean).join(' ')}
+                          onClick={() => togglePin(league)}
+                          title={isPinned ? 'Unpin' : 'Pin to the top'}
+                          type="button"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            fill={isPinned ? 'currentColor' : 'none'}
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="1.7"
+                            viewBox="0 0 16 16"
+                          >
+                            <path d="M9.6 1.8l4.6 4.6-1.7.6-2.3 2.3.3 3.2-1 1-2.9-2.9-3.6 3.6M6.6 10.6L3.7 7.7l1-1 3.2.3 2.3-2.3.6-1.7" />
+                          </svg>
+                        </button>
+                        <button
+                          aria-label={`Remove ${title}`}
+                          className="account-menu__league-remove"
+                          onClick={() => setConfirmRemove(key)}
+                          title={`Remove ${title}`}
+                          type="button"
+                        >
+                          ×
+                        </button>
+                      </span>
                     )}
                   </div>
                 );
@@ -286,6 +317,24 @@ export function AccountMenu() {
                 </span>
               </button>
             ) : null}
+            {/* Sleeper returns every league an account is in. Which of them
+                appear here is a choice, and this is where it is changed. */}
+            {sleeperUsername ? (
+              <button
+                className="account-menu__action"
+                onClick={() => {
+                  setOpen(false);
+                  openLeaguePicker();
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Choose Sleeper leagues
+                <span className="account-menu__action-note">
+                  Tick which of {sleeperUsername}'s leagues appear here
+                </span>
+              </button>
+            ) : null}
             <button
               className="account-menu__action"
               onClick={onAddLeague}
@@ -293,6 +342,9 @@ export function AccountMenu() {
               type="button"
             >
               + Add a league
+              {sleeperUsername ? (
+                <span className="account-menu__action-note">ESPN, or another Sleeper name</span>
+              ) : null}
             </button>
             <button
               className="account-menu__action"

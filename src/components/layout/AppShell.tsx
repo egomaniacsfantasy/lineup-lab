@@ -1,3 +1,4 @@
+import { SleeperLeaguePicker } from '../league/SleeperLeaguePicker';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AmbientCanvas } from '../matchup/AmbientCanvas';
@@ -95,6 +96,7 @@ export function AppShell() {
         </PlayerDetailProvider>
         <BottomTabBar />
         <PricingCurtain />
+        <SleeperLeaguePicker />
         <PlayerVotePrompt onClose={votePrompt.close} open={votePrompt.open} />
       </div>
       </TourProvider>

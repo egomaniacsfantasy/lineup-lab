@@ -432,6 +432,19 @@ pick a manager to open theirs on the right. "Price this trade" returns both
 sides' title, playoff and this-week deltas. A counter-offer search exists as a
 separate endpoint.
 
+**What a player is worth, in the finder.** Wherever the finder puts a number
+beside a player (the picker's list, the pinned-player header, the position
+tiles, and the roster reads the starting points are derived from) it is
+**projected fantasy points per game over the games still to come**, with his
+rank at the position by that figure, and his bye when it is still ahead. It
+comes from the board's week-by-week sheet, the one the engine prices with. A
+bye is not a game; a week whose game is already final is not still to come.
+It used to be pricing's per-player mean, which is the current week alone and
+is replaced by the real score once a game ends, so from Sunday night the list
+was box scores and one bad Sunday could name the wrong position as your
+weakest. If the board cannot be reached the weekly number stands in, and the
+labels say "this week" rather than claiming a season read.
+
 Both views are unreachable in dynasty and keeper leagues.
 
 *Backing:* `src/components/trade/TradeFinder.tsx`, the pure query and
@@ -458,8 +471,40 @@ and bug reporting, and a labs section.
 
 ## 4.8 Connecting a league
 
-**Sleeper** is a username. That is the entire flow: type it, pick a league if
-you are in more than one, done.
+**Sleeper** is a username. That is the entire flow: type it, tick the leagues
+you want, done.
+
+Sleeper answers a username with every league the account is in, and showing
+all of them was the complaint. Which leagues appear is a choice, made in three
+places that share one checklist (`LeagueChecklist`):
+
+- **The connect wizard** asks on the way in. Nothing is ticked for you, and
+  leagues already on the account show as locked rather than being offered
+  twice.
+- **The anonymous peek** (landing page and phone gate) lets somebody pick one
+  league to see priced. After sign-up the app opens on that league only, and
+  the league sheet appears once to ask about the rest. It closes itself when
+  the account has no others. The peek used to attach every league to the
+  connection it handed over, which is how a switcher filled with thirteen.
+- **The league sheet** (`SleeperLeaguePicker`) is the same choice at any later
+  time: every league Sleeper lists, the ones already here ticked. Ticking
+  adds, unticking removes, nothing happens until Save, and the button says
+  what it will do ("Add 2, remove 1"). The open league stays open unless it
+  was unticked, which the sheet warns about first. It opens from "Choose
+  Sleeper leagues" in the account menu, and from the league list on the phone
+  Hub, which has no header and so hosts the sheet itself. A league Sleeper no
+  longer lists (archived, last season) is not on the sheet and is never
+  removed by it.
+
+**Pinning.** Any league can be pinned to the top of the switcher, from its row
+in the account menu or the phone Hub's list. Pinned leagues lead in the order
+they were pinned; the rest keep their order. Pins are per device (local
+storage), like the removal tombstones and the name cache: the account table
+has no column for one yet.
+
+*Backing:* `src/contexts/leagueSelection.ts` (pure: pin order, the selection
+diff, narrowing the peek's connection) and `applySleeperSelection`,
+`togglePin`, `openLeaguePicker` on the league connection context.
 
 **ESPN** is harder because ESPN requires an authenticated cookie pair
 (`espn_s2` and `SWID`). Three paths exist:
@@ -717,7 +762,7 @@ and the connect screen consumes it on read.
 - **Design fixtures** — `/design/:scene` renders any real page against a fixed
   fixture league, so layout can be tested deterministically. This is what the
   rendered test suite drives. Query flags: `?staleSeason`, `?notRolledOver`,
-  `?syncing`, `?dynasty`, `?multiLeague`, `?private`, `?slowForks`, `?tour`,
+  `?syncing`, `?dynasty`, `?multiLeague`, `?sleeper`, `?private`, `?slowForks`, `?tour`,
   `?desktop=1|0`.
 
 ---
@@ -1252,7 +1297,7 @@ and adding before it is used.
     engine stores a favourite's spread as positive (`a.mean - b.mean`), while
     `covered()` and `test/vsBook.test.mjs` assume the board's sign, negative
     for the favourite, which would grade every game the wrong way round.
-26. **The finder's two new candidate filters live in the engine file.**
+27. **The finder's two new candidate filters live in the engine file.**
     `givePosition` and `shape` in `suggestTrades` (`server/engine/engine.js`)
     are the same kind of thing as the existing `position` filter: they skip
     combos before the sim and touch no simulation, pricing or odds maths.
@@ -1263,3 +1308,13 @@ and adding before it is used.
     `server/` has no test for the two filters (nothing under `server/` runs in
     `npm test` anyway, see above); and `src/components/trade/LeagueDealBoard.tsx`
     was already orphaned before the ticket and still is.
+28. **Pins do not follow you to another device.** They live in local storage
+    because `olympus_leagues` has no column for one. Adding `pinned_at
+    timestamptz` and syncing it is the fix, with the same tolerate-the-missing-
+    column handling `league_name` got. Related: the account menu's pin button
+    and "Choose Sleeper leagues" action have no rendered test, because the
+    design fixtures have no signed-in session and the menu draws nothing
+    without one. The same controls on the phone Hub and the sheet itself are
+    covered by `test/leaguePicker.test.mjs`. And without an account (fixtures
+    only; the app sits behind sign-in) leagues ticked on in the sheet last
+    the session, since the list is rebuilt from account rows on load.

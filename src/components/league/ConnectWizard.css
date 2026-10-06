@@ -215,3 +215,46 @@
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ── Picking which leagues come in ──
+   These three had no rules at all, so the step that decides what fills the
+   switcher rendered as bare buttons with a tick nobody could see. The rows
+   themselves are the shared LeagueChecklist. */
+
+.connect-wizard__step-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.connect-wizard__pick-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.connect-wizard__continue {
+  width: 100%;
+  min-height: 50px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.connect-wizard__continue:hover:not(:disabled) {
+  background: var(--amber-mid);
+}
+
+.connect-wizard__continue:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

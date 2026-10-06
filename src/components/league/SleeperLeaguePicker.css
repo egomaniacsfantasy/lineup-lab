@@ -1,0 +1,187 @@
+/* The sheet where you tick which Sleeper leagues appear. A bottom sheet on a
+   phone, a centred dialog on a wide screen. */
+
+.league-picker__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--bg-overlay);
+}
+
+.league-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-height: 88vh;
+  padding: 12px 16px calc(20px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 22px 22px 0 0;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-elevated);
+}
+
+.league-picker__grip {
+  align-self: center;
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-subtle);
+}
+
+.league-picker__head {
+  display: grid;
+  gap: 6px;
+}
+
+.league-picker__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  line-height: 1.05;
+}
+
+.league-picker__sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.league-picker__bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.league-picker__count {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.league-picker__link {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--text-amber);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.league-picker__link:hover { text-decoration: underline; }
+
+.league-picker__list {
+  min-height: 0;
+  margin: 0 -4px;
+  padding: 2px 4px;
+  overflow-y: auto;
+}
+
+.league-picker__note {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.league-picker__failed {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.league-picker__failed p { margin: 0; }
+
+.league-picker__skeleton {
+  display: grid;
+  gap: 8px;
+}
+
+.league-picker__skeleton span {
+  height: 56px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  opacity: 0.6;
+}
+
+.league-picker__actions {
+  display: grid;
+  gap: 8px;
+}
+
+.league-picker__save {
+  width: 100%;
+  min-height: 50px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.league-picker__save:hover:not(:disabled) { background: var(--amber-mid); }
+.league-picker__save:disabled { opacity: 0.5; cursor: default; }
+.league-picker__save:focus-visible,
+.league-picker__cancel:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.league-picker__cancel {
+  min-height: 40px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.league-picker__cancel:hover { color: var(--text-dim); }
+
+@media (min-width: 720px) {
+  .league-picker__scrim { align-items: center; }
+
+  .league-picker {
+    width: min(520px, 92vw);
+    max-height: 82vh;
+    padding: 22px 22px 20px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 22px;
+  }
+
+  .league-picker__grip { display: none; }
+
+  .league-picker__actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .league-picker__cancel { padding: 0 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .league-picker__save { transition: none; }
+}

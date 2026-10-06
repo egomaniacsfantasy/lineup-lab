@@ -1,3 +1,4 @@
+import { SleeperLeaguePicker } from '../league/SleeperLeaguePicker';
 import { useMemo, useState } from 'react';
 import { useLeagueConnection } from '../../contexts/LeagueConnectionContext';
 import { buildPeekMatchup } from '../../hooks/usePeek';
@@ -40,8 +41,10 @@ import './MobileHub.css';
  * a phone to answer, and they are all one number each.
  */
 export function MobileHub() {
-  const { bootstrap, pricing, stored, leagues, switchLeague, isLoading, error } =
-    useLeagueConnection();
+  const {
+    bootstrap, pricing, stored, leagues, switchLeague, isLoading, error,
+    pinnedKeys, togglePin, sleeperUsername, openLeaguePicker,
+  } = useLeagueConnection();
   const [sharing, setSharing] = useState(false);
   const [switching, setSwitching] = useState(false);
 
@@ -137,7 +140,7 @@ export function MobileHub() {
             different one as the one they left. Only a control when there is
             somewhere to go: a lone league dressed as a menu is a promise the
             screen cannot keep. */}
-        {others.length > 0 ? (
+        {others.length > 0 || sleeperUsername ? (
           <button
             aria-expanded={switching}
             aria-haspopup="listbox"
@@ -156,21 +159,71 @@ export function MobileHub() {
       </header>
 
       {switching ? (
-        <ul aria-label="Your leagues" className="mobile-hub__leagues" role="listbox">
-          {others.map((entry) => (
-            <li key={`${entry.provider}:${entry.leagueId}`}>
+        /* Every league, pinned ones first, with the open one marked. This is
+           the whole account menu a phone has: no header sits above this
+           screen, so switching, pinning and choosing which Sleeper leagues
+           appear all live here. */
+        <ul aria-label="Your leagues" className="mobile-hub__leagues">
+          {leagues.map((entry) => {
+            const key = `${entry.provider}:${entry.leagueId}`;
+            const isOpen = stored?.provider === entry.provider && stored?.leagueId === entry.leagueId;
+            const isPinned = pinnedKeys.includes(key);
+            const label = entry.leagueName ?? entry.leagueId;
+            return (
+              <li className="mobile-hub__league-item" key={key}>
+                <button
+                  aria-current={isOpen ? 'true' : undefined}
+                  className={[
+                    'mobile-hub__league-option',
+                    isOpen ? 'mobile-hub__league-option--open' : '',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => {
+                    setSwitching(false);
+                    if (!isOpen) switchLeague(entry.provider, entry.leagueId);
+                  }}
+                  type="button"
+                >
+                  {label}
+                </button>
+                <button
+                  aria-label={isPinned ? `Unpin ${label}` : `Pin ${label} to the top`}
+                  aria-pressed={isPinned}
+                  className={[
+                    'mobile-hub__league-pin',
+                    isPinned ? 'mobile-hub__league-pin--on' : '',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => togglePin(entry)}
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill={isPinned ? 'currentColor' : 'none'}
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.7"
+                    viewBox="0 0 16 16"
+                  >
+                    <path d="M9.6 1.8l4.6 4.6-1.7.6-2.3 2.3.3 3.2-1 1-2.9-2.9-3.6 3.6M6.6 10.6L3.7 7.7l1-1 3.2.3 2.3-2.3.6-1.7" />
+                  </svg>
+                </button>
+              </li>
+            );
+          })}
+          {sleeperUsername ? (
+            <li className="mobile-hub__league-item">
               <button
-                className="mobile-hub__league-option"
+                className="mobile-hub__league-option mobile-hub__league-option--manage"
                 onClick={() => {
                   setSwitching(false);
-                  switchLeague(entry.provider, entry.leagueId);
+                  openLeaguePicker();
                 }}
                 type="button"
               >
-                {entry.leagueName ?? entry.leagueId}
+                Choose Sleeper leagues
               </button>
             </li>
-          ))}
+          ) : null}
         </ul>
       ) : null}
 
@@ -273,6 +326,9 @@ export function MobileHub() {
           onClose={() => setSharing(false)}
         />
       ) : null}
+
+      {/* No shell sits around this screen, so the sheet is hosted here. */}
+      <SleeperLeaguePicker />
 
       <span className="mobile-hub__stamp">{stored?.username ? `@${stored.username}` : ''}</span>
     </div>
