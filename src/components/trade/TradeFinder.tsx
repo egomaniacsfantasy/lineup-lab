@@ -566,49 +566,29 @@ export function TradeFinder({
 
   /* ── One lane ── */
 
+  /* Every player in a package gets the same row: face, name, line. No
+     headline, nobody tucked under anybody. Ordered by value only so two
+     readings of the same deal match. */
   const renderSide = (assets: TradeSuggestion['give'], tone: 'get' | 'send') => {
     const ordered = orderAssets(assets, values);
-    const lead = ordered[0];
-    if (!lead) return null;
-    const extras = ordered.slice(1);
-    const leadPlayer = players[lead.id];
-    if (tone === 'send' && extras.length >= 2) {
-      /* Three bench pieces read as one unit, not three rows. */
-      return (
-        <span className="trade-finder__side trade-finder__side--send">
-          <span className="trade-finder__faces">{ordered.map((asset) => face(asset.id, 'md'))}</span>
-          <span className="trade-finder__who">
-            <span className="trade-finder__who-name trade-finder__who-name--group">
-              {ordered.map((asset) => surname(players[asset.id]?.name ?? asset.name)).join(', ')}
-            </span>
-            <span className="trade-finder__who-meta">
-              {ordered.map((asset) => rankOf(asset.id) ?? players[asset.id]?.position ?? '').filter(Boolean).join(' · ')}
-            </span>
-          </span>
-        </span>
-      );
-    }
+    if (ordered.length === 0) return null;
     return (
       <span className={`trade-finder__side trade-finder__side--${tone}`}>
-        <span className="trade-finder__faces">
-          {face(lead.id, tone === 'get' ? 'lg' : 'md')}
-          {extras.map((asset) => face(asset.id, 'sm'))}
-        </span>
-        <span className="trade-finder__who">
-          <span className={['trade-finder__who-name', tone === 'get' ? 'trade-finder__who-name--lead' : ''].filter(Boolean).join(' ')}>
-            {leadPlayer?.name ?? lead.name}
-          </span>
-          <span className="trade-finder__who-meta">
-            {leadPlayer?.position ? <span className="trade-finder__pos">{leadPlayer.position}</span> : null}
-            {playerMeta(lead.id)}
-          </span>
-          {extras.map((asset) => (
-            <span className="trade-finder__who-extra" key={asset.id}>
-              + {players[asset.id]?.name ?? asset.name}
-              {rankOf(asset.id) ? `, ${rankOf(asset.id)}` : players[asset.id]?.position ? `, ${players[asset.id].position}` : ''}
+        {ordered.map((asset) => {
+          const player = players[asset.id];
+          return (
+            <span className="trade-finder__player" key={asset.id}>
+              {face(asset.id, 'md')}
+              <span className="trade-finder__who">
+                <span className="trade-finder__who-name">{player?.name ?? asset.name}</span>
+                <span className="trade-finder__who-meta">
+                  {player?.position ? <span className="trade-finder__pos">{player.position}</span> : null}
+                  {playerMeta(asset.id)}
+                </span>
+              </span>
             </span>
-          ))}
-        </span>
+          );
+        })}
       </span>
     );
   };
@@ -633,74 +613,65 @@ export function TradeFinder({
     const { suggestion } = group.best;
     const getOrdered = orderAssets(suggestion.get, values);
     const sendOrdered = orderAssets(suggestion.give, values);
-    const headline = getOrdered[0];
-    const sendLead = sendOrdered[0];
-    const headlineRow = headline ? players[headline.id] : null;
-    const sendRow = sendLead ? players[sendLead.id] : null;
     const partner = partnerById.get(suggestion.partnerRosterId);
     const future = futuresByRoster.get(suggestion.partnerRosterId);
     const sub = positionSublines({ team: userTeam, players, playerMeans: values, rosterPositions: bootstrap.league.rosterPositions });
-    const headlinePos = headlineRow?.position;
-    const mySlot = headlinePos && (FINDER_POSITIONS as string[]).includes(headlinePos) ? sub[headlinePos as FinderPosition].starter : null;
-    const consequence = sendLead ? sendConsequence(sendLead.id, userTeam, players, values, bootstrap.league.rosterPositions) : null;
     const word = acceptanceWord(group.best.lopsided, group.best.acceptance);
-    const extraLines = (list: typeof getOrdered) => list.slice(1).map((asset) => (
-      <span className="trade-finder__who-extra" key={asset.id}>
-        + {players[asset.id]?.name ?? asset.name}{rankOf(asset.id) ? `, ${rankOf(asset.id)}` : players[asset.id]?.position ? `, ${players[asset.id].position}` : ''}
-      </span>
-    ));
+
+    /* One block per player, the same block on both sides: face, name, line,
+       and the stat that matters for that side. */
+    const playerBlock = (asset: { id: string; name: string }, tone: 'get' | 'send') => {
+      const player = players[asset.id];
+      const position = player?.position;
+      const mySlot = tone === 'get' && position && (FINDER_POSITIONS as string[]).includes(position)
+        ? sub[position as FinderPosition].starter
+        : null;
+      const consequence = tone === 'send' ? sendConsequence(asset.id, userTeam, players, values, bootstrap.league.rosterPositions) : null;
+      const value = valueOf(asset.id);
+      return (
+        <div className="trade-finder__open-player" key={asset.id}>
+          {face(asset.id, 'lg')}
+          <span className="trade-finder__open-copy">
+            <span className="trade-finder__open-name">{player?.name ?? asset.name}</span>
+            <span className="trade-finder__who-meta">
+              {position ? <span className="trade-finder__pos">{position}</span> : null}
+              {playerMeta(asset.id)}
+            </span>
+            <span className="trade-finder__open-stats">
+              {value != null ? (
+                <span className="trade-finder__stat"><span className="trade-finder__tag">{valueLabel}</span><span className="trade-finder__num">{value.toFixed(1)}</span></span>
+              ) : null}
+              {mySlot ? (
+                <span className="trade-finder__stat"><span className="trade-finder__tag">Your {mySlot.split(' ')[0]} now</span><span className="trade-finder__num trade-finder__num--dim">{mySlot.split(' ')[1]}</span></span>
+              ) : null}
+              {consequence?.slot ? (
+                <span className="trade-finder__stat">
+                  <span className="trade-finder__tag">{consequence.slot === 'bench' ? 'His slot' : 'Who starts instead'}</span>
+                  <span className="trade-finder__stat-text">
+                    {consequence.slot === 'bench'
+                      ? 'Bench. Nothing leaves your lineup.'
+                      : consequence.replacement
+                        ? `${consequence.replacement.name}, ${consequence.replacement.perGame.toFixed(1)}`
+                        : `Your ${consequence.slot}, with nobody behind him`}
+                  </span>
+                </span>
+              ) : null}
+            </span>
+          </span>
+        </div>
+      );
+    };
+
     return (
       <div className="trade-finder__open" id={`deal-${group.best.signature}`}>
         <div className="trade-finder__open-pair">
           <div className="trade-finder__open-side">
-            {headline ? face(headline.id, 'xl') : null}
-            <span className="trade-finder__open-copy">
-              <span className="trade-finder__eyebrow">You get</span>
-              <span className="trade-finder__open-name">{headlineRow?.name ?? headline?.name}</span>
-              <span className="trade-finder__who-meta">
-                {headlinePos ? <span className="trade-finder__pos">{headlinePos}</span> : null}
-                {headline ? playerMeta(headline.id) : null}
-              </span>
-              {extraLines(getOrdered)}
-              <span className="trade-finder__open-stats">
-                {headline && valueOf(headline.id) != null ? (
-                  <span className="trade-finder__stat"><span className="trade-finder__tag">{valueLabel}</span><span className="trade-finder__num">{valueOf(headline.id)!.toFixed(1)}</span></span>
-                ) : null}
-                {mySlot ? (
-                  <span className="trade-finder__stat"><span className="trade-finder__tag">Your {mySlot.split(' ')[0]} now</span><span className="trade-finder__num trade-finder__num--dim">{mySlot.split(' ')[1]}</span></span>
-                ) : null}
-                <span className="trade-finder__stat"><span className="trade-finder__tag">Owner</span><span className="trade-finder__stat-text">{partner?.teamName ?? suggestion.partnerName}{partner ? `, ${recordText(partner.record)}` : ''}</span></span>
-              </span>
-            </span>
+            <span className="trade-finder__eyebrow">You get · from {partner?.teamName ?? suggestion.partnerName}{partner ? `, ${recordText(partner.record)}` : ''}</span>
+            {getOrdered.map((asset) => playerBlock(asset, 'get'))}
           </div>
           <div className="trade-finder__open-side trade-finder__open-side--send">
-            {sendLead ? face(sendLead.id, 'lg') : null}
-            <span className="trade-finder__open-copy">
-              <span className="trade-finder__eyebrow">You send</span>
-              <span className="trade-finder__open-name trade-finder__open-name--send">{sendRow?.name ?? sendLead?.name}</span>
-              <span className="trade-finder__who-meta">
-                {sendRow?.position ? <span className="trade-finder__pos">{sendRow.position}</span> : null}
-                {sendLead ? playerMeta(sendLead.id) : null}
-              </span>
-              {extraLines(sendOrdered)}
-              <span className="trade-finder__open-stats">
-                {sendLead && valueOf(sendLead.id) != null ? (
-                  <span className="trade-finder__stat"><span className="trade-finder__tag">{valueLabel}</span><span className="trade-finder__num">{valueOf(sendLead.id)!.toFixed(1)}</span></span>
-                ) : null}
-                {consequence?.slot ? (
-                  <span className="trade-finder__stat">
-                    <span className="trade-finder__tag">{consequence.slot === 'bench' ? 'His slot' : 'Who starts instead'}</span>
-                    <span className="trade-finder__stat-text">
-                      {consequence.slot === 'bench'
-                        ? 'Bench. Nothing leaves your lineup.'
-                        : consequence.replacement
-                          ? `${consequence.replacement.name}, ${consequence.replacement.perGame.toFixed(1)}`
-                          : `Your ${consequence.slot}, with nobody behind him`}
-                    </span>
-                  </span>
-                ) : null}
-              </span>
-            </span>
+            <span className="trade-finder__eyebrow">You send</span>
+            {sendOrdered.map((asset) => playerBlock(asset, 'send'))}
           </div>
         </div>
 
@@ -733,7 +704,7 @@ export function TradeFinder({
 
         <div className="trade-finder__open-foot">
           <div className="trade-finder__alts">
-            <span className="trade-finder__tag">{group.others.length ? `${group.others.length} other ${group.others.length === 1 ? 'way' : 'ways'} to get him` : 'The only package the book found for him'}</span>
+            <span className="trade-finder__tag">{group.others.length ? `${group.others.length} other ${group.others.length === 1 ? 'package' : 'packages'} for the same player` : 'The only package the book found for him'}</span>
             {group.others.map((other) => {
               const otherWord = acceptanceWord(other.lopsided, other.acceptance);
               const give = orderAssets(other.suggestion.give, values);
@@ -741,9 +712,11 @@ export function TradeFinder({
               return (
                 <button className="trade-finder__alt" key={other.signature} onClick={() => onBuild(other.suggestion)} type="button">
                   <span className="trade-finder__alt-who">
+                    <span className="trade-finder__faces trade-finder__faces--tight">{get.map((asset) => face(asset.id, 'sm'))}</span>
+                    <span>{get.map((asset) => surname(players[asset.id]?.name ?? asset.name)).join(' + ')}</span>
+                    <span className="trade-finder__tag">for</span>
                     <span className="trade-finder__faces trade-finder__faces--tight">{give.map((asset) => face(asset.id, 'sm'))}</span>
                     <span>{give.map((asset) => surname(players[asset.id]?.name ?? asset.name)).join(' + ')}</span>
-                    {get.length > 1 ? <span className="trade-finder__who-meta">with {get.slice(1).map((asset) => players[asset.id]?.name ?? asset.name).join(', ')}</span> : null}
                     <span className="trade-finder__tag">{sizesLabel(suggestionSizes(other.suggestion))}</span>
                   </span>
                   <span className={`trade-finder__num trade-finder__num--${deltaTone(other.suggestion.youDelta)}`}>{signedPct(other.suggestion.youDelta)}</span>

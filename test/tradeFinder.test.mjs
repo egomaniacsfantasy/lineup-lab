@@ -160,9 +160,12 @@ test('a lane opens in place with both faces, the lineup cost, and Build', async 
   try {
     await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
     const lane = page.locator('.trade-finder__lane').first();
-    /* Five columns, every lane: get, swap, send, price. */
-    assert.equal(await lane.locator('.trade-finder__side--get').count(), 1);
-    assert.equal(await lane.locator('.trade-finder__side--send').count(), 1);
+    /* Five columns, every lane: get, swap, send, price. Two players a side,
+       each with his own row and name. */
+    assert.equal(await lane.locator('.trade-finder__side--get .trade-finder__player').count(), 2);
+    assert.equal(await lane.locator('.trade-finder__side--send .trade-finder__player').count(), 2);
+    const laneFaces = await lane.locator('.trade-finder__lane-main .trade-finder__face').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+    assert.equal(new Set(laneFaces).size, 1, `lane faces ${laneFaces.join(', ')}`);
     assert.match(await lane.locator('.trade-finder__swap-col').innerText(), /2 for 2/i);
     /* No action buttons on a closed lane. */
     assert.equal(await lane.locator('.trade-finder__act').count(), 0);
@@ -173,10 +176,15 @@ test('a lane opens in place with both faces, the lineup cost, and Build', async 
     assert.match(await open.locator('.trade-finder__open-name').first().innerText(), /puka nacua/i);
     assert.match(await open.innerText(), /you send/i);
     assert.match(await open.innerText(), /will he take it/i);
-    /* The get face is the biggest thing on the lane. */
-    const xl = await open.locator('.trade-finder__face--xl').first().evaluate((el) => el.getBoundingClientRect().width);
-    const lg = await open.locator('.trade-finder__face--lg').first().evaluate((el) => el.getBoundingClientRect().width);
-    assert.ok(xl > lg && lg >= 60, `faces ${xl} and ${lg}`);
+    /* No hierarchy inside a package: every player on a side is the same
+       row at the same size, nobody a headline and nobody a bullet under him.
+       This 2 for 2 has two players a side, so four equal blocks. */
+    assert.equal(await open.locator('.trade-finder__open-player').count(), 4);
+    const widths = await open.locator('.trade-finder__open-player .trade-finder__face').evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+    assert.equal(new Set(widths).size, 1, `faces ${widths.join(', ')}`);
+    assert.ok(widths[0] >= 60, `faces ${widths[0]}`);
+    assert.equal(await open.locator('.trade-finder__open-name').count(), 4);
+    assert.equal(await lane.locator('.trade-finder__who-extra').count(), 0);
 
     await open.locator('.trade-finder__act--primary').click();
     await page.locator('.trade-cc__builder').waitFor({ state: 'visible' });

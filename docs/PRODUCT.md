@@ -435,13 +435,16 @@ The board answers the ticket two ways, and says which:
 
 Deals are **lanes**, one per player you would land, the same five columns
 every time: what you get, the shape, what you send, your title, and who. The
-best package leads and the other ways to get him fold under it. A deal that
-brings a second player shows him smaller beside the headline with a word for
-what he is; three bench pieces read as one unit. Swings under a point of
+best package leads and the other ways to get him fold under it. Inside a
+package there is no hierarchy: every player on a side is the same row at the
+same size with his own name and line, whether the side holds one player or
+three (user, 2026-10-05: no headline player with the rest as bullets). The
+lane groups under the most valuable incoming player only to decide which
+lane a deal belongs to; nothing on screen says so. Swings under a point of
 title odds (the engine's sampling noise) sit below a line that calls them
-ties rather than being ranked. A lane **opens in place**: both players large
-with rest-of-season per game and the lineup consequence (your RB2 now; who
-starts instead), your title with playoffs and this week, his side with a
+ties rather than being ranked. A lane **opens in place**: every player on
+both sides as an equal block with rest-of-season per game and the lineup
+consequence (your RB2 now; who starts instead), your title with playoffs and this week, his side with a
 plain-language read on what he is playing for, "Will he take it" as a word,
 the other packages, and Dismiss, Share and Build, which exist only there.
 
