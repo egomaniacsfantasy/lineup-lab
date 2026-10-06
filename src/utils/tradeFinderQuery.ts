@@ -1,4 +1,4 @@
-import type { ApiCatalogPlayer, ApiTeam, LeaguePricing, TradeSuggestion } from '../services/leagueApi';
+import type { ApiCatalogPlayer, ApiTeam, TradeSuggestion } from '../services/leagueApi';
 
 /**
  * The finder's ticket: one question with three blanks and a shape.
@@ -295,6 +295,101 @@ export function describeQuery(query: FinderQuery, names: QueryNames = {}) {
   return `With ${partnersWords(query, names.partners)}, send ${pickWords(query.send, names.sendPlayers)}, get ${pickWords(query.get, names.getPlayers)}${shape}`;
 }
 
+/* ── What a player is worth from here ──────────────────────────────────────
+
+   The picker used to show pricing's per-player mean, which is the projection
+   for the CURRENT week and is replaced by the real score the moment a game
+   goes final. From Sunday night until the week rolls over that is a list of
+   box scores, sorted by them, and the starting points were derived from it:
+   one bad Sunday made a position look like the weakest slot on the roster.
+
+   A trade is a rest-of-season decision, so the number is one too: projected
+   fantasy points per game over the games still to come, from the same sheet
+   the engine prices with, plus where that ranks at the position. */
+
+export type ValueBasis = 'ros' | 'week';
+
+/** A value per player id. Pricing's playerMeans fits; so does the outlook. */
+export type PlayerValues = Record<string, { mean: number }>;
+
+export interface BoardRowLike {
+  playerId: string;
+  position: string;
+  mean: number;
+  /** Rest-of-season points as the board serves it; null when unknown. */
+  seasonTotal: number | null;
+  weekly: Record<string, number>;
+}
+
+export interface PlayerOutlook {
+  /** Projected fantasy points per game over the games still to come. */
+  perGame: number;
+  /** Rank at the position by that figure, across the whole board. 1 is best. */
+  positionRank: number;
+  position: string;
+}
+
+/**
+ * Per game over the weeks left.
+ *
+ * A bye is a week with no points, so it is not a game and does not drag the
+ * average down. Whether the current week still counts depends on whether the
+ * player's game is final, which the board already knows and bakes into its
+ * rest-of-season total: if that total matches the weeks after this one, this
+ * week has been played and is left out; otherwise it is still to come.
+ * With no usable weeks the sheet's own per-game mean stands in.
+ */
+export function restOfSeasonPerGame(row: BoardRowLike, week: number | null | undefined): number {
+  const current = week ?? 1;
+  const entries = Object.entries(row.weekly ?? {})
+    .map(([key, points]) => ({ week: Number(key), points: Number(points) }))
+    .filter((entry) => Number.isFinite(entry.week) && Number.isFinite(entry.points));
+  const after = entries.filter((entry) => entry.week > current && entry.points > 0);
+  const thisWeek = entries.find((entry) => entry.week === current && entry.points > 0) ?? null;
+  const sum = (list: { points: number }[]) => list.reduce((total, entry) => total + entry.points, 0);
+
+  let games = after;
+  if (thisWeek) {
+    const withThisWeek = [...after, thisWeek];
+    const total = row.seasonTotal;
+    const played = total != null
+      && Math.abs(total - sum(after)) < Math.abs(total - sum(withThisWeek));
+    if (!played) games = withThisWeek;
+  }
+  if (games.length === 0) return row.mean;
+  return sum(games) / games.length;
+}
+
+export function buildOutlooks(
+  rows: readonly BoardRowLike[],
+  week: number | null | undefined,
+): Map<string, PlayerOutlook> {
+  const scored = rows.map((row) => ({ row, perGame: restOfSeasonPerGame(row, week) }));
+  const out = new Map<string, PlayerOutlook>();
+  const byPosition = new Map<string, typeof scored>();
+  for (const entry of scored) {
+    const list = byPosition.get(entry.row.position) ?? [];
+    list.push(entry);
+    byPosition.set(entry.row.position, list);
+  }
+  for (const [position, list] of byPosition) {
+    list
+      .sort((a, b) => b.perGame - a.perGame)
+      .forEach((entry, index) => {
+        if (out.has(entry.row.playerId)) return;
+        out.set(entry.row.playerId, { perGame: entry.perGame, positionRank: index + 1, position });
+      });
+  }
+  return out;
+}
+
+/** The outlook in the shape the roster reads take, for players it covers. */
+export function outlookValues(outlooks: ReadonlyMap<string, PlayerOutlook>): PlayerValues {
+  const values: PlayerValues = {};
+  for (const [id, outlook] of outlooks) values[id] = { mean: outlook.perGame };
+  return values;
+}
+
 /* ── Starting points ────────────────────────────────────────────────────── */
 
 export interface StartingPoint {
@@ -319,7 +414,7 @@ interface PositionRead {
 function readTeam(
   team: ApiTeam,
   players: Record<string, ApiCatalogPlayer>,
-  means: NonNullable<LeaguePricing['playerMeans']>,
+  means: PlayerValues,
   slotsByPosition: Record<FinderPosition, number>,
 ): Record<FinderPosition, PositionRead> {
   const out = {} as Record<FinderPosition, PositionRead>;
@@ -364,11 +459,16 @@ export function deriveStartingPoints({
   players,
   playerMeans,
   rosterPositions,
+  basis = 'week',
 }: {
   teams: ApiTeam[];
   players: Record<string, ApiCatalogPlayer>;
-  playerMeans: LeaguePricing['playerMeans'] | null | undefined;
+  playerMeans: PlayerValues | null | undefined;
   rosterPositions: string[] | null | undefined;
+  /** What the values are: rest of season per game, or this week alone. The
+   *  sentence under each point says which, so it never claims a season read
+   *  off one week's number. */
+  basis?: ValueBasis;
 }): StartingPoint[] {
   const means = playerMeans ?? null;
   const user = teams.find((team) => team.isUser) ?? null;
@@ -399,7 +499,9 @@ export function deriveStartingPoints({
     points.push({
       id: `upgrade-${upgrade}`,
       title: `Upgrade ${upgrade}`,
-      detail: `Your ${slotOrdinal(upgrade, read.slots)} projects ${read.weakestStarter.toFixed(1)}. The league's projects ${leagueWeakest[upgrade].toFixed(1)}.`,
+      detail: basis === 'ros'
+        ? `Your ${slotOrdinal(upgrade, read.slots)} projects ${read.weakestStarter.toFixed(1)} a game from here on. The league's projects ${leagueWeakest[upgrade].toFixed(1)}.`
+        : `Your ${slotOrdinal(upgrade, read.slots)} projects ${read.weakestStarter.toFixed(1)} this week. The league's projects ${leagueWeakest[upgrade].toFixed(1)}.`,
       badge: { kind: 'position', position: upgrade },
       query: { get: { kind: 'position', positions: [upgrade] } },
     });
@@ -461,7 +563,7 @@ export function positionSublines({
 }: {
   team: ApiTeam;
   players: Record<string, ApiCatalogPlayer>;
-  playerMeans: LeaguePricing['playerMeans'] | null | undefined;
+  playerMeans: PlayerValues | null | undefined;
   rosterPositions: string[] | null | undefined;
 }): Record<FinderPosition, { starter: string | null; rostered: number }> {
   const slotsByPosition = { QB: 0, RB: 0, WR: 0, TE: 0 } as Record<FinderPosition, number>;
