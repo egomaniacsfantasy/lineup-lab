@@ -1632,7 +1632,11 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
         .filter((deal) => deal.partnerRosterId === Number(asked.partnerRosterId))
         .filter((deal) => deal.youDelta > 0)
         .filter((deal) => shapes.length === 0
-          || shapes.some((shape) => shape.give === deal.give.length && shape.get === deal.get.length)),
+          || shapes.some((shape) => shape.give === deal.give.length && shape.get === deal.get.length))
+        /* The engine's rules: picked players must be IN the deal; off limits never sent. */
+        .filter((deal) => ((asked.rules?.giveMust ?? []) as string[]).every((id) => deal.give.some((a) => a.id === id)))
+        .filter((deal) => ((asked.rules?.getMust ?? []) as string[]).every((id) => deal.get.some((a) => a.id === id)))
+        .filter((deal) => !((asked.rules?.protect ?? []) as string[]).some((id) => deal.give.some((a) => a.id === id))),
     };
   }
 

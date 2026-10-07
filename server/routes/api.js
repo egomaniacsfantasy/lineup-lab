@@ -2439,10 +2439,11 @@ apiRouter.post('/league/:leagueId/trade-counter', async (req, res, next) => {
  * at most `maxPartnerLoss`, ranked by the user's title gain. No league-wide light
  * sweep and no acceptance model in the selection: every number is the analyzer's.
  *
- * Body: { userId, partnerRosterId, rules: { giveAllow, getAllow, givePositions,
- * getPositions, minYouDelta, maxPartnerLoss }, shapes: [{ give, get }], readsByRoster }.
- * Each pool is "any of these" (empty = no limit): every player sent is from the
- * give pools, every player received is from the get pools.
+ * Body: { userId, partnerRosterId, rules: { giveAllow, getAllow, giveMust, getMust,
+ * protect, givePositions, getPositions, minYouDelta, maxPartnerLoss }, shapes: [{ give, get }],
+ * readsByRoster }. Position pools are "any of these" (every player on that side is from
+ * them); giveMust / getMust are players every deal must include (plus anything else);
+ * protect are your players never offered.
  */
 apiRouter.post('/league/:leagueId/trade-finder', async (req, res, next) => {
   try {
@@ -2464,7 +2465,10 @@ apiRouter.post('/league/:leagueId/trade-finder', async (req, res, next) => {
     const sender = {
       giveAllow: ids(r.giveAllow),
       getAllow: ids(r.getAllow),
-      protect: [],
+      // Picked players must be IN every deal (alongside anything else); off-limits never go.
+      giveMust: ids(r.giveMust).slice(0, 3),
+      getMust: ids(r.getMust).slice(0, 3),
+      protect: ids(r.protect),
       givePositions: positions(r.givePositions),
       getPositions: positions(r.getPositions),
       minYouDelta: Number.isFinite(minYou) && minYou > 0 ? minYou : 0,

@@ -33,6 +33,9 @@ import {
   standingOf,
   withinNoise,
   passesPointsLimit,
+  queryToRules,
+  rulesFor,
+  toggleKeep,
 } from '../src/utils/tradeFinderQuery.ts';
 
 /**
@@ -102,6 +105,7 @@ test('the ticket becomes one sender-rules request per manager per shape', () => 
   );
   assert.deepEqual(requests[0].rules, {
     giveAllow: [], getAllow: [], givePositions: ['RB', 'WR'], getPositions: ['TE'],
+    giveMust: [], getMust: [], protect: [],
   });
   assert.deepEqual(requests[0].shapes, [{ give: 1, get: 1 }]);
   assert.deepEqual(requests[1].shapes, [{ give: 2, get: 1 }]);
@@ -111,14 +115,49 @@ test('the ticket becomes one sender-rules request per manager per shape', () => 
   assert.equal(open.length, 3 * FINDER_SHAPES.length);
   assert.deepEqual([...new Set(open.map((request) => request.partnerRosterId))], [2, 3, 4]);
   assert.deepEqual(open.slice(0, FINDER_SHAPES.length).map((request) => request.shape), FINDER_SHAPES.map((shape) => shape.id));
-  assert.deepEqual(open[0].rules, { giveAllow: [], getAllow: [], givePositions: [], getPositions: [] });
+  assert.deepEqual(open[0].rules, { giveAllow: [], getAllow: [], givePositions: [], getPositions: [], giveMust: [], getMust: [], protect: [] });
 });
 
 test('a pool of players you want narrows the scan to the managers who own them', () => {
   const teams = [team(1, ['mine'], true), team(2, ['x']), team(3, ['y']), team(4, ['z'])];
   const query = { ...EMPTY_QUERY, get: { kind: 'player', ids: ['x', 'z'] } };
   assert.deepEqual(partnersToScan(query, teams), [2, 4]);
-  assert.deepEqual(queryToRequests(query, teams)[0].rules.getAllow, ['x', 'z']);
+  /* Each manager is asked to include only the picked player HE owns. */
+  const requests = queryToRequests(query, teams);
+  assert.deepEqual(requests.find((r) => r.partnerRosterId === 2).rules.getMust, ['x']);
+  assert.deepEqual(requests.find((r) => r.partnerRosterId === 4).rules.getMust, ['z']);
+  assert.deepEqual(requests[0].rules.getAllow, [], 'a picked player is not a pool');
+});
+
+test('a picked player must be IN the deal, not the whole deal; off-limits players never go', () => {
+  const teams = [team(1, ['lamb', 'hall', 'pollard'], true), team(2, ['gibbs', 'adams'])];
+  const query = reconcileQuery({
+    ...EMPTY_QUERY,
+    send: { kind: 'player', ids: ['lamb'] },
+    get: { kind: 'player', ids: ['gibbs'] },
+    keep: ['hall'],
+  }, teams);
+  const rules = queryToRules(query);
+  assert.deepEqual(rules.giveMust, ['lamb']);
+  assert.deepEqual(rules.giveAllow, [], 'no pool: anyone else of yours may ride along');
+  assert.deepEqual(rules.protect, ['hall']);
+  assert.deepEqual(rulesFor(rules, 2, teams).getMust, ['gibbs']);
+
+  const players = { lamb: { position: 'WR' }, hall: { position: 'RB' }, pollard: { position: 'RB' }, gibbs: { position: 'RB' }, adams: { position: 'WR' } };
+  const owners = new Map([['gibbs', 2], ['adams', 2]]);
+  /* Lamb + Pollard for Gibbs + Adams: includes both picks, so it fits. */
+  assert.equal(boardMatches(deal(2, ['lamb', 'pollard'], ['gibbs', 'adams'], 2), query, players, owners), true);
+  /* Without Lamb it does not. */
+  assert.equal(boardMatches(deal(2, ['pollard'], ['gibbs'], 2), query, players, owners), false);
+  /* Anything sending an off-limits player is out. */
+  assert.equal(boardMatches(deal(2, ['lamb', 'hall'], ['gibbs'], 2), query, players, owners), false);
+  assert.equal(boardMatches(deal(2, ['hall'], ['adams'], 2), { ...EMPTY_QUERY, keep: ['hall'] }, players), false);
+
+  /* Off limits and required cannot both hold: the off-limits list wins. */
+  const clash = reconcileQuery({ ...EMPTY_QUERY, send: { kind: 'player', ids: ['hall'] }, keep: ['hall'] }, teams);
+  assert.deepEqual(clash.send, ANY_PICK);
+  assert.deepEqual(toggleKeep(toggleKeep([], 'a'), 'b'), ['a', 'b']);
+  assert.deepEqual(toggleKeep(['a', 'b'], 'a'), ['b']);
 });
 
 test('the ticket never asks for a player the picked managers do not own', () => {
@@ -189,7 +228,7 @@ test('the ask reads back as one sentence', () => {
     { partnerRosterIds: [2], send: { kind: 'position', positions: ['WR'] }, get: { kind: 'player', ids: ['x'] }, shapes: ['2-1'] },
     { partners: ['Hermes Express'], getPlayers: ['Bijan Robinson'] },
   );
-  assert.equal(text, 'With Hermes Express, send a WR, get Bijan Robinson, 2 for 1');
+  assert.equal(text, 'With Hermes Express, send a WR, get Bijan Robinson plus anything, 2 for 1');
   const wide = describeQuery(
     { partnerRosterIds: [2, 3, 4], send: { kind: 'position', positions: ['RB', 'WR'] }, get: ANY_PICK, shapes: ['1-1', '2-2'] },
     { partners: ['Hermes Express', 'Apollo Archers', 'Ares'] },

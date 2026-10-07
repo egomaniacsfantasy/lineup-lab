@@ -3217,8 +3217,10 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
   // only sims trades that contain the exact core you pinned (plus balancing
   // throw-ins). getMust come from ONE opponent's roster (the chosen manager), so
   // they pin the search to his team.
-  const giveMust = (givePlayerIds ?? []).map(String);
-  const getMust = (getPlayerIds ?? []).map(String);
+  // The Trades-tab finder passes its picked players as sender.giveMust / getMust
+  // (user 2026-10-06: a picked player must be IN the deal, not the whole deal).
+  const giveMust = [...new Set([...(givePlayerIds ?? []), ...(sender?.giveMust ?? [])].map(String))];
+  const getMust = [...new Set([...(getPlayerIds ?? []), ...(sender?.getMust ?? [])].map(String))];
   const getOwner = getMust.length
     ? teams.find((t) => !t.isUser && getMust.every((id) => t.players.map(String).includes(id))) ?? null
     : null;
@@ -3388,10 +3390,16 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     if (senderGetAllow.size && !senderGetAllow.has(String(id))) return false;
     return !senderGetPos || senderGetPos.includes(pos);
   };
-  const tradeable = (team) => team.players
-    .filter((id) => TRADEABLE.includes(catalog[id]?.position) && senderAllows(team, id))
-    .sort((a, b) => projected(b) - projected(a))
-    .slice(0, 9);
+  const tradeable = (team) => {
+    const pool = team.players
+      .filter((id) => TRADEABLE.includes(catalog[id]?.position) && senderAllows(team, id))
+      .sort((a, b) => projected(b) - projected(a));
+    const top = pool.slice(0, 9);
+    // A pinned (must-include) player is always in the pool, even below the top 9.
+    const must = team.isUser ? giveMust : getMust;
+    for (const id of pool) if (must.includes(String(id)) && !top.includes(id)) top.push(id);
+    return top;
+  };
   const combos = (arr, k) => {
     if (k <= 0) return [[]];
     if (k > arr.length) return [];

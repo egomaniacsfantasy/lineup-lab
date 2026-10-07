@@ -46,6 +46,8 @@ import {
   queryToRules,
   queryToShapes,
   reconcileQuery,
+  rulesFor,
+  toggleKeep,
   sendConsequence,
   servedByBoard,
   shapesWords,
@@ -87,7 +89,7 @@ import './TradeFinder.css';
  * Swings under a point of title odds are shown as ties, below a line.
  */
 
-type Slot = 'partner' | 'send' | 'get';
+type Slot = 'partner' | 'send' | 'get' | 'keep';
 
 interface Reads {
   [rosterId: number]: { friendliness: number; relationship: number };
@@ -193,7 +195,18 @@ export function TradeFinder({
   onPriceExact,
   busy,
 }: TradeFinderProps) {
-  const [query, setQuery] = useState<FinderQuery>(EMPTY_QUERY);
+  const keepKey = `og.finder.keep.${leagueId}`;
+  const [query, setQuery] = useState<FinderQuery>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(keepKey) ?? '[]');
+      return { ...EMPTY_QUERY, keep: Array.isArray(saved) ? saved.map(String) : [] };
+    } catch {
+      return EMPTY_QUERY;
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(keepKey, JSON.stringify(query.keep ?? [])); } catch { /* storage off */ }
+  }, [keepKey, query.keep]);
   /* The ask the board is answering. Null until the first Find; the board then
      shows the open ask, every deal, which is what nothing pinned means. */
   const [ranQuery, setRanQuery] = useState<FinderQuery | null>(null);
@@ -216,6 +229,8 @@ export function TradeFinder({
   const teams = bootstrap.teams;
   const players = bootstrap.players;
   const partnerById = useMemo(() => new Map(partners.map((team) => [team.rosterId, team])), [partners]);
+  /* Who owns each player: a get-side pick binds only the manager who owns him. */
+  const owners = useMemo(() => new Map(teams.flatMap((team) => team.players.map((id) => [id, team.rosterId] as [string, number]))), [teams]);
 
   /* ── What a player is worth from here ── */
   const [outlooks, setOutlooks] = useState<Map<string, PlayerOutlook> | null>(null);
@@ -300,6 +315,7 @@ export function TradeFinder({
     partners: q.partnerRosterIds.map((id) => partnerById.get(id)?.teamName).filter((name): name is string => Boolean(name)),
     sendPlayers: q.send.kind === 'player' ? q.send.ids.map((id) => players[id]?.name ?? id) : [],
     getPlayers: q.get.kind === 'player' ? q.get.ids.map((id) => players[id]?.name ?? id) : [],
+    keepPlayers: (q.keep ?? []).map((id) => players[id]?.name ?? id),
   });
 
   const update = (patch: Partial<FinderQuery>) =>
@@ -330,7 +346,7 @@ export function TradeFinder({
       for (let attempt = 0; attempt < 2 && !answered; attempt += 1) {
         if (walkRef.current !== walkId) return;
         try {
-          const answer = await fetchTradeFinder(leagueId, { userId, partnerRosterId, rules, shapes, readsByRoster });
+          const answer = await fetchTradeFinder(leagueId, { userId, partnerRosterId, rules: rulesFor(rules, partnerRosterId, teams), shapes, readsByRoster });
           if (walkRef.current !== walkId) return;
           if (answer.available) {
             found.push(...(answer.suggestions ?? []));
@@ -393,10 +409,10 @@ export function TradeFinder({
   const fromBoard = servedByBoard(asked);
   const walking = !fromBoard && walk.running;
   const sourceSuggestions = useMemo(() => {
-    if (fromBoard) return (board?.suggestions ?? []).filter((suggestion) => boardMatches(suggestion, asked, players));
+    if (fromBoard) return (board?.suggestions ?? []).filter((suggestion) => boardMatches(suggestion, asked, players, owners));
     /* While the walk runs the board stays empty: deals land together. */
     return walk.running ? [] : walk.suggestions ?? [];
-  }, [asked, board?.suggestions, fromBoard, players, walk.running, walk.suggestions]);
+  }, [asked, board?.suggestions, fromBoard, owners, players, walk.running, walk.suggestions]);
 
   const entries = useMemo<ResultEntry[]>(() => sourceSuggestions
     .filter((suggestion) => suggestion.youDelta > 0)
@@ -446,6 +462,21 @@ export function TradeFinder({
           remove: () => update({ partnerRosterIds: togglePartner(query.partnerRosterIds, team.rosterId) }),
         }));
     }
+    if (slot === 'keep') {
+      return (query.keep ?? []).map((id) => ({
+        key: `k-${id}`,
+        label: players[id]?.name ?? id,
+        badge: (
+          <PlayerHeadshot
+            className="trade-finder__leg-headshot"
+            fallbackClassName="trade-finder__leg-headshot-fallback"
+            imageClassName="trade-finder__leg-headshot-image"
+            player={toPlayer(id, players)}
+          />
+        ),
+        remove: () => update({ keep: toggleKeep(query.keep, id) }),
+      }));
+    }
     const pick = slot === 'send' ? query.send : query.get;
     const set = (next: SlotPick) => update(slot === 'send' ? { send: next } : { get: next });
     if (pick.kind === 'position') {
@@ -489,7 +520,7 @@ export function TradeFinder({
               onClick={() => setPicker({ slot, multi: false })}
               type="button"
             >
-              <span className="trade-finder__leg-text trade-finder__leg-text--empty">{slot === 'partner' ? 'Anyone' : 'Anything'}</span>
+              <span className="trade-finder__leg-text trade-finder__leg-text--empty">{slot === 'partner' ? 'Anyone' : slot === 'keep' ? 'Nobody' : 'Anything'}</span>
               <svg aria-hidden="true" className="trade-finder__caret" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 16 16">
                 <path d="M6 4l4 4-4 4" />
               </svg>
@@ -532,6 +563,7 @@ export function TradeFinder({
     { text: `send ${pickWords(ranQuery.send, names(ranQuery).sendPlayers)}`, on: ranQuery.send.kind !== 'any' },
     { text: `get ${pickWords(ranQuery.get, names(ranQuery).getPlayers)}`, on: ranQuery.get.kind !== 'any' },
     { text: shapesWords(ranQuery.shapes), on: ranQuery.shapes.length > 0 },
+    ...(ranQuery.keep?.length ? [{ text: `never ${names(ranQuery).keepPlayers.join(', ')}`, on: true }] : []),
   ] : [];
 
   /* ── Faces ── */
@@ -920,13 +952,14 @@ export function TradeFinder({
           <div className="trade-finder__ticket-head">
             <span className="trade-finder__ticket-title">Your ask</span>
             {ranQuery ? (
-              <button className="trade-finder__ticket-clear" onClick={() => { setQuery(EMPTY_QUERY); }} type="button">Clear</button>
+              <button className="trade-finder__ticket-clear" onClick={() => { setQuery({ ...EMPTY_QUERY, keep: query.keep ?? [] }); }} type="button">Clear</button>
             ) : (
               <span className="trade-finder__ticket-week">Week {bootstrap.week}</span>
             )}
           </div>
           {renderLeg('partner', 'Partner')}
           {renderLeg('send', 'You send')}
+          {renderLeg('keep', 'Off limits')}
           {renderLeg('get', 'You get')}
           <div className="trade-finder__shape-row">
             <span className="trade-finder__leg-label">Shape</span>
@@ -1212,8 +1245,8 @@ interface FinderPickerProps {
 
 function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futuresByRoster, values, outlooks, basis, week, onPick, onClose }: FinderPickerProps) {
   const players = bootstrap.players;
-  const current: SlotPick = slot === 'send' ? query.send : slot === 'get' ? query.get : ANY_PICK;
-  const [mode, setMode] = useState<'position' | 'player'>(current.kind === 'player' ? 'player' : 'position');
+  const current: SlotPick = slot === 'send' ? query.send : slot === 'get' ? query.get : slot === 'keep' ? { kind: 'player', ids: query.keep ?? [] } : ANY_PICK;
+  const [mode, setMode] = useState<'position' | 'player'>(current.kind === 'player' || slot === 'keep' ? 'player' : 'position');
   const [search, setSearch] = useState('');
   const firstRef = useRef<HTMLButtonElement | null>(null);
 
@@ -1229,11 +1262,11 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
     if (!multi) onClose();
   };
 
-  const title = slot === 'partner' ? 'Partner' : slot === 'send' ? 'You send' : 'You get';
+  const title = slot === 'partner' ? 'Partner' : slot === 'send' ? 'You send' : slot === 'keep' ? 'Off limits' : 'You get';
   const sublines = positionSublines({ team: userTeam, players, playerMeans: values, rosterPositions: bootstrap.league.rosterPositions });
 
   const pool = useMemo(() => {
-    const owners = slot === 'send'
+    const owners = slot === 'send' || slot === 'keep'
       ? [userTeam]
       : query.partnerRosterIds.length > 0
         ? partners.filter((team) => query.partnerRosterIds.includes(team.rosterId))
@@ -1256,11 +1289,11 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
           <span className="trade-finder__sheet-title">{title}</span>
           <button
             className="trade-finder__sheet-any"
-            onClick={() => { onPick(slot === 'partner' ? { partnerRosterIds: [] } : slot === 'send' ? { send: ANY_PICK } : { get: ANY_PICK }); onClose(); }}
+            onClick={() => { onPick(slot === 'partner' ? { partnerRosterIds: [] } : slot === 'send' ? { send: ANY_PICK } : slot === 'keep' ? { keep: [] } : { get: ANY_PICK }); onClose(); }}
             ref={firstRef}
             type="button"
           >
-            {slot === 'partner' ? 'Anyone' : 'Anything'}
+            {slot === 'partner' ? 'Anyone' : slot === 'keep' ? 'Nobody' : 'Anything'}
           </button>
         </div>
 
@@ -1292,6 +1325,7 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
           </div>
         ) : (
           <>
+            {slot === 'keep' ? null : (
             <div aria-label="Pick by" className="trade-finder__seg" role="radiogroup">
               {(['position', 'player'] as const).map((option) => (
                 <button
@@ -1306,6 +1340,7 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                 </button>
               ))}
             </div>
+            )}
 
             {mode === 'position' ? (
               <>
@@ -1342,13 +1377,13 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                   </svg>
                   <input
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder={slot === 'send' ? 'Search your roster' : query.partnerRosterIds.length > 0 ? 'Search their rosters' : 'Search the league'}
+                    placeholder={slot === 'send' || slot === 'keep' ? 'Search your roster' : query.partnerRosterIds.length > 0 ? 'Search their rosters' : 'Search the league'}
                     type="search"
                     value={search}
                   />
                 </label>
                 <p className="trade-finder__list-caption">
-                  <span>{slot === 'send' ? 'Yours' : query.partnerRosterIds.length > 0 ? 'Theirs' : 'The league'}</span>
+                  <span>{slot === 'send' || slot === 'keep' ? 'Yours' : query.partnerRosterIds.length > 0 ? 'Theirs' : 'The league'}</span>
                   <span>{basis === 'ros' ? 'Per game, rest of season' : 'Projected this week'}</span>
                 </p>
                 <div className="trade-finder__list">
@@ -1362,7 +1397,11 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                         aria-pressed={on}
                         className={['trade-finder__item', on ? 'trade-finder__item--on' : ''].filter(Boolean).join(' ')}
                         key={id}
-                        onClick={() => pick(slot === 'send' ? { send: togglePlayer(current, id) } : { get: togglePlayer(current, id) })}
+                        onClick={() => pick(slot === 'keep'
+                          ? { keep: toggleKeep(query.keep, id), ...(query.send.kind === 'player' && query.send.ids.includes(id) ? { send: togglePlayer(query.send, id) } : {}) }
+                          : slot === 'send'
+                            ? { send: togglePlayer(current, id), keep: (query.keep ?? []).filter((k) => k !== id) }
+                            : { get: togglePlayer(current, id) })}
                         type="button"
                       >
                         <PlayerHeadshot
@@ -1388,6 +1427,13 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                   })}
                   {pool.length === 0 ? <p className="trade-finder__sheet-note">Nobody by that name.</p> : null}
                 </div>
+                <p className="trade-finder__sheet-note">
+                  {slot === 'keep'
+                    ? 'These players are never offered, in any deal. The list stays until you change it.'
+                    : slot === 'send'
+                      ? 'Every deal includes the players you pick, plus anyone else of yours that is not off limits.'
+                      : 'Every deal includes the player you pick, plus anyone else from his manager.'}
+                </p>
               </>
             )}
           </>
@@ -1397,7 +1443,9 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
             <span className="trade-finder__sheet-note">
               {slot === 'partner'
                 ? (query.partnerRosterIds.length === 0 ? 'Nobody picked: every manager.' : `${query.partnerRosterIds.length} picked. Tap again to remove.`)
-                : current.kind === 'position'
+                : slot === 'keep'
+                  ? ((query.keep ?? []).length === 0 ? 'Nobody off limits.' : `${(query.keep ?? []).length} off limits. Tap again to remove.`)
+                  : current.kind === 'position'
                   ? `${current.positions.length} picked. Tap again to remove.`
                   : current.kind === 'player'
                     ? `${current.ids.length} picked. Tap again to remove.`

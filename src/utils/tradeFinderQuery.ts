@@ -3,13 +3,16 @@ import type { ApiCatalogPlayer, ApiTeam, TradeSuggestion } from '../services/lea
 /**
  * The finder's ticket: one question with three blanks and a shape.
  *
- * The ticket is the trade sender's standing rules, asked on demand. Every blank
- * is a POOL, "any of these", and an empty pool means no limit:
+ * The ticket is the trade sender's standing rules, asked on demand. An empty
+ * blank means no limit:
  *   - partners: the managers to scan (none picked = every manager);
- *   - you send: positions or players of yours that may go (every player sent
- *     comes from the pool);
- *   - you get: positions or players of theirs you would take (every player
- *     received comes from the pool);
+ *   - you send / you get, by POSITION: a pool, every player on that side comes
+ *     from the positions picked;
+ *   - you send / you get, by PLAYER: every deal includes the players picked, plus
+ *     anything else (user 2026-10-06: a picked player is IN the deal, not the
+ *     whole deal). On the get side, each manager's deals include the picked
+ *     players HE owns;
+ *   - off limits: players of yours that are never offered;
  *   - shapes: the package sizes allowed.
  * Each manager is then scanned one at a time by the same per-manager search the
  * sender runs, at the analyzer's full sim count. This module is the pure half:
@@ -96,6 +99,8 @@ export interface FinderQuery {
   get: SlotPick;
   /** Package sizes allowed. Empty = any size. */
   shapes: FinderShape[];
+  /** Your players that are never offered ("off limits"). */
+  keep?: string[];
 }
 
 export const EMPTY_QUERY: FinderQuery = {
@@ -103,7 +108,14 @@ export const EMPTY_QUERY: FinderQuery = {
   send: ANY_PICK,
   get: ANY_PICK,
   shapes: [],
+  keep: [],
 };
+
+/** Add or remove one player from the off-limits list. */
+export function toggleKeep(keep: string[] | undefined, id: string): string[] {
+  const current = keep ?? [];
+  return current.includes(id) ? current.filter((p) => p !== id) : [...current, id];
+}
 
 /* The sender's two thresholds: keep a deal only if your title odds rise at least
    this much, and theirs fall at most this much. The finder opens on every deal
@@ -167,28 +179,38 @@ export function withinNoise(youDelta: number, ci?: number | null) {
  * sims running-back packages the open scan never tried; filtering the open
  * scan down to running backs leaves two or three. A named player is the same.
  * Both walk the league live, exactly the call the finder made before the
- * board existed.
+ * board existed. Off-limits players only REMOVE deals, so the board serves them.
  */
 export function servedByBoard(query: FinderQuery) {
   return query.send.kind === 'any' && query.get.kind === 'any';
 }
 
 /** The board's deals that fit the ticket: every player sent from the send
- *  pool, every player received from the get pool, the partner picked, the
- *  shape picked. The same rule the live search applies, applied after. */
+ *  position pool (or including the picked players), the same on the get side,
+ *  nobody off limits sent, the partner picked, the shape picked. The same rule
+ *  the live search applies, applied after. `owners` (player id -> roster id)
+ *  scopes a get-side player pick to the ones this partner owns. */
 export function boardMatches(
   suggestion: Pick<TradeSuggestion, 'give' | 'get' | 'partnerRosterId'>,
   query: FinderQuery,
   players: Record<string, { position: string }>,
+  owners?: Map<string, number>,
 ) {
   if (query.partnerRosterIds.length && !query.partnerRosterIds.includes(suggestion.partnerRosterId)) return false;
   if (!matchesShapes(suggestion, query.shapes)) return false;
-  const fits = (assets: { id: string }[], pick: SlotPick) => {
+  if ((query.keep ?? []).some((id) => suggestion.give.some((asset) => asset.id === id))) return false;
+  const has = (assets: { id: string }[], id: string) => assets.some((asset) => asset.id === id);
+  const fits = (assets: { id: string }[], pick: SlotPick, side: 'send' | 'get') => {
     if (pick.kind === 'position') return assets.every((asset) => pick.positions.includes(players[asset.id]?.position as FinderPosition));
-    if (pick.kind === 'player') return assets.every((asset) => pick.ids.includes(asset.id));
+    if (pick.kind === 'player') {
+      const must = side === 'get' && owners
+        ? pick.ids.filter((id) => owners.get(id) === suggestion.partnerRosterId)
+        : pick.ids;
+      return must.length > 0 && must.every((id) => has(assets, id));
+    }
     return true;
   };
-  return fits(suggestion.give, query.send) && fits(suggestion.get, query.get);
+  return fits(suggestion.give, query.send, 'send') && fits(suggestion.get, query.get, 'get');
 }
 
 export function isEmptyQuery(query: FinderQuery) {
@@ -227,16 +249,33 @@ export interface FinderRules {
   getAllow: string[];
   givePositions: FinderPosition[];
   getPositions: FinderPosition[];
+  /** Players every deal must include (plus anything else). */
+  giveMust: string[];
+  getMust: string[];
+  /** Your players never offered. */
+  protect: string[];
 }
 
-/** The pools as the sender's rules (empty array = no limit on that pool). */
+/** The ticket as the sender's rules. Player picks are must-include, not pools,
+ *  so giveAllow / getAllow stay empty. `getMust` holds every picked player; the
+ *  per-manager request keeps only the ones that manager owns (rulesFor). */
 export function queryToRules(query: FinderQuery): FinderRules {
   return {
-    giveAllow: query.send.kind === 'player' ? query.send.ids : [],
-    getAllow: query.get.kind === 'player' ? query.get.ids : [],
+    giveAllow: [],
+    getAllow: [],
     givePositions: query.send.kind === 'position' ? query.send.positions : [],
     getPositions: query.get.kind === 'position' ? query.get.positions : [],
+    giveMust: query.send.kind === 'player' ? query.send.ids : [],
+    getMust: query.get.kind === 'player' ? query.get.ids : [],
+    protect: query.keep ?? [],
   };
+}
+
+/** One manager's rules: the get-side picks narrowed to the players he owns. */
+export function rulesFor(rules: FinderRules, partnerRosterId: number, teams: ApiTeam[]): FinderRules {
+  if (!rules.getMust.length) return rules;
+  const team = teams.find((t) => t.rosterId === partnerRosterId);
+  return { ...rules, getMust: rules.getMust.filter((id) => team?.players.includes(id)) };
 }
 
 export function queryToShapes(query: FinderQuery) {
@@ -259,7 +298,7 @@ export function queryToRequests(query: FinderQuery, teams: ApiTeam[]) {
   return partnersToScan(query, teams).flatMap((partnerRosterId) =>
     shapes.map((shape) => ({
       partnerRosterId,
-      rules,
+      rules: rulesFor(rules, partnerRosterId, teams),
       shape,
       shapes: [shapeSizes(shape)].filter((sizes): sizes is { give: number; get: number } => sizes != null),
     })));
@@ -275,13 +314,16 @@ export function reconcileQuery(query: FinderQuery, teams: ApiTeam[]): FinderQuer
   const opponents = teams.filter((team) => !team.isUser);
   const partnerRosterIds = query.partnerRosterIds.filter((id) => opponents.some((team) => team.rosterId === id));
   const pool = partnerRosterIds.length ? opponents.filter((team) => partnerRosterIds.includes(team.rosterId)) : opponents;
+  const keep = [...new Set((query.keep ?? []).filter((id) => user?.players.includes(id)))];
+  /* A player can't be both off limits and required: the off-limits list wins
+     (the picker removes him from it when you pick him to send). */
   const send = query.send.kind === 'player'
-    ? normalizePick({ kind: 'player', ids: query.send.ids.filter((id) => user?.players.includes(id)) })
+    ? normalizePick({ kind: 'player', ids: query.send.ids.filter((id) => user?.players.includes(id) && !keep.includes(id)).slice(0, 3) })
     : normalizePick(query.send);
   const get = query.get.kind === 'player'
     ? normalizePick({ kind: 'player', ids: query.get.ids.filter((id) => pool.some((team) => team.players.includes(id))) })
     : normalizePick(query.get);
-  return { partnerRosterIds, send, get, shapes: orderedShapes(query.shapes) };
+  return { partnerRosterIds, send, get, shapes: orderedShapes(query.shapes), keep };
 }
 
 export function suggestionSizes(suggestion: Pick<TradeSuggestion, 'give' | 'get'>) {
@@ -342,6 +384,7 @@ export interface QueryNames {
   partners?: string[];
   sendPlayers?: string[];
   getPlayers?: string[];
+  keepPlayers?: string[];
 }
 
 function listWords(words: string[], limit = 2) {
@@ -351,7 +394,11 @@ function listWords(words: string[], limit = 2) {
 
 export function pickWords(pick: SlotPick, names: string[] | undefined) {
   if (pick.kind === 'player') {
-    return names?.length ? listWords(names) : `${pick.ids.length} ${pick.ids.length === 1 ? 'player' : 'players'}`;
+    /* A picked player is IN the deal, alongside anything else. */
+    const who = names?.length
+      ? (names.length <= 2 ? names.join(' and ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`)
+      : `${pick.ids.length} ${pick.ids.length === 1 ? 'player' : 'players'}`;
+    return `${who} plus anything`;
   }
   if (pick.kind === 'position') return pick.positions.length === 1 ? `a ${pick.positions[0]}` : pick.positions.join(' or ');
   return 'anything';
@@ -371,7 +418,10 @@ export function shapesWords(shapes: FinderShape[]) {
 /** The ask in one sentence, for the results eyebrow and the empty state. */
 export function describeQuery(query: FinderQuery, names: QueryNames = {}) {
   const shape = query.shapes.length ? `, ${shapesWords(query.shapes)}` : '';
-  return `With ${partnersWords(query, names.partners)}, send ${pickWords(query.send, names.sendPlayers)}, get ${pickWords(query.get, names.getPlayers)}${shape}`;
+  const keep = query.keep?.length
+    ? `, never ${names.keepPlayers?.length ? listWords(names.keepPlayers) : `${query.keep.length} kept`}`
+    : '';
+  return `With ${partnersWords(query, names.partners)}, send ${pickWords(query.send, names.sendPlayers)}, get ${pickWords(query.get, names.getPlayers)}${shape}${keep}`;
 }
 
 /* ── What a player is worth from here ──────────────────────────────────────

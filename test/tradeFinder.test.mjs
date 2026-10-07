@@ -80,7 +80,7 @@ test('the board is there on arrival, from a scan that already ran, with the tick
     assert.deepEqual(await page.locator('.trade-cc__view').allTextContents(), ['Trade finder', 'Build trades']);
     assert.deepEqual(
       await page.locator('.trade-finder__leg-label').allTextContents(),
-      ['Partner', 'You send', 'You get', 'Shape'],
+      ['Partner', 'You send', 'Off limits', 'You get', 'Shape'],
     );
 
     /* No search ran. The board came from the last scan, and says when. */
@@ -232,7 +232,7 @@ test('a named player walks the league live, as a screen, and deals land together
   try {
     await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
     /* Pin a player you want: the search is live and narrows to his owner. */
-    await page.locator('.trade-finder__leg').nth(2).locator('.trade-finder__leg-open').click();
+    await page.locator('.trade-finder__leg').nth(3).locator('.trade-finder__leg-open').click();
     const sheet = page.locator('.trade-finder__sheet');
     await sheet.locator('.trade-finder__seg-btn', { hasText: 'A player' }).click();
     await sheet.locator('.trade-finder__search input').fill('London');
@@ -264,10 +264,47 @@ test('a named player walks the league live, as a screen, and deals land together
   }
 });
 
+test('a picked player only has to be IN the deal, and an off-limits player is never sent', async () => {
+  const page = await openMarket(DESKTOP);
+  try {
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    /* Off limits: McBride. Every board deal that sends him disappears. */
+    await page.locator('.trade-finder__leg').nth(2).locator('.trade-finder__leg-open').click();
+    let sheet = page.locator('.trade-finder__sheet');
+    assert.equal(await sheet.locator('.trade-finder__seg-btn').count(), 0, 'off limits is players only');
+    await sheet.locator('.trade-finder__search input').fill('McBride');
+    await sheet.locator('.trade-finder__item', { hasText: 'Trey McBride' }).first().click();
+    await sheet.waitFor({ state: 'detached' });
+    await page.locator('.trade-finder__find').click();
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    assert.doesNotMatch(await page.locator('.trade-finder__board').innerText(), /Trey McBride/);
+    assert.match(await page.locator('.trade-finder__board').innerText(), /Drake London/);
+
+    /* Take McBride off the list, then pick him to SEND. */
+    await page.locator('.trade-finder__chip-x[aria-label="Remove Trey McBride"]').click();
+    await page.locator('.trade-finder__leg').nth(1).locator('.trade-finder__leg-open').click();
+    sheet = page.locator('.trade-finder__sheet');
+    await sheet.locator('.trade-finder__seg-btn', { hasText: 'A player' }).click();
+    await sheet.locator('.trade-finder__search input').fill('McBride');
+    await sheet.locator('.trade-finder__item', { hasText: 'Trey McBride' }).first().click();
+    await sheet.waitFor({ state: 'detached' });
+    await page.locator('.trade-finder__find').click();
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible', timeout: 15_000 });
+    /* Both McBride deals: the 1 for 1 AND the 2 for 2 where Derrick Henry goes
+       too. A picked player is in the deal, not the whole deal. */
+    const lanes = await page.locator('.trade-finder__lane').allInnerTexts();
+    assert.ok(lanes.length >= 2, `${lanes.length} lanes`);
+    assert.ok(lanes.every((text) => /Trey McBride/.test(text)), 'every deal includes McBride');
+    assert.ok(lanes.some((text) => /Derrick Henry/.test(text)), 'other players of yours can go with him');
+  } finally {
+    await page.close();
+  }
+});
+
 test('the player list values a player by the rest of his season, and says so', async () => {
   const page = await openMarket(DESKTOP);
   try {
-    await page.locator('.trade-finder__leg').nth(2).locator('.trade-finder__leg-open').click();
+    await page.locator('.trade-finder__leg').nth(3).locator('.trade-finder__leg-open').click();
     const sheet = page.locator('.trade-finder__sheet');
     await sheet.waitFor({ state: 'visible' });
     await sheet.locator('.trade-finder__seg-btn', { hasText: 'A player' }).click();
@@ -297,7 +334,9 @@ test('a manager who does not answer is retried, then skipped and named; the walk
     await page.locator('.trade-finder__leg').nth(1).locator('.trade-finder__leg-open').click();
     const sheet = page.locator('.trade-finder__sheet');
     await sheet.locator('.trade-finder__seg-btn', { hasText: 'A player' }).click();
-    await sheet.locator('.trade-finder__item').first().click();
+    /* McLaurin: the player Hermes's fixture deal includes (a pick must be in the deal). */
+    await sheet.locator('.trade-finder__search input').fill('McLaurin');
+    await sheet.locator('.trade-finder__item', { hasText: 'Terry McLaurin' }).first().click();
     await sheet.waitFor({ state: 'detached' });
 
     /* Hermes (2) fails once, as the server does while it restarts; Apollo (3)

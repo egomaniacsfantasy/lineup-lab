@@ -1108,6 +1108,11 @@ export function fetchTradeFinder(
       getAllow: string[];
       givePositions: string[];
       getPositions: string[];
+      /** Players every deal must include (alongside anything else). */
+      giveMust?: string[];
+      getMust?: string[];
+      /** Your players never offered. */
+      protect?: string[];
       /** You give up at most this many projected points (net, rest of season). */
       maxNetPointsLoss?: number | null;
     };

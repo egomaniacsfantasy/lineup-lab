@@ -206,3 +206,16 @@ test('"I give up at most N points" removes trades before they are simmed, and no
     assert.ok(Math.abs(s.give.length - s.get.length) <= 1, 'no 3-for-1 / 1-for-3');
   }
 });
+
+test('finder player picks are must-include (plus anything else), even a bench player; protected never go', async () => {
+  const bench = you.players[10]; // the 5-ppg WR: far outside the top 9 by projection
+  const res = await suggestTrades(ctx, {
+    maxSim: 20, partnerRosterId: 2, sender: { ...openRules, giveMust: [bench], protect: [you.players[1]] },
+  });
+  assert.ok(res.suggestions.length > 0, 'a pinned bench player still gets deals');
+  for (const s of res.suggestions) {
+    assert.ok(s.give.some((p) => p.id === bench), 'every deal includes the pinned player');
+    assert.ok(!s.give.some((p) => p.id === you.players[1]), 'never the protected player');
+  }
+  assert.ok(res.suggestions.some((s) => s.give.length > 1), 'others of yours can ride along');
+});
