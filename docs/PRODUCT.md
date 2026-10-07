@@ -673,6 +673,16 @@ and the connect screen consumes it on read.
   a beta user asking for "a page where you only see your team", who then said
   what he meant: clicking through weeks to see what is coming.
 
+- **A slot nobody filled stays where it is.** Both providers drop an empty
+  starting slot (Sleeper strips the `'0'`, ESPN simply has no entry), so a
+  manager whose quarterback is on bye sends eight players for nine slots. The
+  board works each starter's slot out from what he plays
+  (`src/utils/lineupSlots.ts`), and the two lineups are paired slot against
+  slot rather than row against row, so the empty slot sits at QB facing their
+  quarterback. Counting labels off the array instead put his running back in the
+  QB row, shifted every row below it up one, and stranded a "no starter" row
+  under the kicker. Design flag: `?byeQb`.
+
 - **Reserve players have their own group.** IR and taxi players are on the
   roster but cannot be started from where they sit, so they are not bench depth:
   they sit below the bench under "Reserve", tagged `IR` or `TAXI`, with a dash

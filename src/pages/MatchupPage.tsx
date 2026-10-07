@@ -29,7 +29,7 @@ import { useNflSchedule } from '../hooks/useNflSchedule';
 import {
   MOCK_MATCHUP,
 } from '../mocks';
-import { toMatchupData, toPlayer } from '../adapters/connectedLeague';
+import { slotLabels, toMatchupData, toPlayer } from '../adapters/connectedLeague';
 import { setStoredCascadeScenarioLabel } from '../utils/seasonSelection';
 import { NO_VALUE, formatAmericanOdds, formatProbOrOdds, formatProjectionPoints, impliedProbability } from '../utils/formatOdds';
 import { anyStarted, scorelineFor, teamScored, type Scoreline } from '../utils/liveScoreline';
@@ -45,6 +45,7 @@ import { WeekAhead, type WeekAheadFork } from '../components/matchup/WeekAhead';
 import { fetchWeekForks } from '../services/predictor';
 import { winProbabilityToMoneyline } from '../utils/matchupSides';
 import { playerShortName } from '../utils/playerNames';
+import { slotAccepts } from '../utils/lineupSlots';
 import { useNflGameStateForWeek } from '../hooks/useNflGameState';
 import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';
@@ -357,29 +358,6 @@ type MirroredSlotRow = {
    against a kicker answers a question nobody asked: you compare two players
    because you are choosing between them for one slot, so the only useful
    partners are the ones that could take the same slot. */
-const SLOT_ELIGIBILITY: Record<string, readonly string[]> = {
-  QB: ['QB'],
-  RB: ['RB'],
-  WR: ['WR'],
-  TE: ['TE'],
-  K: ['K'],
-  DEF: ['DEF'],
-  FLX: ['RB', 'WR', 'TE'],
-  FLEX: ['RB', 'WR', 'TE'],
-  WRRB_FLEX: ['RB', 'WR'],
-  REC_FLEX: ['WR', 'TE'],
-  SUPER_FLEX: ['QB', 'RB', 'WR', 'TE'],
-};
-
-function slotAccepts(slotLabel: string, position: string | undefined) {
-  if (!position) return false;
-  const accepted = SLOT_ELIGIBILITY[slotLabel.toUpperCase()];
-  // An unmapped slot (a bench row, a league with a custom slot) should not
-  // silently block everything, so it accepts anything.
-  if (!accepted) return true;
-  return accepted.includes(position.toUpperCase());
-}
-
 /* Both directions: each player has to be able to take the other's slot, so a
    flex running back can be weighed against a running back, and a quarterback
    in a superflex is not offered against a tight end. */
@@ -392,10 +370,24 @@ function slotsAreComparable(
   return slotAccepts(slotA, positionB) && slotAccepts(slotB, positionA);
 }
 
+/**
+ * The two lineups, paired slot by slot.
+ *
+ * Paired by array position, one side being a player short put the rows out of
+ * step with each other: a manager with no quarterback started had his running
+ * back facing their quarterback, every row below shifted, and an empty row left
+ * over at the bottom. The two sides are only comparable slot against slot.
+ *
+ * `slotOrder` is the league's own list of starting slots. Without it (the demo
+ * matchup, which has no league behind it) this falls back to pairing by
+ * position, which is what it always did.
+ */
 function buildMirroredSlotRows(
   yourRoster: RosterSlot[],
   opponentRoster: RosterSlot[],
+  slotOrder?: readonly string[],
 ) {
+  if (slotOrder?.length) return buildRowsBySlot(yourRoster, opponentRoster, slotOrder);
   const max = Math.max(yourRoster.length, opponentRoster.length);
   const rows: MirroredSlotRow[] = [];
   for (let index = 0; index < max; index += 1) {
@@ -417,6 +409,58 @@ function buildMirroredSlotRows(
     });
   }
   return rows;
+}
+
+/** One row per slot the league actually starts, each side taking its own. */
+function buildRowsBySlot(
+  yourRoster: RosterSlot[],
+  opponentRoster: RosterSlot[],
+  slotOrder: readonly string[],
+) {
+  const mine = [...yourRoster];
+  const theirs = [...opponentRoster];
+  const take = (pool: RosterSlot[], label: string) => (
+    pool[0]?.slotLabel === label ? pool.shift() ?? null : null);
+
+  const rows: MirroredSlotRow[] = slotOrder.map((label, index) => {
+    const yourSlot = take(mine, label);
+    const opponentSlot = take(theirs, label);
+    return slotRow(normalizeSlotLabel(label), yourSlot, opponentSlot, index);
+  });
+  /* Anything the league's slot list did not account for still gets a row: a
+     starter off the board is worse than a starter in an odd row. */
+  let extra = slotOrder.length;
+  while (mine.length || theirs.length) {
+    const yourSlot = mine.shift() ?? null;
+    const opponentSlot = theirs.shift() ?? null;
+    rows.push(slotRow(
+      normalizeSlotLabel(yourSlot?.slotLabel ?? opponentSlot?.slotLabel ?? 'BN'),
+      yourSlot,
+      opponentSlot,
+      extra,
+    ));
+    extra += 1;
+  }
+  return rows;
+}
+
+function slotRow(
+  slotLabel: string,
+  yourSlot: RosterSlot | null,
+  opponentSlot: RosterSlot | null,
+  index: number,
+): MirroredSlotRow {
+  const yourProjection = yourSlot?.live?.projected ?? yourSlot?.projection ?? 0;
+  const opponentProjection = opponentSlot?.live?.projected ?? opponentSlot?.projection ?? 0;
+  return {
+    key: `${slotLabel}-${yourSlot?.starter.id ?? 'open'}-${opponentSlot?.starter.id ?? 'open'}-${index}`,
+    slotLabel,
+    yourSlot,
+    opponentSlot,
+    yourProjection,
+    opponentProjection,
+    edgeDelta: roundTo(yourProjection - opponentProjection),
+  };
 }
 
 function HeadToHeadStrip({ summary }: { summary: SleeperHeadToHeadSummary }) {
@@ -1642,9 +1686,16 @@ function MatchupLive({
       }
     : null;
 
+  /* The league's own starting slots, which is what makes the two lineups
+     comparable row by row. Null for the demo matchup, which has no league
+     behind it and falls back to pairing by position. */
+  const leagueSlotOrder = useMemo(
+    () => (bootstrap ? slotLabels(bootstrap.league.rosterPositions) : null),
+    [bootstrap],
+  );
   const slotComparisonRows = useMemo(
-    () => buildMirroredSlotRows(engine.roster, matchup.opponentTeam.roster),
-    [engine.roster, matchup.opponentTeam.roster],
+    () => buildMirroredSlotRows(engine.roster, matchup.opponentTeam.roster, leagueSlotOrder ?? undefined),
+    [engine.roster, matchup.opponentTeam.roster, leagueSlotOrder],
   );
 
   /* Kickoffs pass while the page is open, so the rows need a clock that moves.

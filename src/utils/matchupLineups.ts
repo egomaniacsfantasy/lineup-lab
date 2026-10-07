@@ -1,4 +1,5 @@
 import type { Player, SlotLabel } from '../types/player';
+import { assignStartersToSlots } from './lineupSlots';
 
 /**
  * Two starting lineups, paired slot by slot, for the board's detail view.
@@ -101,8 +102,13 @@ export function buildLineup({
   live,
   resolvePlayer,
 }: BuildLineupInput): LineupSlotEntry[] {
-  return starters.map((id, index) => {
-    const slot = labels[index] ?? 'FLEX';
+  /* By eligibility rather than by array position: both providers drop a slot
+     nobody filled, so counting labels off the array slid every row below the
+     gap up by one and stranded the hole at the bottom. */
+  return assignStartersToSlots<string>(starters, labels, (id) => players[id]?.position)
+    .map(({ slotLabel, starter }) => {
+    const slot = slotLabel as SlotLabel;
+    const id = starter;
     if (id == null || EMPTY_SLOT_IDS.has(id)) {
       return {
         slot,

@@ -8,6 +8,7 @@
  * the server engine in Phase B.
  */
 import { buildLineup } from '../utils/matchupLineups.ts';
+import { assignStartersToSlots } from '../utils/lineupSlots';
 import type {
   ApiCatalogPlayer,
   ApiMatchup,
@@ -325,7 +326,7 @@ export function toWeekMatchups(
   return result;
 }
 
-function slotLabels(rosterPositions: string[]): SlotLabel[] {
+export function slotLabels(rosterPositions: string[]): SlotLabel[] {
   return rosterPositions
     .filter((p) => p !== 'BN' && p !== 'IR' && p !== 'TAXI')
     .map((p) => {
@@ -386,8 +387,20 @@ export function toMatchupData(
   const projectionFor = (playerId: string, matchup: ApiMatchup) =>
     playerMeans[playerId]?.mean ?? matchup.playersPoints[playerId] ?? 0;
 
+  /* Slot by eligibility, not by array position. A slot nobody filled is dropped
+     by both providers (Sleeper strips the '0', ESPN has no entry), so counting
+     labels off the array put a running back in the QB row of a manager whose
+     quarterback was on bye and shifted every row under it. The original index
+     rides along because the engine's swaps are keyed by it. */
   const buildRoster = (matchup: ApiMatchup, isUserSide: boolean): RosterSlot[] =>
-    matchup.starters.map((playerId, index) => {
+    assignStartersToSlots(
+      matchup.starters.map((playerId, index) => ({ playerId, index })),
+      labels,
+      (entry) => bootstrap.players[entry.playerId]?.position,
+    )
+      .flatMap(({ slotLabel, starter }) => (
+        starter == null ? [] : [{ slotLabel: slotLabel as SlotLabel, ...starter }]))
+      .map(({ slotLabel, playerId, index }) => {
       const projection = projectionFor(playerId, matchup);
       const yoursSide = pricedLine?.sides[String(matchup.rosterId)];
       const swaps = isUserSide ? (swapsBySlot.get(index) ?? []) : [];
@@ -438,7 +451,7 @@ export function toMatchupData(
         typeof scored === 'number' && scored > 0 ? Number(scored.toFixed(1)) : null;
 
       return {
-        slotLabel: labels[index] ?? 'FLEX',
+        slotLabel,
         starter: toPlayer(playerId, bootstrap.players),
         projection,
         floor: Number((projection * 0.6).toFixed(1)),
@@ -556,7 +569,16 @@ function buildOffseasonMatchupData(
     total: yours.total,
   };
 
-  const roster: RosterSlot[] = userTeam.starters.map((playerId, index) => {
+  /* Same slotting rule as the in-season board: by eligibility, carrying the
+     original index for the engine's swaps. */
+  const roster: RosterSlot[] = assignStartersToSlots(
+    userTeam.starters.map((playerId, index) => ({ playerId, index })),
+    labels,
+    (entry) => bootstrap.players[entry.playerId]?.position,
+  )
+    .flatMap(({ slotLabel, starter }) => (
+      starter == null ? [] : [{ slotLabel: slotLabel as SlotLabel, ...starter }]))
+    .map(({ slotLabel, playerId, index }) => {
     const projection = playerMeans[playerId]?.mean ?? 0;
     const swaps = swapsBySlot.get(index) ?? [];
     const alternatives = swaps.map((swap) => {
@@ -584,7 +606,7 @@ function buildOffseasonMatchupData(
     });
 
     return {
-      slotLabel: labels[index] ?? 'FLEX',
+      slotLabel,
       starter: toPlayer(playerId, bootstrap.players),
       projection,
       floor: Number((projection * 0.6).toFixed(1)),

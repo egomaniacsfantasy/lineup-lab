@@ -51,6 +51,14 @@ const SYNCING =
 const PREGAME =
   typeof window !== 'undefined' && window.location.search.includes('pregame');
 
+/* ?byeQb starts nobody at quarterback, which is what a manager whose QB is on
+   bye actually sends: both providers drop the empty slot rather than hold a
+   place for it, so the app receives eight starters for nine slots. That is the
+   shape that used to put a running back in the QB row and strand an empty row
+   under the kicker, and it was unreachable by hand. */
+const BYE_QB =
+  typeof window !== 'undefined' && window.location.search.includes('byeQb');
+
 /* ?dynasty makes the design league answer as a dynasty league. Trades vanish
    and the shell's scope note appears, and neither of those states was
    reachable at all without a real dynasty league to connect, which is how the
@@ -390,6 +398,12 @@ function bestLineupSlots(starterIds: string[]) {
   }));
 }
 
+/* The starters the provider would actually send. */
+function startersFor(team: typeof USER_TEAM) {
+  if (!BYE_QB || !team.isUser) return [...team.starters];
+  return team.starters.filter((id) => PLAYER_CATALOG[id]?.position !== 'QB');
+}
+
 function buildTeam(team: typeof USER_TEAM) {
   return {
     rosterId: team.rosterId,
@@ -399,7 +413,7 @@ function buildTeam(team: typeof USER_TEAM) {
     teamName: team.teamName,
     avatarUrl: team.avatarUrl,
     players: [...team.starters, ...team.bench],
-    starters: [...team.starters],
+    starters: startersFor(team),
     reserve: [...((team as { reserve?: string[] }).reserve ?? [])],
     record: team.record,
     pointsFor: team.pointsFor,
@@ -428,7 +442,7 @@ function buildWeekMatchups(
         rosterId: leftTeam.rosterId,
         points: leftPoints,
         playersPoints: playersPoints(leftPlayers),
-        starters: [...leftTeam.starters],
+        starters: startersFor(leftTeam),
         players: leftPlayers,
       },
       {
@@ -437,7 +451,7 @@ function buildWeekMatchups(
         rosterId: rightTeam.rosterId,
         points: rightPoints,
         playersPoints: playersPoints(rightPlayers),
-        starters: [...rightTeam.starters],
+        starters: startersFor(rightTeam),
         players: rightPlayers,
       },
     ];
