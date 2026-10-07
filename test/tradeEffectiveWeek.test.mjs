@@ -58,3 +58,13 @@ test('a player on his BYE this week has not played: the trade still goes live th
   // A real "already played" player still holds the deal to next week.
   assert.equal(tradeEffectiveWeek(['rice', 'allen'], m, WEEK, catalog), 3);
 });
+
+test('a bye is found from the team schedule when the catalog has no byeWeek (ESPN leaves it empty)', () => {
+  // KC's 2026 bye is week 5. The live ESPN catalog carries team but byeWeek: null.
+  const rice = { playerId: 'rice', mean: 15, weekly: { 6: 15, 7: 15 } };
+  const m = new Map([['rice', rice]]);
+  assert.equal(tradeEffectiveWeek(['rice'], m, 5, { rice: { team: 'KC', byeWeek: null } }), 5);
+  // Not his bye week and no row: he already played -> next week.
+  const played6 = { playerId: 'rice', mean: 15, weekly: { 7: 15 } };
+  assert.equal(tradeEffectiveWeek(['rice'], new Map([['rice', played6]]), 6, { rice: { team: 'KC', byeWeek: null } }), 7);
+});

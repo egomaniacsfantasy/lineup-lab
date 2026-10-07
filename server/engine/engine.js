@@ -19,6 +19,7 @@ import { getActiveProjections } from '../projections/store.js';
 import { cached } from '../cache.js';
 import { closedFormWinProb, buildLivePlayerScores } from './liveWinProb.js';
 import { normalizeTeam } from '../live/nflGameStatus.js';
+import { byeWeekFor } from '../config/byes.js';
 
 export const SEASON_SIMS = 10_000; // player-level season Monte Carlo — Futures and movers
 const MATCHUP_SIMS = 10_000; // seeded player-level sims for the headline matchup win%
@@ -2667,7 +2668,11 @@ export function tradeEffectiveWeek(tradedIds, projectionMap, week, catalog = nul
     // Or the scoreboard already has his game FINAL (pinned by pinLeagueActuals)
     // before the pipeline has trimmed the week: same thing, he has played.
     const lockedNow = proj?.lockedWeekly?.[week] != null || proj?.lockedWeekly?.[String(week)] != null;
-    const onBye = Number(catalog?.[id]?.byeWeek ?? catalog?.[String(id)]?.byeWeek) === Number(week);
+    // The ESPN provider leaves byeWeek empty, so fall back to the team's bye from the
+    // schedule (config/byes.js), the same table the bootstrap fills it from.
+    const entry = catalog?.[id] ?? catalog?.[String(id)];
+    const bye = entry ? (entry.byeWeek ?? byeWeekFor(entry.team)) : null;
+    const onBye = bye != null && Number(bye) === Number(week);
     const startable = (hasGrid && !hasCurrent && !onBye) || lockedNow ? week + 1 : week;
     if (startable > ts) ts = startable;
   }
