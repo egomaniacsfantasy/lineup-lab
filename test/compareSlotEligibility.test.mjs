@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fsp from 'node:fs/promises';
+import { SLOT_ELIGIBILITY, slotAccepts } from '../src/utils/lineupSlots.ts';
 
 /**
  * You compare two players because you are choosing between them for one slot,
@@ -8,26 +9,16 @@ import fsp from 'node:fs/promises';
  * this, every starter was pickable against every other: a quarterback could be
  * weighed against a kicker, which answers a question nobody asked.
  *
- * The rules live in MatchupPage as a table. This pins the table itself, since
- * the failure mode is silent — a wrong entry just offers a comparison that
- * makes no sense, and nothing errors.
+ * The table used to live in MatchupPage and this file parsed it out of the
+ * source text. It moved to src/utils/lineupSlots.ts when the lineup board
+ * started working each starter's slot out from what he plays, so the table is
+ * imported now and these assertions are about the real thing rather than about
+ * a regex over a page. Still worth pinning: the failure mode is silent, since a
+ * wrong entry just offers a comparison that makes no sense and nothing errors.
  */
 const source = await fsp.readFile('src/pages/MatchupPage.tsx', 'utf8');
 
-function eligibilityTable() {
-  const block = source.match(/const SLOT_ELIGIBILITY[^=]*=\s*\{([\s\S]*?)\n\};/);
-  assert.ok(block, 'SLOT_ELIGIBILITY table not found');
-  const table = {};
-  for (const line of block[1].split('\n')) {
-    const match = line.match(/^\s*([A-Z_]+):\s*\[([^\]]*)\]/);
-    if (!match) continue;
-    table[match[1]] = match[2]
-      .split(',')
-      .map((entry) => entry.trim().replace(/['"]/g, ''))
-      .filter(Boolean);
-  }
-  return table;
-}
+const eligibilityTable = () => SLOT_ELIGIBILITY;
 
 test('a dedicated slot only accepts its own position', () => {
   const table = eligibilityTable();
@@ -59,11 +50,10 @@ test('flex slots accept exactly the positions they are named for', () => {
 test('an unmapped slot stays open rather than blocking everything', () => {
   /* A bench row or a league with a custom slot has no entry, and defaulting to
      "accepts nothing" would dim the whole lineup with no way to tell why. */
-  assert.match(
-    source,
-    /if \(!accepted\) return true;/,
-    'slotAccepts must fall open for slots it does not know',
-  );
+  assert.equal(slotAccepts('BN', 'QB'), true, 'an unknown slot blocked a player');
+  assert.equal(slotAccepts('SOMETHING_NEW', 'DEF'), true);
+  /* And a known slot still refuses what it should. */
+  assert.equal(slotAccepts('QB', 'RB'), false);
 });
 
 test('eligibility is checked in both directions', () => {
