@@ -45,7 +45,7 @@ import { WeekAhead, type WeekAheadFork } from '../components/matchup/WeekAhead';
 import { fetchWeekForks } from '../services/predictor';
 import { winProbabilityToMoneyline } from '../utils/matchupSides';
 import { playerShortName } from '../utils/playerNames';
-import { slotAccepts } from '../utils/lineupSlots';
+import { slotAccepts } from '../utils/lineupSlots.ts';
 import { useNflGameStateForWeek } from '../hooks/useNflGameState';
 import { hubShareMessage, shareFilename } from '../utils/shareMessage';
 import { oddsPairDelta } from '../utils/noTradeMath';

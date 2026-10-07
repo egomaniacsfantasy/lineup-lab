@@ -8,7 +8,7 @@
  * the server engine in Phase B.
  */
 import { buildLineup } from '../utils/matchupLineups.ts';
-import { assignStartersToSlots } from '../utils/lineupSlots';
+import { assignStartersToSlots } from '../utils/lineupSlots.ts';
 import type {
   ApiCatalogPlayer,
   ApiMatchup,

@@ -19,7 +19,11 @@ const players = {
 
 const labels = ['QB', 'RB', 'TE'];
 
-test('slot labels come from the league by index, and a lineup longer than the list spills to FLEX', () => {
+test("a starter's slot comes from what he plays, and nobody spills off the board", () => {
+  /* This used to label starters by counting off the league's list, which slid
+     every row below an empty slot up by one. Each slot now takes the first
+     starter it accepts. The receiver has no slot to sit in here, so he is
+     appended under his own position: wrong row beats missing. */
   const lineup = buildLineup({
     starters: ['a1', 'a2', 'a3', 'a4'],
     labels,
@@ -29,11 +33,30 @@ test('slot labels come from the league by index, and a lineup longer than the li
 
   assert.deepEqual(
     lineup.map((entry) => entry.slot),
-    ['QB', 'RB', 'TE', 'FLEX'],
+    ['QB', 'RB', 'TE', 'WR'],
   );
   assert.deepEqual(
     lineup.map((entry) => entry.name),
     ['Jalen Hurts', 'Bijan Robinson', 'Trey McBride', 'Jaxon Smith-Njigba'],
+  );
+});
+
+test('a slot nobody filled stays where it is', () => {
+  /* The reported bug, at this level: both providers drop an unfilled slot, so a
+     manager with no quarterback sends two players for three slots. The hole
+     belongs at QB, not at the end. */
+  const lineup = buildLineup({
+    starters: ['a2', 'a3'],
+    labels,
+    players,
+    means: {},
+  });
+
+  assert.deepEqual(lineup.map((entry) => entry.slot), ['QB', 'RB', 'TE']);
+  assert.equal(lineup[0].playerId, null, 'somebody was promoted into the empty QB slot');
+  assert.deepEqual(
+    lineup.slice(1).map((entry) => entry.name),
+    ['Bijan Robinson', 'Trey McBride'],
   );
 });
 

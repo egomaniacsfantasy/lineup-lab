@@ -1,5 +1,5 @@
 import type { Player, SlotLabel } from '../types/player';
-import { assignStartersToSlots } from './lineupSlots';
+import { assignStartersToSlots } from './lineupSlots.ts';
 
 /**
  * Two starting lineups, paired slot by slot, for the board's detail view.
