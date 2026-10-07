@@ -68,3 +68,14 @@ test('a bye is found from the team schedule when the catalog has no byeWeek (ESP
   const played6 = { playerId: 'rice', mean: 15, weekly: { 7: 15 } };
   assert.equal(tradeEffectiveWeek(['rice'], new Map([['rice', played6]]), 6, { rice: { team: 'KC', byeWeek: null } }), 7);
 });
+
+test('a bye player pinned to 0 this week (lockedWeekly) still does not hold the trade', () => {
+  // This is the live case: pinPlayedCurrentWeek locks a bye player at 0 because he has no
+  // current-week row. That lock must not read as "already played".
+  const rice = { playerId: 'rice', mean: 15, weekly: { 6: 15 }, lockedWeekly: { 5: 0, '5': 0 } };
+  const cat = { rice: { team: 'KC', byeWeek: null } };
+  assert.equal(tradeEffectiveWeek(['rice'], new Map([['rice', rice]]), 5, cat), 5);
+  // A real finished game (not his bye) still holds it.
+  const done = { playerId: 'x', mean: 15, weekly: { 6: 15 }, lockedWeekly: { 5: 21 } };
+  assert.equal(tradeEffectiveWeek(['x'], new Map([['x', done]]), 5, { x: { team: 'DAL', byeWeek: null } }), 6);
+});

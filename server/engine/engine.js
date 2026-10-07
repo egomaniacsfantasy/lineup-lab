@@ -2673,7 +2673,9 @@ export function tradeEffectiveWeek(tradedIds, projectionMap, week, catalog = nul
     const entry = catalog?.[id] ?? catalog?.[String(id)];
     const bye = entry ? (entry.byeWeek ?? byeWeekFor(entry.team)) : null;
     const onBye = bye != null && Number(bye) === Number(week);
-    const startable = (hasGrid && !hasCurrent && !onBye) || lockedNow ? week + 1 : week;
+    // A bye player is also PINNED to 0 this week (pinPlayedCurrentWeek locks anyone with
+    // no current-week row), so the lock must not read as "already played" for him either.
+    const startable = onBye ? week : ((hasGrid && !hasCurrent) || lockedNow ? week + 1 : week);
     if (startable > ts) ts = startable;
   }
   return ts;
