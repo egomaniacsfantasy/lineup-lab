@@ -76,11 +76,12 @@ test('every leg takes several picks, and an emptied leg is open again', () => {
   assert.deepEqual(send, { kind: 'position', positions: ['RB', 'WR'] }, 'kept in QB/RB/WR/TE order');
   assert.deepEqual(togglePosition(togglePosition(send, 'RB'), 'WR'), ANY_PICK, 'removing the last pick reopens the leg');
 
-  /* Players: any number, and picking a player replaces a position pool. */
+  /* Players: any number, and they sit ALONGSIDE a position pool (user 2026-10-07). */
   let get = togglePlayer({ kind: 'position', positions: ['TE'] }, 'p1');
   get = togglePlayer(get, 'p2');
-  assert.deepEqual(get, { kind: 'player', ids: ['p1', 'p2'] });
-  assert.deepEqual(togglePlayer(get, 'p1'), { kind: 'player', ids: ['p2'] });
+  assert.deepEqual(get, { kind: 'both', positions: ['TE'], ids: ['p1', 'p2'] });
+  assert.deepEqual(togglePosition(get, 'TE'), { kind: 'player', ids: ['p1', 'p2'] }, 'dropping the positions keeps the players');
+  assert.deepEqual(togglePlayer(togglePlayer(get, 'p1'), 'p2'), { kind: 'position', positions: ['TE'] }, 'dropping the players keeps the positions');
 
   /* Shapes and managers toggle the same way. */
   assert.deepEqual(toggleShape(toggleShape([], '2-2'), '1-1'), ['1-1', '2-2']);
@@ -152,6 +153,22 @@ test('a picked player must be IN the deal, not the whole deal; off-limits player
   /* Anything sending an off-limits player is out. */
   assert.equal(boardMatches(deal(2, ['lamb', 'hall'], ['gibbs'], 2), query, players, owners), false);
   assert.equal(boardMatches(deal(2, ['hall'], ['adams'], 2), { ...EMPTY_QUERY, keep: ['hall'] }, players), false);
+
+  /* Positions AND a player on the same leg: Hampton is in every deal, and
+     everyone else sent is an RB, WR or TE (never a QB). */
+  const both = reconcileQuery({
+    ...EMPTY_QUERY,
+    send: { kind: 'both', positions: ['RB', 'WR', 'TE'], ids: ['lamb'] },
+  }, teams);
+  assert.deepEqual(queryToRules(both).givePositions, ['RB', 'WR', 'TE']);
+  assert.deepEqual(queryToRules(both).giveMust, ['lamb']);
+  const pos = { ...players, qb1: { position: 'QB' } };
+  assert.equal(boardMatches(deal(2, ['lamb', 'pollard'], ['gibbs'], 2), both, pos), true);
+  assert.equal(boardMatches(deal(2, ['lamb', 'qb1'], ['gibbs'], 2), both, pos), false, 'no QB rides along');
+  assert.equal(boardMatches(deal(2, ['pollard'], ['gibbs'], 2), both, pos), false, 'the picked player must be in it');
+  /* A picked player outside the positions is still allowed himself. */
+  const qbPick = { ...EMPTY_QUERY, send: { kind: 'both', positions: ['RB'], ids: ['qb1'] } };
+  assert.equal(boardMatches(deal(2, ['qb1', 'pollard'], ['gibbs'], 2), qbPick, pos), true);
 
   /* Off limits and required cannot both hold: the off-limits list wins. */
   const clash = reconcileQuery({ ...EMPTY_QUERY, send: { kind: 'player', ids: ['hall'] }, keep: ['hall'] }, teams);

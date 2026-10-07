@@ -26,38 +26,55 @@ export function isFinderPosition(value: string | null | undefined): value is Fin
   return value === 'QB' || value === 'RB' || value === 'WR' || value === 'TE';
 }
 
+/**
+ * A leg: positions (a pool, everyone else on that side comes from them), players
+ * (must be in the deal), or BOTH at once (user 2026-10-07: "RB, WR, TE and
+ * Hampton" = Hampton is in every deal and nobody else sent is a QB).
+ */
 export type SlotPick =
   | { kind: 'any' }
   | { kind: 'position'; positions: FinderPosition[] }
-  | { kind: 'player'; ids: string[] };
+  | { kind: 'player'; ids: string[] }
+  | { kind: 'both'; positions: FinderPosition[]; ids: string[] };
 
 export const ANY_PICK: SlotPick = { kind: 'any' };
 
-/** An emptied pool is no limit at all, so it reads (and sends) as "any". */
-export function normalizePick(pick: SlotPick): SlotPick {
-  if (pick.kind === 'position') {
-    const positions = FINDER_POSITIONS.filter((position) => pick.positions.includes(position));
-    return positions.length ? { kind: 'position', positions } : ANY_PICK;
-  }
-  if (pick.kind === 'player') {
-    const ids = [...new Set(pick.ids.map(String))];
-    return ids.length ? { kind: 'player', ids } : ANY_PICK;
-  }
+/** The positions a leg limits to (empty = none). */
+export function pickPositions(pick: SlotPick): FinderPosition[] {
+  return pick.kind === 'position' || pick.kind === 'both' ? pick.positions : [];
+}
+
+/** The players a leg requires (empty = none). */
+export function pickIds(pick: SlotPick): string[] {
+  return pick.kind === 'player' || pick.kind === 'both' ? pick.ids : [];
+}
+
+/** Build a leg from its two halves; an empty leg is no limit at all ("any"). */
+export function makePick(positionsIn: FinderPosition[], idsIn: string[]): SlotPick {
+  const positions = FINDER_POSITIONS.filter((position) => positionsIn.includes(position));
+  const ids = [...new Set(idsIn.map(String))];
+  if (positions.length && ids.length) return { kind: 'both', positions, ids };
+  if (positions.length) return { kind: 'position', positions };
+  if (ids.length) return { kind: 'player', ids };
   return ANY_PICK;
 }
 
-/** Add or remove one position from a leg. Picking a position replaces a player pool. */
-export function togglePosition(pick: SlotPick, position: FinderPosition): SlotPick {
-  const current = pick.kind === 'position' ? pick.positions : [];
-  const next = current.includes(position) ? current.filter((p) => p !== position) : [...current, position];
-  return normalizePick({ kind: 'position', positions: next });
+export function normalizePick(pick: SlotPick): SlotPick {
+  return makePick(pickPositions(pick), pickIds(pick));
 }
 
-/** Add or remove one player from a leg. Picking a player replaces a position pool. */
+/** Add or remove one position from a leg. Picked players stay. */
+export function togglePosition(pick: SlotPick, position: FinderPosition): SlotPick {
+  const current = pickPositions(pick);
+  const next = current.includes(position) ? current.filter((p) => p !== position) : [...current, position];
+  return makePick(next, pickIds(pick));
+}
+
+/** Add or remove one player from a leg. Picked positions stay. */
 export function togglePlayer(pick: SlotPick, id: string): SlotPick {
-  const current = pick.kind === 'player' ? pick.ids : [];
+  const current = pickIds(pick);
   const next = current.includes(id) ? current.filter((p) => p !== id) : [...current, id];
-  return normalizePick({ kind: 'player', ids: next });
+  return makePick(pickPositions(pick), next);
 }
 
 export type FinderShape = '1-1' | '2-1' | '1-2' | '2-2' | '2-3' | '3-2' | '3-3';
@@ -201,12 +218,15 @@ export function boardMatches(
   if ((query.keep ?? []).some((id) => suggestion.give.some((asset) => asset.id === id))) return false;
   const has = (assets: { id: string }[], id: string) => assets.some((asset) => asset.id === id);
   const fits = (assets: { id: string }[], pick: SlotPick, side: 'send' | 'get') => {
-    if (pick.kind === 'position') return assets.every((asset) => pick.positions.includes(players[asset.id]?.position as FinderPosition));
-    if (pick.kind === 'player') {
-      const must = side === 'get' && owners
-        ? pick.ids.filter((id) => owners.get(id) === suggestion.partnerRosterId)
-        : pick.ids;
-      return must.length > 0 && must.every((id) => has(assets, id));
+    const ids = pickIds(pick);
+    const positions = pickPositions(pick);
+    const must = side === 'get' && owners
+      ? ids.filter((id) => owners.get(id) === suggestion.partnerRosterId)
+      : ids;
+    if (ids.length && (must.length === 0 || !must.every((id) => has(assets, id)))) return false;
+    /* Positions bind everyone else on that side; a picked player is always allowed. */
+    if (positions.length) {
+      return assets.every((asset) => must.includes(asset.id) || positions.includes(players[asset.id]?.position as FinderPosition));
     }
     return true;
   };
@@ -236,7 +256,7 @@ export function isExactTrade(query: FinderQuery) {
  * the managers who own one of those players (nobody else can deliver them).
  */
 export function partnersToScan(query: FinderQuery, teams: ApiTeam[]): number[] {
-  const wanted = query.get.kind === 'player' ? query.get.ids : null;
+  const wanted = pickIds(query.get).length ? pickIds(query.get) : null;
   return teams
     .filter((team) => !team.isUser)
     .filter((team) => query.partnerRosterIds.length === 0 || query.partnerRosterIds.includes(team.rosterId))
@@ -263,10 +283,10 @@ export function queryToRules(query: FinderQuery): FinderRules {
   return {
     giveAllow: [],
     getAllow: [],
-    givePositions: query.send.kind === 'position' ? query.send.positions : [],
-    getPositions: query.get.kind === 'position' ? query.get.positions : [],
-    giveMust: query.send.kind === 'player' ? query.send.ids : [],
-    getMust: query.get.kind === 'player' ? query.get.ids : [],
+    givePositions: pickPositions(query.send),
+    getPositions: pickPositions(query.get),
+    giveMust: pickIds(query.send),
+    getMust: pickIds(query.get),
     protect: query.keep ?? [],
   };
 }
@@ -317,12 +337,14 @@ export function reconcileQuery(query: FinderQuery, teams: ApiTeam[]): FinderQuer
   const keep = [...new Set((query.keep ?? []).filter((id) => user?.players.includes(id)))];
   /* A player can't be both off limits and required: the off-limits list wins
      (the picker removes him from it when you pick him to send). */
-  const send = query.send.kind === 'player'
-    ? normalizePick({ kind: 'player', ids: query.send.ids.filter((id) => user?.players.includes(id) && !keep.includes(id)).slice(0, 3) })
-    : normalizePick(query.send);
-  const get = query.get.kind === 'player'
-    ? normalizePick({ kind: 'player', ids: query.get.ids.filter((id) => pool.some((team) => team.players.includes(id))) })
-    : normalizePick(query.get);
+  const send = makePick(
+    pickPositions(query.send),
+    pickIds(query.send).filter((id) => user?.players.includes(id) && !keep.includes(id)).slice(0, 3),
+  );
+  const get = makePick(
+    pickPositions(query.get),
+    pickIds(query.get).filter((id) => pool.some((team) => team.players.includes(id))),
+  );
   return { partnerRosterIds, send, get, shapes: orderedShapes(query.shapes), keep };
 }
 
@@ -368,7 +390,8 @@ export function sizesLabel(sizes: { give: number; get: number }) {
 export type FinderLayout = 'get-player' | 'send-player' | 'both-players' | 'open';
 
 export function pinnedPlayer(pick: SlotPick): string | null {
-  return pick.kind === 'player' && pick.ids.length === 1 ? pick.ids[0] : null;
+  const ids = pickIds(pick);
+  return ids.length === 1 ? ids[0] : null;
 }
 
 export function finderLayout(query: FinderQuery): FinderLayout {
@@ -392,15 +415,23 @@ function listWords(words: string[], limit = 2) {
   return `${words.slice(0, limit).join(', ')} or ${words.length - limit} more`;
 }
 
+function positionWords(positions: FinderPosition[]) {
+  if (positions.length === 1) return `a ${positions[0]}`;
+  return `${positions.slice(0, -1).join(', ')} or ${positions[positions.length - 1]}`;
+}
+
 export function pickWords(pick: SlotPick, names: string[] | undefined) {
-  if (pick.kind === 'player') {
-    /* A picked player is IN the deal, alongside anything else. */
+  const ids = pickIds(pick);
+  const positions = pickPositions(pick);
+  if (ids.length) {
+    /* A picked player is IN the deal, alongside anything else (or anyone from
+       the picked positions when the leg has positions too). */
     const who = names?.length
       ? (names.length <= 2 ? names.join(' and ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`)
-      : `${pick.ids.length} ${pick.ids.length === 1 ? 'player' : 'players'}`;
-    return `${who} plus anything`;
+      : `${ids.length} ${ids.length === 1 ? 'player' : 'players'}`;
+    return positions.length ? `${who} plus only ${positions.join('/')}s` : `${who} plus anything`;
   }
-  if (pick.kind === 'position') return pick.positions.length === 1 ? `a ${pick.positions[0]}` : pick.positions.join(' or ');
+  if (positions.length) return positionWords(positions);
   return 'anything';
 }
 

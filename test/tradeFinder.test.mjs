@@ -301,6 +301,34 @@ test('a picked player only has to be IN the deal, and an off-limits player is ne
   }
 });
 
+test('one leg holds positions AND a player at once; picking the player keeps the positions', async () => {
+  const page = await openMarket(DESKTOP);
+  try {
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    const sendLeg = page.locator('.trade-finder__leg').nth(1);
+    await sendLeg.locator('.trade-finder__leg-open').click();
+    let sheet = page.locator('.trade-finder__sheet');
+    await sheet.locator('.trade-finder__tile', { has: page.locator('.trade-finder__tile-glyph', { hasText: /^TE$/ }) }).click();
+    await sheet.waitFor({ state: 'detached' });
+    await sendLeg.locator('.trade-finder__leg-add').click();
+    sheet = page.locator('.trade-finder__sheet');
+    await sheet.locator('.trade-finder__tile', { has: page.locator('.trade-finder__tile-glyph', { hasText: /^RB$/ }) }).click();
+    await sheet.locator('.trade-finder__seg-btn', { hasText: 'A player' }).click();
+    await sheet.locator('.trade-finder__search input').fill('McBride');
+    await sheet.locator('.trade-finder__item', { hasText: 'Trey McBride' }).first().click();
+    await sheet.locator('.trade-finder__sheet-done').click();
+    const chips = await sendLeg.locator('.trade-finder__chip-text').allInnerTexts();
+    assert.deepEqual(chips, ['Your RBs', 'Your TEs', 'Trey McBride']);
+    /* The fixture's McBride + Henry (RB) deal fits; nothing else of yours rides along. */
+    await page.locator('.trade-finder__find').click();
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible', timeout: 15_000 });
+    const lanes = await page.locator('.trade-finder__lane').allInnerTexts();
+    assert.ok(lanes.length >= 1 && lanes.every((text) => /Trey McBride/.test(text)));
+  } finally {
+    await page.close();
+  }
+});
+
 test('the player list values a player by the rest of his season, and says so', async () => {
   const page = await openMarket(DESKTOP);
   try {

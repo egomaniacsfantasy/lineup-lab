@@ -219,3 +219,15 @@ test('finder player picks are must-include (plus anything else), even a bench pl
   }
   assert.ok(res.suggestions.some((s) => s.give.length > 1), 'others of yours can ride along');
 });
+
+test('positions AND a pinned player on one side: he is in every deal, everyone else is from the positions', async () => {
+  const qb = you.players[0]; // QB: pinned, though QB is not among the picked positions
+  const res = await suggestTrades(ctx, {
+    maxSim: 20, partnerRosterId: 2, sender: { ...openRules, giveMust: [qb], givePositions: ['RB'] },
+  });
+  assert.ok(res.suggestions.length > 0);
+  for (const s of res.suggestions) {
+    assert.ok(s.give.some((p) => p.id === qb), 'the pinned QB is in every deal');
+    assert.ok(s.give.every((p) => p.id === qb || catalog[p.id].position === 'RB'), 'everyone else sent is an RB');
+  }
+});

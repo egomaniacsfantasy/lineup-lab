@@ -46,6 +46,8 @@ import {
   queryToRules,
   queryToShapes,
   reconcileQuery,
+  pickIds,
+  pickPositions,
   rulesFor,
   toggleKeep,
   sendConsequence,
@@ -313,8 +315,8 @@ export function TradeFinder({
 
   const names = (q: FinderQuery) => ({
     partners: q.partnerRosterIds.map((id) => partnerById.get(id)?.teamName).filter((name): name is string => Boolean(name)),
-    sendPlayers: q.send.kind === 'player' ? q.send.ids.map((id) => players[id]?.name ?? id) : [],
-    getPlayers: q.get.kind === 'player' ? q.get.ids.map((id) => players[id]?.name ?? id) : [],
+    sendPlayers: pickIds(q.send).map((id) => players[id]?.name ?? id),
+    getPlayers: pickIds(q.get).map((id) => players[id]?.name ?? id),
     keepPlayers: (q.keep ?? []).map((id) => players[id]?.name ?? id),
   });
 
@@ -479,16 +481,14 @@ export function TradeFinder({
     }
     const pick = slot === 'send' ? query.send : query.get;
     const set = (next: SlotPick) => update(slot === 'send' ? { send: next } : { get: next });
-    if (pick.kind === 'position') {
-      return pick.positions.map((position) => ({
+    return [
+      ...pickPositions(pick).map((position) => ({
         key: `pos-${position}`,
         label: slot === 'send' ? `Your ${position}s` : `Their ${position}s`,
         badge: <span className="trade-finder__pos trade-finder__pos--on">{position}</span>,
         remove: () => set(togglePosition(pick, position)),
-      }));
-    }
-    if (pick.kind === 'player') {
-      return pick.ids.map((id) => ({
+      })),
+      ...pickIds(pick).map((id) => ({
         key: `pl-${id}`,
         label: players[id]?.name ?? id,
         badge: (
@@ -500,9 +500,8 @@ export function TradeFinder({
           />
         ),
         remove: () => set(togglePlayer(pick, id)),
-      }));
-    }
-    return [];
+      })),
+    ];
   };
 
   const renderLeg = (slot: Slot, label: string) => {
@@ -1246,7 +1245,7 @@ interface FinderPickerProps {
 function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futuresByRoster, values, outlooks, basis, week, onPick, onClose }: FinderPickerProps) {
   const players = bootstrap.players;
   const current: SlotPick = slot === 'send' ? query.send : slot === 'get' ? query.get : slot === 'keep' ? { kind: 'player', ids: query.keep ?? [] } : ANY_PICK;
-  const [mode, setMode] = useState<'position' | 'player'>(current.kind === 'player' || slot === 'keep' ? 'player' : 'position');
+  const [mode, setMode] = useState<'position' | 'player'>(current.kind === 'player' || current.kind === 'both' || slot === 'keep' ? 'player' : 'position');
   const [search, setSearch] = useState('');
   const firstRef = useRef<HTMLButtonElement | null>(null);
 
@@ -1346,7 +1345,7 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
               <>
                 <div className="trade-finder__tiles">
                   {FINDER_POSITIONS.map((position) => {
-                    const on = current.kind === 'position' && current.positions.includes(position);
+                    const on = pickPositions(current).includes(position);
                     const sub = sublines[position];
                     return (
                       <button
@@ -1364,8 +1363,8 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                 </div>
                 <p className="trade-finder__sheet-note">
                   {slot === 'get'
-                    ? `Every player you get comes from the position you pick. Under each is what your starter projects ${basis === 'ros' ? 'per game from here on' : 'this week'}.`
-                    : 'Every player you send comes from the position you pick. Under each is how many you carry.'}
+                    ? `Every player you get comes from the positions you pick (a player you pick by name is always allowed). Under each is what your starter projects ${basis === 'ros' ? 'per game from here on' : 'this week'}.`
+                    : 'Every player you send comes from the positions you pick (a player you pick by name is always allowed). Under each is how many you carry.'}
                 </p>
               </>
             ) : (
@@ -1389,7 +1388,7 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                 <div className="trade-finder__list">
                   {pool.map(({ id, team, mean }) => {
                     const player = players[id];
-                    const on = current.kind === 'player' && current.ids.includes(id);
+                    const on = pickIds(current).includes(id);
                     const outlook = outlooks?.get(id) ?? null;
                     const bye = player?.byeWeek != null && player.byeWeek >= week ? `Bye ${player.byeWeek}` : null;
                     return (
@@ -1398,7 +1397,7 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                         className={['trade-finder__item', on ? 'trade-finder__item--on' : ''].filter(Boolean).join(' ')}
                         key={id}
                         onClick={() => pick(slot === 'keep'
-                          ? { keep: toggleKeep(query.keep, id), ...(query.send.kind === 'player' && query.send.ids.includes(id) ? { send: togglePlayer(query.send, id) } : {}) }
+                          ? { keep: toggleKeep(query.keep, id), ...(pickIds(query.send).includes(id) ? { send: togglePlayer(query.send, id) } : {}) }
                           : slot === 'send'
                             ? { send: togglePlayer(current, id), keep: (query.keep ?? []).filter((k) => k !== id) }
                             : { get: togglePlayer(current, id) })}
@@ -1431,8 +1430,8 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                   {slot === 'keep'
                     ? 'These players are never offered, in any deal. The list stays until you change it.'
                     : slot === 'send'
-                      ? 'Every deal includes the players you pick, plus anyone else of yours that is not off limits.'
-                      : 'Every deal includes the player you pick, plus anyone else from his manager.'}
+                      ? 'Every deal includes the players you pick, plus anyone else of yours that is not off limits (only from your picked positions, if you picked any).'
+                      : 'Every deal includes the player you pick, plus anyone else from his manager (only from your picked positions, if you picked any).'}
                 </p>
               </>
             )}
@@ -1445,10 +1444,8 @@ function FinderPicker({ slot, multi, query, bootstrap, userTeam, partners, futur
                 ? (query.partnerRosterIds.length === 0 ? 'Nobody picked: every manager.' : `${query.partnerRosterIds.length} picked. Tap again to remove.`)
                 : slot === 'keep'
                   ? ((query.keep ?? []).length === 0 ? 'Nobody off limits.' : `${(query.keep ?? []).length} off limits. Tap again to remove.`)
-                  : current.kind === 'position'
-                  ? `${current.positions.length} picked. Tap again to remove.`
-                  : current.kind === 'player'
-                    ? `${current.ids.length} picked. Tap again to remove.`
+                  : current.kind !== 'any'
+                  ? `${[pickPositions(current).length ? `${pickPositions(current).join(', ')}` : '', pickIds(current).length ? `${pickIds(current).length} ${pickIds(current).length === 1 ? 'player' : 'players'}` : ''].filter(Boolean).join(' + ')} picked. Tap again to remove.`
                     : 'Nothing picked: anything goes.'}
             </span>
             <button className="trade-finder__sheet-done" onClick={onClose} type="button">Done</button>

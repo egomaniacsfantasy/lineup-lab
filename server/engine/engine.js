@@ -3384,9 +3384,12 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     const pos = catalog[id]?.position;
     if (team.isUser) {
       if (senderProtect.has(String(id))) return false;
+      // A pinned player is always allowed; the positions bind everyone else.
+      if (giveMust.includes(String(id))) return true;
       if (senderGiveAllow.size && !senderGiveAllow.has(String(id))) return false;
       return !senderGivePos || senderGivePos.includes(pos);
     }
+    if (getMust.includes(String(id))) return true;
     if (senderGetAllow.size && !senderGetAllow.has(String(id))) return false;
     return !senderGetPos || senderGetPos.includes(pos);
   };
