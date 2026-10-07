@@ -45,3 +45,16 @@ test('the aligned week is the MAX across every traded player', () => {
   // Even with two not-played players, one already-played player aligns all to next week.
   assert.equal(tradeEffectiveWeek(['lamar', 'snap', 'allen'], map, WEEK), 3);
 });
+
+test('a player on his BYE this week has not played: the trade still goes live this week', () => {
+  // Rice (bye week 2) has no week-2 row, exactly like a player who already played.
+  // His catalog byeWeek tells the two apart (user 2026-10-07: this-week win% never moved).
+  const rice = { playerId: 'rice', mean: 15, weekly: { 3: 15, 4: 15 } };
+  const m = new Map([['rice', rice], ['lamar', notPlayed], ['allen', played]]);
+  const catalog = { rice: { byeWeek: 2 }, lamar: { byeWeek: 9 }, allen: { byeWeek: 7 } };
+  assert.equal(tradeEffectiveWeek(['rice', 'lamar'], m, WEEK, catalog), WEEK);
+  // Without the catalog it is read as "already played" (the old behavior).
+  assert.equal(tradeEffectiveWeek(['rice', 'lamar'], m, WEEK), 3);
+  // A real "already played" player still holds the deal to next week.
+  assert.equal(tradeEffectiveWeek(['rice', 'allen'], m, WEEK, catalog), 3);
+});

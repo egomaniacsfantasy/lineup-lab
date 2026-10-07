@@ -2649,11 +2649,12 @@ function weekWinProbDelta(after, before) {
  * target_start = max over all traded players of that per-player next-startable week —
  * every player in the deal is then valued from the same week, so a Thursday player
  * (already done) and a Monday player (yet to play) are never on mismatched bases.
- * NOTE: a player on his NFL bye this week also lacks the current-week key, so a trade
- * made DURING a traded player's bye is conservatively pushed to next week. Rare, and
- * only ever under-credits by one week; the scoreboard could disambiguate if needed.
+ * A player on his NFL BYE this week also lacks the current-week key, but he has not
+ * played: pass `catalog` and his byeWeek tells the two apart, so a trade made during a
+ * traded player's bye still goes live this week. (Without it, every trade involving a
+ * bye player was pushed a week, and this week's win% never moved: user 2026-10-07.)
  */
-export function tradeEffectiveWeek(tradedIds, projectionMap, week) {
+export function tradeEffectiveWeek(tradedIds, projectionMap, week, catalog = null) {
   let ts = week;
   for (const id of tradedIds) {
     const proj = projectionMap.get(id) ?? projectionMap.get(String(id));
@@ -2666,7 +2667,8 @@ export function tradeEffectiveWeek(tradedIds, projectionMap, week) {
     // Or the scoreboard already has his game FINAL (pinned by pinLeagueActuals)
     // before the pipeline has trimmed the week: same thing, he has played.
     const lockedNow = proj?.lockedWeekly?.[week] != null || proj?.lockedWeekly?.[String(week)] != null;
-    const startable = (hasGrid && !hasCurrent) || lockedNow ? week + 1 : week;
+    const onBye = Number(catalog?.[id]?.byeWeek ?? catalog?.[String(id)]?.byeWeek) === Number(week);
+    const startable = (hasGrid && !hasCurrent && !onBye) || lockedNow ? week + 1 : week;
     if (startable > ts) ts = startable;
   }
   return ts;
@@ -2850,7 +2852,7 @@ export function analyzeTrade(ctx, { partnerRosterId, give = [], get = [], userDr
   // touches — the roster swap and the drop valuation — is measured from that week, so
   // both sides are valued on identical weeks even mid-week when one player has played
   // and another has not.
-  const targetStart = tradeEffectiveWeek([...give, ...get], projectionMap, week);
+  const targetStart = tradeEffectiveWeek([...give, ...get], projectionMap, week, catalog);
   const dropWeeks = [];
   for (let w = targetStart; w <= regularWeeks; w += 1) dropWeeks.push(w);
   for (let r = 0; r < rounds; r += 1) dropWeeks.push(playoffWeekStart + r);
@@ -3048,7 +3050,7 @@ export function suggestCounter(ctx, { partnerRosterId, give = [], get = [], user
     // The swap goes live at targetStart (a player already done for the week holds the
     // deal to next week); weeks before it keep the pre-trade roster/starters, so mid-week
     // both sides are valued from the same week.
-    const targetStart = tradeEffectiveWeek([...giveList, ...getList], projectionMap, week);
+    const targetStart = tradeEffectiveWeek([...giveList, ...getList], projectionMap, week, catalog);
     const tradedTeams = teams.map((t) =>
       t.rosterId === userTeam.rosterId
         ? { ...t, players: userFinal, starters: optimalStarters(userFinal), playersBefore: t.players, startersBefore: t.starters, tradeEffectiveWeek: targetStart }
@@ -3265,7 +3267,7 @@ export async function suggestTrades(ctx, { maxSim = 15, partnerRosterId = null, 
     // The swap goes live at targetStart (a player already done for the week holds the
     // deal to next week); weeks before it keep the pre-trade roster/starters, so mid-week
     // both sides are valued from the same week.
-    const targetStart = tradeEffectiveWeek([...giveList, ...getList], projectionMap, week);
+    const targetStart = tradeEffectiveWeek([...giveList, ...getList], projectionMap, week, catalog);
     const dropWeeks = dropWeeksFrom(targetStart);
     // Roster-limit drops: the analyzer's IR-aware plan, verbatim. A player stashed
     // in a real IR slot frees an active spot while he's out, so an uneven trade can
@@ -3857,7 +3859,7 @@ export function priceTrade(ctx, { userRosterId, partnerRosterId, give = [], get 
   // The trade takes effect at targetStart (>= current week). Both the futures sim and
   // the value gap below are measured from this week, so the two sides are valued on the
   // same window even mid-week when one player has already played and another has not.
-  const targetStart = tradeEffectiveWeek([...give, ...get], projectionMap, week);
+  const targetStart = tradeEffectiveWeek([...give, ...get], projectionMap, week, catalog);
 
   // One seed per inputs state (shared with priceLeague's futures sim when the
   // caller passes it), so before/after cancel common variance (CRN).
