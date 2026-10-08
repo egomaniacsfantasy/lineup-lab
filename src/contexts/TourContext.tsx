@@ -139,10 +139,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     setOpen(false);
   }, [open, tourId]);
 
-  const value = useMemo(
-    () => ({ start, available: true, open }),
-    [open, start, tour],
-  );
+  const value = useMemo(() => ({ start, available: true, open }), [open, start]);
 
   return (
     <TourContext.Provider value={value}>

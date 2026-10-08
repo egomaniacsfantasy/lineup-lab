@@ -12,7 +12,9 @@
  *    is a ring around 843px of a 900px viewport, which is not a spotlight, it
  *    is a box drawn around the page. One lineup row makes the same point and
  *    can actually be seen. Where only a container will do, the overlay clamps
- *    the ring to the viewport so it is at least never off-screen.
+ *    the ring to the viewport so it is at least never off-screen. Where the
+ *    element is a block-wide span holding four glyphs, `fit: 'text'` rings
+ *    the glyphs rather than the span.
  *
  * 2. Anchor by CSS selector, not by `data-tour` attributes sprayed across the
  *    pages. That keeps every word and every target in this one file, and the
@@ -21,49 +23,96 @@
  *    real page and fails if one stops matching.
  */
 
+export type TourSide = 'top' | 'bottom' | 'left' | 'right';
+
 export interface TourStep {
   id: string;
   /** What this stop is about, in three or four words. */
   title: string;
   body: string;
-  /** The element to spotlight. First match wins. */
+  /** The element to spotlight. The first VISIBLE match wins. */
   selector: string;
   /**
-   * Where the card prefers to sit. The overlay flips it when the preferred
-   * side has no room, so this is a preference and not an instruction.
+   * Where the card prefers to sit. The overlay tries this side first, then
+   * the opposite one, then the other two, so it is a preference and not an
+   * instruction. On a phone the card docks to the bottom of the screen and
+   * ignores this entirely.
    */
-  placement: 'top' | 'bottom';
+  placement: TourSide;
+  /**
+   * For a card above or below its target: whether it lines up with the
+   * target's left edge or its centre. Centre is right for a small control
+   * and wrong for a full-width strip, where a centred card floats in the
+   * middle of nothing.
+   */
+  align?: 'start' | 'center';
+  /**
+   * `text` rings the glyphs rather than the element. The hero price is a span
+   * stretched across its whole column, and a ring around that is a ring
+   * around four digits and 300px of air.
+   */
+  fit?: 'box' | 'text';
   /**
    * Whether the spotlit control stays LIVE, i.e. still takes clicks.
    *
-   * Off by default, and that default is load-bearing. The scrim is four
-   * panels around the target, so a target left uncovered is genuinely
-   * pressable - right for the format toggle, wrong for anything that
-   * navigates, because one press would leave the page the tour is describing.
+   * Off by default, and that default is load-bearing. The scrim is a sheet
+   * with a hole in it, so a target left uncovered is genuinely pressable -
+   * right for the format toggle, wrong for anything that navigates, because
+   * one press would leave the page the tour is describing.
    */
   interactive?: boolean;
 }
 
+export interface TourIntro {
+  title: string;
+  body: string;
+  /** The button that starts the walk. */
+  cta: string;
+}
+
 export interface Tour {
   id: string;
+  /** The tab's name, as the card's eyebrow says it. */
+  label: string;
   /** The route this tour belongs to. Matched as a prefix. */
   path: string;
-  /** Shown on the card's last step, so people know it is not a one-shot. */
+  /**
+   * A card shown before the first stop, with nothing spotlit.
+   *
+   * Only the Hub has one. It is the first tab anybody lands on, and the one
+   * idea the whole product rests on - that a price is a probability and no
+   * money moves - deserves a sentence before a ring appears around a number.
+   * It also makes the offer a question. Coach marks that open themselves over
+   * a page you have just arrived on are being talked at; a card that asks
+   * first can be declined in one press.
+   */
+  intro?: TourIntro;
   steps: readonly TourStep[];
 }
 
 export const TOURS: readonly Tour[] = [
   {
     id: 'hub',
+    label: 'Hub',
     path: '/matchup',
+    intro: {
+      title: 'How to read this',
+      body:
+        'Every matchup, trade and season here carries a line, written the way a sportsbook writes a probability. No money moves anywhere. Four stops show you where the numbers come from.',
+      cta: 'Show me',
+    },
     steps: [
       {
         id: 'price',
         title: 'This is a probability',
+        /* The one honest count in the product, said in words rather than as
+           "10,000 sims": MATCHUP_SIMS is 10,000 and the substantiated-claims
+           table in docs/PRODUCT.md carries it. */
         body:
-          'Your matchup carries a line, the way a sportsbook posts one. The bar underneath says the same thing as a percentage, and no money moves anywhere in Odds Gods.',
+          'This week\'s game, played ten thousand times before kickoff. The line is how often you came out ahead, written the way a sportsbook writes it. The bar underneath says it as a percentage. No money moves.',
         selector: '.matchup-page__hero-number',
-        placement: 'bottom',
+        placement: 'right',
+        fit: 'text',
       },
       {
         id: 'format',
@@ -78,31 +127,34 @@ export const TOURS: readonly Tour[] = [
         id: 'lineup',
         title: 'Where the line comes from',
         body:
-          'Every starter carries what they project this week, set against the slot opposite. This board is what the line above is made of, so changing your lineup moves it.',
+          'Every starter is a range, not a number. Each of those ten thousand games draws a score for every player from his projected range and adds them up, so changing a starter moves the line above.',
         /* One card, not the whole board: the board is 698px of a 900px
            viewport, and a ring around that is a box around the page. */
         selector: '.matchup-page__slot-card',
         placement: 'bottom',
+        align: 'start',
       },
       {
         id: 'season',
         title: 'Your season, priced',
         body:
-          'Your championship price, your playoff odds and where you finish. Repriced every time the league moves.',
+          'Your championship price and playoff odds, from the rest of the schedule played ten thousand times. Repriced every time the league moves.',
         selector: '.matchup-page__season--band',
         placement: 'bottom',
+        align: 'start',
       },
     ],
   },
   {
     id: 'league',
+    label: 'League',
     path: '/league',
     steps: [
       {
         id: 'card',
         title: 'The whole week, priced',
         body:
-          'Every game gets a spread, a total and a price on both sides. Press one to open both lineups, slot by slot.',
+          'Every game gets a spread, a total and a price on both sides, from the same ten thousand plays of the week. Press one to open both lineups, slot by slot.',
         /* One stop, not two. The second used to point at the opened game's
            header, which only exists after somebody presses a card - so the
            tour was pointing at something that was not on screen while it
@@ -110,6 +162,26 @@ export const TOURS: readonly Tour[] = [
            and true. */
         selector: '.matchup-slate__row-button',
         placement: 'bottom',
+        align: 'start',
+      },
+      {
+        id: 'swing',
+        title: 'What a game is worth',
+        body:
+          'Playoff odds for both teams if they win and if they lose: the rest of the season, played out from each result. A wide gap is a game that decides something.',
+        /* The Now / Win / Lose grid in the selected game's rail. */
+        selector: '.matchup-slate__swing',
+        placement: 'left',
+      },
+      {
+        id: 'movement',
+        title: 'Lines move',
+        body:
+          'Where this game opened against where it stands now. A line moves when a lineup, an injury or a projection changes, and the chart keeps the whole path.',
+        /* The movement chart under the swing grid. Scoped to the slate so a
+           chart on another tab cannot answer for it. */
+        selector: '.matchup-slate__chart',
+        placement: 'left',
       },
       {
         id: 'views',
@@ -118,11 +190,13 @@ export const TOURS: readonly Tour[] = [
           'Futures holds the title race. Season separates your scoring from your schedule. Predictor lets you call the rest of the year and watch the board move.',
         selector: '.league-page__view-tabs',
         placement: 'bottom',
+        align: 'start',
       },
     ],
   },
   {
     id: 'market',
+    label: 'Trades',
     path: '/market',
     steps: [
       {
@@ -132,6 +206,7 @@ export const TOURS: readonly Tour[] = [
           'The finder proposes trades other managers might actually take. The analyzer prices one you already have in mind.',
         selector: '.trade-cc__views',
         placement: 'bottom',
+        align: 'start',
       },
       {
         id: 'deal',
@@ -145,21 +220,34 @@ export const TOURS: readonly Tour[] = [
         body:
           'Fill in as much as you like: a manager, a position, a player. Every deal is scored by what it does to your championship odds.',
         selector: '.trade-finder__ticket',
-        placement: 'bottom',
+        placement: 'right',
+      },
+      {
+        id: 'price',
+        title: 'Priced from both sides',
+        /* No count here on purpose. Trades run at TRADE_SIMS, which is not
+           the ten thousand the Hub quotes, and "priced from both sides" is
+           the claim the product substantiates. */
+        body:
+          'The change in your championship odds if the deal goes through, with their side priced the same way. The same trade prices the same everywhere in Odds Gods.',
+        selector: '.trade-finder__lane-price',
+        placement: 'left',
       },
     ],
   },
   {
     id: 'board',
+    label: 'Board',
     path: '/rankings',
     steps: [
       {
         id: 'row',
         title: 'Every player, ranked',
         body:
-          'Ranked by the projections that price your league. Press one to see what is behind the number.',
+          'Ranked by the projections every price in Odds Gods is built from: a projected score and a range for each player, in your league\'s scoring. Press one to see what is behind the number.',
         selector: '.board-page__row-button',
         placement: 'bottom',
+        align: 'start',
       },
       {
         id: 'filter',
@@ -168,6 +256,7 @@ export const TOURS: readonly Tour[] = [
           'Filter to a position, or to players you can get.',
         selector: '.board-page__filter-bar',
         placement: 'bottom',
+        align: 'start',
       },
     ],
   },
@@ -197,4 +286,27 @@ export function runnableSteps(
   isPresent: (selector: string) => boolean,
 ): TourStep[] {
   return steps.filter((step) => isPresent(step.selector));
+}
+
+/**
+ * The step list after a stop has turned up late.
+ *
+ * The Hub is still assembling when the tour opens: the season band lands when
+ * the season sim does, which on a real league can be after the card has
+ * already said "1 of 3". Everything already walked, and the stop on screen,
+ * stay exactly where they are; only the stops still ahead are re-cut from
+ * what is present now. So the count can grow while you read, but it can never
+ * renumber the stop you are on or hand you back one you have finished.
+ */
+export function mergeSteps(
+  current: readonly TourStep[],
+  index: number,
+  found: readonly TourStep[],
+  order: readonly TourStep[],
+): TourStep[] {
+  const kept = current.slice(0, index + 1);
+  const last = kept[kept.length - 1];
+  const lastAt = last ? order.findIndex((step) => step.id === last.id) : -1;
+  const ahead = found.filter((step) => order.findIndex((candidate) => candidate.id === step.id) > lastAt);
+  return [...kept, ...ahead];
 }

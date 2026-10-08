@@ -402,7 +402,18 @@ admins.
 
 ## 4.5 Trades (`/market`) — two views
 
-**Trade finder.** A ticket on the left, the board on the right.
+**Trade finder.** A ticket on the left, the deals on the right.
+
+The ticket is the only box on the tab: a slip with an amber top rule, "Your
+ask" as a small bold label, the legs on hairlines, and one amber button
+("Show deals" when the background scan already answers the ask, "Find
+trades" when a leg needs a live walk, "Price this trade" when every leg is
+exact). The deals are not in a card. They are a header line ("Deals that help
+you", or the ask restated: "To get Drake London", "Best RB you can land") with
+the scanned-at stamp under it and Limits and Scan again beside it, then rows
+on hairlines, the best deal carrying a 3px amber rule on its left. Nothing on
+the page is called "the board" any more (user, 2026-10-08). The starting
+points under the ticket are a list on hairlines, not cards.
 
 The ticket is three legs and a shape: *Partner*, *You send*, *You get*
 (anything, a position, or named players), and *Shape* (any size, or any of
@@ -462,10 +473,39 @@ value instead (four points a game). The sheet loosens or tightens all three
 and resets with the ask, so one search's slider never quietly filters the
 next.
 
-**Build trades.** A two-sided builder. Your roster by position on the left;
-pick a manager to open theirs on the right. "Price this trade" returns both
-sides' title, playoff and this-week deltas. A counter-offer search exists as a
-separate endpoint.
+**Build trades.** The same row the finder prints, built by hand. The top of
+the tab is one deal row in the lane grammar: *You get* (the partner named in
+its tag), the swap glyph with the shape ("1 for 1", send-for-get), *You
+send*, and the price slot. Empty legs say what to do ("Pick a manager below",
+"Pick from your roster"); a picked player is a face, a name and his position
+line, with a cross to remove him. The price slot holds the amber "Price this
+trade" button until the trade is priced, then your title delta as the big
+number with the ± beside it and "them" under it, the way a finder row reads.
+Under the row, two roster lists on hairlines with a vertical rule between
+them: *You get* with the manager picker in its header (their roster opens
+once a manager is picked), *You send* with yours. Each roster is grouped by
+position, starters first, with a search field; a row is a face, a name, the
+position line, and a dashed plus that becomes an amber check. The seat order
+matches the finder (you get on the left), which the builder used to flip
+(user, 2026-10-08: "Build trades should feel like the same product").
+
+Priced, the rosters fold away and the row is all that is left of the builder;
+on a laptop it stays stuck to the top of the screen while the verdict scrolls
+under it, with Edit trade at its right end. The verdict under it: the book's
+word ("Good value", "Overpay") as a plain heading in the UI face with no
+colour, one line with both sides' championship deltas, and Even out this
+trade and Share this trade as two buttons on the right. The Overpay/Fair/Steal
+rail and the full-width Even out button are gone; the number in the row is
+the verdict's scale. Then the season impact as a **ledger**: one row per
+metric (championship, make playoffs, win this week in season, expected wins,
+avg seed, projected points rest of season), one column per side, each cell
+before → after with the change underneath. The 95% range rides on the change
+only; a before or after figure with its own ± was three numbers to read per
+cell, and the question the range answers is whether the change is real. A
+change inside its own range is marked "noise". The rest of the league is a
+compact table (team, championship, playoffs, expected wins) rather than a card
+per team. "Price this trade" returns both sides' title, playoff and this-week
+deltas; a counter-offer search exists as a separate endpoint.
 
 **What a player is worth, in the finder.** Wherever the finder puts a number
 beside a player (the picker's list, the pinned-player header, the position
@@ -754,12 +794,25 @@ and the connect screen consumes it on read.
   line", "Balancing the book" and similar, shown once per session.
 - **The product tour** — one short tour per tab, each offered the first time
   you arrive on that tab and replayable forever from the account menu ("How
-  this works") or More. Hub is four stops, League three, Trades two, Board
+  this works") or More. Hub is four stops, League four, Trades three, Board
   two; four is a ceiling `test/tourState.test.mjs` enforces, because length is
   what loses people. It teaches only what a screen cannot explain about
-  itself: that a price is a probability and no money moves, that the header
-  toggle rewrites every number, that the lineup board is what the line is made
-  of, what opening a game on the board gives you.
+  itself: where the numbers come from. A matchup is the week played ten
+  thousand times; a starter is a range, not a number, and each play draws a
+  score from it; the season is the remaining schedule played ten thousand
+  times; a game's worth is playoff odds on both branches; a trade is the
+  change in title odds, priced from both sides. Every count the tour quotes is
+  in the substantiated-claims table (§7), said in words rather than as a sim
+  count, and the trade stop quotes none because `TRADE_SIMS` is not the
+  figure the Hub gives.
+
+  **The Hub asks first.** Its tour opens on a centred intro card with nothing
+  spotlit ("How to read this": one sentence on what a line is and that no
+  money moves, then "Show me" or "Not now") before any ring appears. The Hub
+  is the tab everybody lands on, and coach marks that open themselves over a
+  page you have just arrived on are being talked at. "Not now" counts as
+  skipping and is remembered. The other tabs open straight on their first
+  stop.
 
   It started as five stops on the Hub alone, which meant the Hub carried a
   stop describing the other three tabs from a distance - a tour about screens
@@ -767,40 +820,67 @@ and the connect screen consumes it on read.
   explanation can point at anything. Seen-ness is recorded per tour, so
   finishing the Hub does not spend the other three.
 
+  **The card is a ticket, not a tooltip**: a tracked mono eyebrow naming the
+  tab and the stop ("HUB · 1 OF 4"), a heading in the UI face, one short
+  paragraph, a segmented progress bar, Back and one filled amber action, and a
+  caret on whichever edge faces the ring. Placement is a preference per stop
+  (right, left, below, above); the overlay takes the first side where the
+  whole card fits on screen, so the card never covers its own target, and
+  `test/productTour.test.mjs` asserts that. On a phone the card is a sheet
+  docked to the foot of the screen and the target is scrolled into the room
+  above it. The scrim is one SVG sheet with a rounded hole cut out, not four
+  panels: the hole is unpainted, so the spotlit control is genuinely
+  pressable where a stop asks for it.
+
   Stops anchor by CSS selector rather than by `data-tour` attributes across
-  the pages, so every word and every target lives in one file;
-  `test/productTour.test.mjs` resolves them against the real pages so a class
-  rename fails there instead of silently shortening a tour. A stop whose
-  target is missing is dropped rather than spotlit empty, and a tour with no
-  resolvable stops says nothing at all unless somebody asked for it by name.
+  the pages, so every word and every target lives in one file. The first
+  VISIBLE match wins, not the first match: `.matchup-page__hero-number` is
+  also the price inside a game opened on the League board, and resolving to
+  a hidden node dropped the stop as absent. `test/productTour.test.mjs`
+  resolves every selector against the real pages so a class rename fails
+  there instead of silently shortening a tour. A stop whose target is missing
+  is dropped rather than spotlit empty, and a tour with no resolvable stops
+  says nothing at all unless somebody asked for it by name.
 
   **Ring geometry is a guarded invariant.** Rings were drawn around whole page
   containers (843px of a 900px viewport) and at `top: -8`, which is not a
   highlight but a box around the page with a missing edge. Stops now anchor
   the smallest element that makes the point - one lineup card, not the whole
-  board - the rect is clamped to the viewport so an oversized target still
-  gets four visible edges, and the card is clamped so it can never leave the
-  screen. The test asserts every ring is on screen, is centred on its target,
-  and covers at most 35% of the viewport.
+  board - and a stop can ask for `fit: 'text'`, which rings the glyphs rather
+  than the element (the hero price is a span stretched across its column; a
+  ring around that was four digits and 300px of air). The rect is clamped to
+  the viewport so an oversized target still gets four visible edges, and the
+  card is clamped so it can never leave the screen. The test asserts every
+  ring is on screen, is centred on its target, covers at most 35% of the
+  viewport, hugs the text where asked, and never overlaps the card.
+
+  **The ring is re-measured every frame** while a stop is on screen. The Hub
+  keeps assembling after the tour opens: the season band lands when the
+  season sim does and pushes the hero down by its own height, with no scroll
+  or resize event to say so. Measured once, the ring stayed where the price
+  had been, a box around the team name with the card over the number the stop
+  was about, which is the screenshot that prompted the rebuild. The test grows
+  a block above the hero mid-stop and asserts the ring follows.
 
   Presence and geometry are asked separately and at different times. Presence
   is about the document, before the tour opens; the clamp is about the paint,
   after it has scrolled the target into view. Conflating them dropped every
   stop that happened to be below the fold, which is what left the Hub tour
-  claiming to be shorter than it is. The step list is also not shown until it
-  settles (up to 8s), because a card that says "1 of 3" and should have said
-  "1 of 4" has already misled somebody.
+  claiming to be shorter than it is. The step list is not shown until it
+  settles (up to 8s), and a stop that lands after that still joins the walk on
+  the next press, appended after the stop being left: the count can grow but
+  never renumbers the stop you are on (`mergeSteps`, tested with the season
+  band hidden until the tour gives up on it).
 
-  The scrim is four panels around the target, not one sheet with a hole, so
-  the spotlit control is genuinely pressable. That is opt-in per stop
-  (`interactive`): on the format toggle it is the point of the stop, and
-  everywhere else a fifth clear panel covers the target, because one press on
-  a spotlit nav or card would leave the page the tour is describing. Leaving
-  the tab closes the tour and counts as skipping it. Offered only to a
-  signed-in account with a league, which is also what keeps it off the design
-  fixtures the rendered suite measures. `?tour=<id>` forces one open for
-  review, naming the tour outright because the fixtures live at
-  `/design/matchup` rather than `/matchup`.
+  A clear panel covers the target on every stop that is not about pressing
+  it (`interactive` is opt-in and only the format toggle has it), because one
+  press on a spotlit nav or card would leave the page the tour is describing.
+  Tab is trapped inside the card, arrow keys step, Esc skips. Leaving the tab
+  closes the tour and counts as skipping it. Offered only to a signed-in
+  account with a league, which is also what keeps it off the design fixtures
+  the rendered suite measures. `?tour=<id>` forces one open for review,
+  naming the tour outright because the fixtures live at `/design/matchup`
+  rather than `/matchup`.
 
   It replaces the old static `WelcomeCard`, which was a wall of text behind
   the same two entry points.
@@ -1373,3 +1453,19 @@ and adding before it is used.
     the user considers it a side project to remove; and the live walk's
     acceptance word reads from your saved manager reads, which only the
     builder's scouting panel sets, so most lanes say "Unread" until then.
+30. **The visual pass is half done.** On 2026-10-08 a design critique
+    (`docs/design-critique-2026-10-08.md`) found the app's generated feel came
+    from tracked uppercase everywhere, 9 to 10px type, bold on everything,
+    the price face doing every job, and sheen, glow and grain on every
+    surface. The token and CSS sweep landed (one eyebrow style, 11px floor,
+    decoration removed, the green header dot gone, `scripts/css-check.mjs`
+    in `npm run lint`). Staatliches stays on titles, team names and buttons
+    by the user's choice; a Hanken version was tried and reverted. Still
+    open, in order: the 13px body floor and a 400/500 weight default; the
+    layout pass (rows become rows with dividers, one surface per region, one
+    home per number, the line movement chart collapses to a sparkline until
+    it moves); spacing and radius snapped to the token scale; and two calls
+    for the user, the landing page (left-aligned, the real board beside the
+    form, no blobs) and the Sign-in card (no card, build string behind a dev
+    flag). Board values are still set in the price face, whose 1 reads as an
+    I, until the layout pass moves them to mono.

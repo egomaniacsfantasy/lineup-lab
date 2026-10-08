@@ -23,8 +23,6 @@ const TARGETS = [
   'src/components/charts/OddsChart.css',
   'src/pages/LandingPage.tsx',
   'src/pages/LandingPage.module.css',
-  'src/components/matchup/MatchupDistributions.tsx',
-  'src/components/matchup/MatchupDistributions.css',
   'src/components/matchup/Scoreline.tsx',
   'src/components/matchup/BestLineups.tsx',
   'src/components/matchup/WeekAhead.tsx',
@@ -53,6 +51,9 @@ const TARGETS = [
   'src/pages/MorePage.tsx',
   'src/components/layout/AppHeader.tsx',
   'src/components/layout/BottomTabBar.tsx',
+  'src/components/onboarding/ProductTour.tsx',
+  'src/components/onboarding/ProductTour.css',
+  'src/components/onboarding/tourSteps.ts',
 ];
 const DISALLOWED_DASHES = /[—–]/;
 const DISALLOWED_COLORS = [

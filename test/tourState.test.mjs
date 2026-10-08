@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { TOURS, runnableSteps, tourById, tourForPath } from '../src/components/onboarding/tourSteps.ts';
+import { TOURS, mergeSteps, runnableSteps, tourById, tourForPath } from '../src/components/onboarding/tourSteps.ts';
 
 /**
  * The tour's pure decisions: which tab gets which tour, which stops can run,
@@ -50,6 +50,40 @@ test('every stop is distinct, aimed somewhere, and says something', () => {
       );
     }
   }
+});
+
+test('every tour names its tab, and an intro is as short as a stop', () => {
+  for (const tour of TOURS) {
+    assert.ok(tour.label.length > 0 && tour.label.length <= 8, `${tour.id} has no short tab name for the eyebrow`);
+    if (!tour.intro) continue;
+    assert.ok(tour.intro.title.length > 0 && tour.intro.cta.length > 0, `${tour.id}'s intro is missing a title or a button`);
+    assert.ok(
+      tour.intro.body.length <= 240,
+      `${tour.id}'s intro runs to ${tour.intro.body.length} characters, which is a wall of text before a single ring`,
+    );
+  }
+  assert.ok(tourById('hub')?.intro, 'the Hub is the tab everybody lands on, and it has no intro to ask before it starts');
+});
+
+test('a stop that turns up late joins the walk ahead, never behind', () => {
+  const hub = tourById('hub');
+  const [price, format, lineup, season] = hub.steps;
+  /* Opened at three stops because the season band had not landed. */
+  const current = [price, format, lineup];
+  /* On the second stop, the band is now present. */
+  const merged = mergeSteps(current, 1, [price, format, lineup, season], hub.steps);
+  assert.deepEqual(
+    merged.map((step) => step.id),
+    ['price', 'format', 'lineup', 'season'],
+    'the late stop was not appended after the stop being walked',
+  );
+  /* Walked past the format stop; a stop now vanished from the tail is dropped,
+     but what has been walked stays put. */
+  const shrunk = mergeSteps(merged, 1, [price, format, season], hub.steps);
+  assert.deepEqual(shrunk.map((step) => step.id), ['price', 'format', 'season']);
+  /* Nothing already walked can be handed back, even if it is present. */
+  const noRewind = mergeSteps([format, lineup], 1, [price, format, lineup, season], hub.steps);
+  assert.deepEqual(noRewind.map((step) => step.id), ['format', 'lineup', 'season']);
 });
 
 test('only the stop that asks you to press something leaves it pressable', () => {

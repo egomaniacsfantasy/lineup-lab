@@ -1,8 +1,13 @@
 /* The tour overlay.
 
-   Amber is the brand and the selection colour, so the ring is amber. Nothing
-   in here is green or red: those two mean money everywhere in this product
-   and a tour stop is not money. */
+   Amber is the brand and the selection colour, so the ring, the eyebrow and
+   the one filled button are amber. Nothing in here is green or red: those
+   two mean money everywhere in this product and a tour stop is not money.
+
+   The card is a ticket, not a tooltip: a tracked mono eyebrow naming the tab
+   and the stop, a heading in the UI face, a short paragraph, a segmented
+   progress bar and one filled action. The display face is for prices, and
+   the card never shows one. */
 
 .tour {
   position: fixed;
@@ -11,12 +16,24 @@
   pointer-events: none;
 }
 
-/* One of the four panels around the spotlight. The panels take clicks; the
-   gap between them does not exist, which is what leaves the spotlit control
-   live. */
+/* One sheet with a hole in it. The sheet takes clicks; the hole is not
+   painted, so the browser does not count it, and the spotlit control under
+   it stays live. */
+.tour__mask {
+  position: fixed;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.tour__mask-path {
+  fill: rgba(8, 9, 11, 0.66);
+  pointer-events: auto;
+}
+
 .tour__scrim {
   position: fixed;
-  background: rgba(6, 7, 9, 0.72);
+  background: rgba(8, 9, 11, 0.66);
   pointer-events: auto;
 }
 
@@ -32,14 +49,18 @@
 .tour__ring {
   position: fixed;
   border: 1px solid var(--amber-bright);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-glow-amber);
+  border-radius: 10px;
+  /* A soft halo rather than a glow: the ring has to read against both the
+     dimmed page and the lit target, and one hairline does not. */
+  box-shadow:
+    0 0 0 4px rgba(255, 128, 73, 0.14),
+    0 0 0 1px rgba(8, 9, 11, 0.6);
   pointer-events: none;
   /* Fades in where it belongs rather than sliding there from the last stop.
      Animating the position meant that for a fifth of a second the ring was a
      rectangle around neither element, which is what somebody screenshotting
      the tour actually sees. */
-  animation: tour-ring-in var(--transition-base) ease-out;
+  animation: tour-ring-in var(--transition-base);
 }
 
 @keyframes tour-ring-in {
@@ -53,82 +74,192 @@
 
 .tour__card {
   position: fixed;
-  width: 340px;
+  width: 360px;
   max-width: calc(100vw - 24px);
-  padding: var(--space-md);
+  padding: 16px 20px 18px;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-lg);
   background: var(--bg-surface);
-  box-shadow: var(--shadow-elevated);
+  box-shadow:
+    var(--shadow-elevated),
+    var(--shadow-soft-edge);
   pointer-events: auto;
+  animation: tour-card-in var(--transition-base);
 }
 
-.tour__card:focus {
-  outline: none;
+@keyframes tour-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
+.tour__card:focus,
 .tour__card:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  /* The card takes focus so the keys work, not so it can be seen taking
+     it. An outline here read as part of the design; the buttons inside
+     carry the visible focus state. */
+  outline: none;
 }
 
 .tour__card--centered {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  animation: tour-card-centered-in var(--transition-slow);
+}
+
+@keyframes tour-card-centered-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+.tour__card--intro {
+  width: 440px;
+  padding: 22px 26px 22px;
+}
+
+/* On a phone the card is a sheet at the foot of the screen, under the
+   target, never beside it. */
+.tour__card--docked {
+  top: auto;
+  left: var(--space-sm);
+  right: var(--space-sm);
+  bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
+  width: auto;
+  max-width: none;
+}
+
+/* The caret: a square turned 45 degrees, cut from the card's own surface and
+   border, parked on whichever edge faces the target. --tour-caret is the
+   distance along that edge, set inline. */
+.tour__caret {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-right: 0;
+  border-bottom: 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.tour__card[data-side='bottom'] .tour__caret {
+  top: -8px;
+  left: calc(var(--tour-caret) - 7px);
+}
+
+.tour__card[data-side='top'] .tour__caret {
+  bottom: -8px;
+  left: calc(var(--tour-caret) - 7px);
+  transform: rotate(225deg);
+}
+
+.tour__card[data-side='right'] .tour__caret {
+  left: -8px;
+  top: calc(var(--tour-caret) - 7px);
+  transform: rotate(-45deg);
+}
+
+.tour__card[data-side='left'] .tour__caret {
+  right: -8px;
+  top: calc(var(--tour-caret) - 7px);
+  transform: rotate(135deg);
 }
 
 .tour__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-xs);
+  gap: var(--space-sm);
+  min-height: 20px;
 }
 
-.tour__count {
+.tour__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
   font-family: var(--font-num);
   font-size: var(--type-caption);
-  letter-spacing: 0.06em;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
+.tour__eyebrow-tab {
+  color: var(--text-amber);
+}
+
+.tour__eyebrow-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--ink-3);
+}
+
 .tour__skip {
-  padding: 0;
+  margin: 0 -6px 0 0;
+  padding: 4px 6px;
   border: none;
+  border-radius: var(--radius-sm);
   background: none;
   font-family: var(--font-ui);
-  font-size: var(--type-caption);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
 }
 
 .tour__skip:hover {
   color: var(--text-primary);
+  background: var(--bg-raised);
+}
+
+.tour__skip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 .tour__title {
-  margin: 0 0 var(--space-2xs);
+  margin: 10px 0 6px;
   font-family: var(--font-display);
-  font-size: var(--type-title-lg);
-  font-weight: 600;
-  line-height: 1.1;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
   color: var(--text-primary);
+}
+
+.tour__title--intro {
+  margin-top: 12px;
+  font-size: 24px;
 }
 
 .tour__body {
   margin: 0;
   font-family: var(--font-ui);
-  font-size: var(--type-body);
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.55;
   color: var(--text-dim);
+  text-wrap: pretty;
 }
 
 .tour__progress {
   display: flex;
   gap: var(--space-2xs);
-  margin: var(--space-md) 0 var(--space-sm);
+  margin: 16px 0 14px;
 }
 
 .tour__dot {
@@ -136,6 +267,7 @@
   height: 3px;
   border-radius: var(--radius-pill);
   background: var(--border-subtle);
+  transition: background var(--transition-base);
 }
 
 .tour__dot--done {
@@ -153,16 +285,24 @@
   gap: var(--space-xs);
 }
 
+.tour__actions--intro {
+  margin-top: 20px;
+}
+
 .tour__back,
 .tour__next {
   /* 16px is the floor that stops iOS zooming a tap target's page. */
   min-height: 40px;
-  padding: 0 var(--space-md);
+  padding: 0 18px;
   border-radius: var(--radius-pill);
   font-family: var(--font-ui);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .tour__back {
@@ -173,6 +313,7 @@
 
 .tour__back:hover {
   color: var(--text-primary);
+  border-color: var(--ink-3);
 }
 
 .tour__next {
@@ -186,22 +327,48 @@
   border-color: var(--amber-mid);
 }
 
-.tour__replay {
-  margin: var(--space-xs) 0 0;
+.tour__back:focus-visible,
+.tour__next:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.tour__hint {
+  margin: 12px 0 0;
   font-family: var(--font-ui);
-  font-size: var(--type-caption);
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--text-muted);
   text-align: right;
 }
 
+.tour__card--intro .tour__hint {
+  text-align: left;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .tour__ring {
+  .tour__ring,
+  .tour__card,
+  .tour__card--centered {
     animation: none;
+  }
+
+  .tour__dot {
+    transition: none;
   }
 }
 
-@media (max-width: 720px) {
-  .tour__card {
+@media (max-width: 719px) {
+  .tour__card--intro {
     width: calc(100vw - 24px);
+    padding: 18px 20px;
+  }
+
+  .tour__hint {
+    display: none;
+  }
+
+  .tour__card--intro .tour__hint {
+    display: none;
   }
 }
