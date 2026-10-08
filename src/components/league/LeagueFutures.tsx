@@ -146,7 +146,6 @@ function envelopePoints(rows: { team: LeagueFutureRow; series: { at: number; pro
 
 
 function comparisonTakeaway(
-  userTeam: LeagueFutureRow,
   comparisonTeam: LeagueFutureRow | null,
   userSeries: { probability: number }[] | undefined,
   comparisonSeries: { probability: number }[] | undefined,
@@ -159,11 +158,11 @@ function comparisonTakeaway(
   const comparisonLast = comparisonSeries.at(-1)?.probability ?? 0;
   const difference = comparisonLast - userLast;
   if (Math.abs(difference) < 0.2) {
-    return `${comparisonTeam.teamName} closes even with ${userTeam.teamName} in this view.`;
+    return `${comparisonTeam.teamName} closes even with you.`;
   }
   return difference > 0
-    ? `${comparisonTeam.teamName} closes ${difference.toFixed(1)} points above your line.`
-    : `${comparisonTeam.teamName} closes ${Math.abs(difference).toFixed(1)} points below your line.`;
+    ? `${comparisonTeam.teamName} closes ${difference.toFixed(1)} pp above your line.`
+    : `${comparisonTeam.teamName} closes ${Math.abs(difference).toFixed(1)} pp below your line.`;
 }
 
 export function LeagueFutures({
@@ -196,7 +195,7 @@ export function LeagueFutures({
   const comparisonHistory = comparisonTeam ? historyTeams.find((row) => row.team.rosterId === comparisonTeam.rosterId) : null;
   const envelope = envelopePoints(historyTeams);
   const footerText = userTeam
-    ? comparisonTakeaway(userTeam, comparisonTeam, userHistory?.series, comparisonHistory?.series)
+    ? comparisonTakeaway(comparisonTeam, userHistory?.series, comparisonHistory?.series)
     : 'This chart builds as the league updates.';
 
   /* The opening book, read once. Keyed by roster id because team names are
@@ -407,7 +406,6 @@ export function LeagueFutures({
           <OddsChart
             band={envelope.length > 1 ? { id: 'league-envelope', points: envelope } : null}
             bandLabel="League range"
-            caption="Tap a team above to compare."
             className="league-futures__chart"
             comparison={comparisonHistory
               ? {

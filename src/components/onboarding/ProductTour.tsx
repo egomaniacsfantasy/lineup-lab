@@ -272,7 +272,7 @@ export function ProductTour({ tour, open, explicit, onClose }: ProductTourProps)
           <p className="tour__title">Nothing to show yet</p>
           <p className="tour__body">
             This tab has nothing on it to walk through yet. Once your league
-            finishes syncing, replay it from your account menu.
+            finishes syncing, replay it from the account menu or More.
           </p>
           <div className="tour__actions">
             <button className="tour__next" onClick={skip} type="button">
@@ -403,7 +403,7 @@ export function ProductTour({ tour, open, explicit, onClose }: ProductTourProps)
           </button>
         </div>
         {last ? (
-          <p className="tour__replay">Each tab has its own. Replay them from your account menu.</p>
+          <p className="tour__replay">Each tab has its own. Replay from the account menu or More.</p>
         ) : null}
       </div>
     </div>,

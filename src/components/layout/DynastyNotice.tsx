@@ -61,9 +61,9 @@ export function DynastyNotice() {
       }}
       tone="note"
     >
-      <strong>{label} league, and we are still building for it.</strong> Trade pricing is
-      off here until the engine can value picks and future seasons, and every
-      player value and ranking on this site is for this season alone.
+      <strong>{label} league.</strong> Trades aren&apos;t priced yet, because picks and
+      future seasons aren&apos;t valued, and every player value here is for this
+      season only.
     </ShellNotice>
   );
 }

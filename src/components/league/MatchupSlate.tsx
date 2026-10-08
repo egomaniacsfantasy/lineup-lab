@@ -75,7 +75,7 @@ interface MatchupSlateProps {
  * which is why the header says which lines it is reading.
  */
 const GLANCE_CLOSE_WHY =
-  'Each game that has started is read at its closing line: the last price posted before anyone in it kicked off. After kickoff the price follows the score.';
+  'Started games show their closing line, the last price before kickoff.';
 
 /* Kickoffs pass while the board is open. A minute is the resolution a kickoff
    is printed at, and the same clock the Hub keeps for its rows. */
@@ -92,7 +92,7 @@ const CLOCK_MS = 60_000;
  * has to say what it actually measures.
  */
 const GAME_OF_THE_WEEK_WHY =
-  'The result that moves the whole league most: no other game this week shifts as much championship and playoff probability across all teams.';
+  'The game whose result moves the most championship and playoff odds across the league.';
 
 type RawMovement = {
   at: number;
@@ -439,7 +439,6 @@ export function MatchupSlate({
     <section aria-labelledby="matchup-slate-title" className="matchup-slate">
       <div className="matchup-slate__header">
         <div>
-          <p className="matchup-slate__kicker">Week {currentWeek} matchups</p>
           <h2 className="matchup-slate__title" id="matchup-slate-title">
             This week's board
           </h2>
@@ -822,7 +821,6 @@ export function MatchupSlate({
               ) : null}
               {chartPoints.length > 1 ? (
                 <OddsChart
-                  caption="Held between updates."
                   className="matchup-slate__chart"
                   defaultRangeId="week"
                   deltaFormatter={probabilityDeltaRead}
@@ -839,7 +837,7 @@ export function MatchupSlate({
                   valueFormatter={formatPercent}
                 />
               ) : (
-                <p className="matchup-slate__movement-note">This chart lights up after a couple of line updates.</p>
+                <p className="matchup-slate__movement-note">No line movement yet.</p>
               )}
             </section>
           ) : null}

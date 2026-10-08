@@ -167,8 +167,7 @@ export function WeekDetailModal({ week, userTeamName, line, onClose }: WeekDetai
           </>
         ) : (
           <p className="week-detail__note">
-            This week isn&apos;t priced yet. It&apos;s either a bye or waiting on a
-            projections import.
+            Not priced yet: a bye, or projections aren&apos;t in.
           </p>
         )}
       </section>

@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { PENDING_SLEEPER_PARAM, rememberPendingSleeper } from '../utils/pendingSleeper';
-import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { useAuth } from '../contexts/AuthContext';
 import './AuthLanding.css';
 
@@ -193,7 +192,7 @@ export function AuthLanding() {
           <p className="auth-landing__fineprint">
             {mode === 'signup'
               ? 'Free during the beta. One account, all your leagues.'
-              : 'Welcome back. Your leagues are waiting.'}
+              : 'Welcome back.'}
           </p>
 
           {/* The build line needs to be readable without an account. It was
@@ -202,7 +201,6 @@ export function AuthLanding() {
               ("what is this device running?") could only be answered last. */}
           <p className="auth-landing__build">
             Build {buildStamp}
-            {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
             {viewport ? ` · ${viewport}` : ''}
           </p>
         </section>

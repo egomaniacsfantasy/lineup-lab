@@ -191,7 +191,7 @@ export function Predictor({
         if (timedOut) {
           setBoard(null);
           setBracket(null);
-          setNotice('That run took too long to come back. Try calling fewer games, or reset.');
+          setNotice('That took too long. Call fewer games, or reset.');
         }
       })
       .finally(() => {

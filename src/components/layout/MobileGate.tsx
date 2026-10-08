@@ -100,8 +100,7 @@ export function MobileGate() {
 
               <p className="mobile-gate__fine">Completely free during the beta.</p>
               <p className="mobile-gate__fine mobile-gate__fine--where">
-                The short version fits a phone. Trades, the predictor and the
-                bet slip open on a laptop.
+                Trades, the predictor and the bet slip open on a laptop.
               </p>
             </>
           }
@@ -136,8 +135,7 @@ function EspnDoor({ onBack }: { onBack: () => void }) {
           </span>
         </h1>
         <p className="mobile-gate__copy">
-          It takes about two minutes and needs a computer, because ESPN requires
-          a signed in session. Worth it.
+          About two minutes, on a computer: ESPN needs you signed in there.
         </p>
         <a
           className="mobile-gate__open"

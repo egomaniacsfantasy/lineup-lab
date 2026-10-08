@@ -222,14 +222,6 @@
   background: rgba(244, 245, 242, 0.02);
 }
 
-.trade-cc__partner-empty-note {
-  margin: 0;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .trade-cc__builder-head {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -726,16 +718,6 @@
     grid-column: 3 / 5;
   }
 
-}
-
-.trade-cc__column-label {
-  margin: 0 0 8px;
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .trade-cc__partner-select {

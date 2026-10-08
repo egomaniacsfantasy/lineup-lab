@@ -716,7 +716,7 @@ async function get<T>(path: string, init?: RequestInit): Promise<T> {
        Sleeper when the fault was ours, twice. The friendly line still leads. */
     const friendly =
       body?.message ??
-      `The league service answered ${response.status}. If this keeps happening, that status is the thing to report.`;
+      `Odds Gods returned an error (${response.status}). If it keeps happening, send a bug report.`;
     throw new LeagueApiError(
       body?.error ?? `request_failed_${response.status}`,
       body?.detail && body.detail !== friendly ? `${friendly} (${body.detail})` : friendly,

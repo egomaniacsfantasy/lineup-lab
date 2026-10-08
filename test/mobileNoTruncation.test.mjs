@@ -488,7 +488,7 @@ test('the phone ESPN door explains itself and asks for nothing', async () => {
     }));
 
     assert.equal(door.inputs, 0, 'the phone gate is collecting ESPN credentials');
-    assert.match(door.text, /needs a computer/);
+    assert.match(door.text, /on a computer/);
     assert.match(door.text, /Create a free account/);
   } finally {
     await context.close();
@@ -977,7 +977,7 @@ test('a username turns the page into the visitor own book', async () => {
     assert.equal(book.cta, 'Create a free account');
     /* Carried through, so it is never typed twice. */
     assert.match(book.ctaHref, /sleeper=designgods/, `the CTA points at ${book.ctaHref}`);
-    assert.match(book.text, /The whole book opens when you do\. Free during the beta\./);
+    assert.match(book.text, /Free during the beta\./);
   } finally {
     await context.close();
   }
@@ -1053,7 +1053,7 @@ test('the ESPN door explains itself and never asks for ESPN credentials', async 
 
     assert.equal(door.passwords, 0, 'the landing page is asking for an ESPN password');
     assert.equal(door.inputs, 0, 'the ESPN door is collecting something');
-    assert.match(door.text, /needs a computer/);
+    assert.match(door.text, /on a computer/);
     assert.equal(door.cta, 'Create a free account');
   } finally {
     await context.close();
@@ -1099,8 +1099,8 @@ test('a dynasty peek says what is missing, and does not contradict itself', asyn
     }));
 
     assert.match(seen.note, /Dynasty league/i);
-    assert.match(seen.note, /trade pricing is off/i);
-    assert.match(seen.note, /this season alone/i);
+    assert.match(seen.note, /Trades aren't priced yet/i);
+    assert.match(seen.note, /this season only/i);
 
     /* And the pitch beside it must not offer the thing the note just said is
        off. Saying both, two sentences apart, is the product contradicting

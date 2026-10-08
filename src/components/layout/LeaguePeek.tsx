@@ -183,9 +183,8 @@ export function LeaguePeek({
             has just watched one game get priced is being told the same thing
             has been done to every other game in their league. */}
         <p className="league-peek__pitch">
-          The rest of the book is open. Moneylines, spreads and totals on every
-          matchup in your league, championship odds that move all week, and a
-          bet slip that parlays your own league at fair odds.
+          Behind the locks: moneylines, spreads and totals on every matchup,
+          title odds that move all week, and a bet slip for your own league.
           {/* The trade finder is not offered to a league it does not serve.
               The scope note directly above says trade pricing is off here, and
               following that with "plus a trade finder" is the product

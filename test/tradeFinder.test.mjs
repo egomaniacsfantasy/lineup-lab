@@ -87,7 +87,7 @@ test('the board is there on arrival, from a scan that already ran, with the tick
     const board = page.locator('.trade-finder__board');
     await board.waitFor({ state: 'visible' });
     assert.match(await page.locator('.trade-finder__board-title').innerText(), /the board/i);
-    assert.match(await page.locator('.trade-finder__board-head').innerText(), /Scanned \d{1,2}:\d{2}/);
+    assert.match(await page.locator('.trade-finder__board-head').innerText(), /Updated \d{1,2}:\d{2}/);
     assert.equal(await page.locator('.trade-finder__find').innerText(), 'Show the board');
 
     /* Out of the box: the other side gives up at most 2 points of title odds.

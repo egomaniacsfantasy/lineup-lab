@@ -23,13 +23,12 @@ export function LeagueRecords({ records }: { records: LeagueRecord[] }) {
   return (
     <section aria-labelledby="league-records-title" className="league-records">
       <header className="league-records__head">
-        <p className="league-records__kicker">The book</p>
         <h2 className="league-records__title" id="league-records-title">
           League records
         </h2>
         <p className="league-records__note">
           {unheld > 0
-            ? 'Records start when we start pricing a league and grow from there. Nothing here is backfilled.'
+            ? 'Records start from the week we began pricing this league.'
             : 'Every record here is measured against a price we posted before the games were played.'}
         </p>
       </header>

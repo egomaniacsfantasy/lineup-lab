@@ -155,7 +155,7 @@ function SideCard({ side }: { side: TradeSideDelta }) {
                 <span>{after.toFixed(1)}{r.pct ? '%' : ''}{ci && r.ciKey ? <Plus v={ci.after[r.ciKey]} pct={r.pct} /> : null}</span>
                 <span
                   className={['trade-analyzer-panel__delta-chip', noise ? 'trade-analyzer-panel__delta-chip--noise' : ''].filter(Boolean).join(' ')}
-                  title={noise ? 'Within the simulation noise: the 95% range of this change includes zero.' : undefined}
+                  title={noise ? 'Too small to trust: the ± range includes zero.' : undefined}
                 >
                   <Delta v={r.lowerIsBetter ? -rowDelta : rowDelta} pct={r.pct} />
                   {dCi != null ? <Plus v={dCi} pct={r.pct} /> : null}

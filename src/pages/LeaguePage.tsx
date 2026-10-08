@@ -670,8 +670,8 @@ export function LeaguePage() {
 
       {connected && !pricing?.available ? (
         <SeasonalNotice>
-          Futures and matchup odds are provisional (scoring history only) until
-          projections are imported.
+          Odds are provisional, from scores so far, until this week&apos;s
+          projections arrive.
         </SeasonalNotice>
       ) : null}
 

@@ -337,7 +337,7 @@ function TradeDealsView() {
         <SeasonalNotice>
           {isLoading
             ? 'Syncing your trade board…'
-            : error ?? "We couldn't load your league context for trades right now."}
+            : error ?? "We couldn't load your league right now."}
         </SeasonalNotice>
       </div>
     );
@@ -358,10 +358,8 @@ function TradeDealsView() {
     return (
       <div className="trade-page">
         <SeasonalNotice>
-          Trades are off for dynasty and keeper leagues. Draft picks and players
-          held for future seasons are half of what changes hands here, and the
-          engine prices a rest of season, so every number it could put on one of
-          these would be answering a question nobody in this league is asking.
+          Trades are off for dynasty and keeper leagues. Picks and future seasons
+          are most of what changes hands there, and we only price this season.
         </SeasonalNotice>
       </div>
     );
@@ -885,7 +883,6 @@ function TradeDealsView() {
           <div className="trade-cc__side">
             <div className="trade-cc__side-head">
               <div>
-                <p className="trade-cc__column-label">Your side</p>
                 <h3 className="trade-cc__side-title">You send</h3>
               </div>
               <span className="trade-cc__side-team">{userTeam.teamName}</span>
@@ -903,7 +900,6 @@ function TradeDealsView() {
           >
             <div className="trade-cc__side-head">
               <div>
-                <p className="trade-cc__column-label">Their side</p>
                 <h3 className="trade-cc__side-title">You get</h3>
               </div>
               <div className="trade-cc__partner-tools">
@@ -918,10 +914,7 @@ function TradeDealsView() {
               </>
             ) : (
               <div className="trade-cc__partner-empty">
-                <p className="trade-cc__hint">Pick a manager to open the other side of the market.</p>
-                <p className="trade-cc__partner-empty-note">
-                  The builder stays quiet until you choose who you want to price.
-                </p>
+                <p className="trade-cc__hint">Pick a manager to trade with.</p>
               </div>
             )}
           </div>
@@ -984,7 +977,7 @@ function TradeDealsView() {
                     Even out this trade →
                   </button>
                 ) : !counter.available ? (
-                  <p className="trade-cc__counter-body">Couldn&apos;t compute a fair counter.</p>
+                  <p className="trade-cc__counter-body">Couldn&apos;t find a fair add.</p>
                 ) : counter.needed === false ? (
                   <p className="trade-cc__counter-body">This trade is already balanced.</p>
                 ) : counter.add && counter.add.length > 0 ? (
@@ -1103,10 +1096,10 @@ function TradeDealsView() {
            just did reads as the app not having noticed you at all. */
         <SeasonalNotice>
           {result.reason === 'no_projections'
-            ? 'Trades price once projections are imported.'
+            ? "Trades price once this week's projections are in."
             : give.length === 0 || getIds.length === 0
               ? 'Pick at least one player on each side to price the trade.'
-              : `This trade could not be priced${result.reason ? ` (${result.reason})` : ''}. It is worth trying again.`}
+              : 'Could not price this trade. Try again.'}
         </SeasonalNotice>
       ) : priceError || analysisError ? (
         /* Anything that went wrong, said out loud.
@@ -1124,14 +1117,14 @@ function TradeDealsView() {
               "did not price" in every case, including the one where the price
               came back fine and only the season impact failed. */}
           <p className="trade-cc__failure-head">
-            {priceError ? 'This trade did not price.' : 'Only half of this ran.'}
+            {priceError ? 'This trade did not price.' : 'The trade priced, but not its season impact.'}
           </p>
           <p className="trade-cc__failure-detail">
             {priceError && analysisError
               ? `${priceError} The season impact did not run either.`
               : priceError
                 ? priceError
-                : `The trade priced, but its season impact did not run. ${analysisError}`}
+                : analysisError}
           </p>
           <button
             className="trade-cc__failure-retry"

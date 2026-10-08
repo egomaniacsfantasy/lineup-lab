@@ -19,7 +19,6 @@ const SCORING_LABELS: Record<ScoringFormat, string> = {
   'half-ppr': 'HALF',
 };
 
-import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { isAgreementAdmin } from '../utils/admin';
 import { setAutopilotEnabled, useAutopilotEnabled } from '../utils/autopilotPreference';
 import { useTour } from '../contexts/TourContext';
@@ -61,14 +60,14 @@ export function MorePage() {
   const toolLinks = [
     {
       title: 'Board · Sheet view',
-      body: 'Player board plus the power-user spreadsheet view.',
+      body: 'The board as a spreadsheet.',
       path: '/rankings?view=sheet',
     },
     ...(isOwner
       ? [
           {
             title: 'Projections admin',
-            body: 'Owner import flow for the weekly projection workbooks.',
+            body: 'Import the weekly projections.',
             path: '/admin/projections',
           },
         ]
@@ -141,7 +140,7 @@ export function MorePage() {
               </h3>
               <p className="more-page__card-body">
                 {isRefreshing || isLoading
-                  ? `Reading your ${providerLabel ?? 'league'}.`
+                  ? `Reading your ${providerLabel ? `${providerLabel} league` : 'league'}.`
                   : bootstrap
                     ? `Last read at ${new Date(bootstrap.lastUpdated).toLocaleTimeString()}.`
                     : error ?? 'We could not reach your league.'}
@@ -243,7 +242,7 @@ export function MorePage() {
               <p className="more-page__card-body">
                 {autopilotOn
                   ? 'Showing on the Hub: set my ESPN lineup, and the trade sender.'
-                  : 'Hidden. Turn on to put the ESPN lineup and trade-sender panels back on the Hub.'}
+                  : 'Hidden. Turn on to put the ESPN lineup and trade sender panels back on the Hub.'}
               </p>
             </div>
             <button
@@ -261,7 +260,7 @@ export function MorePage() {
             <div>
               <h3 className="more-page__card-title">Player votes</h3>
               <p className="more-page__card-body">
-                Dark-launched Keep / Trade / Cut prompt. Votes queue locally and do not touch the projection pipeline.
+                Keep / Trade / Cut prompt. Votes are saved on this device only.
               </p>
             </div>
             <span className="more-page__card-cta">Open</span>
@@ -287,7 +286,6 @@ export function MorePage() {
           current, and every symptom then looks unfixed. */}
       <p className="more-page__build">
         Build {buildStamp}
-        {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
       </p>
 
     </div>

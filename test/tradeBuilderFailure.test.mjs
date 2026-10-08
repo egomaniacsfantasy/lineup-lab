@@ -69,7 +69,7 @@ test('the heading agrees with the sentence under it', async () => {
      contradicting itself in two adjacent lines. */
   assert.match(
     text,
-    /priceError \? 'This trade did not price\.' : 'Only half of this ran\.'/,
+    /priceError \? 'This trade did not price\.' : 'The trade priced, but not its season impact\.'/,
   );
 });
 
@@ -85,7 +85,7 @@ test('an unavailable result never tells you to do what you just did', async () =
     /give\.length === 0 \|\| getIds\.length === 0\s*\n?\s*\? 'Pick at least one player on each side/,
     'the empty-sides message is shown regardless of whether the sides are empty',
   );
-  assert.match(text, /This trade could not be priced/);
+  assert.match(text, /Could not price this trade/);
 });
 
 test('the failure state is reachable in the design scene', async () => {

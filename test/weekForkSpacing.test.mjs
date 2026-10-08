@@ -649,7 +649,7 @@ test('a league that has rolled over is moved forward by itself', async () => {
 
     /* It says what it did, and which season it landed on. A board that
        silently changes to different teams is indistinguishable from a bug. */
-    assert.match(seen.says, /Moved you to 2026/i, `the strip says "${seen.says}"`);
+    assert.match(seen.says, /Moved you to the 2026 season/i, `the strip says "${seen.says}"`);
     assert.match(seen.says, /Odds Gods Design Replay/, 'the receipt does not name the league');
     /* Amber, not red. Being put on the right season is not an alarm. */
     assert.match(seen.tone, /shell-notice--note/, 'a successful repair is dressed as a warning');
@@ -705,7 +705,7 @@ test('a league nobody has rolled over yet says so, and stays put', async () => {
 
     const seen = await noticeState(page);
 
-    assert.match(seen.says, /nothing to move you to/i, `the strip says "${seen.says}"`);
+    assert.match(seen.says, /from last year/i, `the strip says "${seen.says}"`);
     /* Both years, because "your data is old" without saying how old is not
        actionable. */
     assert.match(seen.says, /2025/);
@@ -757,8 +757,8 @@ test('a dynasty league is told what is missing and why', async () => {
 
     /* Both halves of the claim, because they are different limitations and a
        user hits them on different screens. */
-    assert.match(seen.says, /trade pricing is off/i, `the note says "${seen.says}"`);
-    assert.match(seen.says, /this season alone/i, 'it does not scope the player values');
+    assert.match(seen.says, /Trades aren't priced yet/i, `the note says "${seen.says}"`);
+    assert.match(seen.says, /this season only/i, 'it does not scope the player values');
     /* Amber. A healthy league on a supported path is not an alarm, and an
        alarm that fires on one teaches people to stop reading alarms. */
     assert.match(seen.tone, /shell-notice--note/, 'a scope note is dressed as a warning');

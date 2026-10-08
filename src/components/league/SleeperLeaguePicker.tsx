@@ -121,7 +121,7 @@ function PickerSheet({ firstRun }: { firstRun: boolean }) {
           </h2>
           <p className="league-picker__sub">
             {load.name === 'ready'
-              ? `${load.user.displayName} is in ${available.length} on Sleeper. Tick the ones you want to see here. You can come back and change this any time.`
+              ? `${load.user.displayName} is in ${available.length} ${available.length === 1 ? 'league' : 'leagues'}. Tick the ones you want here; you can change this any time.`
               : sleeperUsername
                 ? `Looking up ${sleeperUsername} on Sleeper.`
                 : 'No Sleeper account is connected yet.'}

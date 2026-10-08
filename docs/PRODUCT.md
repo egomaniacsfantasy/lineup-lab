@@ -388,9 +388,9 @@ all-play record (your record against every team every week), expected W-L from
 scoring, and schedule luck as the difference. Then the week-by-week season
 strip — results for played weeks, win probability for future ones, colour-graded
 — with a takeaway line ("Favored in N of M weeks", softest and toughest week).
-Then per-week rows with opponent, result or line. Then **The Book** (league
-records, which start when pricing starts and are never backfilled) and **The
-Time Machine** (rewind the board to any prior week and see what has moved).
+Then per-week rows with opponent, result or line. Then **League records**
+(which start when pricing starts and are never backfilled) and **The Time
+Machine** (rewind the board to any prior week and see what has moved).
 
 **Predictor.** Call the rest of the season game by game, optionally with
 scores. Called games are treated as decided; everything else stays simulated.

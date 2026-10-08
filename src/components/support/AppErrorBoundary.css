@@ -16,15 +16,6 @@
   box-shadow: var(--shadow-elevated);
 }
 
-.app-crash__kicker {
-  margin: 0;
-  color: var(--red);
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
 .app-crash__title {
   margin: 0;
   color: var(--text-primary);

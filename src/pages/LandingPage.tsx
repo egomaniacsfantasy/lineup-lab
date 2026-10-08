@@ -211,8 +211,7 @@ function EspnDoor({ onBack }: { onBack: () => void }) {
       <img alt="" className={styles.markSmall} height={512} src={mark} width={512} />
       <h1 className={styles.headline}>ESPN leagues connect after you make an account.</h1>
       <p className={styles.espnCopy}>
-        It takes about two minutes and needs a computer, because ESPN requires a
-        signed in session. Worth it.
+        About two minutes, on a computer: ESPN needs you signed in there.
       </p>
       <Link
         className={styles.go}
@@ -409,7 +408,7 @@ function Book({ league, username }: { league: PeekLeague; username: string }) {
         </button>
       </div>
       <p className={styles.fine}>
-        The whole book opens when you do. Free during the beta.
+        Free during the beta.
       </p>
 
       {sharing ? (

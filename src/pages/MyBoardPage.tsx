@@ -631,7 +631,7 @@ export function MyBoardPage() {
       <div className="board-page">
         {!bootstrap ? (
           <SeasonalNotice>
-            Your league is still syncing, so the Board is waiting on league context before it can load.
+            Loading your league…
           </SeasonalNotice>
         ) : null}
         {bootstrap ? <p className="board-page__state">Loading Board…</p> : null}
@@ -644,7 +644,7 @@ export function MyBoardPage() {
       <h1 className="visually-hidden">Board</h1>
       {!bootstrap ? (
         <SeasonalNotice>
-          Your league is still syncing, so this Board is using league-neutral starter assumptions for now.
+          Your league is still syncing. Values use standard lineup slots until it finishes.
         </SeasonalNotice>
       ) : null}
 

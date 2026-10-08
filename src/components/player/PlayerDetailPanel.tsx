@@ -11,32 +11,7 @@ interface PlayerDetailPanelProps {
   onClose: () => void;
 }
 
-const NEWS_TEMPLATES = [
-  ['ESPN', '{last} logged a full practice Friday and is tracking toward his normal Week 8 role.'],
-  ['The Athletic', "{last}'s usage has held steady over the last month of the 2024 replay window."],
-  ['Rotoworld', 'Coaches expect {last} to see the high-leverage snaps against {opponent} this week.'],
-  ['NFL Network', '{last} was not listed with a new injury designation entering the weekend.'],
-  ['PFF', '{last} remains a top-15 positional usage profile through Week 7.'],
-  ['ESPN', "{last}'s matchup grade improved after the final Week 8 injury report."],
-  ['Fantasy Wire', 'The Week 8 script keeps {last} in the playable range for PPR formats.'],
-  ['Beat report', '{last} handled the expected rep share during the open practice window.'],
-  ['Rotoworld', "{last}'s route and touch profile remains stable heading into {opponent}."],
-  ['The Athletic', 'The market is treating {last} as a steady-volume option for Week 8.'],
-];
-
-const DEFENSE_NEWS_TEMPLATES = [
-  ['ESPN', '{last} allowed fewer than 20 points per game across the first half of the 2024 replay.'],
-  ['The Athletic', "{last}'s pressure profile remains one of the cleaner Week 8 matchup levers."],
-  ['PFF', '{last} carries a turnover-path matchup into the {opponent} game.'],
-];
-
-const NEWS_DATES = ['Oct 28, 2024', 'Oct 26, 2024', 'Oct 24, 2024'];
-
 const OPPONENTS = ['DEN', 'BUF', 'PHI', 'DAL', 'MIA', 'BAL', 'SF', 'DET'];
-
-function getLastName(name: string) {
-  return name.trim().split(/\s+/).at(-1) ?? name;
-}
 
 function getSyntheticDetail(slug: string, projection = 12) {
   const hash = hashString(slug);
@@ -55,7 +30,6 @@ function getSyntheticDetail(slug: string, projection = 12) {
       opponent: OPPONENTS[(hash + index + 2) % OPPONENTS.length],
       points: point,
     })),
-    newsSeed: hash,
   };
 }
 
@@ -88,19 +62,6 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
   const gameLineWithoutVenue = parsedGameLine
     ? `${parsedGameLine.spread}, O/U ${parsedGameLine.total}`
     : gameLine;
-  const lastName = getLastName(fullName);
-  const newsItems = [0, 1, 2].map((index) => {
-    const sourcePool = position === 'DEF' ? DEFENSE_NEWS_TEMPLATES : NEWS_TEMPLATES;
-    const template = sourcePool[(detail.newsSeed + index) % sourcePool.length];
-
-    return {
-      source: template[0],
-      text: template[1]
-        .replace('{last}', lastName)
-        .replace('{opponent}', week8?.opponent ?? 'the opponent'),
-      date: NEWS_DATES[index],
-    };
-  });
   const maxRecent = Math.max(...recentGames.map((game) => game.points), 1);
 
   useEffect(() => {
@@ -180,7 +141,6 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
           <div className="player-detail-panel__status">
             <span>{player?.injuryStatus ?? 'Healthy'}</span>
             <span>Bye: {player?.bye ? `Wk ${player.bye}` : '-'}</span>
-            <span>Owned: {68 + (hashString(playerDetail.slug) % 30)}%</span>
           </div>
 
           <section className="player-detail-panel__section">
@@ -216,23 +176,6 @@ export function PlayerDetailPanel({ playerDetail, onClose }: PlayerDetailPanelPr
                   />
                   <span className="player-detail-panel__bar-label">{game.opponent}</span>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="player-detail-panel__section">
-            <p className="player-detail-panel__section-label">News</p>
-            <div className="player-detail-panel__news-list">
-              {newsItems.map((item) => (
-                <article className="player-detail-panel__news" key={`${item.date}-${item.text}`}>
-                  <p className="player-detail-panel__news-meta">
-                    {item.date} · {item.source}
-                  </p>
-                  <h3 className="player-detail-panel__news-title">
-                    {lastName} stays in the weekly script
-                  </h3>
-                  <p className="player-detail-panel__news-body">{item.text}</p>
-                </article>
               ))}
             </div>
           </section>

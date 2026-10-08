@@ -850,13 +850,12 @@ export function TradeFinder({
           <span className="trade-finder__who-meta">
             {kind === 'walk'
               ? <>Manager <span className="trade-finder__num">{Math.min(walk.done + walk.current.length, ids.length)} of {ids.length}</span> · <span className="trade-finder__num">{walk.found}</span> {walk.found === 1 ? 'deal' : 'deals'} found so far</>
-              : 'Every manager, every shape, at the analyzer\'s full sim count. After this it stays warm in the background.'}
+              : 'Checking every manager and every package size.'}
           </span>
         </div>
         <span className="trade-finder__scan-bar"><span style={{ width: `${kind === 'walk' ? pct : 0}%` }} /></span>
         {kind === 'walk' ? (
           <>
-            <p className="trade-finder__scan-note">Deals land together when the walk finishes, so the board never moves under you.</p>
             <button className="trade-finder__act" onClick={stopWalk} type="button">Stop and show what's found</button>
           </>
         ) : null}
@@ -879,7 +878,7 @@ export function TradeFinder({
           {outside > 0
             ? `${outside} ${outside === 1 ? 'deal helps' : 'deals help'} you, but outside your limits.`
             : fromBoard && !ranQuery
-              ? 'The last scan found no deal that lifts your title odds.'
+              ? 'Nothing on the board lifts your title odds right now.'
               : 'The book found nothing for that ask at a price that helps you.'}
         </p>
         {ranQuery ? <p className="trade-finder__empty-detail">{describeQuery(ranQuery, names(ranQuery))}.</p> : null}
@@ -901,12 +900,12 @@ export function TradeFinder({
     if (!fromBoard) {
       const walked = partnersToScan(asked, teams).length;
       const failed = walk.failed.length ? ` ${walk.failed.length} did not answer.` : '';
-      return `Searched ${walked === 1 ? 'one manager' : `${walked} managers`} just now, at the analyzer's full sim count.${failed}`;
+      return `Searched ${walked === 1 ? 'one manager' : `${walked} managers`} just now.${failed}`;
     }
     const at = clockOf(board?.lastScan?.at);
-    if (!at) return 'Every manager, every shape.';
-    const reason = board?.lastScan?.reason === 'projections_updated' ? ', after a projections update' : '';
-    return `Every manager, every shape. Scanned ${at}${reason}.${board?.scanning ? ' A fresh scan is running.' : ''}`;
+    if (!at) return '';
+    const reason = board?.lastScan?.reason === 'projections_updated' ? ' after new projections' : '';
+    return `Updated ${at}${reason}.${board?.scanning ? ' Refreshing now.' : ''}`;
   };
 
   const getPin = pinnedPlayer(asked.get);
@@ -1000,11 +999,6 @@ export function TradeFinder({
             ) : (
               <button className="trade-finder__find" disabled={busy} onClick={() => void run()} type="button">{findLabel}</button>
             )}
-            <p className="trade-finder__ticket-note">
-              {servedByBoard(query)
-                ? 'Nothing on either leg reads the book\'s last scan of every manager, so there is nothing to wait for.'
-                : 'A position or a player is searched live, two managers at a time, so the book builds its packages around it.'}
-            </p>
           </div>
         </section>
       </div>
@@ -1015,7 +1009,9 @@ export function TradeFinder({
             <div className="trade-finder__board-head">
               <span className="trade-finder__board-title-wrap">
                 <span className="trade-finder__board-title">{boardTitle}</span>
-                <span className="trade-finder__who-meta">{scannedLine()}{boardError ? ` ${boardError}` : ''}</span>
+                {scannedLine() || boardError ? (
+                  <span className="trade-finder__who-meta">{scannedLine()}{boardError ? ` ${boardError}` : ''}</span>
+                ) : null}
               </span>
               <span className="trade-finder__board-tools">
                 <button
@@ -1043,7 +1039,7 @@ export function TradeFinder({
                 </div>
                 {visibleStrong.map((group, index) => renderLane(group, index, false))}
                 {visibleTies.length ? (
-                  <div className="trade-finder__divider">Under {NOISE_PP} point. The book calls these ties</div>
+                  <div className="trade-finder__divider">Under {NOISE_PP} pp: ties</div>
                 ) : null}
                 {visibleTies.map((group, index) => renderLane(group, index, true))}
               </div>
@@ -1146,7 +1142,7 @@ function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits
           <button className="trade-finder__sheet-any" onClick={() => onChange(DEFAULT_LIMITS)} type="button">Reset</button>
         </div>
         <p className="trade-finder__sheet-note">
-          Out of the box the board shows every deal that lifts both sides. These tighten it. They reset when you change the ask, so a slider from one search never quietly filters the next.
+          By default every deal that lifts both sides shows. These narrow it, and reset when you change the ask.
         </p>
         <div className="trade-finder__limit">
           <label className="trade-finder__limit-label" htmlFor="trade-finder-min-gain">
@@ -1163,7 +1159,6 @@ function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits
             type="range"
             value={limits.minGain}
           />
-          <span className="trade-finder__sheet-note">A change inside its own range (the ± beside it) is sampling noise, and the board already sets those below a line.</span>
         </div>
         <div className="trade-finder__limit">
           <label className="trade-finder__limit-label" htmlFor="trade-finder-max-loss">
@@ -1203,7 +1198,7 @@ function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits
             type="range"
             value={limits.maxGiveUp == null ? MAX_GIVE_TOP : limits.maxGiveUp}
           />
-          <span className="trade-finder__sheet-note">Projected points over the rest of the season, net: what you get minus what you send, every player in the deal. All the way right, no limit.</span>
+          <span className="trade-finder__sheet-note">Net projected points, rest of season: what you get minus what you send. All the way right, no limit.</span>
         </div>
         <label className="trade-finder__limit trade-finder__limit--toggle">
           <input
@@ -1213,7 +1208,7 @@ function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits
           />
           <span>
             <span className="trade-finder__limit-label"><span>Hide lopsided deals</span></span>
-            <span className="trade-finder__sheet-note">A manager who is out of the race has no title odds to lose, so a robbery of him passes the slider above. This catches it on roster value instead.</span>
+            <span className="trade-finder__sheet-note">A manager out of the race has no title odds to lose, so a robbery slips past the slider above. This catches it on roster value.</span>
           </span>
         </label>
         <button className="trade-finder__find" onClick={onClose} type="button">Show {kept} {kept === 1 ? 'deal' : 'deals'}</button>

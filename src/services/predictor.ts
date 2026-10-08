@@ -151,7 +151,7 @@ export interface WeekForksResult {
 const NOT_IMPLEMENTED: Unavailable = {
   available: false,
   reason: 'not-implemented',
-  message: 'The conditioned simulation is not wired up yet.',
+  message: "The Predictor isn't available yet.",
 };
 
 /**
@@ -192,7 +192,7 @@ export async function fetchConditionedBoard(
       return {
         available: false,
         reason: 'failed',
-        message: `The simulation answered ${response.status}.`,
+        message: `Could not reprice (error ${response.status}).`,
       };
     }
     return (await response.json()) as ConditionedBoard;
@@ -201,7 +201,7 @@ export async function fetchConditionedBoard(
     return {
       available: false,
       reason: 'failed',
-      message: 'We could not reach the simulation.',
+      message: 'We could not reach Odds Gods.',
     };
   }
 }
@@ -238,7 +238,7 @@ export async function fetchWeekForks(
         available: false,
         week: week ?? null,
         forks: [],
-        message: `The simulation answered ${response.status}.`,
+        message: `Could not reprice (error ${response.status}).`,
       };
     }
     const body = (await response.json()) as {
@@ -257,7 +257,7 @@ export async function fetchWeekForks(
       available: false,
       week: week ?? null,
       forks: [],
-      message: 'We could not reach the simulation.',
+      message: 'We could not reach Odds Gods.',
     };
   }
 }

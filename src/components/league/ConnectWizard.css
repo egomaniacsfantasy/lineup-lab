@@ -117,17 +117,6 @@
   }
 }
 
-.connect-wizard__kicker {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-condensed);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: none;
-}
-
-.connect-wizard__note,
 .connect-wizard__step-note {
   margin: 0;
   color: var(--text-muted);

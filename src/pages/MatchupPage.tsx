@@ -562,7 +562,7 @@ function MarketMoverRow({
               <p>{why}</p>
               {href ? (
                 <a className="matchup-page__mover-open-link" href={href}>
-                  Open in Market →
+                  Open in Trades →
                 </a>
               ) : null}
             </div>
@@ -692,7 +692,7 @@ function MarketMoverRow({
               <p>{why}</p>
               {href ? (
                 <a className="matchup-page__mover-open-link" href={href}>
-                  Open in Market →
+                  Open in Trades →
                 </a>
               ) : null}
             </div>
@@ -2340,7 +2340,7 @@ function MatchupLive({
             <span className="matchup-page__preview-dot" aria-hidden="true" />
             <span>
               {isConnected
-                ? `Previewing a lineup change. You will need to update your lineup in ${providerLabel} to reflect these changes.`
+                ? `Preview only. Set the lineup in ${providerLabel} to make it real.`
                 : 'Previewing a lineup change. This is a hypothetical demo lineup until you reset it.'}
             </span>
             <button
@@ -2464,7 +2464,7 @@ function MatchupLive({
                     {managerLine(matchup.opponentTeam.managerName, matchup.opponentTeam.record)}
                   </p>
                   {!matchup.opponentTeam.managerKey ? (
-                    <p className="matchup-page__meta-copy">Unmanaged team, no read.</p>
+                    <p className="matchup-page__meta-copy">No manager on this team.</p>
                   ) : null}
                 </div>
               </div>
@@ -2542,8 +2542,8 @@ function MatchupLive({
         {unpricedStarterCount > 0 ? (
           <SeasonalNotice>
             {unpricedStarterCount === 1 && unpricedStarterNames[0]
-              ? `${unpricedStarterNames[0]} isn't on the projection sheet yet, so recommendations are limited.`
-              : `${unpricedStarterCount} of your starters are outside the projection sheet, so recommendations are limited.`}
+              ? `No projection for ${unpricedStarterNames[0]} yet, so start/sit calls are limited.`
+              : `No projection yet for ${unpricedStarterCount} of your starters, so start/sit calls are limited.`}
           </SeasonalNotice>
         ) : null}
         {lineMovement ? (
@@ -2554,7 +2554,7 @@ function MatchupLive({
         ) : null}
         {isConnected && !isPriced ? (
           <SeasonalNotice>
-            Live league connected. Pricing is provisional until projections finish syncing.
+            Prices are provisional until this week&apos;s projections load.
           </SeasonalNotice>
         ) : null}
       {seasonLabel ? <SeasonalNotice>{seasonLabel}</SeasonalNotice> : null}
@@ -2950,7 +2950,7 @@ function MatchupLive({
                 ) : null}
                 <div className="matchup-page__edge-actions">
                   <button className="matchup-page__row-action" onClick={inspectBiggestEdge} type="button">
-                    Inspect why
+                    See why
                   </button>
                   <button
                     className="matchup-page__row-action"
@@ -2972,7 +2972,7 @@ function MatchupLive({
                 </div>
               </section>
             ) : isConnected && showSuggestionSkeletons ? (
-              <MatchupSuggestionSkeleton mode="edge" title="Who do I start?" subtitle="the book's answer" />
+              <MatchupSuggestionSkeleton mode="edge" title="Who do I start?" />
             ) : isConnected ? (
               <section className="matchup-page__module matchup-page__module--rail-call matchup-page__module--rail-call-clean">
                 <div className="matchup-page__module-row">
@@ -2992,11 +2992,11 @@ function MatchupLive({
                     </p>
                     <p className="matchup-page__best-note">
                       {showAutopilot
-                        ? `+${bestLineupView.deltaWinProb.toFixed(1)}% win probability. It needs your other starters shuffled between slots to fit; the "Set optimal lineup" button does the whole move in one tap.`
+                        ? `+${bestLineupView.deltaWinProb.toFixed(1)}% win probability. Other starters change slots to fit; "Set optimal lineup on ESPN" does it in one tap.`
                         /* Without the button there is nothing to point at, and
                            naming a control the reader cannot see is worse than
                            saying only what the move is. */
-                        : `+${bestLineupView.deltaWinProb.toFixed(1)}% win probability. It needs your other starters shuffled between slots to fit.`}
+                        : `+${bestLineupView.deltaWinProb.toFixed(1)}% win probability. Other starters change slots to fit.`}
                     </p>
                   </>
                 ) : (
@@ -3070,7 +3070,6 @@ function MatchupLive({
             <section className="matchup-page__module matchup-page__module--rail-chart">
               {matchupHistorySeries.length > 1 ? (
                 <OddsChart
-                  caption="Held values between updates. Tap players below to compare."
                   className="matchup-page__rail-chart"
                   defaultRangeId="week"
                   /* The series is already scoped to the current fantasy week, so the range
@@ -3082,9 +3081,7 @@ function MatchupLive({
                   footer={
                     lineMovement
                       ? `The market moved from ${formatAmericanOdds(lineMovement.from)} to ${formatAmericanOdds(lineMovement.to)} this week.`
-                      : matchupHistorySeries.length > 1
-                        ? 'No real movement today.'
-                        : 'This chart lights up after a couple of line updates.'
+                      : 'No real movement today.'
                   }
                   hero={{
                     id: 'matchup-line',
@@ -3103,7 +3100,6 @@ function MatchupLive({
                 <div className="matchup-page__rail-placeholder">
                   <span className="matchup-page__eyebrow">Line movement</span>
                   <strong>No real movement yet</strong>
-                  <p className="matchup-page__meta-copy">This panel lights up once the book reprices the matchup a couple of times.</p>
                 </div>
               )}
             </section>
@@ -3264,7 +3260,7 @@ function CompareBoard({
           <div>
             <p className="matchup-page__eyebrow">Who do I start?</p>
             <h2 className="matchup-page__module-title" id="compare-board-title">
-              The pecking order
+              Ranked by projection
             </h2>
           </div>
           <button
@@ -3568,7 +3564,7 @@ export function MatchupPage() {
     setMarketScanNote(
       hasFreshTrade
         ? null
-        : 'No new deals on the board. The market moves when lineups do.',
+        : 'No new deals on the board.',
     );
   };
 

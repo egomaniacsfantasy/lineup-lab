@@ -27,7 +27,7 @@ export function StandingsTable({
       <div className="standings__head">
         <h2 className="standings__title">Standings</h2>
         <span className="standings__sub">
-          Ordered by wins, then points for — the same tiebreak the sim seeds playoffs on.
+          Ordered by wins, then points for.
         </span>
       </div>
 

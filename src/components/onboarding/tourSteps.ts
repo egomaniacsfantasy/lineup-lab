@@ -102,7 +102,7 @@ export const TOURS: readonly Tour[] = [
         id: 'card',
         title: 'The whole week, priced',
         body:
-          'Every game gets a spread, a total and a price on both sides. Press one and it opens: both lineups, slot by slot, which is the part a price cannot tell you.',
+          'Every game gets a spread, a total and a price on both sides. Press one to open both lineups, slot by slot.',
         /* One stop, not two. The second used to point at the opened game's
            header, which only exists after somebody presses a card - so the
            tour was pointing at something that was not on screen while it
@@ -143,7 +143,7 @@ export const TOURS: readonly Tour[] = [
            nothing silently drops, taking the only place the product explains
            its own currency with it. */
         body:
-          'Fill in as much or as little as you like: a manager, a position, a player. Every deal the book returns is scored by what it does to your championship odds, not by a points total. That is the only number that decides anything.',
+          'Fill in as much as you like: a manager, a position, a player. Every deal is scored by what it does to your championship odds.',
         selector: '.trade-finder__ticket',
         placement: 'bottom',
       },
@@ -157,7 +157,7 @@ export const TOURS: readonly Tour[] = [
         id: 'row',
         title: 'Every player, ranked',
         body:
-          'One board for the whole pool, built from the projection sheet the engine prices with. Pressing a player opens what is behind their number.',
+          'Ranked by the projections that price your league. Press one to see what is behind the number.',
         selector: '.board-page__row-button',
         placement: 'bottom',
       },
@@ -165,7 +165,7 @@ export const TOURS: readonly Tour[] = [
         id: 'filter',
         title: 'Narrow it down',
         body:
-          'Filter to a position, or to the players you can actually get. The ranking underneath is the same either way.',
+          'Filter to a position, or to players you can get.',
         selector: '.board-page__filter-bar',
         placement: 'bottom',
       },

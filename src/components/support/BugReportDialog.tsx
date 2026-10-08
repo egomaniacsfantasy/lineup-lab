@@ -118,8 +118,7 @@ export function BugReportDialog({
             </p>
           ) : null}
           <p className="bug-report__copy">
-            It came through with the page you were on, the league you had open, and
-            anything that failed behind the scenes. No need to write any of that out.
+            It came through with the page and league you had open.
           </p>
           <button className="bug-report__submit" onClick={onClose} type="button">
             Done

@@ -11,7 +11,6 @@
   gap: 16px;
 }
 
-.matchup-slate__kicker,
 .matchup-slate__team-meta,
 .matchup-slate__moneyline,
 .matchup-slate__prob-number,
@@ -31,15 +30,6 @@
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 22%),
     color-mix(in srgb, var(--bg-inset) 84%, transparent);
-}
-
-.matchup-slate__kicker {
-  margin: 0 0 4px;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
 }
 
 .matchup-slate__title {

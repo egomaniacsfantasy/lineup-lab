@@ -1315,15 +1315,6 @@
 
 .trade-finder__leg-add:hover { border-color: var(--text-amber); color: var(--text-amber); }
 
-.trade-finder__ticket-note {
-  margin: 8px 0 0;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  line-height: 1.5;
-  text-align: center;
-}
-
 .trade-finder__find--quiet {
   background: var(--bg-inset);
   border: 1px solid var(--border-subtle);
@@ -1817,15 +1808,6 @@
   border-radius: 3px;
   background: var(--amber);
   transition: width var(--transition-base);
-}
-
-.trade-finder__scan-note {
-  max-width: 46ch;
-  margin: 0;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.55;
 }
 
 /* ── Limits ── */

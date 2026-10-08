@@ -39,7 +39,6 @@ export class AppErrorBoundary extends Component<Props, State> {
     return (
       <div className="app-crash" role="alert">
         <div className="app-crash__panel">
-          <p className="app-crash__kicker">That broke</p>
           <h1 className="app-crash__title">This screen stopped working.</h1>
           <p className="app-crash__copy">
             Not your fault, and nothing you did is lost. Send us what happened and we

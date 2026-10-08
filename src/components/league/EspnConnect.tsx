@@ -174,9 +174,7 @@ export function EspnConnect({
        plugin, a rejected call and a sheet that closed with no cookie, so three
        different problems produced one sentence that fitted none of them and
        could not be reported back. */
-    setError(
-      `Sign-in could not start: ${result.reason ?? 'unknown'}. Tell me that reason and I can fix it directly.`,
-    );
+    setError('ESPN sign-in could not start. Try again, or send a bug report.');
   };
 
   useEffect(() => {
@@ -255,7 +253,7 @@ export function EspnConnect({
     } catch (caught) {
       if (caught instanceof LeagueApiError && caught.code === 'espn_private' && creds) {
         setShowFallback(true);
-        setError('ESPN rejected this login capture. It may be expired. Open ESPN again, run the connector, and paste the new output here.');
+        setError("ESPN didn't accept that sign-in; it may have expired. Sign in to ESPN again and retry.");
         void trackEspnConnectEvent('failure', { reason: 'private_rejected_capture' });
       } else if (caught instanceof LeagueApiError && caught.code === 'espn_private') {
         setPrivateLeagueId(id);
@@ -347,7 +345,7 @@ export function EspnConnect({
       setError(
         caught instanceof LeagueApiError
           ? caught.message
-          : 'ESPN login could not finish. Use the ESPN-site connector below.',
+          : 'ESPN sign-in did not finish. Use the connector below.',
       );
       void trackEspnConnectEvent('login_fallback', {
         reason: caught instanceof LeagueApiError ? caught.code : 'network',
@@ -396,7 +394,7 @@ export function EspnConnect({
     try {
       const session = await requestEspnSession();
       if (!session.espnS2 || !session.swid) {
-        setError('The connector could not find an ESPN session. Sign in to ESPN in this browser, then try again.');
+        setError("You're not signed in to ESPN in this browser. Sign in at ESPN.com, then try again.");
         return;
       }
       await doConnect({ espnS2: session.espnS2, swid: session.swid });
@@ -430,9 +428,8 @@ export function EspnConnect({
   return (
     <section aria-labelledby="espn-connect-title" className="espn-connect">
       <div className="espn-connect__header">
-        <p className="espn-connect__kicker">Connect ESPN</p>
         <h2 className="espn-connect__title" id="espn-connect-title">
-          Bring your ESPN league in.
+          Connect your ESPN league
         </h2>
       </div>
 
@@ -509,9 +506,8 @@ export function EspnConnect({
                 <div className="espn-connect__fallback-card">
                   <p className="espn-connect__fallback-title">Ready to connect</p>
                   <p className="espn-connect__method-note">
-                    The connector is installed and your ESPN session is live in
-                    this browser. We read the league above and match your team
-                    automatically.
+                    The connector is installed and you&rsquo;re signed in to ESPN.
+                    Connect, and we&rsquo;ll find your team.
                   </p>
                   <button
                     className="espn-connect__submit"
@@ -528,9 +524,8 @@ export function EspnConnect({
                 <div className="espn-connect__fallback-card">
                   <p className="espn-connect__fallback-title">Sign in to ESPN</p>
                   <p className="espn-connect__method-note">
-                    The connector is installed. Sign in on ESPN&rsquo;s own site, in
-                    any tab, and come back. Your password never touches Odds
-                    Gods, and this page notices on its own.
+                    The connector is installed. Sign in at ESPN.com in any tab and
+                    come back.
                   </p>
                   <button className="espn-connect__submit" onClick={openEspnLeague} type="button">
                     Open ESPN ↗︎
@@ -541,10 +536,9 @@ export function EspnConnect({
                 <div className="espn-connect__fallback-card">
                   <p className="espn-connect__fallback-title">Add the connector</p>
                   <p className="espn-connect__method-note">
-                    ESPN keeps your sign-in in a cookie no website may read. A
-                    small Chrome add-on hands that one cookie over, read-only.
-                    Five seconds, once, ever. Your ESPN password is never
-                    involved.
+                    Private ESPN leagues need a small Chrome add-on that shares
+                    your ESPN sign-in with us, read-only. One-time setup. Your
+                    password is never involved.
                   </p>
                   {/* One branch. The listing is live and its id is a constant
                       in espnExtension, so there is no longer a state where
@@ -561,8 +555,7 @@ export function EspnConnect({
                     Add the connector ↗︎
                   </a>
                   <p className="espn-connect__method-note">
-                    This page notices the moment it is installed. Nothing to
-                    reload.
+                    No need to reload after installing.
                   </p>
                 </div>
               ) : null}
@@ -591,9 +584,8 @@ export function EspnConnect({
                     </summary>
                     <div className="espn-connect__fallback-card">
                       <p className="espn-connect__method-note">
-                        We can sign in to ESPN for you instead. Your password is
-                        used once, stored nowhere, and kept out of our logs. The
-                        connector is the better path if you can use it.
+                        We can sign in to ESPN for you. Your password is used once
+                        and never stored.
                       </p>
                       <EspnPasswordFields
                         email={loginEmail}
@@ -618,9 +610,8 @@ export function EspnConnect({
                       <span className="espn-connect__login-lockup">Sign in</span>
                     </div>
                     <p className="espn-connect__cookies-note">
-                      A phone browser cannot run the connector, so we sign in for
-                      you. Your password is used once, stored nowhere, and kept
-                      out of our logs.
+                      On a phone we sign in to ESPN for you. Your password is used
+                      once and never stored.
                     </p>
                     <EspnPasswordFields
                       email={loginEmail}

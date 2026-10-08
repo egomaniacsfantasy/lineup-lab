@@ -8,15 +8,6 @@
   gap: var(--space-2xs);
 }
 
-.league-records__kicker {
-  margin: 0;
-  color: var(--text-amber);
-  font-family: var(--font-condensed);
-  font-size: var(--type-caption);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .league-records__title {
   margin: 0;
   color: var(--text-primary);

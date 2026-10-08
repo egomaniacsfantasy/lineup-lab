@@ -371,7 +371,7 @@ function TradeLayout({
                   </span>
                 ))}
               {generatedAt ? (
-                <span className="trade-display__generated">generated at {generatedAt}</span>
+                <span className="trade-display__generated">Priced {generatedAt}</span>
               ) : null}
             </div>
           ) : null}
@@ -476,7 +476,7 @@ function TradeLayout({
               : null}
           {valueLabel && impactRows.length === 0 ? <span className="trade-display__value">{valueLabel}</span> : null}
           <TradeAcceptanceChip label={acceptanceLabel} probability={acceptanceProbability} />
-          {generatedAt ? <span className="trade-display__generated">generated at {generatedAt}</span> : null}
+          {generatedAt ? <span className="trade-display__generated">Priced {generatedAt}</span> : null}
         </div>
       </div>
       )}

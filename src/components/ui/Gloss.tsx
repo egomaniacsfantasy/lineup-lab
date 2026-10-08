@@ -4,7 +4,7 @@ import './Gloss.css';
 const GLOSSES = {
   ppr: {
     label: 'PPR',
-    body: 'Point Per Reception. Each catch is worth 1 fantasy point on top of yardage and TDs. Most modern fantasy leagues use PPR or Half-PPR.',
+    body: 'Point Per Reception. Each catch is worth 1 fantasy point on top of yardage and TDs.',
   },
   'o-u': {
     label: 'O/U',

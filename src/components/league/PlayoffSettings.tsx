@@ -51,8 +51,7 @@ export function PlayoffSettings({
       <div className="po-settings__head">
         <h3 className="po-settings__title">Playoff structure</h3>
         <span className="po-settings__sub">
-          Set how your league seeds the playoffs — the sim uses these. Change them
-          anytime to match your league.
+          How your league seeds the playoffs. Odds are priced from these.
         </span>
       </div>
 

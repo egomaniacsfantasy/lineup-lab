@@ -316,8 +316,8 @@ export function MobileHub() {
           will find it. Above the fold it would read as an apology for the
           screen they are on. */}
       <p className="mobile-hub__desktop-note">
-        This is the short version. Trades, the predictor, the bet slip and the
-        full board open on a laptop at oddsgods.net.
+        Trades, the predictor, the bet slip and the full board open on a laptop
+        at oddsgods.net.
       </p>
 
       {sharing ? (

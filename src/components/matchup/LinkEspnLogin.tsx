@@ -45,7 +45,7 @@ export function LinkEspnLogin({ leagueId, userId, onLinked }: { leagueId: string
       }
       const res = await linkEspnLogin(leagueId, { espnS2: session.espnS2, swid: session.swid, userId });
       if (res.linked) {
-        setMessage({ text: 'Linked. Your autopilots now act with your own ESPN login.', error: false });
+        setMessage({ text: 'Linked. Autopilot now uses your own ESPN login.', error: false });
         onLinked();
       } else {
         setMessage({ text: REASONS[res.reason ?? ''] ?? 'Could not link your ESPN login. Try again.', error: true });

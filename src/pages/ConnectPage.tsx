@@ -12,7 +12,6 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ConnectWizard } from '../components/league/ConnectWizard';
 import { EspnConnect } from '../components/league/EspnConnect';
 import { useAuth } from '../contexts/AuthContext';
-import { isEspnPluginRegistered } from '../utils/espnNativeAuth';
 import { useLeagueConnection } from '../contexts/LeagueConnectionContext';
 import './ConnectPage.css';
 
@@ -98,16 +97,14 @@ export function ConnectPage() {
     <div className="connect-page">
       <section className="connect-page__hero">
         <p className="connect-page__kicker">Welcome to Odds Gods</p>
-        <h1 className="connect-page__title">Sync a league to begin</h1>
+        <h1 className="connect-page__title">Connect a league to begin</h1>
       </section>
 
       {IDENTITY_RECHECK ? (
         <aside className="connect-page__recheck" role="status">
           <p>
-            <strong>Pick your team again.</strong> ESPN leagues linked before
-            today could be matched to the wrong manager when somebody else had
-            already connected the same league. Reconnect and choose your own
-            team; it will stay put after that.
+            <strong>Pick your team again.</strong> Some ESPN leagues were matched
+            to the wrong team. Reconnect and choose yours.
           </p>
         </aside>
       ) : null}
@@ -140,7 +137,6 @@ export function ConnectPage() {
           what it was running. */}
       <p className="connect-page__build">
         Build {buildStamp}
-        {isEspnPluginRegistered() ? ' · native sign-in ready' : ''}
       </p>
 
       {/* Signed in with no league, this screen is the whole app — and with the

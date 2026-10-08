@@ -55,7 +55,7 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
     return (
       <section className="luck-board">
         <p className="luck-board__empty">
-          No completed weeks yet. This fills in once the league has played.
+          No completed weeks yet.
         </p>
       </section>
     );
@@ -112,20 +112,20 @@ export function LuckBoard({ teams }: { teams: LuckBoardTeam[] }) {
         <thead>
           <tr>
             <th scope="col">Team</th>
-            <th scope="col" className="luck-board__num" title="The real head-to-head record: who you actually played, and who won.">
+            <th scope="col" className="luck-board__num">
               Record
             </th>
-            <th scope="col" className="luck-board__num" title="Your record if you had played every team, every week. Ranks the league on scoring alone, with the schedule taken out.">
+            <th scope="col" className="luck-board__num">
               All-play
             </th>
-            <th scope="col" className="luck-board__num" title="The record your scoring earned: all-play win rate applied to the games you have played. Your record with the schedule removed.">
+            <th scope="col" className="luck-board__num">
               xW-L
             </th>
-            <th scope="col" className="luck-board__num" title="Record minus xW-L. What the schedule gave you, or took away, in wins.">
+            <th scope="col" className="luck-board__num">
               Schedule
             </th>
             {showVsBook ? (
-              <th scope="col" className="luck-board__num" title="Your record against our own closing spread. Covering as a favourite and covering as an underdog count the same: it asks whether you beat the number, not whether you won.">
+              <th scope="col" className="luck-board__num">
                 vs Book
               </th>
             ) : null}

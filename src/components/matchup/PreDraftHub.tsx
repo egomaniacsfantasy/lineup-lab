@@ -27,19 +27,18 @@ const SCORING_LABEL: Record<string, string> = {
 /* What each tab has to say for itself before a draft. The Hub is the only one
    that leads with the team, because the Hub is the team; League and Trades are
    both looking at a league that has not happened yet. */
-const SCOPE_COPY: Record<PreDraftScope, { copy: string; footnote: string }> = {
+const SCOPE_COPY: Record<PreDraftScope, { copy: string; footnote: string | null }> = {
   hub: {
     copy: 'Every roster in this league is empty, so there is no lineup to weigh and nothing to price. The book opens when the draft does.',
-    footnote:
-      'Your board is live now. It is the one thing here that does not need a roster, and everything else fills in the moment you draft.',
+    footnote: 'Your board works before the draft.',
   },
   league: {
     copy: 'Nobody has played a game, so every team is 0-0 and every price is the same +100. There is no board to read until there are results to read it from.',
-    footnote: 'Standings, futures and the weekly slate all arrive with the first snap.',
+    footnote: 'Standings, futures and the weekly board arrive after Week 1.',
   },
   trades: {
     copy: 'Nobody owns a player yet, so there is nothing to offer and nobody to offer it to. Trades open when rosters do.',
-    footnote: 'Until then, your board is where the work happens.',
+    footnote: null,
   },
 };
 
@@ -100,7 +99,7 @@ export function PreDraftHub({
         </div>
       </section>
 
-      <p className="pre-draft__footnote">{footnote}</p>
+      {footnote ? <p className="pre-draft__footnote">{footnote}</p> : null}
     </div>
   );
 }

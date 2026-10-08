@@ -92,7 +92,7 @@ export function PlayerDistribution({ playerId, week, name, onClose }: PlayerDist
           <p className="player-dist__msg">
             {dist.reason === 'locked'
               ? 'This game is final, so the score is locked.'
-              : 'No projection this week (out, on bye, or unpriced).'}
+              : 'No projection this week (out or on bye).'}
           </p>
         )}
 
@@ -155,8 +155,7 @@ export function PlayerDistribution({ playerId, week, name, onClose }: PlayerDist
             </div>
 
             <p className="player-dist__foot">
-              80% band ({dist.floor?.toFixed(1)} to {dist.ceiling?.toFixed(1)}), same model the
-              matchup odds use.
+              80% of outcomes land between {dist.floor?.toFixed(1)} and {dist.ceiling?.toFixed(1)}.
             </p>
           </>
         )}

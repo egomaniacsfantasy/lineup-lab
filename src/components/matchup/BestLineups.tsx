@@ -72,7 +72,7 @@ export function BestLineups({
         <div className="matchup-page__best-panel">
           {nothingToDo ? (
             <p className="matchup-page__best-note">
-              Both lineups are already the best either of you can field. The line is the line.
+              Both lineups are already the best either of you can field.
             </p>
           ) : (
             <>

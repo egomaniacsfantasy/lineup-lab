@@ -189,8 +189,7 @@ export function StaleSeasonNotice() {
   if (state.name === 'moved') {
     return (
       <ShellNotice tone="note">
-        <strong>Moved you to {state.season}.</strong> {state.leagueName} is the current
-        season of this league, and everything below is priced from it.
+        <strong>Moved you to the {state.season} season of {state.leagueName}.</strong>
       </ShellNotice>
     );
   }
@@ -198,8 +197,8 @@ export function StaleSeasonNotice() {
   return (
     <ShellNotice role="alert" tone="alert">
       <strong>This is your {bootstrap.league.season} league.</strong> Nobody has started
-      your {state.season || bootstrap.state.season} league on Sleeper yet, so there is
-      nothing to move you to. Every roster, record and price below is from last year.
+      your {state.season || bootstrap.state.season} league on Sleeper yet. Every roster,
+      record and price below is from last year.
     </ShellNotice>
   );
 }

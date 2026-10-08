@@ -22,9 +22,9 @@ export function DynastyScopeNote({
 
   return (
     <p className="dynasty-scope" role="note">
-      <strong>{leagueType === 'dynasty' ? 'Dynasty' : 'Keeper'} league.</strong> Trade
-      pricing is off until the engine can value picks and future seasons, and every
-      player value here is for this season alone.
+      <strong>{leagueType === 'dynasty' ? 'Dynasty' : 'Keeper'} league.</strong> Trades
+      aren&apos;t priced yet, because picks and future seasons aren&apos;t valued, and
+      every player value here is for this season only.
     </p>
   );
 }

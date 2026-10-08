@@ -36,7 +36,7 @@ export function TradeTargetTeaser({ groups }: TradeTargetTeaserProps) {
         <div className="trade-target-teaser__copy">
           <p className="trade-target-teaser__kicker">Trade targets</p>
           <h2 className="trade-target-teaser__title" id="trade-target-teaser-title">
-            Players you could actually get this week
+            Players you could get this week
           </h2>
         </div>
 

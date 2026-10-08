@@ -42,11 +42,11 @@ const STATE_LABEL: Record<TradeOfferState, string> = {
 
 const SEND_ERRORS: Record<string, string> = {
   drop_format_pending: 'Offers that need a drop from you are not switched on yet.',
-  response_format_pending: 'Answering from here unlocks after one ESPN capture. For now, accept or decline in ESPN.',
-  roster_reserved: 'ESPN is holding your open roster spot for another pending trade, so this one needs a drop. Scan again (we add the drop), or withdraw the other offer.',
+  response_format_pending: 'Accept or decline this one in ESPN.',
+  roster_reserved: 'ESPN is holding your open roster spot for another pending trade, so this one needs a drop. Search again (we add the drop), or withdraw the other offer.',
   trade_pending_processing: 'A trade was just accepted. New offers open up once ESPN processes it.',
-  roster_changed: 'A roster changed since the scan, so this offer is no longer valid. Scan again.',
-  offer_gone: 'That offer is out of date. Scan again.',
+  roster_changed: 'A roster changed since the last search, so this offer is no longer valid. Search again.',
+  offer_gone: 'That offer is out of date. Search again.',
   already_sent: 'Already sent.',
   creds_stale_relink: 'ESPN signed you out. Re-link your ESPN account, then try again.',
   unsupported_provider: 'Sending offers works on ESPN leagues only.',
@@ -341,7 +341,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
 
           <div className="trade-sender__actions">
             <button className="trade-sender__btn trade-sender__btn--go" disabled={saving} onClick={() => void saveRules()} type="button">
-              {saving ? 'Saving…' : 'Save rules and scan'}
+              {saving ? 'Saving…' : 'Save rules and search'}
             </button>
             <button
               className="trade-sender__btn trade-sender__btn--ghost"
@@ -397,7 +397,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                   )}
                   {!state.responseReady ? (
                     <p className="trade-sender__note">
-                      Answer it in ESPN for now. Accept and Decline from here unlock after one ESPN capture.
+                      Answer it in ESPN for now.
                     </p>
                   ) : confirmReply?.id === o.id ? (
                     <div className="trade-sender__confirm">
@@ -445,24 +445,24 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
 
       {state.awaitingTrade ? (
         <p className="trade-sender__note trade-sender__note--good">
-          One of your offers was accepted. We pulled your other offers and will scan again once ESPN processes the trade.
+          One of your offers was accepted. We pulled your other offers and will search again once ESPN processes the trade.
         </p>
       ) : null}
 
       {state.scanning ? (
-        <p className="trade-sender__note">Scanning your league, one manager at a time. This can take a few minutes.</p>
+        <p className="trade-sender__note">Searching your league, one manager at a time. This can take a few minutes.</p>
       ) : state.lastScan?.error ? (
         <p className="trade-sender__note trade-sender__note--error">
           {state.lastScan.error === 'creds_stale_relink'
-            ? 'ESPN signed you out. Re-link your ESPN account to keep scanning.'
-            : 'The last scan did not finish. Try Scan now.'}
+            ? 'ESPN signed you out. Re-link your ESPN account to keep searching.'
+            : 'The last search did not finish. Try Search now.'}
         </p>
       ) : state.lastScan ? (
         state.suggestions.length === 0 ? (
           <p className="trade-sender__note">No trade clears your rules right now. Try a lower minimum or a higher cap.</p>
         ) : null
       ) : (
-        <p className="trade-sender__note">No scan yet. Tap Scan now, or turn on trade autopilot below.</p>
+        <p className="trade-sender__note">No search yet. Tap Search now, or turn on trade autopilot below.</p>
       )}
 
       {state.suggestions.length > 0 ? (
@@ -590,11 +590,11 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
       <div className="trade-sender__foot">
         <span className="trade-sender__note">
           {state.lastScan?.at
-            ? `Last scan ${ago(state.lastScan.at)}${state.lastScan.managers ? `, ${state.lastScan.managers} managers` : ''}`
+            ? `Last search ${ago(state.lastScan.at)}${state.lastScan.managers ? `, ${state.lastScan.managers} managers` : ''}`
             : ''}
         </span>
         <button className="trade-sender__btn trade-sender__btn--ghost" disabled={state.scanning} onClick={() => void scanNow()} type="button">
-          Scan now
+          Search now
         </button>
       </div>
 
@@ -616,8 +616,8 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
                   ? 'Paused until we have your own ESPN login. Open Odds Gods on a device signed in to ESPN.'
                   : state.autoSend?.reason === 'weekly_cap'
                     ? `On. Weekly limit reached (${s.autoCap} sent). It resumes as the week rolls.`
-                    : `On. Every 3 hours (and after each projection update) we scan and send the best offers that clear your rules${s.autoCap != null ? `, up to ${s.autoCap} a week` : ''}. Offers sent to you are accepted or declined by the same rules. Tap Scan now to check immediately. One pending offer per manager, never the same offer twice.${state.autoSend?.sent ? ` Last run sent ${state.autoSend.sent}.` : ''}`
-                : 'Off. Suggestions still refresh every 3 hours and after each projection update, and Scan now works anytime. Nothing is sent or answered for you.'}
+                    : `On. Offers that clear your rules are sent for you${s.autoCap != null ? `, up to ${s.autoCap} a week` : ''}, and offers to you are answered the same way.${state.autoSend?.sent ? ` Last run sent ${state.autoSend.sent}.` : ''}`
+                : 'Off. Suggestions still refresh every 3 hours, and Search now works anytime. Nothing is sent or answered for you.'}
             </span>
           </span>
         </label>
@@ -630,7 +630,7 @@ export function TradeSenderPanel({ leagueId, userId }: { leagueId: string; userI
       {confirmAuto ? (
         <div className="trade-sender__confirm trade-sender__confirm--auto">
           <p>
-            Trade autopilot scans every 3 hours and proposes real trades to other managers on ESPN without asking you first, whenever an offer
+            Trade autopilot searches every 3 hours and proposes real trades to other managers on ESPN without asking you first, whenever an offer
             clears your rules ({s.minYouDelta}% for you, at most {s.maxPartnerLoss}% for them)
             {s.autoCap != null ? `, up to ${s.autoCap} a week` : ', with no weekly limit'}. It also accepts offers sent to you that clear your minimum and declines the rest. Turn it on?
           </p>

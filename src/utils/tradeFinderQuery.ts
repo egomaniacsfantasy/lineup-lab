@@ -700,7 +700,7 @@ export function deriveStartingPoints({
       points.push({
         id: `mirror-${mirror.team.rosterId}`,
         title: `Deal with ${mirror.team.teamName}`,
-        detail: `Deep at ${upgrade}, thin at ${sell}. Your mirror.`,
+        detail: `Deep at ${upgrade}, thin at ${sell}: the reverse of you.`,
         badge: { kind: 'team', rosterId: mirror.team.rosterId },
         query: {
           partnerRosterIds: [mirror.team.rosterId],

@@ -119,9 +119,8 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
   return (
     <section aria-labelledby="connect-wizard-title" className="connect-wizard">
       <div className="connect-wizard__header">
-        <p className="connect-wizard__kicker">Connect your league</p>
         <h2 className="connect-wizard__title" id="connect-wizard-title">
-          One username. Your whole league, priced.
+          Connect your Sleeper league
         </h2>
       </div>
 
@@ -154,9 +153,6 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
             </button>
           </div>
 
-          <p className="connect-wizard__note">
-            Sleeper connects here by username. ESPN starts from the provider chooser.
-          </p>
         </form>
       ) : null}
 
@@ -167,8 +163,7 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
             {step.leagues.length === 1 ? '1 league' : `${step.leagues.length} leagues`}
           </p>
           <p className="connect-wizard__step-hint">
-            Tick the ones you want here. The rest stay out of your way, and you can add
-            or remove any of them later.
+            Tick the leagues you want. You can change this later.
           </p>
 
           <LeagueChecklist
@@ -249,8 +244,7 @@ export function ConnectWizard({ onConnected }: ConnectWizardProps) {
       ) : null}
 
       <p className="connect-wizard__privacy">
-        Read-only. We never ask for your Sleeper password. Odds Gods prices your
-        league, it can&apos;t touch it.
+        Read-only. We never ask for your Sleeper password.
       </p>
     </section>
   );
@@ -289,8 +283,8 @@ function ConfirmStep({
 
       {isPreDraft ? (
         <p className="connect-wizard__step-note">
-          This league hasn&apos;t drafted yet. It connects fully after your draft.
-          Until then you&apos;ll see league settings and members only.
+          This league hasn&apos;t drafted yet. Until it does you&apos;ll see settings
+          and members only.
         </p>
       ) : null}
 
