@@ -1,9 +1,17 @@
+/* ── Trades ───────────────────────────────────────────────────────────────
+   Two views on one page: the finder (TradeFinder.css) and the builder, here.
+   The builder speaks the finder's language: a deal is a row (what you get,
+   the shape, what you send, the price), and the rosters you pick from are
+   lists on hairlines. Amber is you, your selection and the one action. Green
+   and red are title and playoff deltas only. Everything else is weight. */
+
 .market-page {
   width: 100%;
   max-width: 1480px;
   margin: 0 auto;
   padding: clamp(16px, 3vw, 28px);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-lg);
 }
 
@@ -17,7 +25,15 @@
   margin: 0 auto;
   padding: clamp(16px, 3vw, 28px);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-lg);
+}
+
+/* A grid item defaults to min-width: auto, so a child that cannot shrink
+   pushes the track wider than the phone. Everything on this page can shrink. */
+.market-page > *,
+.trade-page > * {
+  min-width: 0;
 }
 
 @media (min-width: 1024px) {
@@ -26,1925 +42,13 @@
   }
 }
 
-.trade-page__real-module {
-  display: grid;
-  gap: 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--bg-surface);
-  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
-  padding: clamp(16px, 3vw, 22px);
-}
+/* ── The two views ── */
 
-.trade-page__real-kicker {
-  margin: 0;
-  color: var(--ink-3, var(--text-muted));
-  font-family: var(--font-ui);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.trade-page__real-title {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: clamp(26px, 5vw, 36px);
-  font-weight: 400;
-  letter-spacing: 0.02em;
-}
-
-.trade-page__real-subhead {
-  margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-}
-
-.trade-page__lane {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  background: var(--bg-inset);
-}
-
-.trade-page__lane-headline {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-page__lane-detail {
-  margin: 2px 0 0;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-page__lane-price {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-num);
-  font-size: 15px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.trade-page__lane-price s {
-  color: var(--text-muted);
-}
-
-.trade-page__lane-players {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 10px 0;
-}
-
-.trade-page__lane-player {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.trade-page__lane-headshot {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: var(--bg-inset);
-}
-
-.trade-page__lane-headshot-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.trade-page__lane-headshot-fallback {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.trade-page__lane-direction {
-  margin: 0;
-  color: var(--ink-3);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.trade-page__lane-name {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-page__lane-arrows {
-  color: var(--amber-bright);
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-/* ── Market deals ── */
-.trade-cc__finder,
-.trade-cc__builder,
-.trade-cc__verdict {
-  border: 1px solid var(--border-subtle);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.016), transparent 28%),
-    var(--bg-surface);
-  box-shadow: inset 0 1px 0 rgba(232, 84, 29, 0.12);
-  padding: 18px;
-  margin-bottom: 14px;
-}
-
-.trade-cc__kicker {
-  margin: 0 0 2px;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.trade-cc__title {
-  margin: 0 0 4px;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: clamp(24px, 3vw, 30px);
-  letter-spacing: 0.02em;
-}
-
-.trade-cc__hint {
-  margin: 0 0 12px;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.trade-cc__partner-empty {
-  display: grid;
-  gap: 8px;
-  padding: 16px;
-  border: 1px dashed color-mix(in srgb, var(--border-subtle) 84%, transparent);
-  border-radius: 14px;
-  background: rgba(244, 245, 242, 0.02);
-}
-
-.trade-cc__builder-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.trade-cc__manager-grid--dense .trade-cc__team-avatar {
-  width: 32px;
-  height: 32px;
-}
-
-.trade-cc__manager-card .trade-cc__team-avatar {
-  width: 40px;
-  height: 40px;
-  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
-  background: color-mix(in srgb, var(--bg-inset) 88%, transparent);
-}
-
-.trade-cc__partner-read--inline {
-  justify-self: end;
-}
-
-.trade-cc__builder--collapsed {
-  position: sticky;
-  top: 12px;
-  z-index: 3;
-  padding: 14px;
-}
-
-.trade-cc__builder--idle {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.012), transparent 24%),
-    color-mix(in srgb, var(--bg-surface) 96%, transparent);
-}
-
-.trade-cc__deal-strip {
-  display: grid;
-  gap: 14px;
-}
-
-.trade-cc__deal-strip-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.trade-cc__deal-strip-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: start;
-  gap: 18px;
-}
-
-/* Aligned by mirroring the sides rather than nudged with a magic padding:
-   an invisible eyebrow reserves the label's height and the glyph centres on
-   the 42px asset row beneath it, so it stays put at any size. */
-.trade-cc__deal-strip-arrow {
-  display: grid;
-  gap: 6px;
-  color: var(--ink-3);
-}
-
-.trade-cc__deal-strip-arrow-spacer {
-  visibility: hidden;
-}
-
-.trade-cc__deal-strip-arrow-glyph {
-  display: grid;
-  place-items: center;
-  min-height: 42px;
-  font-family: var(--font-ui);
-  font-size: 17px;
-  line-height: 1;
-}
-
-.trade-cc__deal-strip-partner {
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.trade-cc__edit-btn {
-  min-height: 36px;
-  padding: 0 13px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--bg-inset);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.trade-cc__deal-side {
-  display: grid;
-  min-width: 0;
-  gap: 10px;
-}
-
-.trade-cc__deal-side-label {
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-}
-
-.trade-cc__deal-side-players {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.trade-cc__deal-side-empty {
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.trade-cc__deal-player {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-width: min(280px, 100%);
-  padding: 11px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 65%),
-    var(--bg-inset);
-}
-
-.trade-cc__deal-player--get {
-  border-color: color-mix(in srgb, var(--amber-bright) 40%, var(--border-subtle));
-}
-
-.trade-cc__deal-player-headshot {
-  width: 48px;
-  height: 48px;
-  overflow: hidden;
-  border-radius: 50%;
-  background: var(--bg-surface-soft);
-}
-
-.trade-cc__deal-player-headshot-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.trade-cc__deal-player-headshot-fallback {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  color: var(--text-muted);
-  font-family: var(--font-num);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.trade-cc__deal-player-copy {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-
-.trade-cc__deal-player-name {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: clamp(18px, 2vw, 22px);
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-cc__deal-player-pos {
-  display: grid;
-  place-items: center;
-  min-width: 38px;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid rgba(244, 245, 242, 0.16);
-  border-radius: 999px;
-  background: rgba(244, 245, 242, 0.08);
-  color: var(--text-primary);
-  font-family: var(--font-num);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.trade-cc__partner-read {
-  flex-shrink: 0;
-  padding: 5px 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-pill);
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.trade-cc__partner-read {
-  margin: -2px 0 8px;
-}
-
-.trade-cc__restore-btn,
-.trade-cc__scan-btn,
-.trade-cc__dismiss-toast-action {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 800;
-}
-
-.trade-cc__rationale-panel,
-.trade-cc__rationale-sections,
-.trade-cc__rationale-section {
-  display: grid;
-  gap: 8px;
-}
-
-.trade-cc__rationale-summary {
-  color: var(--text-primary);
-  font-weight: 700;
-}
-
-.trade-cc__rationale-sections {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.trade-cc__rationale-section {
-  gap: 3px;
-}
-
-.trade-cc__rationale-label {
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.trade-cc__rationale-panel--error {
-  color: var(--red);
-}
-
-.trade-cc__why-block {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: rgba(244, 245, 242, 0.03);
-}
-
-.trade-cc__verdict-why {
-  font-size: 13px;
-}
-
-.trade-cc__dismiss-toast {
-  position: fixed;
-  right: 16px;
-  bottom: calc(var(--shell-tabbar-height, 64px) + 16px);
-  z-index: calc(var(--z-dropdown) + 4);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid rgba(232, 84, 29, 0.34);
-  border-radius: 999px;
-  background: rgba(11, 13, 15, 0.96);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.trade-cc__columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.trade-cc__columns--idle {
-  grid-template-columns: minmax(0, 1.12fr) minmax(280px, 0.88fr);
-}
-
-.trade-cc__side {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 54%),
-    var(--bg-surface-soft);
-}
-
-.trade-cc__side--partner {
-  border-color: color-mix(in srgb, var(--amber) 28%, var(--border-subtle));
-}
-
-.trade-cc__side--idle {
-  min-height: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 58%),
-    color-mix(in srgb, var(--bg-inset) 92%, transparent);
-}
-
-.trade-cc__side-head {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.trade-cc__side-title {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 400;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.trade-cc__side-team {
-  max-width: 180px;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 800;
-  text-align: right;
-}
-
-.trade-cc__partner-tools {
-  display: grid;
-  justify-items: end;
-  gap: 6px;
-  min-width: 150px;
-}
-
-.trade-cc__partner-menu {
-  position: relative;
-  width: min(240px, 100%);
-}
-
-.trade-cc__partner-trigger,
-.trade-cc__partner-option {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  gap: 9px;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-inset);
-  color: var(--text-primary);
-  cursor: pointer;
-  font-family: var(--font-ui);
-  text-align: left;
-}
-
-.trade-cc__partner-trigger {
-  min-height: 42px;
-  padding: 6px 10px;
-  border-radius: 999px;
-}
-
-.trade-cc__team-avatar {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 50%;
-  background: var(--bg-surface-soft);
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 12px;
-  overflow: hidden;
-}
-
-.trade-cc__team-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.trade-cc__partner-trigger-copy,
-.trade-cc__partner-option-copy {
-  display: grid;
-  min-width: 0;
-  gap: 1px;
-}
-
-.trade-cc__partner-trigger-copy span:first-child,
-.trade-cc__partner-option-copy span:first-child {
-  overflow: hidden;
-  font-size: 12px;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-cc__partner-trigger-copy span:last-child,
-.trade-cc__partner-option-copy span:last-child {
-  color: var(--ink-3);
-  font-family: var(--font-num);
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.trade-cc__partner-options {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 8;
-  display: grid;
-  gap: 6px;
-  width: min(280px, calc(100vw - 32px));
-  max-height: 280px;
-  overflow-y: auto;
-  padding: 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--bg-surface);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
-}
-
-.trade-cc__partner-option {
-  min-height: 44px;
-  padding: 7px 9px;
-  border-radius: 12px;
-}
-
-.trade-cc__partner-option:hover,
-.trade-cc__partner-option--active {
-  border-color: var(--amber-bright);
-  background: rgba(232, 84, 29, 0.1);
-}
-
-@media (max-width: 600px) {
-  .trade-cc__builder-head,
-  .trade-cc__columns {
-    grid-template-columns: 1fr;
-  }
-
-  .trade-cc__columns--idle {
-    grid-template-columns: 1fr;
-  }
-
-  .trade-cc__side-head {
-    display: grid;
-  }
-
-  .trade-cc__side-team {
-    max-width: none;
-    text-align: left;
-  }
-
-  .trade-cc__partner-tools {
-    width: 100%;
-    justify-items: stretch;
-  }
-
-  .trade-cc__pill {
-    grid-template-columns: auto auto minmax(0, 1fr) auto;
-  }
-
-  .trade-cc__pill-value {
-    grid-column: 3 / 5;
-  }
-
-}
-
-.trade-cc__partner-select {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--bg-inset);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-}
-
-.trade-cc__partner-read {
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-primary);
-  padding: 6px 10px;
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.trade-cc__selected-deck {
-  display: grid;
-  gap: 8px;
-  min-height: 76px;
-}
-
-.trade-cc__selected-empty {
-  display: grid;
-  place-items: center;
-  min-height: 74px;
-  margin: 0;
-  border: 1px dashed var(--border-subtle);
-  border-radius: 14px;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 13px;
-}
-
-/* The deal on the table is the subject of this screen, so the players are
-   sized like the subject. At 38px the headshot was an icon next to a label;
-   at 68 it is a face you recognise before you read the name. */
-.trade-cc__asset-card {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--bg-inset);
-}
-
-.trade-cc__asset-card--get {
-  border-color: color-mix(in srgb, var(--amber-bright) 38%, var(--border-subtle));
-}
-
-.trade-cc__asset-headshot {
-  /* No overflow clip: the team badge overhangs this circle on purpose, and a
-     circular clip does not cut a corner off it, it cuts along the curve - the
-     logo pressed into the ring with a slice taken out. The round crop lives on
-     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  background: var(--bg-surface-soft);
-}
-
-.trade-cc__asset-headshot-image {
-  width: 100%;
-  height: 100%;
-  /* Cutouts put the head at the top, so a centred crop cuts it off. */
-  object-fit: cover;
-  object-position: top center;
-}
-
-.trade-cc__asset-headshot-fallback {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  color: var(--ink-3);
-  font-family: var(--font-num);
-  font-size: 17px;
-  font-weight: 800;
-}
-
-.trade-cc__asset-pos {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 50%;
-  color: var(--text-primary);
-  font-family: var(--font-num);
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.trade-cc__asset-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.trade-cc__asset-name {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 20px;
-  font-weight: 900;
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-cc__asset-meta {
-  overflow: hidden;
-  color: var(--text-muted);
-  font-family: var(--font-num);
-  font-size: 13px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-cc__asset-remove {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.trade-cc__pool {
-  display: grid;
-  gap: 14px;
-  max-height: 420px;
-  overflow-y: auto;
-}
-
-.trade-cc__pool-group {
-  display: grid;
-  gap: 6px;
-}
-
-/* Pieces on a board: horizontally wrapped bubbles per position group. */
-.trade-cc__pool-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 6px;
-}
-
-.trade-cc__pill {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--bg-inset);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 100ms ease, background 100ms ease;
-}
-
-.trade-cc__pill-copy {
-  display: grid;
-  gap: 1px;
-  min-width: 0;
-}
-
-.trade-cc__pill--on {
-  border-color: var(--amber);
-  background: rgba(232, 84, 29, 0.12);
-}
-
-.trade-cc__pill:hover:not(:disabled),
-.trade-cc__pill:focus-visible {
-  border-color: rgba(255, 128, 73, 0.55);
-  background: rgba(232, 84, 29, 0.08);
-}
-
-.trade-cc__pill:active:not(:disabled) {
-  transform: translateY(1px);
-}
-
-.trade-cc__pill:disabled {
-  cursor: default;
-  opacity: 0.62;
-}
-
-.trade-cc__pill-pos {
-  color: var(--ink-3);
-  font-family: var(--font-num);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.trade-cc__pill-name {
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-cc__pill-value {
-  color: var(--ink-3);
-  font-family: var(--font-num);
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-/* The add affordance stays quiet until hover; the check stays lit. */
-.trade-cc__pill-add {
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 900;
-  opacity: 0;
-  text-align: right;
-  transition: opacity 100ms ease;
-}
-
-.trade-cc__pill:hover:not(:disabled) .trade-cc__pill-add,
-.trade-cc__pill:focus-visible .trade-cc__pill-add,
-.trade-cc__pill--on .trade-cc__pill-add {
-  opacity: 1;
-}
-
-.trade-cc__pill--on .trade-cc__pill-add {
-  color: var(--amber-bright);
-}
-
-.trade-cc__price-btn {
-  width: 100%;
-  min-height: 44px;
-  margin-top: 14px;
-  border: none;
-  border-radius: 10px;
-  background: var(--amber);
-  color: #fff;
-  font-family: var(--font-display);
-  font-size: 15px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.trade-cc__price-btn:disabled {
-  background: var(--bg-surface-soft);
-  color: var(--ink-3);
-  cursor: default;
-}
-
-.trade-cc__counter {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid rgba(232, 84, 29, 0.32);
-  border-radius: 12px;
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgba(232, 84, 29, 0.1), transparent 60%),
-    var(--bg-surface, #15181b);
-}
-
-.trade-cc__counter-card {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid rgba(232, 84, 29, 0.32);
-  border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 58%),
-    var(--bg-surface-soft);
-  animation: trade-counter-in 240ms ease-out both;
-}
-
-.trade-cc__counter-title {
-  margin: 0;
-  color: var(--amber-bright, #ff8049);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.trade-cc__counter-body {
-  margin: 4px 0 10px;
-  color: var(--text-soft, #b9bdb4);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.trade-cc__counter-btn {
-  border: none;
-  border-radius: 9px;
-  background: var(--amber, #e8541d);
-  color: #fff;
-  padding: 8px 14px;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.trade-cc__counter-btn--primary {
-  width: 100%;
-  min-height: 44px;
-  border-radius: 12px;
-  font-family: var(--font-display);
-  font-size: 15px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.trade-cc__counter-btn:hover {
-  background: var(--amber-bright, #ff8049);
-}
-
-.trade-cc__counter-deltas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--text-muted);
-  font-family: var(--font-num);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.trade-cc__counter-deltas span {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: rgba(244, 245, 242, 0.06);
-}
-
-.trade-cc__counter-deltas b {
-  color: var(--text-primary);
-}
-
-.trade-cc__counter-deltas b.trade-cc__signed-value--positive {
-  color: var(--green);
-}
-
-.trade-cc__counter-deltas b.trade-cc__signed-value--negative {
-  color: var(--red);
-}
-
-.trade-cc__counter-deltas b.trade-cc__signed-value--neutral {
-  color: var(--text-muted);
-}
-
-.trade-cc__reasons {
-  margin-bottom: 14px;
-}
-
-.trade-cc__reasons-title {
-  margin: 0 0 6px;
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.trade-cc__reasons ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.trade-cc__reasons li {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.trade-cc__verdict {
-  overflow: hidden;
-}
-
-.trade-cc__verdict-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(220px, 1fr);
-  align-items: end;
-  gap: 18px;
-  margin-bottom: 16px;
-  padding: 18px;
-  border: 1px solid rgba(232, 84, 29, 0.28);
-  border-radius: 18px;
-  background:
-    radial-gradient(110% 150% at 0% 0%, rgba(232, 84, 29, 0.12), transparent 60%),
-    var(--bg-inset);
-}
-
-.trade-cc__verdict-stamp {
-  margin: 0;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: clamp(36px, 5vw, 56px);
-  line-height: 0.92;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  animation: trade-verdict-stamp-in 260ms ease-out both;
-}
-
-.trade-cc__verdict-stamp--good { color: var(--green); }
-.trade-cc__verdict-stamp--neutral { color: var(--text-primary); }
-.trade-cc__verdict-stamp--warn { color: var(--amber-bright); }
-.trade-cc__verdict-stamp--bad { color: var(--red); }
-
-.trade-cc__verdict-subhead {
-  margin: 8px 0 0;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.trade-cc__verdict-subhead span {
-  font-family: var(--font-num);
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
-}
-
-.trade-cc__signed-value--positive {
-  color: var(--green);
-}
-
-.trade-cc__signed-value--negative {
-  color: var(--red);
-}
-
-.trade-cc__signed-value--neutral {
-  color: var(--text-muted);
-}
-
-.trade-cc__hero-price {
-  position: relative;
-  min-height: 54px;
-}
-
-.trade-cc__hero-price .trade-cc__price-track,
-.trade-cc__hero-price .trade-cc__price-fill {
-  position: absolute;
-  top: 18px;
-  height: 8px;
-  border-radius: 999px;
-  transform: translateY(-50%);
-}
-
-.trade-cc__hero-price .trade-cc__price-track {
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.trade-cc__hero-price .trade-cc__price-center {
-  position: absolute;
-  top: 8px;
-  bottom: 20px;
-  left: 50%;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.28);
-  transform: translateX(-50%);
-}
-
-.trade-cc__hero-price .trade-cc__price-fill {
-  left: var(--trade-price-fill-left);
-  width: var(--trade-price-fill-width);
-  background: var(--text-muted);
-  animation: trade-verdict-fill-in 260ms ease-out 60ms both;
-}
-
-.trade-cc__hero-price--steal .trade-cc__price-fill {
-  background: var(--green);
-}
-
-.trade-cc__hero-price--overpay .trade-cc__price-fill {
-  background: var(--red);
-}
-
-.trade-cc__hero-price .trade-cc__price-marker {
-  position: absolute;
-  top: 18px;
-  left: var(--trade-price-position);
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--bg-deep);
-  border-radius: 50%;
-  background: var(--text-primary);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.35);
-  transform: translate(-50%, -50%);
-  animation: trade-verdict-marker-in 260ms ease-out 80ms both;
-}
-
-.trade-cc__hero-price .trade-cc__price-labels {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  justify-content: space-between;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.trade-cc__hero-counter {
-  grid-column: 1 / -1;
-}
-
-.trade-cc__verdict-faces {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 18px;
-  margin: 18px 0 20px;
-  padding: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--bg-surface-soft);
-}
-
-.trade-cc__verdict-face-side {
-  min-width: 0;
-}
-
-.trade-cc__verdict-face-label,
-.trade-cc__module-label {
-  display: block;
-  margin: 0 0 8px;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-}
-
-.trade-cc__verdict-face-group {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.trade-cc__verdict-face {
-  display: block;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  padding: 3px;
-  background: var(--bg-inset);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
-}
-
-.trade-cc__verdict-face--get {
-  border: 2px solid var(--amber-bright);
-}
-
-.trade-cc__verdict-face--give {
-  border: 2px solid var(--border-subtle);
-}
-
-.trade-cc__verdict-face .player-headshot {
-  width: 100%;
-  height: 100%;
-}
-
-.trade-cc__verdict-arrows {
-  display: grid;
-  gap: 0;
-  color: var(--text-muted);
-  font-family: var(--font-num);
-  font-size: 18px;
-  line-height: 0.9;
-  opacity: 0.72;
-}
-
-.trade-cc__verdict-axis-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
-  gap: 14px;
-  margin-bottom: 14px;
-}
-
-.trade-cc__price-module,
-.trade-cc__accept-module {
-  padding: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--bg-inset);
-}
-
-.trade-cc__price-rail {
-  position: relative;
-  height: 22px;
-  margin-top: 12px;
-}
-
-.trade-cc__price-track,
-.trade-cc__price-fill {
-  position: absolute;
-  top: 50%;
-  height: 7px;
-  border-radius: 999px;
-  transform: translateY(-50%);
-}
-
-.trade-cc__price-track {
-  left: 0;
-  right: 0;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.trade-cc__price-center {
-  position: absolute;
-  top: 1px;
-  bottom: 1px;
-  left: 50%;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.28);
-  transform: translateX(-50%);
-}
-
-.trade-cc__price-fill {
-  left: var(--trade-price-fill-left);
-  width: var(--trade-price-fill-width);
-  background: var(--text-muted);
-  transform-origin: left center;
-  animation: trade-verdict-fill-in 260ms ease-out 60ms both;
-}
-
-.trade-cc__price-rail--steal .trade-cc__price-fill { background: var(--green); }
-.trade-cc__price-rail--overpay .trade-cc__price-fill { background: var(--red); }
-
-.trade-cc__price-marker {
-  position: absolute;
-  top: 50%;
-  left: var(--trade-price-position);
-  width: 15px;
-  height: 15px;
-  border: 2px solid var(--bg-deep);
-  border-radius: 50%;
-  background: var(--text-primary);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.35);
-  transform: translate(-50%, -50%);
-  animation: trade-verdict-marker-in 260ms ease-out 80ms both;
-}
-
-.trade-cc__price-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 7px;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.trade-cc__accept-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.trade-cc__accept-number {
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 42px;
-  line-height: 0.9;
-  letter-spacing: 0.03em;
-}
-
-.trade-cc__accept-tag {
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.trade-cc__accept-module--good .trade-cc__accept-number,
-.trade-cc__accept-module--good .trade-cc__accept-tag {
-  color: var(--green);
-}
-
-.trade-cc__accept-module--warn .trade-cc__accept-number,
-.trade-cc__accept-module--warn .trade-cc__accept-tag {
-  color: var(--amber-bright);
-}
-
-.trade-cc__accept-module--bad .trade-cc__accept-number,
-.trade-cc__accept-module--bad .trade-cc__accept-tag {
-  color: var(--red);
-}
-
-.trade-cc__accept-track {
-  position: relative;
-  height: 20px;
-  margin-top: 12px;
-}
-
-.trade-cc__accept-track::before,
-.trade-cc__accept-fill {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  height: 7px;
-  border-radius: 999px;
-  transform: translateY(-50%);
-  content: "";
-}
-
-.trade-cc__accept-track::before {
-  right: 0;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.trade-cc__accept-fill {
-  width: var(--trade-acceptance-pct);
-  background: var(--text-muted);
-  transform-origin: left center;
-  animation: trade-verdict-fill-in 260ms ease-out 80ms both;
-}
-
-.trade-cc__accept-module--good .trade-cc__accept-fill { background: var(--green); }
-.trade-cc__accept-module--warn .trade-cc__accept-fill { background: var(--amber-bright); }
-.trade-cc__accept-module--bad .trade-cc__accept-fill { background: var(--red); }
-
-.trade-cc__accept-marker {
-  position: absolute;
-  top: 50%;
-  left: var(--trade-acceptance-pct);
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--bg-deep);
-  border-radius: 50%;
-  background: var(--text-primary);
-  transform: translate(-50%, -50%);
-  animation: trade-verdict-marker-in 260ms ease-out 100ms both;
-}
-
-.trade-cc__consequences {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.trade-cc__consequence-card {
-  padding: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--bg-surface-soft);
-}
-
-.trade-cc__consequence-team {
-  margin: 0 0 8px;
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.trade-cc__consequence-delta {
-  margin: 0;
-  color: var(--text-muted);
-  font-family: var(--font-num);
-  font-size: 30px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.trade-cc__consequence-delta span {
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.trade-cc__consequence-delta--up,
-.trade-cc__consequence-title--up {
-  color: var(--green);
-}
-
-.trade-cc__consequence-delta--down,
-.trade-cc__consequence-title--down {
-  color: var(--red);
-}
-
-.trade-cc__consequence-title {
-  margin: 8px 0 0;
-  color: var(--ink-3);
-  font-family: var(--font-num);
-  font-size: 12px;
-}
-
-.trade-cc__reasons ul {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.trade-cc__reason {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  align-items: start;
-  color: var(--text-muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.trade-cc__reason span {
-  color: var(--green);
-  font-family: var(--font-num);
-  font-weight: 900;
-}
-
-.trade-cc__reason--hurt span {
-  color: var(--red);
-}
-
-@keyframes trade-verdict-stamp-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes trade-verdict-fill-in {
-  from {
-    transform: translateY(-50%) scaleX(0);
-  }
-  to {
-    transform: translateY(-50%) scaleX(1);
-  }
-}
-
-@keyframes trade-verdict-marker-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.7);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-@keyframes trade-counter-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .trade-cc__verdict-stamp,
-  .trade-cc__price-fill,
-  .trade-cc__price-marker,
-  .trade-cc__accept-fill,
-  .trade-cc__accept-marker,
-  .trade-cc__counter-card {
-    animation: none;
-  }
-}
-
-@media (max-width: 520px) {
-  .trade-cc__finder-head,
-  .trade-cc__deal-strip-top,
-  .trade-cc__deal-strip-grid,
-  .trade-cc__verdict-hero {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .trade-cc__deal-strip-arrow {
-    justify-self: center;
-  }
-
-  .trade-cc__deal-strip-arrow-spacer {
-    display: none;
-  }
-
-  .trade-cc__verdict-stamp {
-    font-size: 40px;
-  }
-
-  .trade-cc__verdict-faces,
-  .trade-cc__verdict-axis-grid,
-  .trade-cc__consequences {
-    grid-template-columns: 1fr;
-  }
-
-  .trade-cc__verdict-faces {
-    gap: 12px;
-  }
-
-  .trade-cc__verdict-arrows {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-  }
-
-  .trade-cc__verdict-face {
-    width: 48px;
-    height: 48px;
-  }
-
-  .trade-cc__deal-player {
-    min-width: 100%;
-  }
-
-  .trade-cc__dismiss-toast {
-    right: 12px;
-    left: 12px;
-    justify-content: center;
-  }
-}
-
-.trade-cc__pool-divider {
-  margin: 8px 0 4px;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.trade-cc__pill {
-  width: 100%;
-}
-
-.trade-cc__pill--bench {
-  opacity: 0.82;
-}
-
-.trade-cc__pill-headshot {
-  /* No overflow clip: the team badge overhangs this circle on purpose, and a
-     circular clip does not cut a corner off it, it cuts along the curve - the
-     logo pressed into the ring with a slice taken out. The round crop lives on
-     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
-  position: relative;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--bg-surface-soft);
-}
-
-.trade-cc__pill-headshot-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.trade-cc__pill-headshot-fallback {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  color: var(--ink-3);
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.trade-cc__pill-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.trade-cc__pool-search {
-  width: 100%;
-  margin-bottom: 8px;
-  padding: 7px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  background: var(--bg-inset);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-}
-
-/* ── Manager read card (your subjective friendliness/relationship) ── */
-.trade-cc__read-card {
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.14));
-  border-radius: 10px;
-  padding: 12px 14px;
-  margin: 10px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: var(--bg-inset, rgba(255, 255, 255, 0.03));
-}
-
-.trade-cc__read-title {
-  margin: 0;
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-
-.trade-cc__read-note {
-  margin: 0;
-  font-size: 0.72rem;
-  opacity: 0.6;
-  line-height: 1.35;
-}
-
-.trade-cc__read-toggle,
-.trade-cc__accept-toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--text-soft);
-}
-
-.trade-cc__accept-toggle-row {
-  margin: 0 0 10px;
-}
-
-.trade-cc__read-slider {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.trade-cc__read-slider-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 0.83rem;
-  font-weight: 600;
-}
-
-.trade-cc__read-slider-value {
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-}
-
-.trade-cc__read-slider-ghost {
-  font-size: 0.7rem;
-  color: var(--text-amber);
-}
-
-.trade-cc__read-slider input[type='range'] {
-  width: 100%;
-  accent-color: var(--amber-bright, #ff8049);
-}
-
-.trade-cc__read-slider-hint {
-  font-size: 0.7rem;
-  opacity: 0.55;
-}
-
-.trade-cc__read-reset,
-.trade-cc__read-toggle-btn {
-  min-height: 32px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-}
-
-.trade-cc__read-reset {
-  align-self: flex-start;
-  padding: 0 12px;
-  color: var(--text-soft);
-  font-family: var(--font-ui);
-  font-size: 0.74rem;
-  font-weight: 800;
-}
-
-.trade-cc__read-toggle-btn {
-  position: relative;
-  width: 52px;
-  background: var(--bg-inset);
-}
-
-.trade-cc__read-toggle-btn span {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--text-soft);
-  transition: transform var(--transition-fast);
-}
-
-.trade-cc__read-toggle-btn--on {
-  border-color: rgba(255, 128, 73, 0.4);
-  background: rgba(232, 84, 29, 0.22);
-}
-
-.trade-cc__read-toggle-btn--on span {
-  transform: translateX(22px);
-  background: var(--text-primary);
-}
-
-@media (max-width: 900px) {
-
-  .trade-cc__partner-read--inline {
-    justify-self: start;
-  }
-}
-
-/* 29px tall is under the 44pt Apple asks for and it is a real control, so it
-   gets a thumb-sized target on touch without growing the pill it draws. */
-@media (max-width: 1023px) {
-  .trade-cc__partner-read {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding-block: 0;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Trade finder density on a phone.
-
-   Measured at 375x812: 296px — 36% of the screen — before the first manager
-   card, and 163px of that was the finder head. The head is already a two
-   column grid (copy, then the read control) but a max-width: 520px rule
-   collapsed it to one column, so "Your read" took an 18px gap and a 44px band
-   of its own directly under the copy it belongs beside.
-
-   The manager cards themselves are left alone. They measure 81px for a 40px
-   avatar, two lines of identity and a price, which is close to the floor for
-   what they carry — an earlier note claiming 178px was a screenshot read at 2x
-   scale, not a measurement.
-   --------------------------------------------------------------------------- */
-@media (max-width: 1023px) {
-
-  /* The control keeps its 44px touch target; it just stops claiming a row. */
-  .trade-cc__partner-read {
-    margin: 0;
-  }
-
-  .trade-cc__finder-blurb,
-  .trade-cc__market-sub {
-    font-size: 12px;
-    line-height: 1.35;
-  }
-}
-
-/* The market page is a grid, and a grid item defaults to min-width: auto — so
-   a child that cannot shrink below its min-content width pushes the track
-   wider than the container instead of being constrained by it. That is how
-   .trade-page ended up 378px inside a 337px content box on a 375px phone,
-   hanging 19px off the right edge. .app-content clips overflow-x, so it was
-   silently cutting content off rather than showing a scrollbar. */
-.market-page,
-.trade-page {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.market-page > *,
-.trade-page > * {
-  min-width: 0;
-}
-
-/* ---------------------------------------------------------------------------
-   Managers become a grid of tiles on a phone.
-
-   As a list, twelve managers ran 12 x 89px — about 1,070px, nearly three
-   screens of scrolling before a single deal. They are a price board: a name, a
-   record and a title price. That fits a tile, and twelve tiles fit one screen.
-   --------------------------------------------------------------------------- */
-@media (max-width: 1023px) {
-
-  .trade-cc__team-avatar {
-    width: 24px;
-    height: 24px;
-    font-size: 9px;
-  }
-}
-
-/* ---------------------------------------------------------------------------
-   Deals first.
-
-   The tab used to open on an instruction above a nine-tile grid, which meant
-   the first screen of a trade finder had no trades on it. Three views instead,
-   in the order the questions actually get asked: what has the book got, who
-   would say yes, and what if I build my own.
-   --------------------------------------------------------------------------- */
 .trade-cc__views {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
   gap: 4px;
-  margin-bottom: 12px;
   padding: 4px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-pill);
@@ -1975,120 +79,747 @@
   color: var(--text-amber);
 }
 
-.trade-cc__finder--hidden {
-  display: none;
-}
+.trade-cc__view:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 
+.trade-cc__finder--hidden,
 .trade-cc__builder--hidden {
   display: none;
 }
 
-/* ---------------------------------------------------------------------------
-   Vertical condensation, phone.
+/* ── The builder: a market and a slip ──
+   The market is the left two thirds: every manager as a pill, a line on the
+   one you picked, then one roster at a time as a priced list. The slip is
+   the right rail: the trade as you build it, what each player does to your
+   lineup, and the one button. It stays put while the roster scrolls. Priced,
+   the verdict takes the market's place and the slip keeps the number. */
 
-   The whole tab is a scrolling problem. Nine manager tiles at ~150px each is
-   1350px of picker before a single trade, and the deals a pick loads landed
-   below all of it. Every rule here buys height back without giving anything
-   up: the same facts, fewer pixels between them.
-   --------------------------------------------------------------------------- */
-@media (max-width: 1023px) {
-
-  /* The headshot was 32px next to a 15px name, which read as a favicon beside
-     a caption. The person is the row. */
-  .trade-cc__manager-card .trade-cc__team-avatar,
-  .trade-cc__manager-grid--dense .trade-cc__team-avatar {
-    width: 38px;
-    height: 38px;
-  }
-
-  /* Trade personas are a desktop study, not a thing you read on a phone while
-     deciding whether to text someone about a running back. */
-  .trade-cc__partner-read,
-  .trade-cc__finder-head {
-    display: none;
-  }
-
+.trade-cc__builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 28px;
+  align-items: start;
 }
 
-/* The picker already sits on the page. Wrapping it in a bordered, padded card
-   as well drew a box around a box and cost 32px of width and 28px of height
-   for nothing. */
-@media (max-width: 1023px) {
-  .trade-cc__finder {
-    padding: 0;
-    border: 0;
-    background: none;
-    box-shadow: none;
-  }
-
+.trade-cc__market {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
 }
 
-.trade-cc__quick-row .trade-cc__team-avatar {
-  width: 32px;
-  height: 32px;
+.trade-cc__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-/* ---------------------------------------------------------------------------
-   Build trades.
+/* ── Managers ── */
 
-   The builder is mostly air: a section eyebrow, a headline, the team name, an
-   empty dashed dropzone sized for a roster it does not have yet, a search
-   field, and then the roster. Five pieces of chrome before the first player,
-   and the dropzone is the largest thing on screen while being the only thing
-   with nothing in it.
-   --------------------------------------------------------------------------- */
-@media (max-width: 1023px) {
-  .trade-cc__builder {
-    padding: 12px;
-  }
-
-  /* An empty tray does not need to be the size of a full one. */
-  .trade-cc__builder .trade-cc__empty-slot,
-  .trade-cc__builder .trade-cc__dropzone--empty {
-    min-height: 40px;
-    padding: 10px;
-    font-size: 12.5px;
-  }
-
-  .trade-cc__builder-title,
-  .trade-cc__side-title {
-    font-size: 20px;
-    line-height: 1.05;
-  }
-
-  .trade-cc__builder-kicker,
-  .trade-cc__side-kicker {
-    font-size: 9.5px;
-  }
-
-  .trade-cc__side {
-    padding: 10px;
-    gap: 8px;
-  }
+.trade-cc__partners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-/* The trade you built by hand is the one you actually want to send someone,
-   so the card is reachable from the analyzer and not only from the finder. */
-.trade-cc__share {
-  justify-self: start;
-  margin-top: 14px;
-  padding: 10px 20px;
-  border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--amber) 12%, transparent);
-  color: var(--text-amber);
+.trade-cc__partner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 12px 4px 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trade-cc__partner:hover:not(:disabled) { border-color: var(--text-muted); color: var(--text-primary); }
+.trade-cc__partner:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.trade-cc__partner:disabled { cursor: default; opacity: 0.62; }
+
+.trade-cc__partner--on {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  color: var(--text-primary);
+}
+
+.trade-cc__partner-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trade-cc__partner--on .trade-cc__partner-name { color: var(--text-amber); }
+
+.trade-cc__partner-record {
+  color: var(--ink-3);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-cc__team-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--bg-surface-soft);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  overflow: hidden;
+}
+
+.trade-cc__team-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── The manager you picked ── */
+
+.trade-cc__market-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 18px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.trade-cc__market-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.trade-cc__market-read {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+/* ── Which roster, and the search ── */
+
+.trade-cc__market-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.trade-cc__roster-tabs {
+  display: flex;
+  gap: 18px;
+}
+
+.trade-cc__roster-tab {
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trade-cc__roster-tab:hover:not(:disabled) { color: var(--text-primary); }
+.trade-cc__roster-tab:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.trade-cc__roster-tab:disabled { cursor: default; opacity: 0.5; }
+
+.trade-cc__roster-tab--active {
+  border-bottom-color: var(--amber);
+  color: var(--text-primary);
+}
+
+.trade-cc__pool-search {
+  display: block;
+  width: 240px;
+  min-height: 36px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.trade-cc__pool-search::placeholder { color: var(--ink-3); }
+.trade-cc__pool-search:focus-visible { outline: 0; border-color: color-mix(in srgb, var(--amber-bright) 40%, var(--border-subtle)); }
+
+/* ── The roster, as a priced list ──
+   Face, name, the slot his manager has him in, per game from here with his
+   rank at the position, his bye, and a plus that becomes a check. The same
+   number the finder prints beside a player. */
+
+.trade-cc__roster {
+  display: grid;
+}
+
+.trade-cc__roster-head,
+.trade-cc__roster-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 64px 72px 56px 40px 26px;
+  align-items: center;
+  gap: 10px;
+}
+
+.trade-cc__roster-head {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.trade-cc__roster-head-player { grid-column: 1 / 3; }
+.trade-cc__roster-head-num { text-align: right; }
+
+.trade-cc__roster-divider {
+  margin: 10px 0 0;
+  padding: 0 4px 4px;
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.trade-cc__roster-row {
+  width: 100%;
+  padding: 7px 4px;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  background: none;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trade-cc__roster-row:hover:not(:disabled) { background: rgba(244, 245, 242, 0.03); }
+.trade-cc__roster-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.trade-cc__roster-row:disabled { cursor: default; opacity: 0.62; }
+.trade-cc__roster-row--on { background: color-mix(in srgb, var(--amber) 10%, transparent); }
+
+.trade-cc__roster-headshot {
+  /* No overflow clip: the team badge overhangs this circle on purpose and a
+     clip cuts it against the curve. The round crop lives on the image
+     (PlayerHeadshot.css), so the photo is still a circle without one here. */
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--bg-surface-soft);
+}
+
+.trade-cc__roster-headshot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trade-cc__roster-headshot-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--ink-3);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.trade-cc__roster-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.trade-cc__roster-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A bench player recedes by weight, not by fading the row. */
+.trade-cc__roster-row--bench .trade-cc__roster-name { color: var(--text-dim); font-weight: 600; }
+.trade-cc__roster-row--on .trade-cc__roster-name { color: var(--text-amber); }
+
+.trade-cc__roster-meta {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.trade-cc__roster-slot {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trade-cc__roster-num {
+  color: var(--text-primary);
+  font-family: var(--font-num);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.trade-cc__roster-rank,
+.trade-cc__roster-bye {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.trade-cc__roster-add {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px dashed var(--ink-3);
+  border-radius: 50%;
+  color: var(--text-muted);
   font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  line-height: 1;
 }
 
-.trade-cc__share:hover {
-  background: color-mix(in srgb, var(--amber) 20%, transparent);
+.trade-cc__roster-row--on .trade-cc__roster-add {
+  border: 1px solid var(--amber);
+  background: var(--amber);
+  color: #fff;
 }
 
-/* The trade failed to price, said where it failed. */
+/* ── The slip ──
+   The trade, as it stands. An amber rule on top says it is yours, the way
+   the finder's ticket wears one. */
+
+.trade-cc__slip {
+  position: sticky;
+  top: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--border-subtle);
+  border-top: 3px solid var(--amber);
+  border-radius: 14px;
+  background: var(--bg-surface);
+}
+
+.trade-cc__slip-leg {
+  display: grid;
+  gap: 0;
+}
+
+.trade-cc__slip-leg-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 6px;
+}
+
+.trade-cc__deal-tag {
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trade-cc__deal-tag-team {
+  color: var(--text-muted);
+  white-space: normal;
+}
+
+.trade-cc__slip-sum {
+  color: var(--text-soft);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trade-cc__slip-empty {
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--ink-3);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.trade-cc__asset-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.trade-cc__asset-headshot {
+  /* No overflow clip, for the same reason as the roster row's. */
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--bg-surface-soft);
+}
+
+.trade-cc__asset-headshot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.trade-cc__asset-headshot-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+
+.trade-cc__asset-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.trade-cc__asset-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trade-cc__asset-meta {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+/* What he does to your lineup, in words, before any price. */
+.trade-cc__asset-note {
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.trade-cc__asset-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.trade-cc__asset-remove:hover:not(:disabled) { border-color: var(--text-muted); color: var(--text-primary); }
+.trade-cc__asset-remove:disabled { opacity: 0.5; cursor: default; }
+
+.trade-cc__slip-swap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-3);
+}
+
+.trade-cc__slip-swap::before,
+.trade-cc__slip-swap::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.trade-cc__slip-swap-glyph {
+  width: 20px;
+  height: 20px;
+}
+
+.trade-cc__slip-shape {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trade-cc__slip-net {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.trade-cc__slip-price {
+  display: grid;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.trade-cc__deal-number {
+  font-family: var(--font-num);
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.trade-cc__deal-ci {
+  margin-left: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.trade-cc__deal-meta {
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.trade-cc__deal-meta span,
+.trade-cc__verdict-subhead span,
+.trade-cc__counter-deltas b {
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-cc__signed-value--positive { color: var(--green); }
+.trade-cc__signed-value--negative { color: var(--red); }
+.trade-cc__signed-value--neutral { color: var(--text-muted); }
+
+.trade-cc__price-btn {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--amber);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.trade-cc__price-btn:hover:not(:disabled) { background: var(--amber-mid); }
+.trade-cc__price-btn:active:not(:disabled) { transform: translateY(1px); }
+.trade-cc__price-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.trade-cc__price-btn:disabled {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.trade-cc__edit-btn {
+  justify-self: start;
+  min-height: 34px;
+  margin-top: 8px;
+  padding: 0 13px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.trade-cc__edit-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+/* ── The verdict ── */
+
+.trade-cc__verdict {
+  display: grid;
+  gap: 20px;
+  padding: 4px 2px 0;
+}
+
+.trade-cc__verdict-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 24px;
+}
+
+.trade-cc__verdict-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The word is a read, not a price, so it is set in the UI face and carries
+   no colour. The numbers beside it are the money. */
+.trade-cc__verdict-stamp {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.trade-cc__verdict-stamp--neutral { color: var(--text-dim); }
+.trade-cc__verdict-stamp--bad { color: var(--text-muted); }
+
+.trade-cc__verdict-subhead {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.trade-cc__verdict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.trade-cc__counter-btn {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  color: var(--text-amber);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.trade-cc__counter-btn:hover {
+  border-color: color-mix(in srgb, var(--amber) 70%, transparent);
+  background: color-mix(in srgb, var(--amber) 28%, transparent);
+}
+
+.trade-cc__counter-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.trade-cc__share {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.trade-cc__share:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.trade-cc__share:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.trade-cc__hero-counter {
+  display: grid;
+}
+
+.trade-cc__counter-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--amber) 32%, var(--border-subtle));
+  border-radius: 14px;
+  background: var(--bg-surface);
+  animation: trade-counter-in 240ms ease-out both;
+}
+
+.trade-cc__counter-body {
+  margin: 0;
+  color: var(--text-soft);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.trade-cc__counter-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trade-cc__counter-deltas span {
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+}
+
+.trade-cc__counter-card .trade-cc__counter-btn { justify-self: start; }
+
+@keyframes trade-counter-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── The trade failed to price, said where it failed ── */
+
 .trade-cc__failure {
   display: grid;
   justify-items: start;
@@ -2102,15 +833,15 @@
 .trade-cc__failure-head {
   margin: 0;
   color: var(--text-primary);
-  font-family: var(--font-condensed);
-  font-size: 15px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .trade-cc__failure-detail {
   margin: 0;
   color: var(--text-soft);
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -2119,12 +850,12 @@
   margin-top: var(--space-2xs);
   padding: 7px 14px;
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: none;
   color: var(--text-primary);
   font-family: var(--font-ui);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: border-color 140ms ease, color 140ms ease;
 }
@@ -2140,11 +871,86 @@
   cursor: default;
 }
 
-.trade-cc__asset-bye,
-.trade-cc__chip-bye {
-  margin-left: 6px;
-  color: var(--text-muted, #8a8f98);
-  font-size: 11px;
+/* ── Dismissed, with a way back ── */
+
+.trade-cc__dismiss-toast {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--shell-tabbar-height, 64px) + 16px);
+  z-index: calc(var(--z-dropdown) + 4);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(232, 84, 29, 0.34);
+  border-radius: var(--radius-pill);
+  background: rgba(11, 13, 15, 0.96);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+}
+
+.trade-cc__dismiss-toast-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+/* ── Tablet and phone ── */
+
+@media (max-width: 1023px) {
+  .trade-cc__finder {
+    padding: 0;
+  }
+
+  /* One column. The slip goes first, so the trade is in view before the
+     roster, and it stops sticking: there is no rail to stick to. */
+  .trade-cc__builder {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .trade-cc__slip {
+    position: static;
+    order: -1;
+  }
+
+  .trade-cc__market-tabs {
+    flex-wrap: wrap;
+  }
+
+  .trade-cc__pool-search {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  /* Rank and bye drop off a narrow row; the slot and the number stay. */
+  .trade-cc__roster-head,
+  .trade-cc__roster-row {
+    grid-template-columns: 30px minmax(0, 1fr) 56px 56px 26px;
+  }
+
+  .trade-cc__roster-rank,
+  .trade-cc__roster-bye {
+    display: none;
+  }
+
+  .trade-cc__verdict-stamp { font-size: 24px; }
+
+  .trade-cc__dismiss-toast {
+    right: 12px;
+    left: 12px;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trade-cc__counter-card { animation: none; }
+  .trade-cc__price-btn { transition: none; }
 }

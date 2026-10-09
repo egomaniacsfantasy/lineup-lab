@@ -497,39 +497,59 @@ told that 0.0 on their side keeps only deals the other manager also gains
 from, took no limit. Limits stay with the ticket from one ask to the next; a
 moved number turns amber on the line.
 
-**Build trades.** The same row the finder prints, built by hand. The top of
-the tab is one deal row in the lane grammar: *You get* (the partner named in
-its tag), the swap glyph with the shape ("1 for 1", send-for-get), *You
-send*, and the price slot. Empty legs say what to do ("Pick a manager below",
-"Pick from your roster"); a picked player is a face, a name and his position
-line, with a cross to remove him. The price slot holds the amber "Price this
-trade" button until the trade is priced, then your title delta as the big
-number with the ± beside it and "them" under it, the way a finder row reads.
-Under the row, two roster lists on hairlines with a vertical rule between
-them: *You get* with the manager picker in its header (their roster opens
-once a manager is picked), *You send* with yours. Each roster is grouped by
-position, starters first, with a search field; a row is a face, a name, the
-position line, and a dashed plus that becomes an amber check. The seat order
-matches the finder (you get on the left), which the builder used to flip
-(user, 2026-10-08: "Build trades should feel like the same product").
+**Build trades.** A market and a slip (user, 2026-10-09: "let's do the
+slip", from five mocked directions). The market is the left two thirds of
+the tab. Every manager in the league sits across the top as a pill (crest,
+name, record); one press picks a partner and nothing else asks for one. Under
+the pills a line on the manager picked, in the display face: their name, then
+title and playoff odds in the book's format and the starter they are thinnest
+at (the starter at QB, RB, WR or TE ranked lowest at his position by
+rest-of-season per game, named with his slot and rank). Then two tabs, *Their
+roster* and *Your roster*, with a search field at the right, and one roster
+at a time as a priced list grouped by position, starters first: face, name
+and line, the **slot he holds in the lineup his manager set** (QB, RB1, WR2,
+FLEX, Bench, IR; read off the provider's starters against the league's slot
+order, never inferred), per game from here with his rank at the position
+(the finder's sheet), his bye, and a dashed plus that becomes an amber check.
+Before a manager is picked the market shows your roster and the title says
+"Pick a manager".
 
-Priced, the rosters fold away and the row is all that is left of the builder;
-on a laptop it stays stuck to the top of the screen while the verdict scrolls
-under it, with Edit trade at its right end. The verdict under it: the book's
-word ("Good value", "Overpay") as a plain heading in the UI face with no
-colour, one line with both sides' championship deltas, and Even out this
-trade and Share this trade as two buttons on the right. The Overpay/Fair/Steal
-rail and the full-width Even out button are gone; the number in the row is
-the verdict's scale. Then the season impact as a **ledger**: one row per
-metric (championship, make playoffs, win this week in season, expected wins,
-avg seed, projected points rest of season), one column per side, each cell
-before → after with the change underneath. The 95% range rides on the change
-only; a before or after figure with its own ± was three numbers to read per
-cell, and the question the range answers is whether the change is real. A
-change inside its own range is marked "noise". The rest of the league is a
-compact table (team, championship, playoffs, expected wins) rather than a card
-per team. "Price this trade" returns both sides' title, playoff and this-week
-deltas; a counter-offer search exists as a separate endpoint.
+The slip is the right rail, under an amber top rule like the finder's
+ticket, and it stays stuck to the top of the screen while the roster scrolls.
+It has no title. *You get* (from the partner, named) and *You send* each carry
+the side's per-game total at the right, then a row per player (face, name,
+position, team, bye, rank, a cross to remove him) with **one line under him
+on what he does to your lineup**: an outgoing starter is "Your WR1. Terry
+McLaurin starts instead (14.3)", the best bench player by value who could
+fill that slot; an outgoing bench player is "From your bench"; an incoming
+player "Starts at RB1" if a sent player vacated that slot, "Starts at RB2.
+Bijan Robinson to the bench" if he is worth more per game than your weakest
+starter there, or "Bench, behind Derrick Henry (12.1)" if not. The slot names
+agree with the roster list because both read the provider's lineup. Empty
+legs say what to do ("Pick a manager", "Pick from their roster", "Pick from
+your roster"). Between the legs a hairline carries the swap glyph and the
+shape ("1 for 1"); under them one line of weight, "You send 6.1 more per
+game" or "Even per game", in a neutral tone because per-game production is
+not money. The amber "Price this trade" button fills the slip's width, set in
+the display face. A pricing failure or an unpriceable result reports under
+the button, where it was pressed, with Try again.
+
+Priced, the market folds away and the **verdict takes its place** in the left
+column; the slip keeps the trade and its button becomes the number: your
+title delta as the big mono figure with the ± beside it and the partner's
+delta under it, with Edit trade beneath, which opens the rosters again
+without clearing the price. Any change to the trade clears it. The verdict is
+as before: the book's word as a plain heading with no colour, one line with
+both sides' championship deltas, Even out this trade and Share this trade,
+the counter's card, and the season impact as a ledger (one row per metric,
+one column per side, before → after with the change underneath and "noise"
+where the change sits inside its own 95% range) with the rest of the league
+as a compact table. "Price this trade" returns both sides' title, playoff and
+this-week deltas; a counter-offer search exists as a separate endpoint.
+
+On a tablet or phone the builder is one column with the slip first and not
+stuck; rank and bye drop off the roster row. Trades are a laptop surface in
+any case (4.9).
 
 **What a player is worth, in the finder.** Wherever the finder puts a number
 beside a player (the picker's list, the pinned-player header, the position
@@ -546,7 +566,10 @@ labels say "this week" rather than claiming a season read.
 
 Both views are unreachable in dynasty and keeper leagues.
 
-*Backing:* `src/components/trade/TradeFinder.tsx`, the pure query, board and
+*Backing:* `src/components/trade/TradeFinder.tsx`, the builder in
+`src/pages/TradePage.tsx` with the slip's lineup reads in `src/utils/tradeSlip.ts`
+(unit-tested in `test/tradeSlip.test.mjs`, rendered in `test/tradeBuilderSlip.test.mjs`),
+the pure query, board and
 deal-reading logic in `src/utils/tradeFinderQuery.ts`, `GET
 /api/league/:id/trade-board` and `POST .../trade-board/scan` over
 `server/engine/tradeBoardStore.js` (the scan runs in the sender's worker,

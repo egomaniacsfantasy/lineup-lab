@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { resolveApiUrl } from '../services/apiBase.ts';
 import { useSearchParams } from 'react-router-dom';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -23,11 +23,30 @@ import {
   type TradeTraits,
 } from '../services/leagueApi';
 import { TradeAnalyzerPanel } from '../components/trade/TradeAnalyzerPanel';
-import type { LeagueBootstrap } from '../services/leagueApi';
+import { fetchBoard, type ApiTeam, type LeagueBootstrap } from '../services/leagueApi';
 import { MOCK_TRADE_TARGET_GROUPS } from '../mocks';
 import { signedDeltaClass } from '../utils/deltaTone';
 import { analysisVerdict, signedPct, tradeCardHeadline } from '../utils/tradeVerdict';
 import { tradesSupported } from '../utils/leagueCapabilities';
+import { formatProbOrOdds } from '../utils/formatOdds';
+import {
+  buildOutlooks,
+  outlookValues,
+  type PlayerOutlook,
+  type PlayerValues,
+  type ValueBasis,
+} from '../utils/tradeFinderQuery';
+import {
+  getRead,
+  getWords,
+  lineupSlots,
+  netWords,
+  sendRead,
+  sendWords,
+  sidePerGame,
+  slotOf,
+  weakestStarter,
+} from '../utils/tradeSlip';
 import { useScoutingAffectsAcceptance } from '../hooks/useLabsFlags';
 import type { ManagerFile } from '../services/managerFiles';
 import { compileManagerFile } from '../services/managerFiles';
@@ -45,19 +64,6 @@ import { officialLeagueUrl } from '../utils/officialLeagueUrl';
 import { drawTradeCard, type TradeCardProposal, type TradeCardAsset } from '../utils/tradeCard';
 import { shareFilename, tradeShareMessage } from '../utils/shareMessage';
 import { ShareCardPreview } from '../components/matchup/ShareCardPreview';
-
-function railPosition(youDeltaTitle: number) {
-  return 0.5 + 0.5 * Math.tanh(youDeltaTitle / 6);
-}
-
-function priceRailStyle(position: number): CSSProperties {
-  const pct = Math.max(0, Math.min(1, position)) * 100;
-  return {
-    '--trade-price-position': `${pct}%`,
-    '--trade-price-fill-left': `${Math.min(50, pct)}%`,
-    '--trade-price-fill-width': `${Math.abs(pct - 50)}%`,
-  } as CSSProperties;
-}
 
 function initials(name: string) {
   return name
@@ -182,7 +188,9 @@ function TradeDealsView() {
   /* A proposal is an argument you make to another manager, so it has to be
      able to leave the app as a picture. */
   const [tradeCard, setTradeCard] = useState<TradeCardProposal | null>(null);
-  const [partnerMenuOpen, setPartnerMenuOpen] = useState(false);
+  /* Which roster the market shows. Theirs opens the moment a manager is
+     picked; yours is there before one is. */
+  const [rosterTab, setRosterTab] = useState<'theirs' | 'yours'>('theirs');
   const [isEditingTrade, setIsEditingTrade] = useState(true);
   const verdictRef = useRef<HTMLElement | null>(null);
   const selectedPartner = useMemo(
@@ -194,6 +202,32 @@ function TradeDealsView() {
     [pricing?.futures],
   );
   const scoutingAffectsAcceptance = useScoutingAffectsAcceptance(stored?.leagueId);
+
+  /* What a player is worth from here: projected points per game over the
+     games still to come, with his rank at the position, from the same sheet
+     the finder reads and the engine prices with. Without the board the
+     week's pricing means stand in, and the labels say so. */
+  const [outlooks, setOutlooks] = useState<Map<string, PlayerOutlook> | null>(null);
+  const scoringFamily = bootstrap?.league.scoringFamily;
+  const leagueWeek = pricing?.week ?? bootstrap?.week;
+  useEffect(() => {
+    if (!bootstrap) return;
+    let cancelled = false;
+    fetchBoard(800, scoringFamily)
+      .then((payload) => {
+        if (cancelled || !payload.available || payload.rankings.length === 0) return;
+        setOutlooks(buildOutlooks(payload.rankings, leagueWeek));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrap, leagueWeek, scoringFamily]);
+  const basis: ValueBasis = outlooks ? 'ros' : 'week';
+  const values = useMemo<PlayerValues | null>(
+    () => (outlooks ? outlookValues(outlooks) : pricing?.playerMeans ?? null),
+    [outlooks, pricing?.playerMeans],
+  );
 
   const currentWeek = pricing?.week ?? bootstrap?.week ?? null;
   const { dismissedSignatures, dismiss, undo, restoreAll, pendingUndoSignature } =
@@ -315,13 +349,8 @@ function TradeDealsView() {
     analysis.partner,
   );
   const builderCollapsed = verdictReady && !isEditingTrade;
-  const builderIdle = !builderCollapsed && partnerRosterId == null && give.length === 0 && getIds.length === 0;
   const verdictMeta = verdictReady && analysis?.you && analysis.partner
-    ? {
-        verdict: analysisVerdict(analysis.you.delta.titleProb),
-        priceStyle: priceRailStyle(railPosition(analysis.you.delta.titleProb)),
-        railTone: railPosition(analysis.you.delta.titleProb) >= 0.5 ? 'steal' : 'overpay',
-      }
+    ? { verdict: analysisVerdict(analysis.you.delta.titleProb) }
     : null;
 
   useEffect(() => {
@@ -581,134 +610,18 @@ function TradeDealsView() {
       ? tradeSideFromIds(label, ids, bootstrap.players)
       : { label, assets: [{ id: `${label}-empty`, name: 'No players selected.', kind: 'text' as const }] };
 
-  const renderSelectedCards = (
-    _rosterId: number,
-    ids: string[],
-    set: (v: string[]) => void,
-    empty: string,
-    tone: 'send' | 'get',
-  ) => (
-    <div className="trade-cc__selected-deck">
-      {ids.length === 0 ? (
-        <p className="trade-cc__selected-empty">{empty}</p>
-      ) : (
-        ids.map((id) => {
-          const player = bootstrap.players[id];
-          if (!player) return null;
-          return (
-            <article className={`trade-cc__asset-card trade-cc__asset-card--${tone}`} key={id}>
-              <PlayerHeadshot
-                className="trade-cc__asset-headshot"
-                fallbackClassName="trade-cc__asset-headshot-fallback"
-                imageClassName="trade-cc__asset-headshot-image"
-                player={toPlayer(id, bootstrap.players)}
-              />
-              <span className="trade-cc__asset-pos">{player.position}</span>
-              <span className="trade-cc__asset-copy">
-                <span className="trade-cc__asset-name">{player.name}</span>
-                {player.byeWeek ? <span className="trade-cc__asset-bye">BYE {player.byeWeek}</span> : null}
-              </span>
-              <button
-                aria-label={`Remove ${player.name}`}
-                className="trade-cc__asset-remove"
-                disabled={isPricing || counterLoading}
-                onClick={() => toggle(ids, set, id)}
-                type="button"
-              >
-                ×
-              </button>
-            </article>
-          );
-        })
-      )}
-    </div>
-  );
-
-  const renderPool = (
-    rosterId: number,
-    list: string[],
-    set: (v: string[]) => void,
-    search: string,
-    setSearch: (v: string) => void,
-  ) => {
-    const q = search.trim().toLowerCase();
-    const allRows = rosterRows(bootstrap, rosterId);
-    const rows = q ? allRows.filter((r) => r.player.name.toLowerCase().includes(q)) : allRows;
-    // Pieces on a board, not a list: group by position so you scan the
-    // roster the way you think about it.
-    const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
-    const groups = POSITION_ORDER
-      .map((position) => ({ position, rows: rows.filter((r) => r.player.position === position) }))
-      .filter((group) => group.rows.length > 0);
-    const leftover = rows.filter((r) => !POSITION_ORDER.includes(r.player.position));
-    if (leftover.length > 0) groups.push({ position: 'Other', rows: leftover });
-    return (
-      <>
-        <input
-          aria-label="Search players"
-          autoComplete="off"
-          className="trade-cc__pool-search"
-          disabled={isPricing || counterLoading}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search players"
-          spellCheck={false}
-          type="search"
-          value={search}
-        />
-        <div className="trade-cc__pool">
-          {groups.map((group) => (
-            <div className="trade-cc__pool-group" key={group.position}>
-              <p className="trade-cc__pool-divider">{group.position}</p>
-              <div className="trade-cc__pool-grid">
-                {group.rows.map((row) => (
-                  <button
-                    aria-pressed={list.includes(row.id)}
-                    className={[
-                      'trade-cc__pill',
-                      list.includes(row.id) ? 'trade-cc__pill--on' : '',
-                      row.isStarter ? '' : 'trade-cc__pill--bench',
-                    ].join(' ')}
-                    disabled={isPricing || counterLoading}
-                    key={row.id}
-                    onClick={() => toggle(list, set, row.id)}
-                    type="button"
-                  >
-                    <PlayerHeadshot
-                      className="trade-cc__pill-headshot"
-                      fallbackClassName="trade-cc__pill-headshot-fallback"
-                      imageClassName="trade-cc__pill-headshot-image"
-                      player={toPlayer(row.id, bootstrap.players)}
-                    />
-                    <span className="trade-cc__pill-copy">
-                      <span className="trade-cc__pill-name">{row.player.name}</span>
-                      <span className="trade-cc__pill-pos">
-                        {[row.player.position, row.player.team, row.player.byeWeek ? `BYE ${row.player.byeWeek}` : null]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    </span>
-                    <span aria-hidden="true" className="trade-cc__pill-add">
-                      {list.includes(row.id) ? '✓' : '+'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </>
-    );
+  const rosterPositions = bootstrap.league.rosterPositions;
+  const busy = isPricing || counterLoading;
+  const youSlots = lineupSlots(userTeam, rosterPositions);
+  const theirSlots = selectedPartner ? lineupSlots(selectedPartner, rosterPositions) : null;
+  const perGameLabel = basis === 'ros' ? 'Per game' : 'This week';
+  const valueOf = (id: string) => values?.[id]?.mean ?? null;
+  const rankOf = (id: string) => {
+    const outlook = outlooks?.get(id);
+    return outlook ? `${outlook.position}${outlook.positionRank}` : null;
   };
 
-  const choosePartner = (rosterId: number | null) => {
-    if (isPricing || counterLoading) return;
-    setPartnerRosterId(rosterId);
-    setPartnerMenuOpen(false);
-    setGetIds([]);
-    resetOutputs();
-  };
-
-  const renderTeamAvatar = (team: NonNullable<typeof selectedPartner>) => (
+  const renderCrest = (team: ApiTeam) => (
     <span className="trade-cc__team-avatar" aria-hidden="true">
       {team.avatarUrl ? (
         <img alt="" height={64} loading="lazy" src={resolveApiUrl(team.avatarUrl) ?? undefined} width={64} />
@@ -718,49 +631,356 @@ function TradeDealsView() {
     </span>
   );
 
-  const renderPartnerSelector = () => (
-    <div className="trade-cc__partner-menu">
-      <button
-        aria-expanded={partnerMenuOpen}
-        className="trade-cc__partner-trigger"
-        disabled={isPricing || counterLoading}
-        onClick={() => setPartnerMenuOpen((current) => !current)}
-        type="button"
-      >
-        {selectedPartner ? renderTeamAvatar(selectedPartner) : <span className="trade-cc__team-avatar" aria-hidden="true">?</span>}
-        <span className="trade-cc__partner-trigger-copy">
-          <span>{selectedPartner?.teamName ?? 'Pick manager'}</span>
-          {selectedPartner ? (
-            <span>{selectedPartner.record.wins}-{selectedPartner.record.losses}</span>
-          ) : null}
-        </span>
-      </button>
-      {partnerMenuOpen ? (
-        <div className="trade-cc__partner-options" role="listbox" aria-label="Pick manager">
-          {partners.map((team) => (
-            <button
-              aria-selected={partnerRosterId === team.rosterId}
-              className={[
-                'trade-cc__partner-option',
-                partnerRosterId === team.rosterId ? 'trade-cc__partner-option--active' : '',
-              ].filter(Boolean).join(' ')}
-              key={team.rosterId}
-              onClick={() => choosePartner(team.rosterId)}
-              role="option"
-              type="button"
-            >
-              {renderTeamAvatar(team)}
-              <span className="trade-cc__partner-option-copy">
-                <span>{team.teamName}</span>
-                <span>{team.record.wins}-{team.record.losses}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+  const choosePartner = (rosterId: number) => {
+    if (busy) return;
+    if (rosterId === partnerRosterId) return;
+    setPartnerRosterId(rosterId);
+    setRosterTab('theirs');
+    setGetIds([]);
+    setGetSearch('');
+    resetOutputs();
+  };
+
+  /* Every manager in the league, one press each. The record is on the pill
+     because who is winning is the first thing you weigh about a partner. */
+  const renderPartners = () => (
+    <div className="trade-cc__partners" role="group" aria-label="Pick a manager">
+      {partners.map((team) => {
+        const on = partnerRosterId === team.rosterId;
+        return (
+          <button
+            aria-pressed={on}
+            className={['trade-cc__partner', on ? 'trade-cc__partner--on' : ''].filter(Boolean).join(' ')}
+            disabled={busy}
+            key={team.rosterId}
+            onClick={() => choosePartner(team.rosterId)}
+            type="button"
+          >
+            {renderCrest(team)}
+            <span className="trade-cc__partner-name">{team.teamName}</span>
+            <span className="trade-cc__partner-record">
+              {team.record.wins}-{team.record.losses}{team.record.ties ? `-${team.record.ties}` : ''}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 
+  /* A line on the manager you picked: where they stand, and the starter
+     they are thinnest at, which is the first place to look for a deal. */
+  const renderMarketHead = () => {
+    if (!selectedPartner) {
+      return (
+        <div className="trade-cc__market-head">
+          <h3 className="trade-cc__market-title">Pick a manager</h3>
+          <p className="trade-cc__market-read">Their roster opens here. Yours is open meanwhile.</p>
+        </div>
+      );
+    }
+    const future = futuresByRoster.get(selectedPartner.rosterId);
+    const thin = theirSlots ? weakestStarter(selectedPartner, bootstrap.players, outlooks, theirSlots) : null;
+    const read = [
+      future ? `Title ${formatProbOrOdds(future.titleProb)}` : null,
+      future ? `playoffs ${formatProbOrOdds(future.playoffProb)}` : null,
+      thin ? `thinnest at ${thin.slot}: ${bootstrap.players[thin.id]?.name ?? ''} (${thin.position}${thin.rank})` : null,
+    ].filter(Boolean).join(' · ');
+    return (
+      <div className="trade-cc__market-head">
+        <h3 className="trade-cc__market-title">{selectedPartner.teamName}</h3>
+        {read ? <p className="trade-cc__market-read">{read}</p> : null}
+      </div>
+    );
+  };
+
+  const showTheirs = selectedPartner != null && theirSlots != null && rosterTab === 'theirs';
+  const activeTeam = showTheirs && selectedPartner ? selectedPartner : userTeam;
+  const activeSlots = showTheirs && theirSlots ? theirSlots : youSlots;
+  const activeList = showTheirs ? getIds : give;
+  const setActiveList = showTheirs ? setGetIds : setGive;
+  const activeSearch = showTheirs ? getSearch : giveSearch;
+  const setActiveSearch = showTheirs ? setGetSearch : setGiveSearch;
+
+  const renderRosterTabs = () => (
+    <div className="trade-cc__market-tabs">
+      <div className="trade-cc__roster-tabs" role="tablist" aria-label="Roster">
+        <button
+          aria-selected={showTheirs}
+          className={['trade-cc__roster-tab', showTheirs ? 'trade-cc__roster-tab--active' : ''].filter(Boolean).join(' ')}
+          disabled={selectedPartner == null || busy}
+          onClick={() => setRosterTab('theirs')}
+          role="tab"
+          type="button"
+        >
+          Their roster
+        </button>
+        <button
+          aria-selected={!showTheirs}
+          className={['trade-cc__roster-tab', !showTheirs ? 'trade-cc__roster-tab--active' : ''].filter(Boolean).join(' ')}
+          disabled={busy}
+          onClick={() => setRosterTab('yours')}
+          role="tab"
+          type="button"
+        >
+          Your roster
+        </button>
+      </div>
+      <input
+        aria-label="Search players"
+        autoComplete="off"
+        className="trade-cc__pool-search"
+        disabled={busy}
+        onChange={(event) => setActiveSearch(event.target.value)}
+        placeholder={`Search ${activeTeam.teamName}`}
+        spellCheck={false}
+        type="search"
+        value={activeSearch}
+      />
+    </div>
+  );
+
+  /* One roster as a priced list: face, name, the slot he holds in the
+     lineup his manager set, per game from here with his rank at the
+     position, his bye, and a plus that becomes a check. Grouped by position
+     so you scan it the way you think about it. */
+  const renderRoster = () => {
+    const q = activeSearch.trim().toLowerCase();
+    const allRows = rosterRows(bootstrap, activeTeam.rosterId);
+    const rows = q ? allRows.filter((r) => r.player.name.toLowerCase().includes(q)) : allRows;
+    const POSITION_ORDER = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+    const groups = POSITION_ORDER
+      .map((position) => ({ position, rows: rows.filter((r) => r.player.position === position) }))
+      .filter((group) => group.rows.length > 0);
+    const leftover = rows.filter((r) => !POSITION_ORDER.includes(r.player.position));
+    if (leftover.length > 0) groups.push({ position: 'Other', rows: leftover });
+    return (
+      <div className="trade-cc__roster">
+        <div className="trade-cc__roster-head" aria-hidden="true">
+          <span className="trade-cc__roster-head-player">Player</span>
+          <span>Slot</span>
+          <span className="trade-cc__roster-head-num">{perGameLabel}</span>
+          <span className="trade-cc__roster-head-num trade-cc__roster-rank">Rank</span>
+          <span className="trade-cc__roster-head-num trade-cc__roster-bye">Bye</span>
+          <span />
+        </div>
+        {groups.map((group) => (
+          <div className="trade-cc__roster-group" key={group.position}>
+            <p className="trade-cc__roster-divider">{group.position}</p>
+            {group.rows.map((row) => {
+              const on = activeList.includes(row.id);
+              const mean = valueOf(row.id);
+              return (
+                <button
+                  aria-pressed={on}
+                  className={[
+                    'trade-cc__roster-row',
+                    on ? 'trade-cc__roster-row--on' : '',
+                    row.isStarter ? '' : 'trade-cc__roster-row--bench',
+                  ].filter(Boolean).join(' ')}
+                  disabled={busy}
+                  key={row.id}
+                  onClick={() => toggle(activeList, setActiveList, row.id)}
+                  type="button"
+                >
+                  <PlayerHeadshot
+                    className="trade-cc__roster-headshot"
+                    fallbackClassName="trade-cc__roster-headshot-fallback"
+                    imageClassName="trade-cc__roster-headshot-image"
+                    player={toPlayer(row.id, bootstrap.players)}
+                  />
+                  <span className="trade-cc__roster-copy">
+                    <span className="trade-cc__roster-name">{row.player.name}</span>
+                    <span className="trade-cc__roster-meta">
+                      {[row.player.position, row.player.team].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                  <span className="trade-cc__roster-slot">{slotOf(row.id, activeSlots, activeTeam)}</span>
+                  <span className="trade-cc__roster-num">{mean != null ? mean.toFixed(1) : ''}</span>
+                  <span className="trade-cc__roster-num trade-cc__roster-rank">{rankOf(row.id) ?? ''}</span>
+                  <span className="trade-cc__roster-num trade-cc__roster-bye">{row.player.byeWeek ?? ''}</span>
+                  <span aria-hidden="true" className="trade-cc__roster-add">{on ? '✓' : '+'}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        {rows.length === 0 ? <p className="trade-cc__hint">Nobody by that name.</p> : null}
+      </div>
+    );
+  };
+
+  /* A side of the slip: a face and a name per player with his line, and
+     under each what he does to your lineup. Empty, it says what to do. */
+  const renderSlipLeg = (
+    tone: 'get' | 'send',
+    ids: string[],
+    set: (v: string[]) => void,
+    empty: string,
+  ) => {
+    const sum = sidePerGame(ids, values);
+    return (
+      <div className={`trade-cc__slip-leg trade-cc__slip-leg--${tone}`}>
+        <div className="trade-cc__slip-leg-head">
+          <span className="trade-cc__deal-tag">
+            {tone === 'get' ? 'You get' : 'You send'}
+            {tone === 'get' && selectedPartner ? (
+              <span className="trade-cc__deal-tag-team"> from {selectedPartner.teamName}</span>
+            ) : null}
+          </span>
+          {sum != null && ids.length > 0 ? (
+            <span className="trade-cc__slip-sum">
+              {sum.toFixed(1)} {basis === 'ros' ? 'per game' : 'this week'}
+            </span>
+          ) : null}
+        </div>
+        {ids.length === 0 ? (
+          <p className="trade-cc__slip-empty">{empty}</p>
+        ) : (
+          ids.map((id) => {
+            const player = bootstrap.players[id];
+            if (!player) return null;
+            const words = values
+              ? tone === 'get'
+                ? getWords(getRead(id, userTeam, youSlots, give, getIds, bootstrap.players, values))
+                : sendWords(sendRead(id, userTeam, youSlots, give, bootstrap.players, values))
+              : null;
+            return (
+              <div className="trade-cc__asset-card" key={id}>
+                <PlayerHeadshot
+                  className="trade-cc__asset-headshot"
+                  fallbackClassName="trade-cc__asset-headshot-fallback"
+                  imageClassName="trade-cc__asset-headshot-image"
+                  player={toPlayer(id, bootstrap.players)}
+                />
+                <span className="trade-cc__asset-copy">
+                  <span className="trade-cc__asset-name">{player.name}</span>
+                  <span className="trade-cc__asset-meta">
+                    {[
+                      player.position,
+                      player.team,
+                      player.byeWeek ? `bye ${player.byeWeek}` : null,
+                      rankOf(id),
+                    ].filter(Boolean).join(' · ')}
+                  </span>
+                  {words ? <span className="trade-cc__asset-note">{words}</span> : null}
+                </span>
+                {builderCollapsed ? null : (
+                  <button
+                    aria-label={`Remove ${player.name}`}
+                    className="trade-cc__asset-remove"
+                    disabled={busy}
+                    onClick={() => toggle(ids, set, id)}
+                    type="button"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    );
+  };
+
+  /* The slip. It fills in as you pick, says what each player does to your
+     lineup, and its one button prices the trade. Priced, the button is the
+     number, and Edit trade opens the rosters again. */
+  const renderSlip = () => {
+    const net = netWords(sidePerGame(getIds, values), sidePerGame(give, values));
+    return (
+      <aside className="trade-cc__slip" aria-label="Your trade">
+        {renderSlipLeg('get', getIds, setGetIds, selectedPartner ? 'Pick from their roster' : 'Pick a manager')}
+        <div className="trade-cc__slip-swap" aria-hidden="true">
+          <svg className="trade-cc__slip-swap-glyph" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M7 16h14m0 0l-3-3m3 3l-3 3M17 8H3m0 0l3-3M3 8l3 3" />
+          </svg>
+          {give.length > 0 && getIds.length > 0 ? (
+            <span className="trade-cc__slip-shape">{give.length} for {getIds.length}</span>
+          ) : null}
+        </div>
+        {renderSlipLeg('send', give, setGive, 'Pick from your roster')}
+        {net && give.length > 0 && getIds.length > 0 ? <p className="trade-cc__slip-net">{net}</p> : null}
+        <div className="trade-cc__slip-price">
+          {isPricing ? (
+            <SimulationLoader label="Pricing this trade" size="compact" />
+          ) : builderCollapsed && analysis?.you && analysis.partner ? (
+            <>
+              <span className="trade-cc__deal-tag">Your title</span>
+              <span className={`trade-cc__deal-number ${signedDeltaClass(analysis.you.delta.titleProb)}`}>
+                {signedPct(analysis.you.delta.titleProb)}
+                {analysis.you.ci ? <span className="trade-cc__deal-ci">±{analysis.you.ci.delta.titleProb.toFixed(1)}</span> : null}
+              </span>
+              <span className="trade-cc__deal-meta">
+                {analysis.partner.teamName}{' '}
+                <span className={signedDeltaClass(analysis.partner.delta.titleProb)}>{signedPct(analysis.partner.delta.titleProb)}</span>
+              </span>
+              <button
+                className="trade-cc__edit-btn"
+                onClick={() => setIsEditingTrade(true)}
+                type="button"
+              >
+                Edit trade
+              </button>
+            </>
+          ) : (
+            <button
+              className="trade-cc__price-btn"
+              disabled={!canPrice}
+              onClick={() => void runPricing()}
+              type="button"
+            >
+              Price this trade
+            </button>
+          )}
+        </div>
+        {verdictReady && !isEditingTrade ? null : result && !result.available ? (
+          /* Say why it did not price.
+
+             This printed "pick at least one player on each side" for every
+             reason except missing projections, including the reasons that
+             arise with both sides already full, which is the only way to
+             reach this branch by pressing the button. Being told to do the
+             thing you just did reads as the app not having noticed you. */
+          <SeasonalNotice>
+            {result.reason === 'no_projections'
+              ? "Trades price once this week's projections are in."
+              : give.length === 0 || getIds.length === 0
+                ? 'Pick at least one player on each side to price the trade.'
+                : 'Could not price this trade. Try again.'}
+          </SeasonalNotice>
+        ) : priceError || analysisError ? (
+          /* Anything that went wrong, said out loud, under the button that
+             was pressed. The only place a failure was ever reported used to
+             be the analyzer panel, which sits inside the verdict block, and
+             that block only renders when both calls have already succeeded:
+             the message explaining why the trade could not be priced was
+             gated behind the trade having been priced. */
+          <div className="trade-cc__failure" role="status">
+            {/* The heading has to agree with the sentence under it. */}
+            <p className="trade-cc__failure-head">
+              {priceError ? 'This trade did not price.' : 'The trade priced, but not its season impact.'}
+            </p>
+            <p className="trade-cc__failure-detail">
+              {priceError && analysisError
+                ? `${priceError} The season impact did not run either.`
+                : priceError
+                  ? priceError
+                  : analysisError}
+            </p>
+            <button
+              className="trade-cc__failure-retry"
+              disabled={isPricing || !canPrice}
+              onClick={() => void runPricing()}
+              type="button"
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+      </aside>
+    );
+  };
   return (
     <div className="trade-page">
 
@@ -828,314 +1048,169 @@ function TradeDealsView() {
         />
       </section>
 
-      {/* ── Builder ── */}
+      {/* ── Builder ──
+          A market and a slip. The market is every manager as a pill, then
+          one roster at a time as a priced list. The slip at the right holds
+          the trade as you build it and prices it. Priced, the verdict takes
+          the market's place and the slip keeps the number. */}
       <section
         className={[
           'trade-cc__builder',
           marketView === 'build' ? '' : 'trade-cc__builder--hidden',
-          builderCollapsed ? 'trade-cc__builder--collapsed' : '',
-          builderIdle ? 'trade-cc__builder--idle' : '',
+          builderCollapsed ? 'trade-cc__builder--priced' : '',
         ].filter(Boolean).join(' ')}
         ref={builderRef}
       >
-        {builderCollapsed ? (
-          <div className="trade-cc__deal-strip">
-            <div className="trade-cc__deal-strip-top">
-              <span className="trade-cc__deal-strip-partner">
-                {selectedPartner?.teamName ?? 'Manager'}
-              </span>
-              {isPricing ? (
-                <SimulationLoader label="Pricing this trade" size="compact" />
-              ) : (
-                <button
-                  className="trade-cc__edit-btn"
-                  onClick={() => setIsEditingTrade(true)}
-                  type="button"
-                >
-                  Edit trade
-                </button>
-              )}
-            </div>
-            <div className="trade-cc__deal-strip-grid">
-              <TradeSide dense side={tradeSideOrEmpty('You send', give)} tone="send" />
-              <span className="trade-cc__deal-strip-arrow" aria-hidden="true">
-                <span className="trade-display__eyebrow trade-cc__deal-strip-arrow-spacer">&nbsp;</span>
-                <span className="trade-cc__deal-strip-arrow-glyph">⇄</span>
-              </span>
-              <TradeSide dense side={tradeSideOrEmpty('You get', getIds)} tone="get" />
-            </div>
-          </div>
-        ) : (
-        <>
-        <div className="trade-cc__builder-head">
-          <div>
-            <p className="trade-cc__kicker">Build a trade</p>
-            <h2 className="trade-cc__title">Who is moving?</h2>
-          </div>
-        </div>
-
-        <div
-          className={[
-            'trade-cc__columns',
-            builderIdle ? 'trade-cc__columns--idle' : '',
-          ].filter(Boolean).join(' ')}
-        >
-          <div className="trade-cc__side">
-            <div className="trade-cc__side-head">
-              <div>
-                <h3 className="trade-cc__side-title">You send</h3>
-              </div>
-              <span className="trade-cc__side-team">{userTeam.teamName}</span>
-            </div>
-            {renderSelectedCards(userTeam.rosterId, give, setGive, 'No players selected yet.', 'send')}
-            {renderPool(userTeam.rosterId, give, setGive, giveSearch, setGiveSearch)}
-          </div>
-
-          <div
-            className={[
-              'trade-cc__side',
-              'trade-cc__side--partner',
-              partnerRosterId == null ? 'trade-cc__side--idle' : '',
-            ].filter(Boolean).join(' ')}
-          >
-            <div className="trade-cc__side-head">
-              <div>
-                <h3 className="trade-cc__side-title">You get</h3>
-              </div>
-              <div className="trade-cc__partner-tools">
-                {renderPartnerSelector()}
-              </div>
-            </div>
-
-            {partnerRosterId != null ? (
-              <>
-                {renderSelectedCards(partnerRosterId, getIds, setGetIds, 'No return selected yet.', 'get')}
-                {renderPool(partnerRosterId, getIds, setGetIds, getSearch, setGetSearch)}
-              </>
-            ) : (
-              <div className="trade-cc__partner-empty">
-                <p className="trade-cc__hint">Pick a manager to trade with.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {isPricing ? (
-          <SimulationLoader label="Pricing this trade" />
-        ) : (
-          <button
-            className="trade-cc__price-btn"
-            disabled={!canPrice}
-            onClick={() => void runPricing()}
-            type="button"
-          >
-            Price this trade
-          </button>
-        )}
-        </>
-        )}
-      </section>
-
-      {verdictReady && analysis?.you && analysis.partner && verdictMeta ? (
-        <section className="trade-cc__verdict" ref={verdictRef}>
-          <div className="trade-cc__verdict-hero">
-            <div>
-              <p className={`trade-cc__verdict-stamp trade-cc__verdict-stamp--${verdictMeta.verdict.tone}`}>
-                {verdictMeta.verdict.stamp}
-              </p>
-              <p className="trade-cc__verdict-subhead">
-                your championship <span className={signedDeltaClass(analysis.you.delta.titleProb)}>{signedPct(analysis.you.delta.titleProb)}</span>
-              </p>
-            </div>
-            <div
-              className={[
-                'trade-cc__hero-price',
-                `trade-cc__hero-price--${verdictMeta.railTone}`,
-              ].join(' ')}
-              style={verdictMeta.priceStyle}
-            >
-              <span className="trade-cc__price-track" />
-              <span className="trade-cc__price-center" />
-              <span className="trade-cc__price-fill" />
-              <span className="trade-cc__price-marker" />
-              <span className="trade-cc__price-labels">
-                <span>Overpay</span>
-                <span>Fair</span>
-                <span>Steal</span>
-              </span>
-            </div>
-            {verdictMeta.verdict.label !== 'Fair' ? (
-              <div className="trade-cc__hero-counter">
-                {counterLoading ? (
-                  <SimulationLoader label="Finding fair add" variant="evener" />
-                ) : counter == null ? (
-                  <button
-                    className="trade-cc__counter-btn trade-cc__counter-btn--primary"
-                    onClick={() => void fetchCounter()}
-                    type="button"
-                  >
-                    Even out this trade →
-                  </button>
-                ) : !counter.available ? (
-                  <p className="trade-cc__counter-body">Couldn&apos;t find a fair add.</p>
-                ) : counter.needed === false ? (
-                  <p className="trade-cc__counter-body">This trade is already balanced.</p>
-                ) : counter.add && counter.add.length > 0 ? (
-                  <div className="trade-cc__counter-card">
-                    <TradeSide
-                      dense
-                      side={tradeSideOrEmpty('Add', counter.add.map((add) => add.id))}
-                      tone={counter.whoAdds === 'you' ? 'send' : 'get'}
-                    />
-                    <p className="trade-cc__counter-body">
-                      {counter.whoAdds === 'you'
-                        ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out.`
-                        : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')} to even it out.`}
-                    </p>
-                    {counter.before && counter.after ? (
-                      <div className="trade-cc__counter-deltas">
-                        <span>
-                          You <b className={signedDeltaClass(counter.before.youDelta)}>{signedPct(counter.before.youDelta)}</b>{' '}
-                          to <b className={signedDeltaClass(counter.after.youDelta)}>{signedPct(counter.after.youDelta)}</b>
-                        </span>
-                        <span>
-                          Them <b className={signedDeltaClass(counter.before.partnerDelta)}>{signedPct(counter.before.partnerDelta)}</b>{' '}
-                          to <b className={signedDeltaClass(counter.after.partnerDelta)}>{signedPct(counter.after.partnerDelta)}</b>
-                        </span>
-                      </div>
-                    ) : null}
+        <div className="trade-cc__market">
+          {verdictReady && builderCollapsed && analysis?.you && analysis.partner && verdictMeta ? (
+            <section className="trade-cc__verdict" ref={verdictRef}>
+              <div className="trade-cc__verdict-head">
+                <div className="trade-cc__verdict-copy">
+                  <p className={`trade-cc__verdict-stamp trade-cc__verdict-stamp--${verdictMeta.verdict.tone}`}>
+                    {verdictMeta.verdict.label}
+                  </p>
+                  <p className="trade-cc__verdict-subhead">
+                    Your championship odds{' '}
+                    <span className={signedDeltaClass(analysis.you.delta.titleProb)}>{signedPct(analysis.you.delta.titleProb)}</span>,{' '}
+                    {analysis.partner.teamName}{' '}
+                    <span className={signedDeltaClass(analysis.partner.delta.titleProb)}>{signedPct(analysis.partner.delta.titleProb)}</span>.
+                  </p>
+                </div>
+                <div className="trade-cc__verdict-actions">
+                  {verdictMeta.verdict.label !== 'Fair' && counter == null && !counterLoading ? (
                     <button
-                      className="trade-cc__counter-btn"
-                      onClick={() => applyCounterAdd(counter)}
+                      className="trade-cc__counter-btn trade-cc__counter-btn--primary"
+                      onClick={() => void fetchCounter()}
                       type="button"
                     >
-                      {counter.whoAdds === 'you' ? 'Add it to what you give' : 'Add it to what you get'}
+                      Even out this trade
                     </button>
-                  </div>
-                ) : (
-                  <p className="trade-cc__counter-body">No single add balances this trade well.</p>
-                )}
+                  ) : null}
+                  {/* A trade you built by hand is exactly the one you want to
+                      send someone, so the card is reachable here and not only
+                      from the finder. */}
+                  {give.length > 0 && getIds.length > 0 ? (
+                    <button
+                      className="trade-cc__share"
+                      onClick={() => {
+                        const you = analysis.you;
+                        const them = analysis.partner;
+                        if (!bootstrap || !you || !them) return;
+                        const partner = bootstrap.teams.find(
+                          (team) => team.rosterId === partnerRosterId,
+                        );
+                        const asset = (id: string): TradeCardAsset => {
+                          const player = toPlayer(id, bootstrap.players);
+                          return {
+                            name: player.name,
+                            position: player.position,
+                            team: player.team,
+                            headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
+                          };
+                        };
+                        setTradeCard({
+                          eyebrow: `Week ${bootstrap.week}`,
+                          leagueName: stored?.leagueName ?? null,
+                          verdict: tradeCardHeadline(you.delta.titleProb, them.delta.titleProb),
+                          you: {
+                            manager: userTeam.teamName,
+                            avatar: resolveApiUrl(userTeam.avatarUrl) ?? null,
+                            assets: getIds.map(asset),
+                            titleDelta: signedPct(you.delta.titleProb),
+                            playoffDelta: signedPct(you.delta.playoffProb),
+                            titleUp: you.delta.titleProb >= 0,
+                            playoffUp: you.delta.playoffProb >= 0,
+                          },
+                          them: {
+                            manager: partner?.teamName ?? 'Them',
+                            avatar: resolveApiUrl(partner?.avatarUrl) ?? null,
+                            assets: give.map(asset),
+                            titleDelta: signedPct(them.delta.titleProb),
+                            playoffDelta: signedPct(them.delta.playoffProb),
+                            titleUp: them.delta.titleProb >= 0,
+                            playoffUp: them.delta.playoffProb >= 0,
+                          },
+                        });
+                      }}
+                      type="button"
+                    >
+                      Share this trade
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            ) : null}
-          </div>
 
-          {/* Scouting-affects-acceptance is hidden with the personas it
-              belongs to. The preference still exists and still applies; it
-              just is not a switch on the trade screen any more. */}
+              {counterLoading ? (
+                <div className="trade-cc__hero-counter">
+                  <SimulationLoader label="Finding fair add" variant="evener" />
+                </div>
+              ) : counter ? (
+                <div className="trade-cc__hero-counter">
+                  {!counter.available ? (
+                    <p className="trade-cc__counter-body">Couldn&apos;t find a fair add.</p>
+                  ) : counter.needed === false ? (
+                    <p className="trade-cc__counter-body">This trade is already balanced.</p>
+                  ) : counter.add && counter.add.length > 0 ? (
+                    <div className="trade-cc__counter-card">
+                      <TradeSide
+                        dense
+                        side={tradeSideOrEmpty('Add', counter.add.map((add) => add.id))}
+                        tone={counter.whoAdds === 'you' ? 'send' : 'get'}
+                      />
+                      <p className="trade-cc__counter-body">
+                        {counter.whoAdds === 'you'
+                          ? `Add ${counter.add.map((a) => a.name).join(' + ')} to your side to even it out.`
+                          : `Ask ${analysis.partner.teamName} to add ${counter.add.map((a) => a.name).join(' + ')} to even it out.`}
+                      </p>
+                      {counter.before && counter.after ? (
+                        <div className="trade-cc__counter-deltas">
+                          <span>
+                            You <b className={signedDeltaClass(counter.before.youDelta)}>{signedPct(counter.before.youDelta)}</b>{' '}
+                            to <b className={signedDeltaClass(counter.after.youDelta)}>{signedPct(counter.after.youDelta)}</b>
+                          </span>
+                          <span>
+                            Them <b className={signedDeltaClass(counter.before.partnerDelta)}>{signedPct(counter.before.partnerDelta)}</b>{' '}
+                            to <b className={signedDeltaClass(counter.after.partnerDelta)}>{signedPct(counter.after.partnerDelta)}</b>
+                          </span>
+                        </div>
+                      ) : null}
+                      <button
+                        className="trade-cc__counter-btn"
+                        onClick={() => applyCounterAdd(counter)}
+                        type="button"
+                      >
+                        {counter.whoAdds === 'you' ? 'Add it to what you give' : 'Add it to what you get'}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="trade-cc__counter-body">No single add balances this trade well.</p>
+                  )}
+                </div>
+              ) : null}
 
-          <TradeAnalyzerPanel
-            analysis={analysis}
-            analyzing={analyzing}
-            error={analysisError}
-            friendliness={friendliness}
-            relationship={relationship}
-            showVerdict={false}
-          />
-
-          {/* The card was only reachable from the finder, which is the half of
-              the tab where the deal is not yours. A trade you built by hand is
-              exactly the one you want to send someone. */}
-          {analysis?.available && analysis.you && analysis.partner
-            && give.length > 0 && getIds.length > 0 ? (
-            <button
-              className="trade-cc__share"
-              onClick={() => {
-                const you = analysis.you;
-                const them = analysis.partner;
-                if (!bootstrap || !you || !them) return;
-                const partner = bootstrap.teams.find(
-                  (team) => team.rosterId === partnerRosterId,
-                );
-                const userTeam = bootstrap.teams.find((team) => team.isUser);
-                const asset = (id: string): TradeCardAsset => {
-                  const player = toPlayer(id, bootstrap.players);
-                  return {
-                    name: player.name,
-                    position: player.position,
-                    team: player.team,
-                    headshotUrl: resolveApiUrl(player.headshotUrl) ?? null,
-                  };
-                };
-                setTradeCard({
-                  eyebrow: `Week ${bootstrap.week}`,
-                  leagueName: stored?.leagueName ?? null,
-                  verdict: tradeCardHeadline(you.delta.titleProb, them.delta.titleProb),
-                  you: {
-                    manager: userTeam?.teamName ?? 'You',
-                    avatar: resolveApiUrl(userTeam?.avatarUrl) ?? null,
-                    assets: getIds.map(asset),
-                    titleDelta: signedPct(you.delta.titleProb),
-                    playoffDelta: signedPct(you.delta.playoffProb),
-                    titleUp: you.delta.titleProb >= 0,
-                    playoffUp: you.delta.playoffProb >= 0,
-                  },
-                  them: {
-                    manager: partner?.teamName ?? 'Them',
-                    avatar: resolveApiUrl(partner?.avatarUrl) ?? null,
-                    assets: give.map(asset),
-                    titleDelta: signedPct(them.delta.titleProb),
-                    playoffDelta: signedPct(them.delta.playoffProb),
-                    titleUp: them.delta.titleProb >= 0,
-                    playoffUp: them.delta.playoffProb >= 0,
-                  },
-                });
-              }}
-              type="button"
-            >
-              Share this trade
-            </button>
-          ) : null}
-        </section>
-      ) : result && !result.available ? (
-        /* Say why it did not price.
-
-           This printed "pick at least one player on each side" for every
-           reason except missing projections — including the reasons that
-           arise with both sides already full, which is the only way to reach
-           this branch by pressing the button. Being told to do the thing you
-           just did reads as the app not having noticed you at all. */
-        <SeasonalNotice>
-          {result.reason === 'no_projections'
-            ? "Trades price once this week's projections are in."
-            : give.length === 0 || getIds.length === 0
-              ? 'Pick at least one player on each side to price the trade.'
-              : 'Could not price this trade. Try again.'}
-        </SeasonalNotice>
-      ) : priceError || analysisError ? (
-        /* Anything that went wrong, said out loud.
-
-           This branch did not exist. The only place a failure was ever
-           reported was the analyzer panel, which sits INSIDE the verdict
-           block above — and that block only renders when both calls have
-           already succeeded. So the message explaining why the trade could
-           not be priced was gated behind the trade having been priced, and
-           the three ways this screen can fail all rendered the same nothing:
-           pricing rejected, analysis rejected, or pricing fine and analysis
-           not. The button looked dead in every one of them. */
-        <section className="trade-cc__failure" role="status">
-          {/* The heading has to agree with the sentence under it. It said
-              "did not price" in every case, including the one where the price
-              came back fine and only the season impact failed. */}
-          <p className="trade-cc__failure-head">
-            {priceError ? 'This trade did not price.' : 'The trade priced, but not its season impact.'}
-          </p>
-          <p className="trade-cc__failure-detail">
-            {priceError && analysisError
-              ? `${priceError} The season impact did not run either.`
-              : priceError
-                ? priceError
-                : analysisError}
-          </p>
-          <button
-            className="trade-cc__failure-retry"
-            disabled={isPricing || !canPrice}
-            onClick={() => void runPricing()}
-            type="button"
-          >
-            Try again
-          </button>
-        </section>
-      ) : null}
+              {/* Scouting-affects-acceptance is hidden with the personas it
+                  belongs to. The preference still exists and still applies; it
+                  just is not a switch on the trade screen any more. */}
+              <TradeAnalyzerPanel
+                analysis={analysis}
+                analyzing={analyzing}
+                error={analysisError}
+                friendliness={friendliness}
+                relationship={relationship}
+                showVerdict={false}
+              />
+            </section>
+          ) : (
+            <>
+              {renderPartners()}
+              {renderMarketHead()}
+              {renderRosterTabs()}
+              {renderRoster()}
+            </>
+          )}
+        </div>
+        {renderSlip()}
+      </section>
       <DismissToast onUndo={undo} visible={pendingUndoSignature != null} />
     </div>
   );
