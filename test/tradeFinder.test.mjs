@@ -80,18 +80,22 @@ test('the board is there on arrival, from a scan that already ran, with the tick
     assert.deepEqual(await page.locator('.trade-cc__view').allTextContents(), ['Trade finder', 'Build trades']);
     assert.deepEqual(
       await page.locator('.trade-finder__leg-label').allTextContents(),
-      ['Partner', 'You send', 'Off limits', 'You get', 'Shape'],
+      ['Partner', 'You send', 'Off limits', 'You get'],
     );
+    /* No shape row. Each side's count sits on its own leg. */
+    assert.equal(await page.locator('.trade-finder__count').count(), 2);
+    assert.deepEqual(await page.locator('.trade-finder__count').first().locator('button').allTextContents(), ['any', '1', '2', '3']);
 
     /* No search ran. The board came from the last scan, and says when. */
     const board = page.locator('.trade-finder__board');
     await board.waitFor({ state: 'visible' });
-    assert.match(await page.locator('.trade-finder__board-title').innerText(), /the board/i);
+    assert.match(await page.locator('.trade-finder__board-title').innerText(), /deals that help you/i);
     assert.match(await page.locator('.trade-finder__board-head').innerText(), /Updated \d{1,2}:\d{2}/);
-    assert.equal(await page.locator('.trade-finder__find').innerText(), 'Show the board');
+    assert.equal(await page.locator('.trade-finder__find').innerText(), 'Show deals');
 
-    /* Out of the box: the other side gives up at most 2 points of title odds.
-       Every fixture deal is inside that (them +0.4, -1.2, -0.8, -0.2). */
+    /* Out of the box: no limit on what the other side gives up, every deal
+       that helps you. Four of the five fixture deals do; the fifth lowers your
+       odds and is never shown. */
     assert.equal(await page.locator('.trade-finder__lane').count(), 4);
     assert.match(await page.locator('.trade-finder__lane').first().innerText(), /Puka Nacua/);
     assert.doesNotMatch(await board.innerText(), /outside your limits/);
@@ -124,35 +128,76 @@ test('a first look waits on the scan as a screen, then hands over to the board',
   }
 });
 
-test('limits live behind a button, start at a 2 point partner loss, and reset with the ask', async () => {
+test('limits sit in the ticket as words, open to steppers, and stay with the ticket between asks', async () => {
   const page = await openMarket(DESKTOP);
   try {
     await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
-    /* No slider on the board itself. */
-    assert.equal(await page.locator('.trade-finder__board input[type=range]').count(), 0);
+    /* Nothing behind a button any more: no Limits control on the results, no
+       sliders anywhere, and the line under the legs says both numbers. */
+    assert.equal(await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).count(), 0);
+    assert.equal(await page.locator('input[type=range]').count(), 0);
+    /* The words wrap as inline chips, so innerText carries line breaks. */
+    const lineWords = async () => (await page.locator('.trade-finder__limits-line').innerText()).replace(/\s+/g, ' ');
+    assert.match(await lineWords(), /Your title up 0\.0 pp or more/);
+    assert.match(await lineWords(), /theirs down no limit/);
+    assert.equal(await page.locator('.trade-finder__limits-panel').count(), 0, 'the steppers are closed until asked for');
 
-    await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).click();
-    const sheet = page.locator('.trade-finder__sheet--limits');
-    await sheet.waitFor({ state: 'visible' });
-    assert.match(await sheet.locator('label[for=trade-finder-max-loss]').innerText(), /2\.0 pp/);
-    assert.equal(await sheet.locator('#trade-finder-min-gain').inputValue(), '0');
-
-    /* Tightened to nothing: only the deal that lifts both sides. */
-    await sheet.locator('#trade-finder-max-loss').fill('0');
-    assert.match(await sheet.locator('label[for=trade-finder-max-loss]').innerText(), /nothing/);
-    await sheet.locator('.trade-finder__find').click();
-    await sheet.waitFor({ state: 'detached' });
-    assert.equal(await page.locator('.trade-finder__lane').count(), 1);
+    /* Change opens them in place. Their side steps down from no limit through
+       5, 3, 2, 1, 0.5 to nothing, and the board refilters as it goes. */
+    await page.locator('.trade-finder__limits-change').click();
+    const theirs = page.locator('.trade-finder__stepper', { has: page.locator('#trade-finder-max-loss-value') });
+    const down = theirs.locator('button[aria-label="Let them lose less"]');
+    assert.equal(await theirs.locator('output').innerText(), 'no limit');
+    await down.click();
+    assert.equal(await theirs.locator('output').innerText(), '5.0 pp');
+    for (let i = 0; i < 5; i += 1) await down.click();
+    assert.equal(await theirs.locator('output').innerText(), '0.0 pp');
+    assert.equal(await down.isDisabled(), true, 'the strict end is the end');
+    assert.equal(await page.locator('.trade-finder__lane').count(), 1, 'only the deal that lifts both sides');
     assert.match(await page.locator('.trade-finder__board').innerText(), /3 outside your limits/);
-    assert.match(await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).innerText(), /1/);
+    /* The line marks the number that moved. */
+    assert.equal(await page.locator('.trade-finder__limits-num--set').innerText(), '0.0 pp');
+    await page.locator('.trade-finder__limits-change').click();
+    assert.equal(await page.locator('.trade-finder__limits-panel').count(), 0);
 
-    /* A new ask resets them, so one search's slider never filters the next. */
-    await page.locator('.trade-finder__ticket .trade-finder__seg-btn', { hasText: '2 for 2' }).click();
+    /* A new ask keeps them: the limits are part of the ticket. Two going out
+       leaves the one 2 for 2 deal, which lifts both sides, so nothing is
+       outside the (kept) limit. */
+    await page.locator('.trade-finder__leg', { hasText: 'You send' }).locator('.trade-finder__count-btn', { hasText: '2' }).click();
+    assert.match(await page.locator('.trade-finder__readback').innerText(), /2 going out/);
     await page.locator('.trade-finder__find').click();
     await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
     assert.equal(await page.locator('.trade-finder__lane').count(), 1);
     assert.doesNotMatch(await page.locator('.trade-finder__board').innerText(), /outside your limits/);
-    assert.doesNotMatch(await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).innerText(), /1/);
+    assert.match(await lineWords(), /theirs down 0\.0 pp at most/);
+  } finally {
+    await page.close();
+  }
+});
+
+test('a count on each leg picks the shapes, and a count the engine cannot price is off', async () => {
+  const page = await openMarket(DESKTOP);
+  try {
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    const send = page.locator('.trade-finder__leg', { hasText: 'You send' }).locator('.trade-finder__count');
+    const get = page.locator('.trade-finder__leg', { hasText: 'You get' }).locator('.trade-finder__count');
+    const press = (control, text) => control.locator('.trade-finder__count-btn', { hasText: new RegExp(`^${text}$`) });
+
+    /* 1 for 1: the three one-player swaps on the board. */
+    await press(send, '1').click();
+    await press(get, '1').click();
+    assert.match(await page.locator('.trade-finder__readback').innerText(), /1 for 1/);
+    await page.locator('.trade-finder__find').click();
+    await page.locator('.trade-finder__board').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.trade-finder__lane').count(), 3);
+
+    /* With one coming back, three going out is off: the engine prices no 3 for 1. */
+    assert.equal(await press(send, '3').isDisabled(), true);
+    assert.equal(await press(send, '2').isDisabled(), false);
+    /* Open the get side again and 3 going out comes back. */
+    await press(get, 'any').click();
+    assert.equal(await press(send, '3').isDisabled(), false);
+    assert.match(await page.locator('.trade-finder__readback').innerText(), /1 going out/);
   } finally {
     await page.close();
   }
@@ -380,9 +425,6 @@ test('a manager who does not answer is retried, then skipped and named; the walk
     assert.match(head, /Searched 5 managers just now/);
     assert.match(head, /1 did not answer/);
     /* Hermes answered on the retry, so his deals are on the board. */
-    await page.locator('.trade-finder__ghost', { hasText: 'Limits' }).click();
-    await page.locator('.trade-finder__sheet--limits #trade-finder-max-loss').fill('10');
-    await page.locator('.trade-finder__sheet--limits .trade-finder__find').click();
     assert.match(await page.locator('.trade-finder__lanes').innerText(), /Hermes Express/);
   } finally {
     await page.close();

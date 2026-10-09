@@ -419,14 +419,21 @@ ask" as a small bold label, the legs on hairlines, and one amber button
 trades" when a leg needs a live walk, "Price this trade" when every leg is
 exact). The deals are not in a card. They are a header line ("Deals that help
 you", or the ask restated: "To get Drake London", "Best RB you can land") with
-the scanned-at stamp under it and Limits and Scan again beside it, then rows
+the scanned-at stamp under it and Scan again beside it, then rows
 on hairlines, the best deal carrying a 3px amber rule on its left. Nothing on
 the page is called "the board" any more (user, 2026-10-08). The starting
 points under the ticket are a list on hairlines, not cards.
 
-The ticket is three legs and a shape: *Partner*, *You send*, *You get*
-(anything, a position, or named players), and *Shape* (any size, or any of
-1 for 1 up to 3 for 3, read as send-for-get). A leg takes one pick with one
+The ticket is three legs, each with a count: *Partner*, *You send*, *You
+get* (anything, a position, or named players). The send and get legs carry
+"any 1 2 3" on their right, how many go out and how many come back, and the
+pair picks the package sizes (since 2026-10-09; it was a *Shape* row of
+eight chips, which the user called a headache). A count the engine cannot
+price beside the other leg's count is greyed (no 3 for 1 or 1 for 3), as is
+a count under the players already named on that leg. A line under the legs
+reads the ask back as a sentence ("With anyone, send WR, get RB, 2 for 1").
+Under the hood the pair is still a set of shapes, so the walk and the board
+filter are unchanged. A leg takes one pick with one
 tap and the sheet closes; the pick sits on the leg as a chip with its own
 cross, and a dashed "+" reopens the sheet to add more, so multi-select exists
 without a Done button. A pinned player you want fixes the partner to his
@@ -474,13 +481,21 @@ consequence (your RB2 now; who starts instead), your title with playoffs and thi
 plain-language read on what he is playing for, "Will he take it" as a word,
 the other packages, and Dismiss, Share and Build, which exist only there.
 
-**Limits** live behind a button. Out of the box the board shows deals that
-lift both sides (your title rises at least 0, theirs falls at most nothing)
-and hides lopsided deals: a manager out of the race has no title odds to
-lose, so a robbery of him passes the title slider and is caught on roster
-value instead (four points a game). The sheet loosens or tightens all three
-and resets with the ask, so one search's slider never quietly filters the
-next.
+**Limits** are part of the ticket (since 2026-10-09; they were behind a
+button on the results, with sliders, and reset with every ask). A line under
+the legs says both numbers in words, "Your title up 0.0 pp or more, theirs
+down no limit", and Change opens steppers in place: your minimum gain (0,
+0.5, 1, 2, 3, 5), their maximum loss (the same, then no limit at the top),
+net projected points you give up, and the lopsided checkbox. Each stepper
+has its meaning under it and the ends of its scale named, because 0.0 is the
+loose end of your row and the strict end of theirs. Out of the box: every
+deal that helps you at all, no limit on what the other side gives up, and
+lopsided deals hidden (a manager out of the race has no title odds to lose,
+so a robbery of him is caught on roster value instead, four points a game).
+The defaults were 2 pp on their side; the user asked for 0.0 on both and,
+told that 0.0 on their side keeps only deals the other manager also gains
+from, took no limit. Limits stay with the ticket from one ask to the next; a
+moved number turns amber on the line.
 
 **Build trades.** The same row the finder prints, built by hand. The top of
 the tab is one deal row in the lane grammar: *You get* (the partner named in

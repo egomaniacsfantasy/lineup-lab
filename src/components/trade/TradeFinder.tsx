@@ -23,7 +23,6 @@ import {
   DEFAULT_LIMITS,
   EMPTY_QUERY,
   FINDER_POSITIONS,
-  FINDER_SHAPES,
   NOISE_PP,
   boardMatches,
   buildOutlooks,
@@ -59,8 +58,16 @@ import {
   togglePartner,
   togglePlayer,
   togglePosition,
-  toggleShape,
   withinNoise,
+  GAIN_STEPS,
+  GIVE_STEPS,
+  LOSS_STEPS,
+  SHAPE_COUNT_OPTIONS,
+  countAllowed,
+  countsOfShapes,
+  shapesForCounts,
+  stepValue,
+  type ShapeCount,
   type FinderLimits,
   type FinderPosition,
   type FinderQuery,
@@ -71,6 +78,7 @@ import {
   type ValueBasis,
 } from '../../utils/tradeFinderQuery';
 import './TradeFinder.css';
+import './TradeFinderTicket.css';
 
 /**
  * The trade finder: a ticket on the left, the board on the right.
@@ -386,7 +394,6 @@ export function TradeFinder({
       return;
     }
     setRanQuery(next);
-    setLimits(DEFAULT_LIMITS);
     setOpened(null);
     setShowAll(false);
     setTicketOpen(false);
@@ -504,6 +511,43 @@ export function TradeFinder({
     ];
   };
 
+  /* How many go each way, on the leg itself. "any" on both is every shape;
+     a count on one leg leaves the other open. The pair is stored as shapes,
+     so the walk and the board filter read nothing new. */
+  const counts = countsOfShapes(query.shapes);
+  const renderCount = (side: 'send' | 'get') => {
+    const value = counts[side];
+    const other = side === 'send' ? counts.get : counts.send;
+    const named = pickIds(side === 'send' ? query.send : query.get).length;
+    const set = (next: ShapeCount) =>
+      update({ shapes: side === 'send' ? shapesForCounts(next, other) : shapesForCounts(other, next) });
+    return (
+      <span aria-label={side === 'send' ? 'How many you send' : 'How many you get'} className="trade-finder__count" role="group">
+        <button
+          aria-pressed={value == null}
+          className={['trade-finder__count-btn', value == null ? 'trade-finder__count-btn--on' : ''].filter(Boolean).join(' ')}
+          disabled={busy}
+          onClick={() => set(null)}
+          type="button"
+        >
+          any
+        </button>
+        {SHAPE_COUNT_OPTIONS.map((option) => (
+          <button
+            aria-pressed={value === option}
+            className={['trade-finder__count-btn', value === option ? 'trade-finder__count-btn--on' : ''].filter(Boolean).join(' ')}
+            disabled={busy || !countAllowed(side, option, other, named)}
+            key={option}
+            onClick={() => set(option)}
+            type="button"
+          >
+            {option}
+          </button>
+        ))}
+      </span>
+    );
+  };
+
   const renderLeg = (slot: Slot, label: string) => {
     const chips = legChips(slot);
     const empty = chips.length === 0;
@@ -553,6 +597,7 @@ export function TradeFinder({
             </>
           )}
         </span>
+        {slot === 'send' || slot === 'get' ? renderCount(slot) : null}
       </div>
     );
   };
@@ -878,7 +923,7 @@ export function TradeFinder({
           {outside > 0
             ? `${outside} ${outside === 1 ? 'deal helps' : 'deals help'} you, but outside your limits.`
             : fromBoard && !ranQuery
-              ? 'Nothing on the board lifts your title odds right now.'
+              ? 'Nothing from the last scan lifts your title odds right now.'
               : 'The book found nothing for that ask at a price that helps you.'}
         </p>
         {ranQuery ? <p className="trade-finder__empty-detail">{describeQuery(ranQuery, names(ranQuery))}.</p> : null}
@@ -911,7 +956,7 @@ export function TradeFinder({
   const getPin = pinnedPlayer(asked.get);
   const sendPin = pinnedPlayer(asked.send);
   const boardTitle = !ranQuery || (asked.partnerRosterIds.length === 0 && asked.send.kind === 'any' && asked.get.kind === 'any')
-    ? 'The board'
+    ? 'Deals that help you'
     : asked.get.kind === 'position' && asked.get.positions.length === 1
       ? `Best ${asked.get.positions[0]} you can land`
       : getPin
@@ -920,11 +965,7 @@ export function TradeFinder({
           ? `What ${players[sendPin]?.name ?? 'he'} brings back`
           : 'Deals the book likes';
 
-  const findLabel = isExactTrade(query) ? 'Price this trade' : servedByBoard(query) ? 'Show the board' : 'Find trades';
-  const limitCount = (limits.minGain !== DEFAULT_LIMITS.minGain ? 1 : 0)
-    + (limits.maxLoss !== DEFAULT_LIMITS.maxLoss ? 1 : 0)
-    + (limits.hideLopsided !== DEFAULT_LIMITS.hideLopsided ? 1 : 0)
-    + (limits.maxGiveUp !== DEFAULT_LIMITS.maxGiveUp ? 1 : 0);
+  const findLabel = isExactTrade(query) ? 'Price this trade' : servedByBoard(query) ? 'Show deals' : 'Find trades';
   const lanesShown = visibleStrong.length + visibleTies.length;
 
   return (
@@ -959,40 +1000,8 @@ export function TradeFinder({
           {renderLeg('send', 'You send')}
           {renderLeg('keep', 'Off limits')}
           {renderLeg('get', 'You get')}
-          <div className="trade-finder__shape-row">
-            <span className="trade-finder__leg-label">Shape</span>
-            <div aria-label="Package shapes" className="trade-finder__seg trade-finder__seg--wrap" role="group">
-              <button
-                aria-pressed={query.shapes.length === 0}
-                className={['trade-finder__seg-btn', query.shapes.length === 0 ? 'trade-finder__seg-btn--on' : ''].filter(Boolean).join(' ')}
-                disabled={busy}
-                onClick={() => update({ shapes: [] })}
-                type="button"
-              >
-                Any
-              </button>
-              {FINDER_SHAPES.map((shape) => {
-                const on = query.shapes.includes(shape.id);
-                return (
-                  <button
-                    aria-pressed={on}
-                    className={['trade-finder__seg-btn', on ? 'trade-finder__seg-btn--on' : ''].filter(Boolean).join(' ')}
-                    disabled={busy}
-                    key={shape.id}
-                    onClick={() => update({ shapes: toggleShape(query.shapes, shape.id) })}
-                    type="button"
-                  >
-                    {shape.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <p className="trade-finder__shape-note">
-            {query.shapes.length === 0
-              ? 'Every package size, 1 for 1 up to 3 for 3.'
-              : `Only ${shapesWords(query.shapes)}. The first number is what you send.`}
-          </p>
+          <p className="trade-finder__readback">{describeQuery(query, names(query))}.</p>
+          <LimitsPanel limits={limits} onChange={setLimits} onToggle={() => setLimitsOpen((current) => !current)} open={limitsOpen} />
           <div className="trade-finder__ticket-foot">
             {walking ? (
               <button className="trade-finder__find trade-finder__find--quiet" onClick={stopWalk} type="button">Stop the search</button>
@@ -1014,14 +1023,6 @@ export function TradeFinder({
                 ) : null}
               </span>
               <span className="trade-finder__board-tools">
-                <button
-                  aria-expanded={limitsOpen}
-                  className={['trade-finder__ghost', limitsChanged(limits) ? 'trade-finder__ghost--on' : ''].filter(Boolean).join(' ')}
-                  onClick={() => setLimitsOpen(true)}
-                  type="button"
-                >
-                  Limits{limitCount ? <span className="trade-finder__num"> {limitCount}</span> : null}
-                </button>
                 {fromBoard ? (
                   <button className="trade-finder__ghost" disabled={Boolean(board?.scanning)} onClick={() => void rescanBoard()} type="button">
                     {board?.scanning ? 'Scanning' : 'Scan again'}
@@ -1110,111 +1111,122 @@ export function TradeFinder({
         />
       ) : null}
 
-      {limitsOpen ? (
-        <LimitsSheet
-          kept={groups.length}
-          limits={limits}
-          onChange={setLimits}
-          onClose={() => setLimitsOpen(false)}
-        />
-      ) : null}
     </div>
   );
 }
 
-/* ── Limits, behind a button ─────────────────────────────────────────────── */
+/* ── Limits, in the ticket ───────────────────────────────────────────────── */
 
-const MAX_LOSS_TOP = 10;
-const MAX_GIVE_TOP = 300;
+const gainWords = (value: number) => `${value.toFixed(1)} pp`;
+const lossWords = (value: number | null) => (value == null ? 'no limit' : `${value.toFixed(1)} pp`);
+const giveWords = (value: number | null) => (value == null ? 'no limit' : `${value} pts`);
 
-function LimitsSheet({ limits, kept, onChange, onClose }: { limits: FinderLimits; kept: number; onChange: (next: FinderLimits) => void; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return createPortal(
-    <div className="trade-finder__scrim" onClick={onClose} role="presentation">
-      <div aria-label="Limits" aria-modal="true" className="trade-finder__sheet trade-finder__sheet--limits" onClick={(event) => event.stopPropagation()} role="dialog">
-        <span aria-hidden="true" className="trade-finder__grip" />
-        <div className="trade-finder__sheet-head">
-          <span className="trade-finder__sheet-title">Limits</span>
-          <button className="trade-finder__sheet-any" onClick={() => onChange(DEFAULT_LIMITS)} type="button">Reset</button>
-        </div>
-        <p className="trade-finder__sheet-note">
-          By default every deal that lifts both sides shows. These narrow it, and reset when you change the ask.
-        </p>
-        <div className="trade-finder__limit">
-          <label className="trade-finder__limit-label" htmlFor="trade-finder-min-gain">
-            <span>Your title rises at least</span>
-            <span className="trade-finder__num">{limits.minGain.toFixed(1)} pp</span>
-          </label>
-          <input
-            className="trade-finder__floor-input"
-            id="trade-finder-min-gain"
-            max={5}
-            min={0}
-            onChange={(event) => onChange({ ...limits, minGain: Number(event.target.value) })}
-            step={0.5}
-            type="range"
-            value={limits.minGain}
-          />
-        </div>
-        <div className="trade-finder__limit">
-          <label className="trade-finder__limit-label" htmlFor="trade-finder-max-loss">
-            <span>Their title falls at most</span>
-            <span className="trade-finder__num">{limits.maxLoss == null ? 'any' : limits.maxLoss === 0 ? 'nothing' : `${limits.maxLoss.toFixed(1)} pp`}</span>
-          </label>
-          <input
-            className="trade-finder__floor-input"
-            id="trade-finder-max-loss"
-            max={MAX_LOSS_TOP}
-            min={0}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              onChange({ ...limits, maxLoss: value >= MAX_LOSS_TOP ? null : value });
-            }}
-            step={0.5}
-            type="range"
-            value={limits.maxLoss == null ? MAX_LOSS_TOP : limits.maxLoss}
-          />
-          <span className="trade-finder__sheet-note">At nothing, only deals that lift both sides. All the way right, no limit.</span>
-        </div>
-        <div className="trade-finder__limit">
-          <label className="trade-finder__limit-label" htmlFor="trade-finder-max-give">
-            <span>You give up at most</span>
-            <span className="trade-finder__num">{limits.maxGiveUp == null ? 'any' : `${limits.maxGiveUp} pts`}</span>
-          </label>
-          <input
-            className="trade-finder__floor-input"
-            id="trade-finder-max-give"
-            max={MAX_GIVE_TOP}
-            min={0}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              onChange({ ...limits, maxGiveUp: value >= MAX_GIVE_TOP ? null : value });
-            }}
-            step={10}
-            type="range"
-            value={limits.maxGiveUp == null ? MAX_GIVE_TOP : limits.maxGiveUp}
-          />
-          <span className="trade-finder__sheet-note">Net projected points, rest of season: what you get minus what you send. All the way right, no limit.</span>
-        </div>
-        <label className="trade-finder__limit trade-finder__limit--toggle">
-          <input
-            checked={limits.hideLopsided}
-            onChange={(event) => onChange({ ...limits, hideLopsided: event.target.checked })}
-            type="checkbox"
-          />
-          <span>
-            <span className="trade-finder__limit-label"><span>Hide lopsided deals</span></span>
-            <span className="trade-finder__sheet-note">A manager out of the race has no title odds to lose, so a robbery slips past the slider above. This catches it on roster value.</span>
-          </span>
-        </label>
-        <button className="trade-finder__find" onClick={onClose} type="button">Show {kept} {kept === 1 ? 'deal' : 'deals'}</button>
+/**
+ * The limits are part of the ask, so they live under the legs and stay put
+ * between searches (they used to sit behind a button on the results and reset
+ * with every ask, and nobody found them). Closed, one line says both numbers
+ * in words. Open, each is a stepper with its meaning under it and the ends of
+ * its scale named, because a slider at 0.0 does not say which way is loose:
+ * 0.0 keeps everything on your row and nothing on theirs.
+ */
+function LimitsPanel({ limits, open, onChange, onToggle }: { limits: FinderLimits; open: boolean; onChange: (next: FinderLimits) => void; onToggle: () => void }) {
+  const changed = {
+    minGain: limits.minGain !== DEFAULT_LIMITS.minGain,
+    maxLoss: limits.maxLoss !== DEFAULT_LIMITS.maxLoss,
+    maxGiveUp: limits.maxGiveUp !== DEFAULT_LIMITS.maxGiveUp,
+    hideLopsided: limits.hideLopsided !== DEFAULT_LIMITS.hideLopsided,
+  };
+  const num = (on: boolean, text: string) => (
+    <span className={['trade-finder__num', on ? 'trade-finder__limits-num--set' : ''].filter(Boolean).join(' ')}>{text}</span>
+  );
+  const stepper = (id: string, label: string, text: string, down: () => void, up: () => void, atBottom: boolean, atTop: boolean, downLabel: string, upLabel: string) => (
+    <span aria-labelledby={id} className="trade-finder__stepper" role="group">
+      <button aria-label={downLabel} className="trade-finder__stepper-btn" disabled={atBottom} onClick={down} type="button">&minus;</button>
+      <output className="trade-finder__stepper-value trade-finder__num" htmlFor={id} id={`${id}-value`}>{text}</output>
+      <button aria-label={upLabel} className="trade-finder__stepper-btn" disabled={atTop} onClick={up} type="button">+</button>
+      <span className="visually-hidden">{label}</span>
+    </span>
+  );
+  return (
+    <div className={['trade-finder__limits', open ? 'trade-finder__limits--open' : ''].filter(Boolean).join(' ')}>
+      <div className="trade-finder__limits-line">
+        <span className="trade-finder__limits-words">
+          Your title up {num(changed.minGain, gainWords(limits.minGain))} or more
+          <span aria-hidden="true" className="trade-finder__limits-dot" />
+          theirs down {num(changed.maxLoss, lossWords(limits.maxLoss))}{limits.maxLoss == null ? '' : ' at most'}
+          {changed.maxGiveUp ? (
+            <>
+              <span aria-hidden="true" className="trade-finder__limits-dot" />
+              you give up {num(true, giveWords(limits.maxGiveUp))} at most
+            </>
+          ) : null}
+        </span>
+        <button aria-expanded={open} className="trade-finder__limits-change" onClick={onToggle} type="button">
+          {open ? 'Done' : 'Change'}
+        </button>
       </div>
-    </div>,
-    document.body,
+      {open ? (
+        <div className="trade-finder__limits-panel">
+          <div className="trade-finder__limit-row">
+            <span className="trade-finder__limit-words">
+              <span className="trade-finder__limit-title" id="trade-finder-min-gain">Your title rises at least</span>
+              <span className="trade-finder__limit-note">0.0 shows every deal that helps you. Under 1 pp is noise.</span>
+            </span>
+            {stepper(
+              'trade-finder-min-gain', 'Your title rises at least', gainWords(limits.minGain),
+              () => onChange({ ...limits, minGain: stepValue(GAIN_STEPS, limits.minGain, -1) }),
+              () => onChange({ ...limits, minGain: stepValue(GAIN_STEPS, limits.minGain, 1) }),
+              limits.minGain <= GAIN_STEPS[0], limits.minGain >= GAIN_STEPS[GAIN_STEPS.length - 1],
+              'Ask for less', 'Ask for more',
+            )}
+          </div>
+          <div aria-hidden="true" className="trade-finder__limit-scale"><span>every deal</span><span>only big ones</span></div>
+          <div className="trade-finder__limit-row">
+            <span className="trade-finder__limit-words">
+              <span className="trade-finder__limit-title" id="trade-finder-max-loss">Their title falls at most</span>
+              <span className="trade-finder__limit-note">0.0 means they cannot lose a thing. Step up to allow more; the top is no limit.</span>
+            </span>
+            {stepper(
+              'trade-finder-max-loss', 'Their title falls at most', lossWords(limits.maxLoss),
+              () => onChange({ ...limits, maxLoss: stepValue(LOSS_STEPS, limits.maxLoss, -1) }),
+              () => onChange({ ...limits, maxLoss: stepValue(LOSS_STEPS, limits.maxLoss, 1) }),
+              limits.maxLoss === LOSS_STEPS[0], limits.maxLoss == null,
+              'Let them lose less', 'Let them lose more',
+            )}
+          </div>
+          <div aria-hidden="true" className="trade-finder__limit-scale"><span>they must not lose</span><span>no limit</span></div>
+          <div className="trade-finder__limit-row">
+            <span className="trade-finder__limit-words">
+              <span className="trade-finder__limit-title" id="trade-finder-max-give">You give up at most</span>
+              <span className="trade-finder__limit-note">Net projected points, rest of season: what you get minus what you send.</span>
+            </span>
+            {stepper(
+              'trade-finder-max-give', 'You give up at most', giveWords(limits.maxGiveUp),
+              () => onChange({ ...limits, maxGiveUp: stepValue(GIVE_STEPS, limits.maxGiveUp, -1) }),
+              () => onChange({ ...limits, maxGiveUp: stepValue(GIVE_STEPS, limits.maxGiveUp, 1) }),
+              limits.maxGiveUp === GIVE_STEPS[0], limits.maxGiveUp == null,
+              'Give up less', 'Give up more',
+            )}
+          </div>
+          <div aria-hidden="true" className="trade-finder__limit-scale"><span>nothing</span><span>no limit</span></div>
+          <label className="trade-finder__limit-row trade-finder__limit-row--toggle">
+            <input
+              checked={limits.hideLopsided}
+              onChange={(event) => onChange({ ...limits, hideLopsided: event.target.checked })}
+              type="checkbox"
+            />
+            <span className="trade-finder__limit-words">
+              <span className="trade-finder__limit-title">Hide lopsided deals</span>
+              <span className="trade-finder__limit-note">A manager out of the race has no title odds to lose, so a robbery slips past the limit above. This catches it on roster value.</span>
+            </span>
+          </label>
+          <div className="trade-finder__limits-foot">
+            <span className="trade-finder__limit-note">Limits stay with the ticket from one ask to the next.</span>
+            <button className="trade-finder__ticket-clear" disabled={!limitsChanged(limits)} onClick={() => onChange(DEFAULT_LIMITS)} type="button">Reset</button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

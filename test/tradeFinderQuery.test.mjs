@@ -21,6 +21,14 @@ import {
   togglePosition,
   toggleShape,
   DEFAULT_LIMITS,
+  GAIN_STEPS,
+  GIVE_STEPS,
+  LOSS_STEPS,
+  countAllowed,
+  countsOfShapes,
+  shapesForCounts,
+  shapesWords,
+  stepValue,
   LOPSIDED_PPG,
   NOISE_PP,
   boardMatches,
@@ -67,6 +75,53 @@ test('the shape row offers every size up to 3 for 3, and the first number is wha
     ['1 for 1', '2 for 1', '1 for 2', '2 for 2', '2 for 3', '3 for 2', '3 for 3']);
   assert.deepEqual(FINDER_SHAPES.find((shape) => shape.id === '2-1')?.sizes, { give: 2, get: 1 });
   assert.deepEqual(FINDER_SHAPES.find((shape) => shape.id === '2-3')?.sizes, { give: 2, get: 3 });
+});
+
+test('a count on each leg is a view of the shape set, and only the sets a count pair makes', () => {
+  assert.deepEqual(shapesForCounts(null, null), [], 'any and any is every shape');
+  assert.deepEqual(shapesForCounts(2, null), ['2-1', '2-2', '2-3']);
+  assert.deepEqual(shapesForCounts(null, 1), ['1-1', '2-1']);
+  assert.deepEqual(shapesForCounts(3, 1), [], 'the engine prices no 3 for 1');
+  assert.deepEqual(shapesForCounts(2, 2), ['2-2']);
+  /* Round trip, for every pair that makes a set. */
+  for (const send of [null, 1, 2, 3]) {
+    for (const get of [null, 1, 2, 3]) {
+      const shapes = shapesForCounts(send, get);
+      if (shapes.length === 0) continue;
+      assert.deepEqual(countsOfShapes(shapes), { send, get }, `${send} for ${get}`);
+    }
+  }
+  assert.deepEqual(countsOfShapes([]), { send: null, get: null });
+  assert.deepEqual(countsOfShapes(['1-1', '3-3']), { send: null, get: null }, 'a set no pair makes reads as open');
+  /* Which counts are on offer beside the other leg's count. */
+  assert.equal(countAllowed('send', 3, 1), false);
+  assert.equal(countAllowed('send', 3, null), true);
+  assert.equal(countAllowed('get', 1, 3), false);
+  assert.equal(countAllowed('send', 1, null, 2), false, 'two players named cannot fit in one');
+  assert.equal(countAllowed('send', null, 1, 3), true, 'any is always on');
+  /* The words the ticket reads back. */
+  assert.equal(shapesWords(shapesForCounts(2, 1)), '2 for 1');
+  assert.equal(shapesWords(shapesForCounts(2, null)), '2 going out');
+  assert.equal(shapesWords(shapesForCounts(null, 3)), '3 coming back');
+  assert.equal(shapesWords(['1-1', '3-3']), '1 for 1 or 3 for 3');
+  /* Shapes too small for the players named on a leg are dropped. */
+  const two = reconcileQuery(
+    { partnerRosterIds: [], send: { kind: 'player', ids: ['u1', 'u2'] }, get: ANY_PICK, shapes: ['1-1', '2-1', '2-2'] },
+    [team(1, ['u1', 'u2', 'u3'], true), team(2, ['x'])],
+  );
+  assert.deepEqual(two.shapes, ['2-1', '2-2']);
+});
+
+test('a limit steps along its list and holds at the ends, with no limit at the loose end', () => {
+  assert.equal(stepValue(GAIN_STEPS, 0, 1), 0.5);
+  assert.equal(stepValue(GAIN_STEPS, 0, -1), 0, 'held at the strict end');
+  assert.equal(stepValue(GAIN_STEPS, 5, 1), 5, 'held at the top');
+  assert.equal(stepValue(LOSS_STEPS, null, -1), 5, 'down from no limit is the biggest number');
+  assert.equal(stepValue(LOSS_STEPS, 5, 1), null, 'up from the biggest number is no limit');
+  assert.equal(stepValue(LOSS_STEPS, null, 1), null);
+  assert.equal(stepValue(GAIN_STEPS, 0.7, 1), 1, 'a value off the list snaps to the next step');
+  assert.equal(stepValue(GAIN_STEPS, 0.7, -1), 0.5);
+  assert.equal(stepValue(GIVE_STEPS, 200, 1), null);
 });
 
 test('every leg takes several picks, and an emptied leg is open again', () => {
@@ -217,10 +272,12 @@ test('picked shapes keep only those package sizes', () => {
 });
 
 test('the keep rule and ranking are the trade sender\'s, not an acceptance estimate', () => {
-  /* Opens on every deal that helps you at all and costs the other side at
-     most 2 points of title odds. The limits sheet changes it. */
+  /* Opens on every deal that helps you at all, with no limit on what the
+     other side gives up (user 2026-10-09; it was 2 pp, and a cap at 0 would
+     keep only deals the other manager also gains from). The steppers in the
+     ticket change it. */
   assert.equal(DEFAULT_MIN_GAIN, 0);
-  assert.equal(DEFAULT_MAX_PARTNER_LOSS, 2);
+  assert.equal(DEFAULT_MAX_PARTNER_LOSS, null);
   const deal = (youDelta, partnerDelta) => ({ suggestion: { youDelta, partnerDelta } });
   /* Kept only if your title odds rise at least X and theirs fall at most Y. */
   assert.equal(passesLimits({ youDelta: 2.1, partnerDelta: -1.2 }, 1, 3), true);
@@ -364,10 +421,10 @@ test('deals group under the player you would land, best package first', () => {
   assert.equal(headlinePlayer(deal(3, [], ['pollard', 'brown'], 1), values), 'brown');
 });
 
-test('under a point of title odds is a tie, and the default limits lift both sides', () => {
+test('under a point of title odds is a tie, and the default limits keep every deal that helps you', () => {
   assert.equal(withinNoise(0.9), true);
   assert.equal(withinNoise(NOISE_PP), false);
-  assert.deepEqual(DEFAULT_LIMITS, { minGain: 0, maxLoss: 2, hideLopsided: true, maxGiveUp: null });
+  assert.deepEqual(DEFAULT_LIMITS, { minGain: 0, maxLoss: null, hideLopsided: true, maxGiveUp: null });
 });
 
 test('a robbery of a team that is out is caught on roster value, not title odds', () => {

@@ -33,6 +33,7 @@ const TARGETS = [
   'src/components/trade/TradeAnalyzerPanel.css',
   'src/components/trade/TradeFinder.tsx',
   'src/components/trade/TradeFinder.css',
+  'src/components/trade/TradeFinderTicket.css',
   'src/utils/tradeFinderQuery.ts',
   'src/components/league/LeagueChecklist.tsx',
   'src/components/league/LeagueChecklist.css',

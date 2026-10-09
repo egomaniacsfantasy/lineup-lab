@@ -103,6 +103,70 @@ export function toggleShape(shapes: FinderShape[], shape: FinderShape): FinderSh
   return orderedShapes(shapes.includes(shape) ? shapes.filter((s) => s !== shape) : [...shapes, shape]);
 }
 
+/*
+ * How the ticket asks for a shape (user 2026-10-09: eight chips in two rows
+ * was "a headache"). Each leg carries a count, how many go out and how many
+ * come back, and the pair picks the shapes. "any" on both is every size. The
+ * query still stores shapes, so everything downstream reads as before; the
+ * counts are a view of the shape set, and only the sets a count pair makes.
+ */
+export const SHAPE_COUNT_OPTIONS = [1, 2, 3] as const;
+export type ShapeCount = (typeof SHAPE_COUNT_OPTIONS)[number] | null;
+export interface ShapeCounts { send: ShapeCount; get: ShapeCount }
+
+/** The shapes a pair of counts allows: every listed shape matching both. */
+export function shapesForCounts(send: ShapeCount, get: ShapeCount): FinderShape[] {
+  if (send == null && get == null) return [];
+  return FINDER_SHAPES
+    .filter((entry) => (send == null || entry.sizes.give === send) && (get == null || entry.sizes.get === get))
+    .map((entry) => entry.id);
+}
+
+/** The counts a shape set came from, or any/any for a set no count pair makes. */
+export function countsOfShapes(shapes: FinderShape[]): ShapeCounts {
+  const sorted = orderedShapes(shapes).join(',');
+  for (const send of [null, ...SHAPE_COUNT_OPTIONS]) {
+    for (const get of [null, ...SHAPE_COUNT_OPTIONS]) {
+      const candidate = shapesForCounts(send, get);
+      if (candidate.length && candidate.join(',') === sorted) return { send, get };
+    }
+  }
+  return { send: null, get: null };
+}
+
+/**
+ * Whether a count can be asked for beside the other leg's count. The engine
+ * prices no 3 for 1 or 1 for 3 (user 2026-10-06), so with three going out,
+ * one coming back is off the table, and a count under the players already
+ * named on that leg would leave nothing to send them in.
+ */
+export function countAllowed(side: 'send' | 'get', value: ShapeCount, other: ShapeCount, named = 0): boolean {
+  if (value == null) return true;
+  if (value < named) return false;
+  return (side === 'send' ? shapesForCounts(value, other) : shapesForCounts(other, value)).length > 0;
+}
+
+/*
+ * The limits as steppers (user 2026-10-09: sliders at 0.0 did not say which
+ * way was loose). Each list runs strict to loose or loose to strict as the
+ * row's words read it; `null` is no limit and sits at the loose end.
+ */
+export const GAIN_STEPS: readonly number[] = [0, 0.5, 1, 2, 3, 5];
+export const LOSS_STEPS: readonly (number | null)[] = [0, 0.5, 1, 2, 3, 5, null];
+export const GIVE_STEPS: readonly (number | null)[] = [0, 10, 20, 30, 50, 75, 100, 150, 200, null];
+
+/** The next step along a list, held at either end. A value off the list snaps to its nearest neighbour in that direction. */
+export function stepValue<T extends number | null>(steps: readonly T[], current: T, direction: 1 | -1): T {
+  const index = steps.indexOf(current);
+  if (index !== -1) return steps[Math.min(steps.length - 1, Math.max(0, index + direction))];
+  if (current == null) return steps[steps.length - 1];
+  const numeric = steps.map((step, at) => [step == null ? Infinity : step, at] as const);
+  const candidates = numeric.filter(([step]) => (direction === 1 ? step > current : step < current));
+  if (!candidates.length) return current;
+  const pick = direction === 1 ? candidates[0] : candidates[candidates.length - 1];
+  return steps[pick[1]];
+}
+
 export function togglePartner(partnerRosterIds: number[], rosterId: number): number[] {
   return partnerRosterIds.includes(rosterId)
     ? partnerRosterIds.filter((id) => id !== rosterId)
@@ -139,9 +203,11 @@ export function toggleKeep(keep: string[] | undefined, id: string): string[] {
    that helps you at all (minimum 0), with the sender's default limit on what the
    other side gives up, so the board is not led by robberies nobody would take. */
 export const DEFAULT_MIN_GAIN = 0;
-/* The other side's title odds fall at most 2 points by default. The sheet can
-   tighten or loosen it. */
-export const DEFAULT_MAX_PARTNER_LOSS = 2;
+/* No limit on what the other side gives up by default (user 2026-10-09). The
+   lopsided guard still drops robberies of teams already out; the stepper in the
+   ticket tightens this one. It was 2 pp; a cap at 0 would keep only deals the
+   other manager also gains from, which on a real league is a handful. */
+export const DEFAULT_MAX_PARTNER_LOSS: number | null = null;
 
 /** The limits the board applies, kept behind a button. They reset with the ask. */
 export interface FinderLimits {
@@ -345,7 +411,12 @@ export function reconcileQuery(query: FinderQuery, teams: ApiTeam[]): FinderQuer
     pickPositions(query.get),
     pickIds(query.get).filter((id) => pool.some((team) => team.players.includes(id))),
   );
-  return { partnerRosterIds, send, get, shapes: orderedShapes(query.shapes), keep };
+  /* A shape smaller than the players named on a leg could never hold them. */
+  const shapes = orderedShapes(query.shapes).filter((id) => {
+    const sizes = shapeSizes(id);
+    return sizes != null && sizes.give >= pickIds(send).length && sizes.get >= pickIds(get).length;
+  });
+  return { partnerRosterIds, send, get, shapes, keep };
 }
 
 export function suggestionSizes(suggestion: Pick<TradeSuggestion, 'give' | 'get'>) {
@@ -443,6 +514,10 @@ export function partnersWords(query: FinderQuery, names: string[] | undefined) {
 
 export function shapesWords(shapes: FinderShape[]) {
   if (shapes.length === 0) return 'any shape';
+  const counts = countsOfShapes(shapes);
+  if (counts.send != null && counts.get != null) return `${counts.send} for ${counts.get}`;
+  if (counts.send != null) return `${counts.send} going out`;
+  if (counts.get != null) return `${counts.get} coming back`;
   return shapes.map((shape) => FINDER_SHAPES.find((entry) => entry.id === shape)?.label ?? shape).join(' or ');
 }
 
