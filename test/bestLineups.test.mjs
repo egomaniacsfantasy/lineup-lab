@@ -153,18 +153,21 @@ test('it names the swap on both sides, in the board\'s own short form', async ()
   }
 });
 
-test('once games start it stops offering lineups nobody can set', async () => {
+test('once games start it stops offering lineups nobody can set, and says nothing about it', async () => {
   /* Without ?pregame the design league credits every player with points, which
      is the "games are under way" state. The engine's best lineup would happily
-     bench somebody who has already played. */
+     bench somebody who has already played. It used to leave a note in the
+     control's place ("Games have started, so a best lineup is no longer one
+     you could set"), a sentence about a thing the board no longer offers. */
   const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
   try {
     await page.goto(`${baseUrl}/design/matchup`, { waitUntil: 'domcontentloaded' });
-    await page.locator('.matchup-page__module--slot-board').waitFor();
-    await page.locator('.matchup-page__best-note').first().waitFor();
+    await page.locator('.matchup-page__slot-card').first().waitFor();
     assert.equal(await page.locator('.matchup-page__best-toggle').count(), 0, 'a best lineup was offered mid-game');
-    const note = await page.locator('.matchup-page__best-note').first().innerText();
-    assert.match(note, /games have started/i, `the reason is not given: ${note}`);
+    assert.equal(await page.locator('.matchup-page__best-note').count(), 0, 'the board explains the missing control instead of just not having it');
+    const board = await page.locator('.matchup-page__module--slot-board').innerText();
+    assert.doesNotMatch(board, /games have started/i, 'the "games have started" note is back');
+    assert.doesNotMatch(board, /lineup vs lineup/i, 'the board is titled again');
   } finally {
     await page.close();
   }

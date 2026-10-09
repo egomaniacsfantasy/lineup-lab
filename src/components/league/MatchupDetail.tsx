@@ -167,10 +167,10 @@ export function MatchupDetail({
     );
   };
   const scorelinesOf = (starters?: readonly LineupSlotEntry[]) => (starters ?? []).map(scorelineOf);
-  /* A finished game's row recedes rather than carrying a FINAL tag, the same as
-     on the Hub (components/matchup/Scoreline.tsx). Bench rows too: they print
-     scores through the same SlotNumbers, and a bare score with neither a tag
-     nor a faded row reads as a projection. */
+  /* A finished game's row recedes and its score is labelled "final", the same
+     as on the Hub (components/matchup/Scoreline.tsx). Bench rows too: they
+     print scores through the same SlotNumbers, and a bare score on a bright
+     row reads as a projection. */
   const isFinal = (entry: LineupSlotEntry | null) =>
     entry?.playerId != null && scorelineOf(entry).phase === 'final';
   // The row's meta line: position + team normally, but before a game kicks off it
@@ -283,6 +283,7 @@ export function MatchupDetail({
     const numbers = (
       <SlotNumbers
         align={opponent ? 'right' : 'left'}
+        matchupStarted={matchupStarted}
         projection={pointsText(entry.projection)}
         scoreline={scorelineOf(entry)}
       />
@@ -376,12 +377,6 @@ export function MatchupDetail({
 
           {rows.length > 0 ? (
             <section className="matchup-page__module matchup-page__module--slot-board">
-              <div className="matchup-page__module-row matchup-page__module-row--lineup">
-                <div>
-                  <h2 className="matchup-page__module-title">Lineup vs lineup</h2>
-                </div>
-              </div>
-
               <div className="matchup-page__slot-board-grid">
                 <div className="matchup-page__slot-board-head matchup-page__slot-board-head--left">
                   {left.isUser ? (

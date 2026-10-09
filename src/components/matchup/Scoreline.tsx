@@ -1,29 +1,40 @@
 import type { GamePhase, Scoreline, TeamGameState } from '../../utils/liveScoreline';
 import { gameTagFor, primaryNumber } from '../../utils/liveScoreline';
+import './Scoreline.css';
 
 /**
  * A lineup row's numbers. See utils/liveScoreline.ts for the rule.
  *
- * Before his game: one number, the projection, as the Hub has always shown.
- * While it is on: points scored take the big number, and the projected final
- * sits underneath with a word on it. Two unlabelled one-decimal numbers stacked
- * in the same face are a guessing game, and "20.9 / 0.1 now" was read as twenty
- * points scored.
+ * Before anyone in the matchup has kicked off: one number per row, the
+ * projection, as the Hub has always shown. Every number means the same thing,
+ * so none of them needs a word.
  *
- * Once it is over: the score and nothing else. A projection beside a settled
- * result is a second number on a row where nothing is left to happen, and on
- * the Hub it had converged on the score anyway, so every finished row read
- * "15.9 / proj 15.9". The row recedes instead (slot-card--final), which is what
- * says the game is done.
+ * Once the matchup is under way the column is a mix, and every number says
+ * what it is:
+ *
+ *  - not kicked off yet: the projection, with "proj" under it
+ *  - playing: points scored, with the projected final under it ("proj 17.1")
+ *  - over: the final score, with "final" under it
+ *
+ * The finished row also recedes (slot-card--final), but a fade on its own was
+ * read as nothing: on a Sunday with two 9:30 games done, the two faded scores
+ * sat in a column of bright projections and nobody could say which numbers had
+ * happened. Two unlabelled one-decimal numbers in the same face are a guessing
+ * game, and the same is true of one unlabelled number in a column where its
+ * neighbours mean something else.
  */
 export function SlotNumbers({
   projection,
   scoreline,
   align = 'left',
+  matchupStarted = false,
 }: {
   projection: string;
   scoreline: Scoreline | null;
   align?: 'left' | 'right';
+  /** True once anybody in the matchup has kicked off, which is when a bare
+      number stops being self-explanatory. */
+  matchupStarted?: boolean;
 }) {
   const className = [
     'matchup-page__slot-numbers',
@@ -35,6 +46,11 @@ export function SlotNumbers({
     return (
       <span className={className}>
         <span className="matchup-page__slot-projection">{projection}</span>
+        {matchupStarted ? (
+          <span className="matchup-page__slot-number-label matchup-page__slot-number-label--proj" title="Projected">
+            proj
+          </span>
+        ) : null}
       </span>
     );
   }
@@ -44,6 +60,9 @@ export function SlotNumbers({
       <span className={className}>
         <span className="matchup-page__slot-scored" title="Final points">
           {primaryNumber(scoreline, projection)}
+        </span>
+        <span className="matchup-page__slot-number-label matchup-page__slot-number-label--final">
+          final
         </span>
       </span>
     );
@@ -65,9 +84,10 @@ export function SlotNumbers({
  * Where the player's game is, in the spot his kickoff time held: the clock
  * while it runs.
  *
- * A finished game prints no tag. Its row recedes instead (slot-card--final),
- * which says "over" without another word on the line. The word stays for
- * screen readers, which cannot see a row go grey.
+ * A finished game prints no tag on the meta line: its row recedes
+ * (slot-card--final) and its score carries "final" in the number column, so a
+ * tag here would say it a third time. The word stays on the meta line for
+ * screen readers, which read the line before the number.
  *
  * Live has no colour of its own. Green and red are money, amber is you, and a
  * game clock is neither: it is the brightest thing on a row whose finished

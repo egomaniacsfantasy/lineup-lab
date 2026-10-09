@@ -1,0 +1,14 @@
+/* The word under a lineup row's number once the matchup is under way: "proj"
+   under a projection, "final" under a settled score. The live row's "proj 17.1"
+   keeps its own class in MatchupPage.css; this is the same type at the same
+   size, so the three states line up as one column. Muted, no colour: green and
+   red are money, amber is you, and a label is neither. */
+.matchup-page__slot-number-label {
+  color: var(--text-muted);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}

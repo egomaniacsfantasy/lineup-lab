@@ -44,16 +44,12 @@ export function BestLineups({
 }) {
   const [open, setOpen] = useState(false);
 
-  if (started) {
-    /* Once a game is under way the engine's best lineup would happily bench a
-       player who has already played, which is not a lineup anybody can set. The
-       honest move is to say so rather than to price an impossible week. */
-    return (
-      <p className="matchup-page__best-note">
-        Games have started, so a best lineup is no longer one you could set.
-      </p>
-    );
-  }
+  /* Once a game is under way the engine's best lineup would happily bench a
+     player who has already played, which is not a lineup anybody can set. So
+     the control goes, and nothing replaces it: a line explaining why there is
+     no hypothetical was a sentence spent on a thing the board no longer offers,
+     and the board's own numbers now say which games are over. */
+  if (started) return null;
 
   const nothingToDo = changes.in.length === 0 && opponentChanges.in.length === 0;
 

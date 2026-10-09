@@ -139,6 +139,7 @@ const READ_ROWS = ({ selector, finalTeams }) => {
         leadsWithScore: Boolean(card.querySelector('.matchup-page__slot-scored')),
         leadsWithProjection: Boolean(card.querySelector('.matchup-page__slot-projection')),
         projLabel: card.querySelector('.matchup-page__slot-proj-label')?.textContent ?? null,
+        numberLabel: card.querySelector('.matchup-page__slot-number-label')?.textContent?.trim() ?? null,
         frame: `${frame.borderTopColor} | ${frame.boxShadow}`,
       };
     })
@@ -188,20 +189,57 @@ test('a live player leads with points and carries the quarter and clock', async 
   assert.equal(rows['T. McLaurin']?.tag, 'Half');
 });
 
-test('a finished player shows his score alone, and his row recedes', async () => {
+test('a finished player shows his score labelled final, and his row recedes', async () => {
   const rows = await rowsAt('/design/matchup?liveGames');
   const henry = rows['D. Henry'];
   assert.ok(henry, 'the design lineup has no D. Henry');
   assert.equal(henry.finished, true, 'D. Henry is no longer on a team the fixture has final');
   assert.equal(henry.leadsWithScore, true);
-  assert.equal(henry.tag, null, 'a finished row printed a tag; the fade is the whole signal');
+  assert.equal(henry.tag, null, 'a finished row printed a tag on its meta line; the number column already says final');
   assert.equal(henry.projLabel, null, 'a finished row printed "proj" beside a settled score');
-  assert.equal(henry.faded, true, 'a finished row must recede, since nothing else on it says the game is over');
+  assert.equal(henry.numberLabel, 'final', 'a settled score must say so under the number; a fade alone was read as nothing');
+  assert.equal(henry.faded, true, 'a finished row must also recede, so the games still to come are what the eye lands on');
   assert.equal(henry.spoken, 'Final', 'a screen reader cannot see a row fade, so it must still hear Final');
 });
 
+test('once the matchup is under way, every number says what it is', async () => {
+  /* A Sunday column is a mix of scores and projections in one face. With two
+     9:30 games done, two faded scores sat among bright projections and the
+     user could not tell which numbers had happened. So each row's number
+     carries a word: "proj" before kickoff, "proj <final>" while playing,
+     "final" after. Before anyone has kicked off, nothing is labelled: every
+     number is a projection and the word would be noise on every row. */
+  /* ?pregame&liveGames is the Sunday column: nobody credited with points, so
+     the scoreboard alone decides who is final, who is playing and who has
+     not kicked off, and all three sit in one lineup. */
+  const started = Object.values(await rowsAt('/design/matchup?pregame&liveGames')).filter((row) => !row.bench);
+  const kinds = { final: 0, playing: 0, upcoming: 0 };
+  for (const row of started) {
+    if (row.finished) {
+      kinds.final += 1;
+      assert.equal(row.numberLabel, 'final', `${row.name} has played and his score is unlabelled`);
+    } else if (row.leadsWithScore) {
+      kinds.playing += 1;
+      assert.match(row.projLabel ?? '', /^proj /, `${row.name} is playing and his projected final is unlabelled`);
+    } else {
+      kinds.upcoming += 1;
+      assert.equal(row.numberLabel, 'proj', `${row.name} has not played and his projection is unlabelled`);
+    }
+  }
+  for (const [kind, count] of Object.entries(kinds)) {
+    assert.ok(count > 0, `the fixture has no ${kind} row, so that branch is unproven`);
+  }
+
+  const pregame = Object.values(await rowsAt('/design/matchup?pregame')).filter((row) => !row.bench);
+  assert.ok(pregame.length > 0, 'the pregame fixture has no lineup rows');
+  for (const row of pregame) {
+    assert.equal(row.numberLabel, null, `${row.name} is labelled before anyone has kicked off`);
+    assert.equal(row.projLabel, null, `${row.name} carries a live label before anyone has kicked off`);
+  }
+});
+
 test('only finished rows recede', async () => {
-  /* The fade is the only thing marking a score as final, so it must mark
+  /* The fade marks a score as final alongside its label, so it must mark
      exactly those rows. A live row faded is the one game still worth watching
      made hard to see; a finished row left bright reads as a projection. */
   const rows = Object.values(await rowsAt('/design/matchup?liveGames'));

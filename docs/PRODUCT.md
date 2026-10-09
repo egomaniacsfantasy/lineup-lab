@@ -285,9 +285,18 @@ modules, top to bottom:
   date, with a "Your card" share button.
 - **Head-to-head hero** — both teams, records, moneyline on each side,
   projected points, a win-probability bar, the spread and the total.
-- **Lineup vs lineup** — your starters against theirs slot by slot, with each
+- **The slot board** — your starters against theirs slot by slot, with each
   player's projection, NFL opponent and kickoff time, and a per-slot edge
-  arrow. Any two of your players can be tapped to compare, and a one-line hint
+  arrow. Untitled since 2026-10-09: it was headed "Lineup vs lineup", which
+  two columns of faces under You and Them already say. Once anybody in the
+  matchup has kicked off, every number says what it is: "proj" under a
+  projection, "proj 17.1" under a live score, "final" under a settled one, and
+  the finished row also recedes. Before kickoff nothing is labelled, because
+  every number is a projection. The fade used to be the only final signal and
+  two finished 9:30 players read as projections among the rest. The "if we
+  both start our best" control goes once games start; it used to leave a note
+  saying why, which was a sentence about a control the board no longer has.
+  Any two of your players can be tapped to compare, and a one-line hint
   says so. A player whose game has kicked off cannot be picked, on the board
   or on the bench: a kickoff locks him into or out of the lineup, so there is
   no start/sit question to ask about him. His card simply stops responding (no

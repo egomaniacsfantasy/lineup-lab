@@ -102,6 +102,14 @@ const MEASURE = () => {
     titles: [...document.querySelectorAll('.matchup-page__module-title')].map(
       (node) => node.textContent.trim(),
     ),
+    /* Which modules the page has, by their modifier class. The skeleton's
+       modules used to be matched by title, until the slot board lost its
+       title and the skeleton had nothing left to be matched on. */
+    modules: [...document.querySelectorAll('.matchup-page__module')].flatMap((node) =>
+      [...node.classList].filter(
+        (name) => name.startsWith('matchup-page__module--') && name !== 'matchup-page__module--skeleton',
+      ),
+    ),
   };
 };
 
@@ -162,16 +170,26 @@ for (const width of [1100, 1440]) {
   });
 }
 
-test('the skeleton only names modules the Hub actually delivers', async () => {
+test('the skeleton only draws modules the Hub actually delivers', async () => {
   const { cold, loaded } = await bothStates(1440);
 
-  assert.ok(cold.titles.length > 0, 'the skeleton names nothing, so this proves nothing');
+  assert.ok(cold.modules.length > 0, 'the skeleton draws no named module, so this proves nothing');
+  for (const module of cold.modules) {
+    assert.ok(
+      loaded.modules.includes(module),
+      `the skeleton promises a ${module} module that the loaded Hub does not have`,
+    );
+  }
   for (const title of cold.titles) {
     assert.ok(
       loaded.titles.includes(title),
       `the skeleton promises a "${title}" module that the loaded Hub does not have`,
     );
   }
+  assert.ok(
+    !cold.titles.includes('Lineup vs lineup') && !loaded.titles.includes('Lineup vs lineup'),
+    'the slot board is titled again; two columns of faces under You and Them do not need the words',
+  );
 });
 
 test('the wait is stated once', async () => {

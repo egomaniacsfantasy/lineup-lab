@@ -11,16 +11,16 @@
  *    projected final moves underneath it labelled "proj", and a live tag carries
  *    the quarter and clock.
  *
- *  - FINAL. His game is over. The big number is his final score, "proj" shows
- *    what he was projected to score before kickoff so the row reads as a result
- *    against expectation, and a FINAL tag closes it.
+ *  - FINAL. His game is over. The big number is his final score with "final"
+ *    under it, and the row recedes.
  *
  * Why per player rather than one mode for the whole matchup: a Sunday lineup is
  * always a mix, 1pm players final while the 8:20 player has not started, and the
  * useful read of "the rest of my week" is the projection for the players who
  * have not played. Mixing scores and projections in one column is only safe
- * because every row that shows a score says so with its tag. The tag is what
- * makes this work; do not ship one without the other.
+ * because, once the matchup has started, every number says what it is: "proj"
+ * under a projection, "final" under a score, the clock on a live row. The
+ * labels are what make this work; do not ship a mixed column without them.
  *
  * Game state comes from the NFL scoreboard (/api/nfl/game-state). When that has
  * not loaded, the kickoff time and the points feed stand in: a passed kickoff or

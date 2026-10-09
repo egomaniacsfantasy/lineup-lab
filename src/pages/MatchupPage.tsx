@@ -1136,12 +1136,10 @@ function MatchupColdLoading({ label }: { label: string }) {
           </section>
 
           <section className="matchup-page__module matchup-page__module--slot-board matchup-page__module--skeleton">
-            <div className="matchup-page__module-row matchup-page__module-row--lineup">
-              {/* No "tap two players to compare" here. It is the real board's
-                  hint and it is true there; over eight rows that are not
-                  buttons yet it is an instruction the screen cannot honour. */}
-              <h2 className="matchup-page__module-title">Lineup vs lineup</h2>
-            </div>
+            {/* No header, same as the board it stands in for. The board used to
+                be titled "Lineup vs lineup", which named the only thing the
+                two columns of faces could be, and the "tap two players to
+                compare" hint is the real board's and is only true there. */}
             <div className="matchup-page__slot-board-grid" aria-hidden="true">
               {Array.from({ length: COLD_SLOT_ROWS }, (_, index) => (
                 <Fragment key={`cold-slot-${index}`}>
@@ -2559,25 +2557,31 @@ function MatchupLive({
         ) : null}
       {seasonLabel ? <SeasonalNotice>{seasonLabel}</SeasonalNotice> : null}
             <section className="matchup-page__module matchup-page__module--slot-board">
-              <div className="matchup-page__module-row matchup-page__module-row--lineup">
-                <div>
-                  <h2 className="matchup-page__module-title">Lineup vs lineup</h2>
-                  {compareHint ? <p className="matchup-page__lineup-hint">{compareHint}</p> : null}
+              {/* Untitled. Two columns of your faces against theirs under a
+                  You / Them header is a lineup against a lineup; the title
+                  said so again. The row above the grid now exists only when
+                  it has something to hold: the compare hint, or the best
+                  lineups control before kickoff. */}
+              {compareHint || (bestLineupView && !matchupStarted) ? (
+                <div className="matchup-page__module-row matchup-page__module-row--lineup">
+                  <div>
+                    {compareHint ? <p className="matchup-page__lineup-hint">{compareHint}</p> : null}
+                  </div>
+                  {bestLineupView ? (
+                    <BestLineups
+                      bestLabel={formatDisplayedOdds(bestLineupView.moneyline, bestLineupView.winProbability)}
+                      changes={bestLineupView.changes}
+                      deltaWinProb={bestLineupView.deltaWinProb}
+                      nowLabel={formatDisplayedOdds(
+                        engine.activeLine.yours.moneyline,
+                        engine.activeLine.yours.winProbability,
+                      )}
+                      opponentChanges={bestLineupView.opponentChanges}
+                      started={matchupStarted}
+                    />
+                  ) : null}
                 </div>
-                {bestLineupView ? (
-                  <BestLineups
-                    bestLabel={formatDisplayedOdds(bestLineupView.moneyline, bestLineupView.winProbability)}
-                    changes={bestLineupView.changes}
-                    deltaWinProb={bestLineupView.deltaWinProb}
-                    nowLabel={formatDisplayedOdds(
-                      engine.activeLine.yours.moneyline,
-                      engine.activeLine.yours.winProbability,
-                    )}
-                    opponentChanges={bestLineupView.opponentChanges}
-                    started={matchupStarted}
-                  />
-                ) : null}
-              </div>
+              ) : null}
 
               <div className="matchup-page__slot-board-grid">
                 <div className="matchup-page__slot-board-head matchup-page__slot-board-head--left">
@@ -2663,6 +2667,7 @@ function MatchupLive({
                               </span>
                             </span>
                             <SlotNumbers
+                              matchupStarted={matchupStarted}
                               projection={formatProjection(row.yourProjection, isPriced)}
                               scoreline={scorelineOf(row.yourSlot)}
                             />
@@ -2705,6 +2710,7 @@ function MatchupLive({
                           <>
                             <SlotNumbers
                               align="right"
+                              matchupStarted={matchupStarted}
                               projection={formatProjection(row.opponentProjection, isPriced)}
                               scoreline={scorelineOf(row.opponentSlot)}
                             />
