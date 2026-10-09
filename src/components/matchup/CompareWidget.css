@@ -112,11 +112,14 @@
 }
 
 .compare-widget__avatar {
+  /* No overflow clip: the team badge overhangs this circle on purpose, and a
+     circular clip does not cut a corner off it, it cuts along the curve - the
+     logo pressed into the ring with a slice taken out. The round crop lives on
+     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
   display: inline-flex;
   width: 32px;
   height: 32px;
   aspect-ratio: 1;
-  overflow: hidden;
   align-items: center;
   justify-content: center;
   border-radius: 50%;

@@ -27,13 +27,16 @@
 }
 
 .trade-target-card__avatar {
+  /* No overflow clip: the team badge overhangs this circle on purpose, and a
+     circular clip does not cut a corner off it, it cuts along the curve - the
+     logo pressed into the ring with a slice taken out. The round crop lives on
+     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 64px;
   height: 64px;
   aspect-ratio: 1;
-  overflow: hidden;
   border-radius: 50%;
   background: color-mix(in srgb, var(--bg-surface-soft) 88%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-border) 90%, transparent);

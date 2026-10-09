@@ -780,9 +780,12 @@
 }
 
 .trade-cc__asset-headshot {
+  /* No overflow clip: the team badge overhangs this circle on purpose, and a
+     circular clip does not cut a corner off it, it cuts along the curve - the
+     logo pressed into the ring with a slice taken out. The round crop lives on
+     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
   width: 68px;
   height: 68px;
-  overflow: hidden;
   border-radius: 50%;
   background: var(--bg-surface-soft);
 }
@@ -1687,12 +1690,15 @@
 }
 
 .trade-cc__pill-headshot {
+  /* No overflow clip: the team badge overhangs this circle on purpose, and a
+     circular clip does not cut a corner off it, it cuts along the curve - the
+     logo pressed into the ring with a slice taken out. The round crop lives on
+     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
   position: relative;
   flex-shrink: 0;
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  overflow: hidden;
   background: var(--bg-surface-soft);
 }
 

@@ -190,10 +190,13 @@
 }
 
 .trade-finder__leg-headshot {
+  /* No overflow clip: the team badge overhangs this circle on purpose, and a
+     circular clip does not cut a corner off it, it cuts along the curve - the
+     logo pressed into the ring with a slice taken out. The round crop lives on
+     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
   width: 30px;
   height: 30px;
   flex-shrink: 0;
-  overflow: hidden;
   border-radius: 50%;
   background: var(--bg-inset);
 }
@@ -675,10 +678,13 @@
 
 .trade-finder__who-headshot,
 .trade-finder__item-headshot {
+  /* No overflow clip: the team badge overhangs this circle on purpose, and a
+     circular clip does not cut a corner off it, it cuts along the curve - the
+     logo pressed into the ring with a slice taken out. The round crop lives on
+     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
   width: 26px;
   height: 26px;
   flex-shrink: 0;
-  overflow: hidden;
   border-radius: 50%;
   background: var(--bg-inset);
 }
@@ -1445,8 +1451,11 @@
 .trade-finder__faces--tight .trade-finder__face + .trade-finder__face { margin-left: -8px; }
 
 .trade-finder__face {
+  /* No overflow clip: the team badge overhangs this circle on purpose, and a
+     circular clip does not cut a corner off it, it cuts along the curve - the
+     logo pressed into the ring with a slice taken out. The round crop lives on
+     the image (PlayerHeadshot.css), so the photo is a circle without one here. */
   flex-shrink: 0;
-  overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: 50%;
   background: radial-gradient(circle at 50% 30%, #3a2d24, #15110e 70%);
