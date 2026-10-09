@@ -203,3 +203,106 @@ export function isMissingLeagueNameColumn(
   const message = error.message ?? '';
   return (error.code === 'PGRST204' || /column/i.test(message)) && /league_name/.test(message);
 }
+
+/**
+ * The NFL season a moment falls in.
+ *
+ * The calendar year, except January and February, which still belong to the
+ * season that kicked off the autumn before: the title game is played in
+ * February and nobody wants their league pruned during it. Sleeper flips its
+ * own season a week or two after that game, so the two agree for all but a
+ * fortnight, and in that fortnight the only difference is that last year's
+ * leagues linger until March.
+ */
+export function nflSeasonOf(now: Date = new Date()): string {
+  const year = now.getFullYear();
+  return String(now.getMonth() < 2 ? year - 1 : year);
+}
+
+/**
+ * Leagues filed under an earlier season than the one given.
+ *
+ * These are the rows the switcher used to carry forever. Sleeper does not roll
+ * a league forward: every season is a new league with a new id, so an account
+ * that connected in 2025 and again in 2026 held both, and the 2025 copies
+ * stayed in the list a year later under raw ids, because the name refresh
+ * only asks about the current season. Andre's phone showed five of them.
+ *
+ * A league with no recorded season is kept: there is nothing to judge it by,
+ * and the oldest rows on the table predate the column. The comparison is
+ * numeric so a league filed under NEXT season, which Sleeper does during a
+ * rollover, is never mistaken for an old one.
+ */
+export function priorSeasonLeagues<T extends { season?: string | null }>(
+  leagues: readonly T[],
+  season: string | null | undefined,
+): T[] {
+  const cutoff = Number(season);
+  if (!Number.isFinite(cutoff)) return [];
+  return leagues.filter((league) => {
+    const filed = Number(league.season);
+    return league.season != null && league.season !== '' && Number.isFinite(filed) && filed < cutoff;
+  });
+}
+
+/**
+ * The season to judge the account's rows against, given what Sleeper lists.
+ *
+ * Normally Sleeper's own current season. But the lookup falls back to last
+ * season's leagues when nothing is filed under this one yet (see
+ * server/leagueChoices.js), and pruning "last season" at that moment would
+ * empty the switcher for somebody who plainly has leagues. So the cutoff is
+ * the newest season Sleeper actually listed, and the state season only when
+ * it listed nothing.
+ */
+export function newestListedSeason(
+  listed: readonly { season?: string | null }[],
+  stateSeason: string | null | undefined,
+): string | null {
+  let newest: number | null = null;
+  for (const league of listed) {
+    const filed = Number(league.season);
+    if (!Number.isFinite(filed) || league.season == null || league.season === '') continue;
+    if (newest == null || filed > newest) newest = filed;
+  }
+  if (newest != null) return String(newest);
+  return stateSeason != null && stateSeason !== '' ? String(stateSeason) : null;
+}
+
+/**
+ * Sleeper rows this account holds that Sleeper no longer lists.
+ *
+ * A league you left, were removed from, or that the commissioner deleted stays
+ * on the account forever: nothing ever asked Sleeper whether the row still
+ * meant anything, and the league sheet cannot remove it because the sheet only
+ * offers what Sleeper lists. Three of Andre's rows were test leagues deleted
+ * in July, still in the switcher in October as bare ids.
+ *
+ * Scoped three ways so a flaky answer cannot take real leagues with it: only
+ * rows for the Sleeper user the lookup was for (an account could in principle
+ * hold a second username), only rows filed under the cutoff season or later
+ * (older ones are the prior-season rule's business), and nothing at all when
+ * Sleeper listed nothing, because an empty list is what a failed lookup looks
+ * like too.
+ */
+export function deadSleeperLeagues<
+  T extends { provider: string; leagueId: string; userId: string; season?: string | null },
+>(
+  leagues: readonly T[],
+  lookup: {
+    user: { id: string };
+    season: string | null | undefined;
+    leagues: readonly { id: string; season?: string | null }[];
+  },
+): T[] {
+  if (lookup.leagues.length === 0) return [];
+  const cutoff = Number(newestListedSeason(lookup.leagues, lookup.season));
+  const listed = new Set(lookup.leagues.map((league) => String(league.id)));
+  return leagues.filter((league) => {
+    if (league.provider !== 'sleeper' || league.userId !== lookup.user.id) return false;
+    if (listed.has(league.leagueId)) return false;
+    if (league.season == null || league.season === '') return true;
+    const filed = Number(league.season);
+    return !Number.isFinite(cutoff) || !Number.isFinite(filed) || filed >= cutoff;
+  });
+}

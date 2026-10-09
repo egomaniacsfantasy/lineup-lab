@@ -615,8 +615,12 @@ places that share one checklist (`LeagueChecklist`):
   was unticked, which the sheet warns about first. It opens from "Choose
   Sleeper leagues" in the account menu, and from the league list on the phone
   Hub, which has no header and so hosts the sheet itself. A league Sleeper no
-  longer lists (archived, last season) is not on the sheet and is never
-  removed by it.
+  longer lists is not on the sheet, and it does not need to be: the next name
+  refresh drops it from the account, along with any row filed under an
+  earlier season than the newest one Sleeper lists. The hydrate applies the
+  same season rule by the calendar (January and February belong to the season
+  before), so last season's copies go on the next load even before Sleeper
+  answers. Not this season, not a league.
 
 **Pinning.** Any league can be pinned to the top of the switcher, from its row
 in the account menu or the phone Hub's list. Pinned leagues lead in the order
@@ -1516,3 +1520,21 @@ and adding before it is used.
     form, no blobs) and the Sign-in card (no card, build string behind a dev
     flag). Board values are still set in the price face, whose 1 reads as an
     I, until the layout pass moves them to mono.
+31. **The switcher kept leagues for ever.** ~~Open.~~ **Fixed 2026-10-09.**
+    Andre's phone showed fifteen rows, ten of them bare ids: five 2025 copies
+    of leagues he also held for 2026 (Sleeper mints a new league every
+    season), three test leagues deleted in July, and two private ESPN
+    leagues. Nothing on the client ever asked whether a row still meant
+    anything: the league sheet only removes what Sleeper still lists, and
+    the name refresh only asks about the current season, so an old row could
+    never be named and never be removed. `priorSeasonLeagues` and
+    `deadSleeperLeagues` (`src/contexts/leagueRows.ts`) now prune on both
+    reads, the account rows and the Sleeper answer, through the same
+    tombstone-and-delete a manual removal uses, and the open league is
+    released if it was one of them. The `league_name` column was added to
+    `olympus_leagues` the same day, and a device that knows a name for a
+    nameless row writes it back once, which is how the ESPN rows get named
+    on a second device. Still open: a private ESPN league connected on one
+    device shows its id on another until the first device opens the app
+    again; a server-side name fetch with the stored cookies would close
+    that. Guard: `test/leaguePruning.test.mjs`.

@@ -86,7 +86,7 @@ test('removing a league is still not undone by the account rows', async () => {
   const source = await fs.readFile(path.resolve(CONTEXT), 'utf8');
   const remove = source.slice(source.indexOf('const removeLeague = useCallback'));
   assert.match(remove.slice(0, 900), /removedKeysRef\.current\.add/);
-  const hydrate = source.slice(source.indexOf('const all = rows'));
+  const hydrate = source.slice(source.indexOf('const kept = rows'));
   assert.match(hydrate.slice(0, 400), /removedKeysRef\.current\.has/);
 });
 

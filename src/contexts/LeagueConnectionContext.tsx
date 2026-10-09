@@ -33,9 +33,13 @@ import {
 import { supabase } from '../services/supabase';
 import {
   applyCachedLeagueNames,
+  deadSleeperLeagues,
   isMissingLeagueNameColumn,
   leagueNameFromRow,
   mergeLeagueNames,
+  newestListedSeason,
+  nflSeasonOf,
+  priorSeasonLeagues,
   rememberLeagueNames,
   sameLeagueList,
   type DbLeagueRow,
@@ -555,6 +559,71 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
   const marketScanPromiseRef = useRef<Promise<LeaguePricing | null> | null>(null);
   pricingRef.current = pricing;
   userIdRef.current = user?.id ?? null;
+  /* Rows whose name this device has already written back to the account this
+     session, so the backfill below runs once per row rather than on every
+     rehydrate. */
+  const backfilledNamesRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Take leagues off the account that nobody chose to remove: last season's
+   * copies, and Sleeper leagues Sleeper no longer lists. Same tombstone and
+   * delete as removeLeague, for the same reason: the hydrate re-reads the rows
+   * before the delete lands, and the tombstone is what keeps the league gone
+   * in between. A committed delete clears its tombstone so the league can be
+   * added again later, and a failed one is logged and retried next load.
+   */
+  const dropLeagueRows = useCallback((gone: readonly StoredConnection[], reason: string) => {
+    if (gone.length === 0) return;
+    const goneKeys = new Set(gone.map(leagueKey));
+    for (const key of goneKeys) removedKeysRef.current.add(key);
+    writeRemovedKeys(removedKeysRef.current);
+    setPinnedKeys((current) => {
+      const pruned = current.filter((key) => !goneKeys.has(key));
+      if (pruned.length === current.length) return current;
+      writePinnedKeys(pruned);
+      return pruned;
+    });
+    const accountId = userIdRef.current;
+    if (!accountId) return;
+    for (const league of gone) {
+      void supabase
+        .from('olympus_leagues')
+        .delete()
+        .eq('user_id', accountId)
+        .eq('provider', league.provider)
+        .eq('league_id', league.leagueId)
+        .then(({ error }) => {
+          if (error) {
+            console.error(
+              '[leagues] could not drop', leagueKey(league), `(${reason})`, error.message,
+              '- it stays hidden on this device and the delete is retried next load.',
+            );
+            return;
+          }
+          removedKeysRef.current.delete(leagueKey(league));
+          writeRemovedKeys(removedKeysRef.current);
+        });
+    }
+  }, []);
+
+  /** Let go of the open league. The hydrate re-runs with no local choice and
+   *  picks the best remaining row, the way a fresh device does. */
+  const releaseActive = useCallback(() => {
+    applyApiContext(null);
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    setStored(null);
+    setBootstrap(null);
+    setSchedule(null);
+    setPricing(null);
+    setPricingMeta(EMPTY_PRICING_META);
+    setLineHistory(null);
+    setError(null);
+    setErrorIsRetryable(false);
+  }, []);
 
   useEffect(() => {
     setLastMarketScanAt(stored ? readLastMarketScan(stored.leagueId) : null);
@@ -601,9 +670,23 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
            `rows` by index. The list is filtered a line later, so an index into
            `all` stopped matching the row it came from and the "active" league
            could be somebody else entirely. */
-        const all = rows
+        const kept = rows
           .map((row) => ({ ...rowToConnection(row), wasActive: row.is_active }))
           .filter((connection) => !removedKeysRef.current.has(leagueKey(connection)));
+
+        /* Last season is not a league any more. Sleeper mints a new league for
+           every season, so an account that connected two years running held
+           both copies, and the old one sat in the switcher for ever under a
+           bare id because nothing names a league from a season nobody asks
+           about. If it is not this season's, it goes. */
+        const expired = priorSeasonLeagues(kept, nflSeasonOf());
+        dropLeagueRows(expired, 'prior season');
+        const expiredKeys = new Set(expired.map(leagueKey));
+        const all = kept.filter((connection) => !expiredKeys.has(leagueKey(connection)));
+        if (stored && expiredKeys.has(leagueKey(stored))) {
+          releaseActive();
+          return;
+        }
 
         /* A row that is still here despite being removed means the delete never
            committed. Hiding it forever would leave the account quietly wrong on
@@ -652,6 +735,25 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
             mergeLeagueNames(leaguesForSwitcher, stored ? [...previous, stored] : previous),
           );
           rememberLeagueNames(merged);
+          /* The account has a column for the name now (added 2026-10-09), but
+             every row written before it is nameless, and the ESPN rows can
+             only be named by a device that connected them. So a name this
+             device knows for a row that arrived without one is written back
+             here, once, and the next device reads it instead of showing the
+             id. The row keeps its own is_active; this is a name, not a switch. */
+          const nameless = new Set(all.filter((row) => !row.leagueName).map(leagueKey));
+          const activeByKey = new Map(all.map((row) => [leagueKey(row), row.wasActive]));
+          const accountId = userIdRef.current;
+          const backfill = merged.filter((league) => {
+            const key = leagueKey(league);
+            return Boolean(league.leagueName) && nameless.has(key) && !backfilledNamesRef.current.has(key);
+          });
+          if (accountId && backfill.length > 0) {
+            for (const league of backfill) backfilledNamesRef.current.add(leagueKey(league));
+            void upsertRows(
+              backfill.map((league) => leagueRow(accountId, league, activeByKey.get(leagueKey(league)) ?? false)),
+            );
+          }
           /* Same list -> same reference, so the name refresh downstream is not
              woken up to redo work it already did. */
           return sameLeagueList(merged, previous) ? previous : merged;
@@ -722,7 +824,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     return () => {
       cancelled = true;
     };
-  }, [stored, user]);
+  }, [dropLeagueRows, releaseActive, stored, user]);
 
   useEffect(() => {
     /* Names come from Sleeper, not from the account, because the rows have no
@@ -740,6 +842,24 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     connectUsername(sleeperUsername)
       .then((result) => {
         if (cancelled || result.leagues.length === 0) return;
+        /* Sleeper has just said which leagues this account is in. Two kinds of
+           row it has thereby said are over: anything filed under a season older
+           than what it lists, and anything for this season it does not list at
+           all (left, removed, or deleted by the commissioner). The league sheet
+           cannot remove the second kind, because it only offers what Sleeper
+           lists, so this is the only place they can go. The list changes, the
+           effect runs again on the shorter one, and the names come then. */
+        const over = [
+          ...priorSeasonLeagues(leagues, newestListedSeason(result.leagues, result.season)),
+          ...deadSleeperLeagues(leagues, result),
+        ];
+        if (over.length > 0) {
+          const overKeys = new Set(over.map(leagueKey));
+          dropLeagueRows(leagues.filter((league) => overKeys.has(leagueKey(league))), 'not listed by Sleeper');
+          setLeagues(leagues.filter((league) => !overKeys.has(leagueKey(league))));
+          if (stored && overKeys.has(leagueKey(stored))) releaseActive();
+          return;
+        }
         const summaries = sleeperSummaries(result.leagues);
         /* `stored` may be null here now that this runs without an active
            Sleeper league, so the base is built from the Sleeper account rather
@@ -807,7 +927,7 @@ export function LeagueConnectionProvider({ children }: { children: ReactNode }) 
     return () => {
       cancelled = true;
     };
-  }, [leagues, stored, user]);
+  }, [dropLeagueRows, leagues, releaseActive, stored, user]);
 
   const applyPricingSnapshot = useCallback(
     (
