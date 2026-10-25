@@ -28,6 +28,25 @@ function num(v) {
 }
 
 /**
+ * Model name -> Sleeper catalog name, for players the model (ESPN depth-chart names)
+ * calls by a nickname/short form the catalog doesn't use. Without these the projection
+ * falls through to a synthetic `repo::` id, never links to the rostered player, and the
+ * site shows him at 0. Keys/values are normalizeName() forms. (2026-10-25: found by
+ * matching every pushed combine name against the Sleeper catalog.)
+ */
+export const MODEL_NAME_ALIASES = {
+  'bam knight': 'zonovan knight',     // ARI RB
+  'josh palmer': 'joshua palmer',     // BUF WR
+  'andrew ogletree': 'drew ogletree', // IND TE
+};
+
+/** normalizeName() plus the model->catalog alias, for looking a model player up in the catalog. */
+export function catalogNameKey(name) {
+  const n = normalizeName(name);
+  return MODEL_NAME_ALIASES[n] ?? n;
+}
+
+/**
  * Name+position -> Sleeper id (and DEF team code -> id). Built PRIMARILY from the
  * full Sleeper player catalog so EVERY pushed combine player resolves — not just
  * whoever the last manual import happened to cover (that was silently dropping the
@@ -225,7 +244,7 @@ async function _computeAdjusted(suf = '') {
     if (idx) {
       playerId = pos === 'DEF' && p.team
         ? idx.byTeamDef.get(String(p.team).toUpperCase()) ?? null
-        : idx.byNamePos.get(`${normalizeName(p.name)}|${pos}`) ?? null;
+        : idx.byNamePos.get(`${catalogNameKey(p.name)}|${pos}`) ?? null;
     }
     // Not resolvable to a Sleeper id (rare now that we match the full catalog --
     // e.g. a non-Sleeper practice-squad name). Keep them on the board with a stable
