@@ -17,7 +17,7 @@
 
 import { loadProjections } from './loadFromRepo.js';
 import { getActiveProjections } from './store.js';
-import { normalizeName } from './importer.js';
+import { normalizeName, catalogNameKey } from './importer.js';
 import { sleeperProvider } from '../providers/sleeperProvider.js';
 
 const Z80 = 1.2815515594; // 80% interval half-width in sigmas (matches our weekly CI)
@@ -25,25 +25,6 @@ const Z80 = 1.2815515594; // 80% interval half-width in sigmas (matches our week
 function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
-}
-
-/**
- * Model name -> Sleeper catalog name, for players the model (ESPN depth-chart names)
- * calls by a nickname/short form the catalog doesn't use. Without these the projection
- * falls through to a synthetic `repo::` id, never links to the rostered player, and the
- * site shows him at 0. Keys/values are normalizeName() forms. (2026-10-25: found by
- * matching every pushed combine name against the Sleeper catalog.)
- */
-export const MODEL_NAME_ALIASES = {
-  'bam knight': 'zonovan knight',     // ARI RB
-  'josh palmer': 'joshua palmer',     // BUF WR
-  'andrew ogletree': 'drew ogletree', // IND TE
-};
-
-/** normalizeName() plus the model->catalog alias, for looking a model player up in the catalog. */
-export function catalogNameKey(name) {
-  const n = normalizeName(name);
-  return MODEL_NAME_ALIASES[n] ?? n;
 }
 
 /**

@@ -17,7 +17,7 @@
  */
 import { cached } from '../cache.js';
 import { sleeperProvider } from './sleeperProvider.js';
-import { normalizeName } from '../projections/importer.js';
+import { normalizeName, catalogNameKey } from '../projections/importer.js';
 import { getEspnCreds, getEspnCredsFor, normSwid } from './espnCredStore.js';
 import { anyGameLive } from '../live/nflGameStatus.js';
 import { LIVE_MATCHUP_TTL_MS } from '../gameWindows.js';
@@ -119,7 +119,8 @@ function resolvePlayer(espnPlayer, crosswalk, synthetic) {
     const id = team ? crosswalk.defByTeam.get(team) : null;
     if (id) return id;
   } else if (position) {
-    const id = crosswalk.byNamePos.get(`${normalizeName(espnPlayer.fullName)}|${position}`);
+    // catalogNameKey = normalizeName + nickname alias (ESPN says "Bam Knight", Sleeper "Zonovan Knight")
+    const id = crosswalk.byNamePos.get(`${catalogNameKey(espnPlayer.fullName)}|${position}`);
     if (id) return id;
   }
 

@@ -44,6 +44,25 @@ export function normalizeName(name) {
     .trim();
 }
 
+/**
+ * Nickname/short-form name -> Sleeper catalog name. Both the model (ESPN depth-chart
+ * names) and ESPN's fantasy feed use these forms; the Sleeper catalog does not, so
+ * without the alias the player never resolves to a Sleeper id and shows a 0
+ * projection (the board via adjusted.js, ESPN rosters via espnProvider.js).
+ * Keys/values are normalizeName() forms. (2026-10-25: Bam Knight.)
+ */
+export const MODEL_NAME_ALIASES = {
+  'bam knight': 'zonovan knight',     // ARI RB
+  'josh palmer': 'joshua palmer',     // BUF WR
+  'andrew ogletree': 'drew ogletree', // IND TE
+};
+
+/** normalizeName() plus the nickname -> catalog alias, for looking a player up in the Sleeper catalog. */
+export function catalogNameKey(name) {
+  const n = normalizeName(name);
+  return MODEL_NAME_ALIASES[n] ?? n;
+}
+
 export function normalizeTeam(team) {
   const t = String(team ?? '').toUpperCase().trim();
   return TEAM_ALIASES[t] ?? t;
