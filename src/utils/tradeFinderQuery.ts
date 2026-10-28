@@ -559,6 +559,8 @@ export interface BoardRowLike {
 export interface PlayerOutlook {
   /** Projected fantasy points per game over the games still to come. */
   perGame: number;
+  /** Projected fantasy points summed over every game still to come (0 with none left). */
+  total: number;
   /** Rank at the position by that figure, across the whole board. 1 is best. */
   positionRank: number;
   position: string;
@@ -575,6 +577,22 @@ export interface PlayerOutlook {
  * With no usable weeks the sheet's own per-game mean stands in.
  */
 export function restOfSeasonPerGame(row: BoardRowLike, week: number | null | undefined): number {
+  const games = restOfSeasonGames(row, week);
+  if (games.length === 0) return row.mean;
+  return games.reduce((total, points) => total + points, 0) / games.length;
+}
+
+/**
+ * Projected points summed over the games still to come. A trade is judged on
+ * this rather than per game: a player with one game left at 15 is worth 15,
+ * not "15 a game". No games left = 0.
+ */
+export function restOfSeasonTotal(row: BoardRowLike, week: number | null | undefined): number {
+  return restOfSeasonGames(row, week).reduce((total, points) => total + points, 0);
+}
+
+/** The points of each game still to come (byes and out-weeks have none). */
+function restOfSeasonGames(row: BoardRowLike, week: number | null | undefined): number[] {
   const current = week ?? 1;
   const entries = Object.entries(row.weekly ?? {})
     .map(([key, points]) => ({ week: Number(key), points: Number(points) }))
@@ -591,15 +609,18 @@ export function restOfSeasonPerGame(row: BoardRowLike, week: number | null | und
       && Math.abs(total - sum(after)) < Math.abs(total - sum(withThisWeek));
     if (!played) games = withThisWeek;
   }
-  if (games.length === 0) return row.mean;
-  return sum(games) / games.length;
+  return games.map((entry) => entry.points);
 }
 
 export function buildOutlooks(
   rows: readonly BoardRowLike[],
   week: number | null | undefined,
 ): Map<string, PlayerOutlook> {
-  const scored = rows.map((row) => ({ row, perGame: restOfSeasonPerGame(row, week) }));
+  const scored = rows.map((row) => ({
+    row,
+    perGame: restOfSeasonPerGame(row, week),
+    total: restOfSeasonTotal(row, week),
+  }));
   const out = new Map<string, PlayerOutlook>();
   const byPosition = new Map<string, typeof scored>();
   for (const entry of scored) {
@@ -612,10 +633,17 @@ export function buildOutlooks(
       .sort((a, b) => b.perGame - a.perGame)
       .forEach((entry, index) => {
         if (out.has(entry.row.playerId)) return;
-        out.set(entry.row.playerId, { perGame: entry.perGame, positionRank: index + 1, position });
+        out.set(entry.row.playerId, { perGame: entry.perGame, total: entry.total, positionRank: index + 1, position });
       });
   }
   return out;
+}
+
+/** Rest-of-season totals in the same shape, for the slip and the roster column. */
+export function outlookTotals(outlooks: ReadonlyMap<string, PlayerOutlook>): PlayerValues {
+  const values: PlayerValues = {};
+  for (const [id, outlook] of outlooks) values[id] = { mean: outlook.total };
+  return values;
 }
 
 /** The outlook in the shape the roster reads take, for players it covers. */

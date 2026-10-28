@@ -31,6 +31,7 @@ import { tradesSupported } from '../utils/leagueCapabilities';
 import { formatProbOrOdds } from '../utils/formatOdds';
 import {
   buildOutlooks,
+  outlookTotals,
   outlookValues,
   type PlayerOutlook,
   type PlayerValues,
@@ -40,6 +41,7 @@ import {
   getRead,
   getWords,
   lineupSlots,
+  netTotalWords,
   netWords,
   sendRead,
   sendWords,
@@ -224,6 +226,13 @@ function TradeDealsView() {
     };
   }, [bootstrap, leagueWeek, scoringFamily]);
   const basis: ValueBasis = outlooks ? 'ros' : 'week';
+  /* Rest-of-season TOTALS (sum of every game still to come) for the slip and the
+     roster column. A per-game figure over-sells a player with one game left, so
+     the deal is shown in total points; this-week means stand in without the board. */
+  const totals = useMemo<PlayerValues | null>(
+    () => (outlooks ? outlookTotals(outlooks) : pricing?.playerMeans ?? null),
+    [outlooks, pricing?.playerMeans],
+  );
   const values = useMemo<PlayerValues | null>(
     () => (outlooks ? outlookValues(outlooks) : pricing?.playerMeans ?? null),
     [outlooks, pricing?.playerMeans],
@@ -614,8 +623,8 @@ function TradeDealsView() {
   const busy = isPricing || counterLoading;
   const youSlots = lineupSlots(userTeam, rosterPositions);
   const theirSlots = selectedPartner ? lineupSlots(selectedPartner, rosterPositions) : null;
-  const perGameLabel = basis === 'ros' ? 'Per game' : 'This week';
-  const valueOf = (id: string) => values?.[id]?.mean ?? null;
+  const perGameLabel = basis === 'ros' ? 'Rest of season' : 'This week';
+  const valueOf = (id: string) => totals?.[id]?.mean ?? null;
   const rankOf = (id: string) => {
     const outlook = outlooks?.get(id);
     return outlook ? `${outlook.position}${outlook.positionRank}` : null;
@@ -795,7 +804,7 @@ function TradeDealsView() {
                     </span>
                   </span>
                   <span className="trade-cc__roster-slot">{slotOf(row.id, activeSlots, activeTeam)}</span>
-                  <span className="trade-cc__roster-num">{mean != null ? mean.toFixed(1) : ''}</span>
+                  <span className="trade-cc__roster-num">{mean != null ? mean.toFixed(basis === 'ros' ? 0 : 1) : ''}</span>
                   <span className="trade-cc__roster-num trade-cc__roster-rank">{rankOf(row.id) ?? ''}</span>
                   <span className="trade-cc__roster-num trade-cc__roster-bye">{row.player.byeWeek ?? ''}</span>
                   <span aria-hidden="true" className="trade-cc__roster-add">{on ? '✓' : '+'}</span>
@@ -817,7 +826,7 @@ function TradeDealsView() {
     set: (v: string[]) => void,
     empty: string,
   ) => {
-    const sum = sidePerGame(ids, values);
+    const sum = sidePerGame(ids, totals);
     return (
       <div className={`trade-cc__slip-leg trade-cc__slip-leg--${tone}`}>
         <div className="trade-cc__slip-leg-head">
@@ -829,7 +838,7 @@ function TradeDealsView() {
           </span>
           {sum != null && ids.length > 0 ? (
             <span className="trade-cc__slip-sum">
-              {sum.toFixed(1)} {basis === 'ros' ? 'per game' : 'this week'}
+              {basis === 'ros' ? `${sum.toFixed(0)} pts rest of season` : `${sum.toFixed(1)} this week`}
             </span>
           ) : null}
         </div>
@@ -887,7 +896,9 @@ function TradeDealsView() {
      lineup, and its one button prices the trade. Priced, the button is the
      number, and Edit trade opens the rosters again. */
   const renderSlip = () => {
-    const net = netWords(sidePerGame(getIds, values), sidePerGame(give, values));
+    const net = basis === 'ros'
+      ? netTotalWords(sidePerGame(getIds, totals), sidePerGame(give, totals))
+      : netWords(sidePerGame(getIds, values), sidePerGame(give, values));
     return (
       <aside className="trade-cc__slip" aria-label="Your trade">
         {renderSlipLeg('get', getIds, setGetIds, selectedPartner ? 'Pick from their roster' : 'Pick a manager')}

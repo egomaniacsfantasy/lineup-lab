@@ -244,6 +244,19 @@ export function sidePerGame(ids: readonly string[], values: PlayerValues | null)
 }
 
 /**
+ * The weight of the deal in rest-of-season points, before any price: who sends
+ * more over the games still to come. Under half a point is even.
+ */
+export function netTotalWords(inTotal: number | null, outTotal: number | null): string | null {
+  if (inTotal == null || outTotal == null) return null;
+  const diff = outTotal - inTotal;
+  if (Math.abs(diff) < 0.5) return 'Even over the rest of the season.';
+  return diff > 0
+    ? `You send ${diff.toFixed(0)} more points over the rest of the season.`
+    : `You get ${(-diff).toFixed(0)} more points over the rest of the season.`;
+}
+
+/**
  * The weight of the deal in one line, before any price: who sends more per
  * game. Under a twentieth of a point a game is even.
  */

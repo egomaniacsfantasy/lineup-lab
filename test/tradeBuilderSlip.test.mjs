@@ -142,7 +142,7 @@ test('a pick fills the slip with a line on your lineup, the price lands in the s
        slot named, whatever a value ranking would say. */
     assert.match(notes[1], /^Your FLEX\. .+ starts instead \(\d+\.\d\)\.$/);
     assert.equal(await page.locator('.trade-cc__slip-shape').innerText(), '1 for 1');
-    assert.match(await page.locator('.trade-cc__slip-net').innerText(), /^You send \d+\.\d more per game\.$/);
+    assert.match(await page.locator('.trade-cc__slip-net').innerText(), /^(You (send|get) \d+ more points over the rest of the season|Even over the rest of the season)\.$/);
     assert.equal(await page.locator('.trade-cc__slip-sum').count(), 2);
 
     await page.locator('.trade-cc__price-btn').click();
