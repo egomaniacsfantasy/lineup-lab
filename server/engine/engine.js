@@ -147,7 +147,12 @@ function playerDistribution(playerId, projectionMap, catalogEntry, week = null) 
       const scale = mean > 0 ? weekMean / mean : 1;
       stdev = Number((stdev * Math.max(0.25, scale)).toFixed(2));
       mean = weekMean;
-    } else if (weeklyCount >= 10) {
+    } else {
+      // Any grid missing this week = no game for him that week (bye, or a week the
+      // pipeline dropped him from the depth chart) -> a certain 0. This used to require
+      // >= 10 grid rows, a preseason-era guard: mid-season the grid only holds the
+      // REMAINING weeks, so once fewer than 10 were left every bye fell back to the
+      // player's average instead of 0.
       return { mean: 0, stdev: 0, unpriced: false, zeroed: true };
     }
   }

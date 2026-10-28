@@ -179,6 +179,12 @@ async function _computeAdjusted(suf = '') {
 
   const projections = [];
   let matched = 0;
+  // A game-level grid exists (the live pipeline always ships one). Then a player with
+  // NO weekly rows has no remaining games (cascade-dropped, reserve, off the projectable
+  // ranks) and is worth 0 -- his season-sheet number must not stand in as a per-game mean
+  // (Christian Kirk read 20.9/gm with no games left, 2026-10-27). Only a grid-less source
+  // falls back to the season point.
+  const gridded = dataset.players.some((p) => Array.isArray(p.weekly) && p.weekly.length > 0);
   for (const p of dataset.players) {
     const pos = p.position;
 
@@ -215,7 +221,7 @@ async function _computeAdjusted(suf = '') {
 
     const mean = weekVals.length
       ? weekVals.reduce((a, b) => a + b, 0) / weekVals.length
-      : (seasonPoint ?? 0);
+      : (gridded ? 0 : (seasonPoint ?? 0));
     const stdev = perGameSig.length
       ? perGameSig.reduce((a, b) => a + b, 0) / perGameSig.length
       : Math.abs(mean) * 0.45;
@@ -244,7 +250,7 @@ async function _computeAdjusted(suf = '') {
       stdev: Number((stdev ?? 0).toFixed(2)),
       weekly,
       weeklyCI,
-      seasonTotal: seasonPoint,
+      seasonTotal: gridded && weekVals.length === 0 ? 0 : seasonPoint,
       floor: seasonFloor,
       ceiling: seasonCeil,
       depthRank: p.depthRank ?? null,
