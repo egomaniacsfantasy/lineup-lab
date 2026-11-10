@@ -96,8 +96,11 @@ test('the market is every manager as a pill, and your roster as a priced list un
     assert.equal(await row(page, 'Justin Jefferson').locator('.trade-cc__roster-slot').innerText(), 'WR1');
     assert.equal(await row(page, 'DeVonta Smith').locator('.trade-cc__roster-slot').innerText(), 'Bench');
     assert.equal(await row(page, 'Terry McLaurin').locator('.trade-cc__roster-slot').innerText(), 'FLEX');
-    /* Per game and the rank at the position, the finder's numbers. */
-    assert.match(await row(page, 'Justin Jefferson').locator('.trade-cc__roster-num').first().innerText(), /^\d+\.\d$/);
+    /* Points over the rest of the season, a whole number, and the rank at
+       the position: the finder's numbers. This still asked for a per-game
+       decimal after the column moved to season totals (be7501e), so it had
+       failed on main ever since and blocked every hooked push. */
+    assert.match(await row(page, 'Justin Jefferson').locator('.trade-cc__roster-num').first().innerText(), /^\d+$/);
     assert.match(await row(page, 'Justin Jefferson').locator('.trade-cc__roster-rank').innerText(), /^WR\d+$/);
 
     /* The slip says what to do, and has no title. */
