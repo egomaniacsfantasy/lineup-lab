@@ -144,8 +144,22 @@ function playerDistribution(playerId, projectionMap, catalogEntry, week = null) 
       // certain 0: no spread. Otherwise its leftover CI sigma, with draws clipped at 0,
       // credits ~0.4*sigma phantom points per sim (Achane out for the season read ~1.2/wk).
       if (Number(weekMean) <= 0) return { mean: 0, stdev: 0, unpriced: false, zeroed: false };
-      const scale = mean > 0 ? weekMean / mean : 1;
-      stdev = Number((stdev * Math.max(0.25, scale)).toFixed(2));
+      // Spread = THIS week's own floor/ceiling (the same 80% CI the split-normal
+      // sims draw from), not the season-average sigma rescaled by weekMean/mean.
+      // That ratio exploded for anyone whose remaining grid is mostly zeros: a
+      // one-game fill-in QB (Wentz, wk9) averaged ~1.5/wk, so his 13.2 week got a
+      // 9x sigma (107.6) and the live win% read a 13-pt lead as a coin flip.
+      const wci = projection.weeklyCI?.[week] ?? projection.weeklyCI?.[String(week)];
+      const wFloor = Number(wci?.floor);
+      const wCeil = Number(wci?.ceiling);
+      if (Number.isFinite(wFloor) && Number.isFinite(wCeil) && wCeil > wFloor) {
+        stdev = Number(((wCeil - wFloor) / (2 * Z80)).toFixed(2));
+      } else {
+        // No per-week CI (e.g. the snapshot): old rescale, capped so a near-zero
+        // season average can't blow the sigma up.
+        const scale = mean > 0 ? weekMean / mean : 1;
+        stdev = Number((stdev * Math.min(2, Math.max(0.25, scale))).toFixed(2));
+      }
       mean = weekMean;
     } else {
       // Any grid missing this week = no game for him that week (bye, or a week the
