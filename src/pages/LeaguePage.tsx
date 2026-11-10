@@ -22,9 +22,11 @@ import { forkPairs } from '../utils/forkRows';
 import {
   fetchWeekForks,
   fetchProjectedScores,
+  type ByePlayer,
   type WeekForksResult,
   type ProjectedScores,
 } from '../services/predictor';
+import { decidedWinner } from '../utils/predictorLocks';
 import { leagueRecords } from '../utils/leagueRecords';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -409,6 +411,27 @@ export function LeaguePage() {
     return map;
   }, [projScores]);
 
+  /* Key players on bye, keyed the same way as the projections they explain. */
+  const byesByWeekRoster = useMemo(() => {
+    const map = new Map<string, ByePlayer[]>();
+    for (const entry of projScores?.weeks ?? []) {
+      for (const [rosterId, players] of Object.entries(entry.byes ?? {})) {
+        if (players.length > 0) map.set(`${entry.week}:${rosterId}`, players);
+      }
+    }
+    return map;
+  }, [projScores]);
+
+  /* This week's price for every team, off the same slate the board draws. */
+  const winProbByRoster = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const matchup of connected?.slate ?? []) {
+      if (typeof matchup.teamAWinProb === 'number') map.set(String(matchup.teamARosterId), matchup.teamAWinProb);
+      if (typeof matchup.teamBWinProb === 'number') map.set(String(matchup.teamBRosterId), matchup.teamBWinProb);
+    }
+    return map;
+  }, [connected?.slate]);
+
   /* Remaining games, and the board as it stands with nothing forced. Both are
      read off data the page already holds; the conditioned numbers come from
      the engine, not from here. */
@@ -434,10 +457,27 @@ export function LeaguePage() {
           };
         });
         if (named.some((side) => !side.teamName)) return [];
-        return [{ week: weekEntry.week, matchupId, away: named[0], home: named[1] }];
+        /* Only the week in progress can already be settled, and only the
+           engine's own price says so: one side at 100.0% on banked points. */
+        const winner =
+          weekEntry.week === bootstrap.week
+            ? decidedWinner(
+                named.map((side) => ({
+                  rosterId: side.rosterId,
+                  winProb: winProbByRoster.get(side.rosterId),
+                })),
+              )
+            : null;
+        return [{
+          week: weekEntry.week,
+          matchupId,
+          away: named[0],
+          home: named[1],
+          ...(winner ? { decided: { winnerRosterId: winner } } : {}),
+        }];
       });
     });
-  }, [bootstrap, schedule, projByWeekRoster]);
+  }, [bootstrap, schedule, projByWeekRoster, winProbByRoster]);
 
   const predictorBaseline = useMemo<PredictorBaselineRow[]>(() => {
     if (!connected) return [];
@@ -826,6 +866,7 @@ export function LeaguePage() {
               games={predictorGames}
               leagueId={String(stored?.leagueId ?? '')}
               projByWeekRoster={projByWeekRoster}
+              byesByWeekRoster={byesByWeekRoster}
               storageKey={`og.predictor.${stored?.provider}.${stored?.leagueId}`}
               userId={String(stored?.userId ?? '')}
             />

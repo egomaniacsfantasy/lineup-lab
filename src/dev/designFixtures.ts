@@ -59,6 +59,13 @@ const PREGAME =
 const BYE_QB =
   typeof window !== 'undefined' && window.location.search.includes('byeQb');
 
+/* ?decided settles one of this week's games: the engine's price for it comes
+   back 100.0 against 0.0, which is what a matchup that is over (or out of
+   reach) looks like to the app. Without it the Predictor's locked game, the
+   one state that only exists late in a real week, could not be reached. */
+const DECIDED =
+  typeof window !== 'undefined' && window.location.search.includes('decided');
+
 /* ?dynasty makes the design league answer as a dynasty league. Trades vanish
    and the shell's scope note appears, and neither of those states was
    reachable at all without a real dynasty league to connect, which is how the
@@ -735,8 +742,12 @@ function buildPricing(leagueId: string, pricingMode: 'empty' | 'live'): LeaguePr
     ),
     lineFor(
       MATCHUP_IDS.apollo,
-      { rosterId: 3, moneyline: -213, winProbability: 68.1, projection: 154.2, spread: 10.7, total: 297.7 },
-      { rosterId: 4, moneyline: 213, winProbability: 31.9, projection: 143.5, spread: -10.7, total: 297.7 },
+      DECIDED
+        ? { rosterId: 3, moneyline: -9999900, winProbability: 100, projection: 154.2, spread: 10.7, total: 297.7 }
+        : { rosterId: 3, moneyline: -213, winProbability: 68.1, projection: 154.2, spread: 10.7, total: 297.7 },
+      DECIDED
+        ? { rosterId: 4, moneyline: 9999900, winProbability: 0, projection: 143.5, spread: -10.7, total: 297.7 }
+        : { rosterId: 4, moneyline: 213, winProbability: 31.9, projection: 143.5, spread: -10.7, total: 297.7 },
     ),
     lineFor(
       MATCHUP_IDS.poseidon,
@@ -1557,6 +1568,52 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
       season: '2026',
       reason: 'found',
     };
+  }
+
+  /* Each team's projection for every week left, and who it is missing.
+     NOT a projection: this week reads the fixture's own priced lines, and
+     later weeks are each team's scoring average nudged by week so the cards
+     differ. The byes are fixed names off the fixture rosters, chosen to cover
+     the three shapes the card has to draw: one name, two, and an overflow. */
+  if (endpoint === 'projected-scores' && method === 'GET') {
+    const lineProjection = new Map<string, number>();
+    for (const line of bundle.pricing.lines ?? []) {
+      for (const [rosterId, side] of Object.entries(line.sides)) {
+        lineProjection.set(rosterId, side.projection);
+      }
+    }
+    const named = (ids: string[]) =>
+      ids.map((id) => ({
+        id,
+        name: PLAYER_CATALOG[id]?.name ?? id,
+        position: PLAYER_CATALOG[id]?.position ?? null,
+      }));
+    const starters = (rosterId: number) =>
+      TEAM_POOL.find((team) => team.rosterId === rosterId)?.starters ?? [];
+    const byes: Record<number, Record<string, ReturnType<typeof named>>> = {
+      [WEEK + 1]: {
+        '1': named(starters(1).slice(3, 5)),
+        '4': named(starters(4).slice(1, 2)),
+      },
+      [WEEK + 2]: {
+        '2': named(starters(2).slice(1, 4)),
+      },
+    };
+    const weeks = [];
+    for (let week = WEEK; week <= WEEK + 5; week += 1) {
+      const scores: Record<string, number> = {};
+      for (const team of TEAM_POOL) {
+        const rosterId = String(team.rosterId);
+        const average = team.pointsFor / Math.max(1, team.record.wins + team.record.losses + team.record.ties);
+        const missing = byes[week]?.[rosterId]?.length ?? 0;
+        scores[rosterId] =
+          week === WEEK && lineProjection.has(rosterId)
+            ? lineProjection.get(rosterId)!
+            : Number((average + ((week * 7 + team.rosterId * 3) % 9) - 4 - missing * 5.5).toFixed(1));
+      }
+      weeks.push({ week, scores, byes: byes[week] ?? {} });
+    }
+    return { available: true, weeks };
   }
 
   if (endpoint === 'predictor' && method === 'POST') {

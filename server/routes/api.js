@@ -27,6 +27,7 @@ import {
   prepareLeagueCtx, playerScoreDistribution, optimalAssign, computeLineupMoves,
 } from '../engine/engine.js';
 import { predictSeason, weekForks, weekProjections, PREDICTOR_SIMS } from '../engine/leverage.js';
+import { keyByesByWeek } from '../services/predictorByes.js';
 import { findSuccessorLeague } from '../leagueSuccession.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { registerLeague, readRegistry } from '../engine/leagueRegistry.js';
@@ -2603,6 +2604,8 @@ apiRouter.get('/league/:leagueId/forks', async (req, res, next) => {
 /**
  * Each team's projected points per remaining week (no Monte Carlo - distribution
  * means). Drives the Predictor's per-matchup projection + the override-box default.
+ * Each week also carries `byes`: per roster, the would-be starters whose NFL team is
+ * off that week (see services/predictorByes.js).
  * Query: userId. Cached 5m per league/user/build.
  */
 apiRouter.get('/league/:leagueId/projected-scores', async (req, res, next) => {
@@ -2613,7 +2616,26 @@ apiRouter.get('/league/:leagueId/projected-scores', async (req, res, next) => {
     const ctx = await assembleLeagueCtx(provider, leagueId, userId, null, getFinalNflTeams());
     const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
     const key = `agg:projscores:${leagueId}:${userId}:${build}`;
-    const result = await cached(key, 5 * 60_000, () => weekProjections(ctx));
+    const result = await cached(key, 5 * 60_000, () => {
+      const projected = weekProjections(ctx);
+      // Who is missing each week, beside the number it explains. Display only: the
+      // projection above already benches a bye player and fills his slot. "Key" is
+      // the lineup the engine's own optimalAssign picks on season-long means.
+      const prepared = projected.available ? prepareLeagueCtx(ctx) : null;
+      if (!prepared) return projected;
+      const { teams, catalog, slotLabels, projectionMap } = prepared;
+      const byes = keyByesByWeek({
+        teams,
+        catalog,
+        weeks: projected.weeks.map((entry) => entry.week),
+        assign: (playerIds) => optimalAssign(playerIds, slotLabels, projectionMap, catalog, null),
+        meanOf: (playerId) => projectionMap.get(playerId)?.mean ?? 0,
+      });
+      return {
+        ...projected,
+        weeks: projected.weeks.map((entry) => ({ ...entry, byes: byes[entry.week] ?? {} })),
+      };
+    });
     res.json(result);
   } catch (error) {
     next(error);

@@ -406,6 +406,18 @@ scores. Called games are treated as decided; everything else stays simulated.
 The standings, playoff odds and title odds re-derive on each call, and your
 title price sits pinned in the corner so you can watch it move.
 
+A current-week game the engine already prices at 100.0% against 0.0% (over, or
+out of reach on banked points) is shown locked and is never asked for. It is
+left out of the "called" counts and sent to the engine as a forced result, so
+the bracket can still open (`src/utils/predictorLocks.ts`). The figure beside
+each team is labelled "Proj": this week it is the lineup as set, every later
+week the best lineup the roster can field with bye and empty slots filled at
+replacement, which is the engine's own rule (`teamWeekProjection`). Under each
+team the card names its key players on bye that week: the would-be starters
+whose NFL team is off, two names and a count
+(`server/services/predictorByes.js`, served on `projected-scores`). Design
+flag: `?decided` settles one of the fixture week's games.
+
 *Standings* exists as a fifth view but is reachable only by URL and only for
 admins.
 

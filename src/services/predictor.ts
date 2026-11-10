@@ -264,9 +264,21 @@ export async function fetchWeekForks(
 
 /** Each team's projected points per remaining week (no sims). Feeds the
  *  per-matchup projection display and the override-box default. */
+export interface ByePlayer {
+  id: string;
+  name: string;
+  position: string | null;
+}
+
 export interface ProjectedScores {
   available: boolean;
-  weeks: { week: number; scores: Record<string, number> }[];
+  weeks: {
+    week: number;
+    scores: Record<string, number>;
+    /** Per roster: the players that team would start who are on bye this
+     *  week, best first. The score beside it already accounts for them. */
+    byes?: Record<string, ByePlayer[]>;
+  }[];
 }
 
 export async function fetchProjectedScores(
@@ -276,6 +288,11 @@ export async function fetchProjectedScores(
   try {
     const query = new URLSearchParams({ userId });
     const [url, init] = withContext(`/api/league/${leagueId}/projected-scores?${query}`);
+    /* Design leagues answer locally, as the forks and the board do. Without
+       this a fixture matchup had no number and no byes on it, so the two
+       things a future week says about a team could not be looked at. */
+    const fixture = (await maybeHandleDesignFixtureRequest(url)) as ProjectedScores | null;
+    if (fixture) return fixture;
     const response = await fetch(url, init);
     if (!response.ok) return { available: false, weeks: [] };
     return (await response.json()) as ProjectedScores;

@@ -9,9 +9,11 @@ import {
   type BracketMatchup,
   type BracketPick,
   type BracketSideRef,
+  type ByePlayer,
   type ConditionedRow,
   type Pick,
 } from '../../services/predictor';
+import { openPicks, picksToSend, type DecidedGame } from '../../utils/predictorLocks';
 import './Predictor.css';
 
 export interface PredictorSide {
@@ -29,6 +31,50 @@ export interface PredictorGame {
   matchupId: number;
   home: PredictorSide;
   away: PredictorSide;
+  /** Set when this week's game is already settled: the engine prices one side
+   *  at 100.0% on the points that are banked. Such a game is shown, locked,
+   *  and never asked for. */
+  decided?: { winnerRosterId: string };
+}
+
+/** "Proj 124.3": the number on a matchup is a forecast, and says so. A bare
+ *  figure beside a team name reads as a score that has happened. */
+function Projection({ points }: { points: number }) {
+  return (
+    <span className="predictor__side-prob">
+      <span className="predictor__side-label">Proj</span> {points.toFixed(1)}
+    </span>
+  );
+}
+
+/** Who a team is missing this week. Two names and a count: enough to explain
+ *  the number above it, short enough to sit under a team on a card. */
+function byeLine(players: readonly ByePlayer[] | undefined) {
+  if (!players || players.length === 0) return null;
+  const named = players.slice(0, 2).map((player) => player.name).join(', ');
+  const rest = players.length - 2;
+  return rest > 0 ? `${named} +${rest}` : named;
+}
+
+function ByeRow({ sides }: { sides: (readonly ByePlayer[] | undefined)[] }) {
+  const lines = sides.map(byeLine);
+  if (lines.every((line) => line == null)) return null;
+  return (
+    <div className="predictor__byes">
+      {lines.map((line, index) => (
+        <span
+          className={['predictor__bye', index === 1 ? 'predictor__bye--home' : ''].filter(Boolean).join(' ')}
+          key={index}
+        >
+          {line ? (
+            <>
+              <span className="predictor__side-label">On bye</span> {line}
+            </>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export interface PredictorBaselineRow {
@@ -115,6 +161,7 @@ export function Predictor({
   baseline,
   storageKey,
   projByWeekRoster,
+  byesByWeekRoster,
 }: {
   leagueId: string;
   userId: string;
@@ -124,8 +171,10 @@ export function Predictor({
   /** Projected points keyed `${week}:${rosterId}` — covers playoff weeks too, so
    *  playoff matchups can show each team's projection. */
   projByWeekRoster?: Map<string, number>;
+  /** Key players on bye, keyed the same way. */
+  byesByWeekRoster?: Map<string, ByePlayer[]>;
 }) {
-  const [picks, setPicks] = useState<Pick[]>(() => readPicks(storageKey));
+  const [storedPicks, setPicks] = useState<Pick[]>(() => readPicks(storageKey));
   const [bracketPicks, setBracketPicks] = useState<BracketPick[]>([]);
   const [board, setBoard] = useState<ConditionedRow[] | null>(null);
   const [bracket, setBracket] = useState<Bracket | null>(null);
@@ -133,11 +182,37 @@ export function Predictor({
   const [notice, setNotice] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const hash = useMemo(() => pickSetHash(picks, bracketPicks), [picks, bracketPicks]);
+  /* This week's settled games. Reduced to a string first so the list keeps
+     its identity while the page above re-derives `games` (a price refresh
+     hands down a new array every time), and a run is not restarted over a
+     set of locks that did not change. */
+  const decidedKey = games
+    .filter((game) => game.decided)
+    .map((game) => `${game.week}:${game.matchupId}:${game.decided?.winnerRosterId}`)
+    .join('|');
+  const decided = useMemo<DecidedGame[]>(
+    () =>
+      decidedKey === ''
+        ? []
+        : decidedKey.split('|').map((entry) => {
+            const [week, matchupId, winnerRosterId] = entry.split(':');
+            return { week: Number(week), matchupId: Number(matchupId), winnerRosterId };
+          }),
+    [decidedKey],
+  );
+
+  /* `picks` is what the user has called and can still change. A call saved
+     against a game that has since been decided is no longer theirs to make.
+     `sent` is what the engine conditions on: those calls plus the settled
+     games, which have to be forced for the bracket ever to open. */
+  const picks = useMemo(() => openPicks(storedPicks, decided), [storedPicks, decided]);
+  const sent = useMemo(() => picksToSend(storedPicks, decided), [storedPicks, decided]);
+
+  const hash = useMemo(() => pickSetHash(sent, bracketPicks), [sent, bracketPicks]);
 
   useEffect(() => {
-    writePicks(storageKey, picks);
-  }, [picks, storageKey]);
+    writePicks(storageKey, storedPicks);
+  }, [storedPicks, storageKey]);
 
   useEffect(() => {
     /* Nothing forced is the baseline, which we already have. Asking the server
@@ -167,7 +242,7 @@ export function Predictor({
     }, CONDITIONED_TIMEOUT_MS);
 
     let cancelled = false;
-    fetchConditionedBoard(leagueId, userId, picks, controller.signal, { bracketPicks })
+    fetchConditionedBoard(leagueId, userId, sent, controller.signal, { bracketPicks })
       .then((result) => {
         if (cancelled) return;
         if (!result.available) {
@@ -204,7 +279,7 @@ export function Predictor({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [leagueId, userId, picks, bracketPicks, hash]);
+  }, [leagueId, userId, picks, sent, bracketPicks, hash]);
 
   const pickedFor = useCallback(
     (matchupId: number) => picks.find((pick) => pick.matchupId === matchupId) ?? null,
@@ -212,6 +287,7 @@ export function Predictor({
   );
 
   const choose = (game: PredictorGame, rosterId: string) => {
+    if (game.decided) return;
     setPicks((current) => {
       const existing = current.find((pick) => pick.matchupId === game.matchupId);
       if (!existing) {
@@ -295,8 +371,10 @@ export function Predictor({
       : activeStep?.kind === 'playoff'
         ? bracketPicks.filter((bp) => bp.round === activeStep.round).length
         : 0;
+  const stepDecided =
+    activeStep?.kind === 'week' ? activeStep.games.filter((game) => game.decided).length : 0;
   const stepTotal =
-    activeStep?.kind === 'week' ? activeStep.games.length
+    activeStep?.kind === 'week' ? activeStep.games.length - stepDecided
       : activeStep?.kind === 'playoff' ? activeStep.matchups.length : 0;
 
   const conditioned = useMemo(() => {
@@ -333,7 +411,15 @@ export function Predictor({
     });
   }, [baseline, conditioned]);
 
-  const totalRemaining = games.length;
+  /* Games still open to call. A decided game is not "remaining": counting it
+     would leave the header one short of done for ever. */
+  const totalRemaining = games.length - decided.length;
+  const decidedNote =
+    decided.length === 0
+      ? ''
+      : decided.length === 1
+        ? ' 1 game this week is already decided and is locked in.'
+        : ` ${decided.length} games this week are already decided and are locked in.`;
 
   /* Your row, and where the calls have moved it. Held apart so the header can
      show the before and the after without digging through the table. */
@@ -350,8 +436,11 @@ export function Predictor({
           </h2>
           <p className="predictor__sub">
             {picks.length === 0
-              ? `Every game below is still simulated. Pick one and the whole book reprices.`
+              ? decided.length === 0
+                ? `Every game below is still simulated. Pick one and the whole book reprices.`
+                : `Every open game is still simulated. Pick one and the whole book reprices.`
               : `${picks.length} of ${totalRemaining} games called. The other ${totalRemaining - picks.length} are still simulated.`}
+            {decidedNote}
           </p>
         </div>
 
@@ -421,7 +510,10 @@ export function Predictor({
             ))}
           </select>
           <span className="predictor__weekcount">
-            {stepPicked} of {stepTotal} called
+            {stepTotal === 0 && stepDecided > 0
+              ? 'All decided'
+              : `${stepPicked} of ${stepTotal} called`}
+            {stepTotal > 0 && stepDecided > 0 ? ` · ${stepDecided} decided` : ''}
           </span>
         </div>
 
@@ -465,25 +557,36 @@ export function Predictor({
       <div className="predictor__body">
         <div className="predictor__picks">
           {activeStep?.kind === 'week' ? activeStep.games.map((game) => {
-            const pick = pickedFor(game.matchupId);
+            const pick = game.decided ? null : pickedFor(game.matchupId);
+            const settled = game.decided ?? null;
             return (
-              <div className="predictor__game" key={game.matchupId}>
+              <div
+                className={['predictor__game', settled ? 'predictor__game--decided' : '']
+                  .filter(Boolean).join(' ')}
+                key={game.matchupId}
+              >
                 {/* The two sides are wrapped so the "vs" divider can anchor to
                     them. Centred on the whole game instead, it slid halfway
                     down the score-entry row the moment a game was called. */}
                 <div className="predictor__game-sides">
                 {[game.away, game.home].map((side, index) => {
                   const chosen = pick?.winnerRosterId === side.rosterId;
-                  const beaten = pick != null && !chosen;
+                  const won = settled?.winnerRosterId === side.rosterId;
+                  const beaten = (pick != null && !chosen) || (settled != null && !won);
                   return (
                     <button
-                      aria-pressed={chosen}
+                      aria-pressed={settled ? undefined : chosen}
                       className={[
                         'predictor__side',
                         index === 1 ? 'predictor__side--home' : '',
                         chosen ? 'predictor__side--picked' : '',
+                        /* Not the amber of a call. Amber says "you chose
+                           this"; nobody chose this, it happened, so the
+                           winner carries weight and the loser recedes. */
+                        won ? 'predictor__side--won' : '',
                         beaten ? 'predictor__side--beaten' : '',
                       ].filter(Boolean).join(' ')}
+                      disabled={settled != null}
                       key={side.rosterId}
                       onClick={() => choose(game, side.rosterId)}
                       type="button"
@@ -495,7 +598,7 @@ export function Predictor({
                       <span className="predictor__side-copy">
                         <span className="predictor__side-name">{side.teamName}</span>
                         {typeof side.projPoints === 'number' ? (
-                          <span className="predictor__side-prob">{side.projPoints.toFixed(1)}</span>
+                          <Projection points={side.projPoints} />
                         ) : typeof side.winProb === 'number' ? (
                           <span className="predictor__side-prob">{side.winProb.toFixed(0)}%</span>
                         ) : null}
@@ -504,6 +607,16 @@ export function Predictor({
                   );
                 })}
                 </div>
+
+                {settled ? (
+                  <p className="predictor__decided">Already decided. Nothing to call.</p>
+                ) : null}
+
+                <ByeRow
+                  sides={[game.away, game.home].map((side) =>
+                    byesByWeekRoster?.get(`${game.week}:${side.rosterId}`),
+                  )}
+                />
 
                 {pick ? (
                   /* Inputs sit in the SAME away/home order as the buttons above, so
@@ -589,12 +702,17 @@ export function Predictor({
                               <span className="predictor__seed">#{side.seed}</span> {side.teamName}
                             </span>
                             {typeof side.projPoints === 'number' ? (
-                              <span className="predictor__side-prob">{side.projPoints.toFixed(1)}</span>
+                              <Projection points={side.projPoints} />
                             ) : null}
                           </span>
                         </button>
                       );
                     })}
+                    <ByeRow
+                      sides={sides.map((side) =>
+                        byesByWeekRoster?.get(`${matchup.week}:${side.rosterId}`),
+                      )}
+                    />
                   </div>
                 );
               })}
