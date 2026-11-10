@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatProbOrOdds } from '../../utils/formatOdds';
 import { TeamAvatar } from './TeamAvatar';
+import { PredictorBracket } from './PredictorBracket';
+import { PlayerHeadshot } from '../player/PlayerHeadshot';
+import type { Player } from '../../types';
 import { SimulationLoader } from '../ui/SimulationLoader';
 import {
   fetchConditionedBoard,
   pickSetHash,
   type Bracket,
-  type BracketMatchup,
   type BracketPick,
-  type BracketSideRef,
   type ByePlayer,
   type ConditionedRow,
   type Pick,
 } from '../../services/predictor';
-import { openPicks, picksToSend, type DecidedGame } from '../../utils/predictorLocks';
+import { openPicks, picksOnBoard, picksToSend, type DecidedGame } from '../../utils/predictorLocks';
 import './Predictor.css';
 
 export interface PredictorSide {
@@ -47,29 +48,44 @@ function Projection({ points }: { points: number }) {
   );
 }
 
-/** Who a team is missing this week. Two names and a count: enough to explain
- *  the number above it, short enough to sit under a team on a card. */
-function byeLine(players: readonly ByePlayer[] | undefined) {
-  if (!players || players.length === 0) return null;
-  const named = players.slice(0, 2).map((player) => player.name).join(', ');
-  const rest = players.length - 2;
-  return rest > 0 ? `${named} +${rest}` : named;
-}
-
-function ByeRow({ sides }: { sides: (readonly ByePlayer[] | undefined)[] }) {
-  const lines = sides.map(byeLine);
-  if (lines.every((line) => line == null)) return null;
+/**
+ * Who a team is missing this week, as faces.
+ *
+ * Every one of them, not two and a count: "+1" hides exactly the name you
+ * were about to look for, and a team short four starters should look short
+ * four starters. The chips wrap, so the row grows instead of truncating.
+ */
+function ByeRow({
+  sides,
+  resolvePlayer,
+}: {
+  sides: (readonly ByePlayer[] | undefined)[];
+  resolvePlayer?: (id: string) => Player;
+}) {
+  if (sides.every((players) => !players || players.length === 0)) return null;
   return (
     <div className="predictor__byes">
-      {lines.map((line, index) => (
+      {sides.map((players, index) => (
         <span
           className={['predictor__bye', index === 1 ? 'predictor__bye--home' : ''].filter(Boolean).join(' ')}
           key={index}
         >
-          {line ? (
-            <>
-              <span className="predictor__side-label">On bye</span> {line}
-            </>
+          {players && players.length > 0 ? (
+            <span className="predictor__bye-list">
+              <span className="predictor__side-label">On bye</span>
+              {players.map((player) => (
+                <span className="predictor__bye-player" key={player.id}>
+                  <PlayerHeadshot
+                    className="predictor__bye-shot"
+                    name={player.name}
+                    player={resolvePlayer?.(player.id)}
+                    position={player.position ?? undefined}
+                    slug={resolvePlayer ? undefined : player.id}
+                  />
+                  <span className="predictor__bye-name">{player.name}</span>
+                </span>
+              ))}
+            </span>
           ) : null}
         </span>
       ))}
@@ -91,28 +107,14 @@ export interface PredictorBaselineRow {
 }
 
 function formatRecord(r: { wins: number; losses: number; ties: number } | null | undefined) {
-  if (!r) return '—';
+  if (!r) return '\u2014';
   return r.ties ? `${r.wins}-${r.losses}-${r.ties}` : `${r.wins}-${r.losses}`;
 }
 
-/** A navigation step: a regular-season week or a playoff round. */
+/** A navigation step: a regular-season week, or the playoff bracket. */
 type Step =
   | { kind: 'week'; key: string; label: string; week: number; games: PredictorGame[] }
-  | { kind: 'playoff'; key: string; label: string; round: number; week: number; matchups: BracketMatchup[] };
-
-function nextPow2(n: number) {
-  let p = 1;
-  while (p < n) p *= 2;
-  return p;
-}
-
-function roundLabel(round: number, totalRounds: number) {
-  const fromEnd = totalRounds - 1 - round;
-  if (fromEnd <= 0) return 'Playoffs · Final';
-  if (fromEnd === 1) return 'Playoffs · Semifinals';
-  if (fromEnd === 2) return 'Playoffs · Quarterfinals';
-  return `Playoffs · Round ${round + 1}`;
-}
+  | { kind: 'playoff'; key: string; label: string };
 
 /**
  * The Predictor: pick the rest of the season and watch the book move.
@@ -162,6 +164,8 @@ export function Predictor({
   storageKey,
   projByWeekRoster,
   byesByWeekRoster,
+  resolvePlayer,
+  playoffTeams = 0,
 }: {
   leagueId: string;
   userId: string;
@@ -173,6 +177,11 @@ export function Predictor({
   projByWeekRoster?: Map<string, number>;
   /** Key players on bye, keyed the same way. */
   byesByWeekRoster?: Map<string, ByePlayer[]>;
+  /** Turns a bye player's id into the record a headshot is drawn from. */
+  resolvePlayer?: (id: string) => Player;
+  /** How many teams make the playoffs. Draws the bracket frame before the
+   *  engine has seeds to put in it; 0 hides the bracket. */
+  playoffTeams?: number;
 }) {
   const [storedPicks, setPicks] = useState<Pick[]>(() => readPicks(storageKey));
   const [bracketPicks, setBracketPicks] = useState<BracketPick[]>([]);
@@ -205,8 +214,21 @@ export function Predictor({
      against a game that has since been decided is no longer theirs to make.
      `sent` is what the engine conditions on: those calls plus the settled
      games, which have to be forced for the bracket ever to open. */
-  const picks = useMemo(() => openPicks(storedPicks, decided), [storedPicks, decided]);
-  const sent = useMemo(() => picksToSend(storedPicks, decided), [storedPicks, decided]);
+  /* And before either: only calls for games still on the board. A pick saved
+     last week for a game that has since been played would otherwise be sent
+     and credited a second time, one game too many on both teams' records. */
+  const boardKey = games.map((game) => `${game.week}:${game.matchupId}`).join('|');
+  const onBoard = useMemo(() => {
+    const board = boardKey === ''
+      ? []
+      : boardKey.split('|').map((entry) => {
+          const [week, matchupId] = entry.split(':');
+          return { week: Number(week), matchupId: Number(matchupId) };
+        });
+    return picksOnBoard(storedPicks, board);
+  }, [storedPicks, boardKey]);
+  const picks = useMemo(() => openPicks(onBoard, decided), [onBoard, decided]);
+  const sent = useMemo(() => picksToSend(onBoard, decided), [onBoard, decided]);
 
   const hash = useMemo(() => pickSetHash(sent, bracketPicks), [sent, bracketPicks]);
 
@@ -281,25 +303,31 @@ export function Predictor({
     };
   }, [leagueId, userId, picks, sent, bracketPicks, hash]);
 
+  /* Week and id together. A provider that numbers its games 1 to 6 every
+     week reuses the id, and the id alone would light the same card in every
+     week at once. */
+  const isGame = (pick: Pick, game: { week: number; matchupId: number }) =>
+    pick.week === game.week && pick.matchupId === game.matchupId;
   const pickedFor = useCallback(
-    (matchupId: number) => picks.find((pick) => pick.matchupId === matchupId) ?? null,
+    (game: PredictorGame) =>
+      picks.find((pick) => pick.week === game.week && pick.matchupId === game.matchupId) ?? null,
     [picks],
   );
 
   const choose = (game: PredictorGame, rosterId: string) => {
     if (game.decided) return;
     setPicks((current) => {
-      const existing = current.find((pick) => pick.matchupId === game.matchupId);
+      const existing = current.find((pick) => isGame(pick, game));
       if (!existing) {
         return [...current, { week: game.week, matchupId: game.matchupId, winnerRosterId: rosterId }];
       }
       /* Same side twice unpicks; the other side flips. One control, three
          outcomes, no separate clear button to hunt for. */
       if (existing.winnerRosterId === rosterId) {
-        return current.filter((pick) => pick.matchupId !== game.matchupId);
+        return current.filter((pick) => !isGame(pick, game));
       }
       return current.map((pick) =>
-        pick.matchupId === game.matchupId ? { ...pick, winnerRosterId: rosterId } : pick,
+        isGame(pick, game) ? { ...pick, winnerRosterId: rosterId } : pick,
       );
     });
   };
@@ -307,12 +335,12 @@ export function Predictor({
   /* Override the projected score for a called game. Committed on blur, never
      per keystroke — each commit reprices the whole board (one sim), so typing
      "124" must not fire three runs. Blank clears the override back to projected. */
-  const setPoints = (matchupId: number, side: 'winner' | 'loser', raw: string) => {
+  const setPoints = (game: PredictorGame, side: 'winner' | 'loser', raw: string) => {
     const n = Number(raw);
     const val = raw.trim() === '' || Number.isNaN(n) ? undefined : n;
     setPicks((current) =>
       current.map((pick) => {
-        if (pick.matchupId !== matchupId) return pick;
+        if (!isGame(pick, game)) return pick;
         const nextPick: Pick = { ...pick };
         if (side === 'winner') {
           if (val == null) delete nextPick.winnerPoints;
@@ -354,13 +382,13 @@ export function Predictor({
     const weekSteps: Step[] = weekList.map((w) => ({
       kind: 'week', key: `w${w}`, label: `Week ${w}`, week: w, games: games.filter((g) => g.week === w),
     }));
-    const totalRounds = bracket ? Math.max(1, Math.round(Math.log2(nextPow2(bracket.playoffTeams)))) : 0;
-    const playoffSteps: Step[] = (bracket?.rounds ?? []).map((rd) => ({
-      kind: 'playoff', key: `p${rd.round}`, label: roundLabel(rd.round, totalRounds),
-      round: rd.round, week: rd.week, matchups: rd.matchups,
-    }));
+    /* One step for the whole bracket, there from the start. It used to be a
+       step per round that only appeared once the season was fully called, so
+       nothing on the page said the playoffs could be picked at all. */
+    const size = bracket?.playoffTeams ?? playoffTeams;
+    const playoffSteps: Step[] = size >= 2 ? [{ kind: 'playoff', key: 'playoffs', label: 'Playoffs' }] : [];
     return [...weekSteps, ...playoffSteps];
-  }, [games, bracket]);
+  }, [games, bracket, playoffTeams]);
 
   const [stepIndex, setStepIndex] = useState(0);
   const safeStepIndex = Math.min(stepIndex, Math.max(0, steps.length - 1));
@@ -369,13 +397,13 @@ export function Predictor({
     activeStep?.kind === 'week'
       ? picks.filter((pick) => pick.week === activeStep.week).length
       : activeStep?.kind === 'playoff'
-        ? bracketPicks.filter((bp) => bp.round === activeStep.round).length
+        ? bracketPicks.length
         : 0;
   const stepDecided =
     activeStep?.kind === 'week' ? activeStep.games.filter((game) => game.decided).length : 0;
   const stepTotal =
     activeStep?.kind === 'week' ? activeStep.games.length - stepDecided
-      : activeStep?.kind === 'playoff' ? activeStep.matchups.length : 0;
+      : activeStep?.kind === 'playoff' ? Math.max(0, (bracket?.playoffTeams ?? playoffTeams) - 1) : 0;
 
   const conditioned = useMemo(() => {
     if (!board) return null;
@@ -439,7 +467,9 @@ export function Predictor({
               ? decided.length === 0
                 ? `Every game below is still simulated. Pick one and the whole book reprices.`
                 : `Every open game is still simulated. Pick one and the whole book reprices.`
-              : `${picks.length} of ${totalRemaining} games called. The other ${totalRemaining - picks.length} are still simulated.`}
+              : totalRemaining - picks.length === 0
+                ? `All ${totalRemaining} games called. Nothing in the regular season is left to the sim.`
+                : `${picks.length} of ${totalRemaining} games called. The other ${totalRemaining - picks.length} ${totalRemaining - picks.length === 1 ? 'is' : 'are'} still simulated.`}
             {decidedNote}
           </p>
         </div>
@@ -536,8 +566,7 @@ export function Predictor({
               const w = activeStep.week;
               setPicks((current) => current.filter((pick) => pick.week !== w));
             } else if (activeStep?.kind === 'playoff') {
-              const r = activeStep.round;
-              setBracketPicks((current) => current.filter((bp) => bp.round < r));
+              setBracketPicks([]);
             }
           }}
           type="button"
@@ -557,7 +586,7 @@ export function Predictor({
       <div className="predictor__body">
         <div className="predictor__picks">
           {activeStep?.kind === 'week' ? activeStep.games.map((game) => {
-            const pick = game.decided ? null : pickedFor(game.matchupId);
+            const pick = game.decided ? null : pickedFor(game);
             const settled = game.decided ?? null;
             return (
               <div
@@ -616,6 +645,7 @@ export function Predictor({
                   sides={[game.away, game.home].map((side) =>
                     byesByWeekRoster?.get(`${game.week}:${side.rosterId}`),
                   )}
+                  resolvePlayer={resolvePlayer}
                 />
 
                 {pick ? (
@@ -645,7 +675,7 @@ export function Predictor({
                             placeholder={side.projPoints != null ? side.projPoints.toFixed(1) : ''}
                             defaultValue={value ?? ''}
                             key={`${game.matchupId}:${side.rosterId}:${value ?? ''}`}
-                            onBlur={(event) => setPoints(game.matchupId, role, event.target.value)}
+                            onBlur={(event) => setPoints(game, role, event.target.value)}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
                             }}
@@ -658,68 +688,14 @@ export function Predictor({
               </div>
             );
           }) : activeStep?.kind === 'playoff' ? (
-            <>
-              {bracket?.champion ? (
-                <p className="predictor__champ">
-                  🏆 {teamInfo.get(bracket.champion)?.teamName ?? 'Champion'} wins it all
-                </p>
-              ) : null}
-              {activeStep.matchups.map((matchup) => {
-                const pick = bracketPicks.find(
-                  (bp) => bp.round === matchup.round && bp.idx === matchup.idx,
-                );
-                const sides = [matchup.a, matchup.b].map((ref: BracketSideRef) => {
-                  const info = teamInfo.get(ref.rosterId);
-                  return {
-                    rosterId: ref.rosterId,
-                    seed: ref.seed,
-                    teamName: info?.teamName ?? `#${ref.seed}`,
-                    avatarUrl: info?.avatarUrl ?? null,
-                    projPoints: projByWeekRoster?.get(`${matchup.week}:${ref.rosterId}`),
-                  };
-                });
-                return (
-                  <div className="predictor__game" key={`${matchup.round}:${matchup.idx}`}>
-                    {sides.map((side, index) => {
-                      const chosen = pick?.winnerRosterId === side.rosterId;
-                      const beaten = pick != null && !chosen;
-                      return (
-                        <button
-                          aria-pressed={chosen}
-                          className={[
-                            'predictor__side',
-                            index === 1 ? 'predictor__side--home' : '',
-                            chosen ? 'predictor__side--picked' : '',
-                            beaten ? 'predictor__side--beaten' : '',
-                          ].filter(Boolean).join(' ')}
-                          key={side.rosterId}
-                          onClick={() => chooseBracket(matchup.round, matchup.idx, side.rosterId)}
-                          type="button"
-                        >
-                          <TeamAvatar avatarUrl={side.avatarUrl} name={side.teamName} />
-                          <span className="predictor__side-copy">
-                            <span className="predictor__side-name">
-                              <span className="predictor__seed">#{side.seed}</span> {side.teamName}
-                            </span>
-                            {typeof side.projPoints === 'number' ? (
-                              <Projection points={side.projPoints} />
-                            ) : null}
-                          </span>
-                        </button>
-                      );
-                    })}
-                    <ByeRow
-                      sides={sides.map((side) =>
-                        byesByWeekRoster?.get(`${matchup.week}:${side.rosterId}`),
-                      )}
-                    />
-                  </div>
-                );
-              })}
-              {activeStep.matchups.length === 0 ? (
-                <p className="predictor__empty">Call the earlier round first to set this one.</p>
-              ) : null}
-            </>
+            <PredictorBracket
+              bracket={bracket}
+              onPick={chooseBracket}
+              picks={bracketPicks}
+              playoffTeams={playoffTeams}
+              projByWeekRoster={projByWeekRoster}
+              teams={teamInfo}
+            />
           ) : (
             <p className="predictor__empty">No games left to call.</p>
           )}

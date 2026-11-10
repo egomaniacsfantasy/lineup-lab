@@ -414,9 +414,24 @@ each team is labelled "Proj": this week it is the lineup as set, every later
 week the best lineup the roster can field with bye and empty slots filled at
 replacement, which is the engine's own rule (`teamWeekProjection`). Under each
 team the card names its key players on bye that week: the would-be starters
-whose NFL team is off, two names and a count
-(`server/services/predictorByes.js`, served on `projected-scores`). Design
-flag: `?decided` settles one of the fixture week's games.
+whose NFL team is off, every one of them, each with a headshot
+(`server/services/predictorByes.js`, served on `projected-scores`).
+
+Saved calls are kept in the browser, so only calls for a game still on the
+board are counted or sent, matched on week and matchup id together
+(`picksOnBoard`). A call left over from a week that has since been played used
+to be forced a second time and put one game too many on both teams' records.
+
+The playoffs are one step, a bracket (`PredictorBracket`, laid out by
+`src/utils/bracketLayout.ts`). Its frame is drawn from the start with seed
+numbers in it; once every regular-season game is called the engine returns the
+seeded bracket and a pick carries its team into the next column. A matchup can
+be picked only when the engine has served it, so the round and index a pick is
+sent under are always the engine's own. A reseeding league gets the same
+columns without connector lines, since its next round is redrawn.
+
+Design flags: `?decided` settles one of the fixture week's games;
+`?playoffTeams=6` widens the fixture playoffs to six, the shape with byes.
 
 *Standings* exists as a fifth view but is reachable only by URL and only for
 admins.

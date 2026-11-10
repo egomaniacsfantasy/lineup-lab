@@ -66,6 +66,16 @@ const BYE_QB =
 const DECIDED =
   typeof window !== 'undefined' && window.location.search.includes('decided');
 
+/* ?playoffTeams=6 widens the fixture's playoffs from four teams to six, which
+   is the shape most real leagues run and the one with first-round byes in
+   it. Four teams is two tidy columns and hides every hard part of drawing a
+   bracket. */
+const DESIGN_PLAYOFF_TEAMS = (() => {
+  if (typeof window === 'undefined') return 4;
+  const asked = Number(new URL(window.location.href).searchParams.get('playoffTeams'));
+  return Number.isInteger(asked) && asked >= 2 && asked <= 6 ? asked : 4;
+})();
+
 /* ?dynasty makes the design league answer as a dynasty league. Trades vanish
    and the shell's scope note appears, and neither of those states was
    reachable at all without a real dynasty league to connect, which is how the
@@ -1032,7 +1042,7 @@ function buildBootstrap(leagueId: string): LeagueBootstrap {
       scoringSettings: {},
       rosterPositions: [...SLOT_ORDER, 'BN', 'BN', 'BN', 'BN'],
       playoffWeekStart: 11,
-      playoffTeams: 4,
+      playoffTeams: DESIGN_PLAYOFF_TEAMS,
       lastScoredWeek: 7,
       regularSeasonWeeks: 10,
       leagueType: DYNASTY ? 'dynasty' : 'redraft',
@@ -1337,9 +1347,60 @@ const DESIGN_PREDICTOR_MS =
 
 /* The client hashes a pick set to throw away runs whose picks are no longer
    on screen. The fixture has to agree with it or every answer is discarded. */
-function predictorHash(picks: { week?: number; matchupId?: number; winnerRosterId?: string }[]) {
-  return picks
-    .map((pick) => `${pick.week}:${pick.matchupId}:${pick.winnerRosterId}`)
+/* The bracket the engine would hand back once the regular season is called.
+   NOT the engine: seeds are the fixture's futures order, the draw is the
+   standard one, and a round appears once the round before it is fully
+   picked, which is the shape the real bracketView returns. */
+function designBracket(
+  bundle: FixtureBundle,
+  bracketPicks: { round: number; idx: number; winnerRosterId: string }[],
+) {
+  const playoffTeams = DESIGN_PLAYOFF_TEAMS;
+  const seeded = [...(bundle.pricing.futures ?? [])]
+    .sort((a, b) => b.playoffProb - a.playoffProb)
+    .slice(0, playoffTeams)
+    .map((team, index) => ({ rosterId: String(team.rosterId), seed: index + 1 }));
+  let size = 1;
+  while (size < playoffTeams) size *= 2;
+  const order = (n: number): number[] =>
+    n <= 1 ? [1] : order(n / 2).flatMap((seed) => [seed, n + 1 - seed]);
+  let alive: ((typeof seeded)[number] | null)[] = order(size).map((seed) => seeded[seed - 1] ?? null);
+  const rounds = [];
+  let champion: string | null = null;
+  for (let round = 0; alive.filter(Boolean).length > 1; round += 1) {
+    const matchups = [];
+    const next: ((typeof seeded)[number] | null)[] = [];
+    let pending = false;
+    for (let i = 0; i < alive.length; i += 2) {
+      const a = alive[i];
+      const b = alive[i + 1];
+      if (!a || !b) { next.push(a ?? b ?? null); continue; }
+      const forced = bracketPicks.find((pick) => pick.round === round && pick.idx === i / 2);
+      const winner = forced && [a.rosterId, b.rosterId].includes(String(forced.winnerRosterId))
+        ? String(forced.winnerRosterId)
+        : null;
+      matchups.push({ round, idx: i / 2, week: 11 + round, a, b, winnerRosterId: winner });
+      if (winner) next.push(winner === a.rosterId ? a : b);
+      else { next.push(null); pending = true; }
+    }
+    rounds.push({ round, week: 11 + round, matchups });
+    if (pending) return { seeds: seeded, rounds, champion, playoffTeams, reseed: false };
+    alive = next;
+  }
+  champion = alive.find(Boolean)?.rosterId ?? null;
+  return { seeds: seeded, rounds, champion, playoffTeams, reseed: false };
+}
+
+function predictorHash(
+  picks: { week?: number; matchupId?: number; winnerRosterId?: string }[],
+  bracketPicks: { round: number; idx: number; winnerRosterId: string }[] = [],
+) {
+  /* The same string the client builds, bracket picks included, or every
+     answer to a bracket pick is thrown away as stale. */
+  return [
+    ...picks.map((pick) => `${pick.week}:${pick.matchupId}:${pick.winnerRosterId}`),
+    ...bracketPicks.map((pick) => `b:${pick.round}:${pick.idx}:${pick.winnerRosterId}`),
+  ]
     .sort()
     .join('|');
 }
@@ -1621,17 +1682,24 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
       typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};
     const picks = Array.isArray(body.picks) ? (body.picks as { winnerRosterId?: string }[]) : [];
     const winners = new Set(picks.map((pick) => String(pick.winnerRosterId)));
+    const bracketPicks = Array.isArray(body.bracketPicks)
+      ? (body.bracketPicks as { round: number; idx: number; winnerRosterId: string }[])
+      : [];
+    /* Every game from the fixture week to the end of its regular season. */
+    const regularGames = bundle.schedule
+      .filter((entry) => entry.week >= WEEK)
+      .reduce((count, entry) => count + entry.matchups.length / 2, 0);
 
     await new Promise((resolve) => setTimeout(resolve, DESIGN_PREDICTOR_MS));
 
     const clamp = (value: number) => Math.max(0.1, Math.min(99.9, value));
     return {
       available: true,
-      pickSetHash: String(body.picks ? predictorHash(picks) : ''),
+      pickSetHash: String(body.picks ? predictorHash(picks, bracketPicks) : ''),
       picked: picks.length,
-      simulated: 0,
+      simulated: Math.max(0, regularGames - picks.length),
       sims: 4000,
-      bracket: null,
+      bracket: picks.length >= regularGames ? designBracket(bundle, bracketPicks) : null,
       rows: (bundle.pricing.futures ?? []).map((team) => {
         const called = winners.has(String(team.rosterId));
         const nudge = picks.length === 0 ? 0 : called ? 6.5 : -2.5;

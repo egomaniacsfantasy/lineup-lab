@@ -52,14 +52,37 @@ export function decidedWinner(sides: readonly LockSide[]): string | null {
   return null;
 }
 
+/**
+ * The saved calls that still point at a game on the board.
+ *
+ * Picks are kept in the browser between visits, and the season moves on
+ * underneath them. A call made last week for a game that has since been
+ * played was still being sent, and the engine, which is told to force
+ * whatever it is handed, credited that result a second time on top of the
+ * real one. Every team in such a game showed one game too many, before a
+ * single game of the week on screen was called.
+ *
+ * Matched on week AND matchup id: a provider that numbers its games 1 to 6
+ * every week reuses the id, so the id alone names six different games.
+ */
+export function picksOnBoard<P extends LockPick>(
+  picks: readonly P[],
+  games: readonly { week: number; matchupId: number }[],
+): P[] {
+  const live = new Set(games.map((game) => `${game.week}:${game.matchupId}`));
+  return picks.filter((pick) => live.has(`${pick.week}:${pick.matchupId}`));
+}
+
+const sameGame = (a: { week: number; matchupId: number }, b: { week: number; matchupId: number }) =>
+  a.week === b.week && a.matchupId === b.matchupId;
+
 /** The user's own calls: anything saved against a game that has since been
  *  decided is dropped, because that game is no longer theirs to call. */
 export function openPicks<P extends LockPick>(
   picks: readonly P[],
   decided: readonly DecidedGame[],
 ): P[] {
-  const locked = new Set(decided.map((game) => game.matchupId));
-  return picks.filter((pick) => !locked.has(pick.matchupId));
+  return picks.filter((pick) => !decided.some((game) => sameGame(game, pick)));
 }
 
 /**

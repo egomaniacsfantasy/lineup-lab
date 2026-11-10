@@ -846,3 +846,295 @@
 .predictor__bye--home {
   text-align: right;
 }
+
+/* ---------------------------------------------------------------------------
+   The playoff bracket.
+
+   Columns are rounds. Every slot in a column takes an equal share of the
+   height, so a slot sits exactly between the two that feed it and the
+   connector lines can be drawn from that fact alone, with no measuring.
+   --------------------------------------------------------------------------- */
+.pbracket {
+  display: grid;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.pbracket__note,
+.pbracket__champ {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* The one amber thing above the bracket: the champion is your call. */
+.pbracket__champ {
+  border-color: rgba(232, 84, 29, 0.44);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.pbracket__champ .predictor__side-label {
+  margin-right: var(--space-xs);
+  color: var(--text-amber);
+}
+
+/* A bracket is wider than a phone. It scrolls inside its own frame, so the
+   page around it never does. */
+.pbracket__scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.pbracket__rounds {
+  --pbracket-gutter: 18px;
+  display: flex;
+  align-items: stretch;
+  min-width: min-content;
+}
+
+.pbracket__round {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 190px;
+}
+
+.pbracket__round-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin: 0 var(--pbracket-gutter) var(--space-xs) 0;
+  color: var(--text-soft);
+  font-family: var(--font-condensed);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pbracket__round + .pbracket__round .pbracket__round-head {
+  margin-left: var(--pbracket-gutter);
+}
+
+.pbracket__round-week {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.pbracket__slots {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.pbracket__slot {
+  position: relative;
+  display: flex;
+  /* Equal shares only hold if no slot needs more than its share. A bye card
+     is one row and a game is two, so every slot is given room for a game;
+     otherwise the taller ones push the column out of step and a semifinal
+     sits visibly off the two games that feed it. */
+  flex: 1 1 0;
+  min-height: 96px;
+  align-items: center;
+  padding: 6px var(--pbracket-gutter) 6px 0;
+}
+
+.pbracket__round + .pbracket__round .pbracket__slot {
+  padding-left: var(--pbracket-gutter);
+}
+
+.pbracket__round:last-child .pbracket__slot {
+  padding-right: 0;
+}
+
+/* Connectors. Each slot reaches right to the gutter's edge and turns toward
+   its partner: the upper of a pair turns down, the lower turns up, and the
+   slot they feed reaches left to meet them. */
+.pbracket__rounds--connected .pbracket__round:not(:last-child) .pbracket__slot::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  width: var(--pbracket-gutter);
+  border-right: 1px solid var(--border-subtle);
+  pointer-events: none;
+}
+
+.pbracket__rounds--connected .pbracket__round:not(:last-child) .pbracket__slot:nth-child(odd)::after {
+  top: 50%;
+  bottom: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pbracket__rounds--connected .pbracket__round:not(:last-child) .pbracket__slot:nth-child(even)::after {
+  top: 0;
+  bottom: 50%;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pbracket__rounds--connected .pbracket__round + .pbracket__round .pbracket__slot::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: var(--pbracket-gutter);
+  border-top: 1px solid var(--border-subtle);
+  pointer-events: none;
+}
+
+.pbracket__card {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  overflow: hidden;
+}
+
+/* A game that can be picked right now stands a little forward of one that is
+   still waiting on an earlier round. */
+.pbracket__card--open {
+  border-color: var(--glass-border);
+}
+
+.pbracket__card--bye {
+  border-style: dashed;
+  background: transparent;
+}
+
+.pbracket__team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.pbracket__team + .pbracket__team {
+  border-top: 1px solid var(--border-subtle);
+}
+
+button.pbracket__team {
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+button.pbracket__team:hover {
+  background: rgba(232, 84, 29, 0.08);
+  color: var(--text-primary);
+}
+
+button.pbracket__team:focus-visible {
+  outline: 2px solid var(--text-amber);
+  outline-offset: -2px;
+}
+
+.pbracket__team .team-avatar,
+.pbracket__blank {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+}
+
+.pbracket__blank {
+  border: 1px dashed var(--border-subtle);
+  border-radius: 50%;
+}
+
+.pbracket__seed {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pbracket__seed:empty {
+  display: none;
+}
+
+.pbracket__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pbracket__proj,
+.pbracket__bye {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pbracket__bye {
+  font-family: var(--font-condensed);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pbracket__team--open {
+  color: var(--text-dim);
+}
+
+/* Yours, wherever it is seeded: weight, not a seat. */
+.pbracket__team--you .pbracket__name {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* A call. Same amber as a called game in the weeks above. */
+.pbracket__team--picked {
+  background: linear-gradient(90deg, rgba(232, 84, 29, 0.3), rgba(232, 84, 29, 0.1));
+  color: var(--text-primary);
+}
+
+.pbracket__team--picked .pbracket__proj {
+  color: var(--text-amber);
+}
+
+.pbracket__team--beaten {
+  opacity: 0.4;
+}
+
+/* Players on bye, as faces. Each chip is a headshot and a name; they wrap,
+   so a team missing four starters lists four. */
+.predictor__bye-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.predictor__bye--home .predictor__bye-list {
+  justify-content: flex-end;
+}
+
+.predictor__bye-player {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-soft);
+}
+
+.predictor__bye-shot {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+}

@@ -45,6 +45,7 @@ import {
   toLeagueFutures,
   toScheduleItems,
   toWeekMatchups,
+  toPlayer,
 } from '../adapters/connectedLeague';
 import {
   MOCK_LEAGUE,
@@ -867,6 +868,8 @@ export function LeaguePage() {
               leagueId={String(stored?.leagueId ?? '')}
               projByWeekRoster={projByWeekRoster}
               byesByWeekRoster={byesByWeekRoster}
+              playoffTeams={bootstrap.league.playoffTeams ?? 0}
+              resolvePlayer={(id) => toPlayer(id, bootstrap.players)}
               storageKey={`og.predictor.${stored?.provider}.${stored?.leagueId}`}
               userId={String(stored?.userId ?? '')}
             />
