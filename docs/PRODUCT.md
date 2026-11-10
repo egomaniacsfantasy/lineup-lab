@@ -421,6 +421,20 @@ Saved calls are kept in the browser, so only calls for a game still on the
 board are counted or sent, matched on week and matchup id together
 (`picksOnBoard`). A call left over from a week that has since been played used
 to be forced a second time and put one game too many on both teams' records.
+Such calls are also deleted from storage once the schedule has loaded, and a
+week already settled into every record is not offered even while the provider
+still names it current (`firstOpenWeek`, the engine's own start-week rule).
+A finished week the provider has not yet settled into the records (the gap
+after the app has moved to the next week) is served on `projected-scores` as
+`settled`, from the same final matchups the sim pins
+(`server/services/predictorSettled.js`). Those games show as "Final" at the
+real score, are counted in the standings before any call, and are sent as
+forced results with their scores. Without them every team reads one game
+short. Design flag: `?unsettled`.
+
+"Reset to now" clears every call and the bracket and returns the picker to the
+week being played; "Clear week" / "Clear bracket" clear only the step on
+screen.
 
 The playoffs are one step, a bracket (`PredictorBracket`, laid out by
 `src/utils/bracketLayout.ts`). Its frame is drawn from the start with seed

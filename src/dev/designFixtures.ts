@@ -66,6 +66,14 @@ const BYE_QB =
 const DECIDED =
   typeof window !== 'undefined' && window.location.search.includes('decided');
 
+/* ?unsettled is the Tuesday gap: last week is over and the app has moved on,
+   but the provider has not put those results in anybody's record. Every
+   record drops the game it would have held, and projected-scores hands the
+   week back as finals. It is the state where the Predictor read one game
+   short, and it only exists for a day or two a week in a real league. */
+const UNSETTLED =
+  typeof window !== 'undefined' && window.location.search.includes('unsettled');
+
 /* ?playoffTeams=6 widens the fixture's playoffs from four teams to six, which
    is the shape most real leagues run and the one with first-round byes in
    it. Four teams is two tidy columns and hides every hard part of drawing a
@@ -432,11 +440,29 @@ function buildTeam(team: typeof USER_TEAM) {
     players: [...team.starters, ...team.bench],
     starters: startersFor(team),
     reserve: [...((team as { reserve?: string[] }).reserve ?? [])],
-    record: team.record,
-    pointsFor: team.pointsFor,
+    ...standingFor(team),
     pointsAgainst: team.pointsAgainst,
     isUser: team.isUser,
     division: null,
+  };
+}
+
+/* The record a provider would report. Under ?unsettled that is the record
+   without last week's game, taken back out at the score it was played at. */
+function standingFor(team: typeof USER_TEAM) {
+  if (!UNSETTLED) return { record: team.record, pointsFor: team.pointsFor };
+  const rows = buildSchedule().find((entry) => entry.week === WEEK - 1)?.matchups ?? [];
+  const mine = rows.find((row) => row.rosterId === team.rosterId);
+  const theirs = rows.find((row) => row.matchupId === mine?.matchupId && row.rosterId !== team.rosterId);
+  if (!mine || !theirs) return { record: team.record, pointsFor: team.pointsFor };
+  const won = mine.points > theirs.points;
+  return {
+    record: {
+      ...team.record,
+      wins: team.record.wins - (won ? 1 : 0),
+      losses: team.record.losses - (won ? 0 : 1),
+    },
+    pointsFor: Number((team.pointsFor - mine.points).toFixed(1)),
   };
 }
 
@@ -1674,7 +1700,19 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
       }
       weeks.push({ week, scores, byes: byes[week] ?? {} });
     }
-    return { available: true, weeks };
+    /* Last week's games as finals, straight off the fixture schedule. */
+    const settled = UNSETTLED
+      ? (bundle.schedule.find((entry) => entry.week === WEEK - 1)?.matchups ?? []).reduce<
+          { week: number; matchupId: number; sides: { rosterId: string; points: number }[] }[]
+        >((games, row) => {
+          const game = games.find((entry) => entry.matchupId === row.matchupId);
+          const side = { rosterId: String(row.rosterId), points: row.points };
+          if (game) game.sides.push(side);
+          else games.push({ week: WEEK - 1, matchupId: row.matchupId, sides: [side] });
+          return games;
+        }, [])
+      : [];
+    return { available: true, weeks, settled };
   }
 
   if (endpoint === 'predictor' && method === 'POST') {
@@ -1689,6 +1727,8 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
     const regularGames = bundle.schedule
       .filter((entry) => entry.week >= WEEK)
       .reduce((count, entry) => count + entry.matchups.length / 2, 0);
+    /* A forced result from a finished week is not one of them. */
+    const openCalls = (picks as { week?: number }[]).filter((pick) => Number(pick.week) >= WEEK).length;
 
     await new Promise((resolve) => setTimeout(resolve, DESIGN_PREDICTOR_MS));
 
@@ -1697,9 +1737,9 @@ export async function maybeHandleDesignFixtureRequest(path: string, init?: Reque
       available: true,
       pickSetHash: String(body.picks ? predictorHash(picks, bracketPicks) : ''),
       picked: picks.length,
-      simulated: Math.max(0, regularGames - picks.length),
+      simulated: Math.max(0, regularGames - openCalls),
       sims: 4000,
-      bracket: picks.length >= regularGames ? designBracket(bundle, bracketPicks) : null,
+      bracket: openCalls >= regularGames ? designBracket(bundle, bracketPicks) : null,
       rows: (bundle.pricing.futures ?? []).map((team) => {
         const called = winners.has(String(team.rosterId));
         const nudge = picks.length === 0 ? 0 : called ? 6.5 : -2.5;

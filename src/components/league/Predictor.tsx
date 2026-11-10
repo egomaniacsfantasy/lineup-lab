@@ -14,7 +14,7 @@ import {
   type ConditionedRow,
   type Pick,
 } from '../../services/predictor';
-import { openPicks, picksOnBoard, picksToSend, type DecidedGame } from '../../utils/predictorLocks';
+import { openPicks, picksOnBoard, picksToSend, withDecided, type DecidedGame } from '../../utils/predictorLocks';
 import './Predictor.css';
 
 export interface PredictorSide {
@@ -35,7 +35,14 @@ export interface PredictorGame {
   /** Set when this week's game is already settled: the engine prices one side
    *  at 100.0% on the points that are banked. Such a game is shown, locked,
    *  and never asked for. */
-  decided?: { winnerRosterId: string };
+  decided?: {
+    winnerRosterId: string;
+    /** Set when the game is over: the real score, and `final` to say so.
+     *  This is a finished week the provider has not put in the records. */
+    winnerPoints?: number;
+    loserPoints?: number;
+    final?: boolean;
+  };
 }
 
 /** "Proj 124.3": the number on a matchup is a forecast, and says so. A bare
@@ -197,15 +204,22 @@ export function Predictor({
      set of locks that did not change. */
   const decidedKey = games
     .filter((game) => game.decided)
-    .map((game) => `${game.week}:${game.matchupId}:${game.decided?.winnerRosterId}`)
+    .map((game) =>
+      [game.week, game.matchupId, game.decided?.winnerRosterId, game.decided?.winnerPoints ?? '', game.decided?.loserPoints ?? ''].join(':'))
     .join('|');
   const decided = useMemo<DecidedGame[]>(
     () =>
       decidedKey === ''
         ? []
         : decidedKey.split('|').map((entry) => {
-            const [week, matchupId, winnerRosterId] = entry.split(':');
-            return { week: Number(week), matchupId: Number(matchupId), winnerRosterId };
+            const [week, matchupId, winnerRosterId, winnerPoints, loserPoints] = entry.split(':');
+            return {
+              week: Number(week),
+              matchupId: Number(matchupId),
+              winnerRosterId,
+              ...(winnerPoints !== '' ? { winnerPoints: Number(winnerPoints) } : {}),
+              ...(loserPoints !== '' ? { loserPoints: Number(loserPoints) } : {}),
+            };
           }),
     [decidedKey],
   );
@@ -232,9 +246,14 @@ export function Predictor({
 
   const hash = useMemo(() => pickSetHash(sent, bracketPicks), [sent, bracketPicks]);
 
+  /* Saved as the calls that are still on the board, so a call for a week that
+     has been played is dropped from the browser for good, not just ignored.
+     Until the schedule has loaded there is no board to check against, and
+     writing then would wipe every saved call on each visit. */
   useEffect(() => {
-    writePicks(storageKey, storedPicks);
-  }, [storedPicks, storageKey]);
+    if (boardKey === '') return;
+    writePicks(storageKey, onBoard);
+  }, [onBoard, boardKey, storageKey]);
 
   useEffect(() => {
     /* Nothing forced is the baseline, which we already have. Asking the server
@@ -390,7 +409,18 @@ export function Predictor({
     return [...weekSteps, ...playoffSteps];
   }, [games, bracket, playoffTeams]);
 
-  const [stepIndex, setStepIndex] = useState(0);
+  /* "Now" is the first week with a game still open. A finished week that is
+     waiting to be settled sits before it, and opening on a page of final
+     scores would bury the week actually being played. null means "at now",
+     so the picker lands there however late the schedule arrives. */
+  const homeIndex = Math.max(
+    0,
+    steps.findIndex((step) => step.kind === 'week' && step.games.some((game) => !game.decided)),
+  );
+  const [chosenStep, setChosenStep] = useState<number | null>(null);
+  const stepIndex = chosenStep ?? homeIndex;
+  const setStepIndex = (next: number | ((index: number) => number)) =>
+    setChosenStep(typeof next === 'function' ? next(stepIndex) : next);
   const safeStepIndex = Math.min(stepIndex, Math.max(0, steps.length - 1));
   const activeStep = steps[safeStepIndex] ?? null;
   const stepPicked =
@@ -419,6 +449,18 @@ export function Predictor({
      showing a table with its two most important columns missing. */
   const busy = pending && picks.length > 0;
 
+  /* The standings before any call, with the decided games already in them:
+     the same thing the conditioned board returns, so the first call moves
+     the record by one game and not by two. */
+  const standing = useMemo(
+    () =>
+      withDecided(baseline, decided, (settled) => {
+        const game = games.find((g) => g.week === settled.week && g.matchupId === settled.matchupId);
+        return game ? [game.home.rosterId, game.away.rosterId] : [];
+      }),
+    [baseline, decided, games],
+  );
+
   const sortedRows = useMemo(() => {
     const recScore = (r: { wins?: number; ties?: number } | null | undefined) =>
       (r?.wins ?? 0) + 0.5 * (r?.ties ?? 0);
@@ -426,7 +468,7 @@ export function Predictor({
       if (american == null) return 0;
       return american < 0 ? -american / (-american + 100) : 100 / (american + 100);
     };
-    return [...baseline].sort((a, b) => {
+    return [...standing].sort((a, b) => {
       const na = conditioned?.get(a.rosterId);
       const nb = conditioned?.get(b.rosterId);
       const wa = recScore(na?.record ?? a.record);
@@ -437,7 +479,7 @@ export function Predictor({
       if (pb !== pa) return pb - pa;
       return implied(nb?.titleOdds ?? b.titleOdds) - implied(na?.titleOdds ?? a.titleOdds);
     });
-  }, [baseline, conditioned]);
+  }, [standing, conditioned]);
 
   /* Games still open to call. A decided game is not "remaining": counting it
      would leave the header one short of done for ever. */
@@ -446,8 +488,8 @@ export function Predictor({
     decided.length === 0
       ? ''
       : decided.length === 1
-        ? ' 1 game this week is already decided and is locked in.'
-        : ` ${decided.length} games this week are already decided and are locked in.`;
+        ? ' 1 game is already decided and is locked in.'
+        : ` ${decided.length} games are already decided and are locked in.`;
 
   /* Your row, and where the calls have moved it. Held apart so the header can
      show the before and the after without digging through the table. */
@@ -571,15 +613,22 @@ export function Predictor({
           }}
           type="button"
         >
-          Reset
+          {activeStep?.kind === 'playoff' ? 'Clear bracket' : 'Clear week'}
         </button>
         <button
           className="predictor__weekaction"
-          disabled={picks.length === 0 && bracketPicks.length === 0}
-          onClick={() => { setPicks([]); setBracketPicks([]); }}
+          disabled={picks.length === 0 && bracketPicks.length === 0 && safeStepIndex === homeIndex}
+          onClick={() => {
+            /* Back to the present in one press: every call gone, and the
+               picker returned to the week being played. Clearing alone left
+               you standing in week 14 of a season you had just un-called. */
+            setPicks([]);
+            setBracketPicks([]);
+            setChosenStep(null);
+          }}
           type="button"
         >
-          Clear all
+          Reset to now
         </button>
       </div>
 
@@ -626,7 +675,14 @@ export function Predictor({
                       <TeamAvatar avatarUrl={side.avatarUrl} name={side.teamName} />
                       <span className="predictor__side-copy">
                         <span className="predictor__side-name">{side.teamName}</span>
-                        {typeof side.projPoints === 'number' ? (
+                        {settled?.final && settled.winnerPoints != null && settled.loserPoints != null ? (
+                          /* A score, and labelled as one. This game was
+                             played; "Proj" beside it would be a lie. */
+                          <span className="predictor__side-prob">
+                            <span className="predictor__side-label">Final</span>{' '}
+                            {(won ? settled.winnerPoints : settled.loserPoints).toFixed(1)}
+                          </span>
+                        ) : typeof side.projPoints === 'number' ? (
                           <Projection points={side.projPoints} />
                         ) : typeof side.winProb === 'number' ? (
                           <span className="predictor__side-prob">{side.winProb.toFixed(0)}%</span>
@@ -638,7 +694,11 @@ export function Predictor({
                 </div>
 
                 {settled ? (
-                  <p className="predictor__decided">Already decided. Nothing to call.</p>
+                  <p className="predictor__decided">
+                    {settled.final
+                      ? 'Final. Counted here ahead of your league standings.'
+                      : 'Already decided. Nothing to call.'}
+                  </p>
                 ) : null}
 
                 <ByeRow

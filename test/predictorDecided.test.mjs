@@ -201,6 +201,10 @@ test('a call saved for a week that has been played is not sent again', async () 
     assert.match(await page.locator('.predictor__sub').innerText(), /1 of 9 games called/);
     await page.selectOption('#predictor-week', 'w9');
     assert.equal(await page.locator('.predictor__side--picked').count(), 0, 'a week 7 call lit a week 9 card');
+    /* And gone from the browser, not merely ignored: an older build of the
+       page reading the same storage would count them again. */
+    const kept = await page.evaluate((name) => JSON.parse(window.localStorage.getItem(name)), key);
+    assert.deepEqual(kept.map((pick) => pick.week), [8]);
   } finally {
     await page.close();
   }
@@ -276,6 +280,99 @@ test('the playoffs are one bracket, framed before the seeds exist and picked in 
     await page.locator('.pbracket__round').first().locator('button.pbracket__team', { hasText: '#5' }).click();
     await page.waitForFunction(() => !document.querySelector('.pbracket__champ'));
     assert.match(await weekCount(page), /2 of 5 called/);
+  } finally {
+    await page.close();
+  }
+});
+
+test('Reset to now clears every call and returns to the week being played', async () => {
+  const page = await open('&playoffTeams=6');
+  try {
+    const reset = page.getByRole('button', { name: 'Reset to now' });
+    assert.equal(await reset.isDisabled(), true, 'nothing to reset on arrival');
+
+    /* Away from the present with nothing called is still somewhere to come
+       back from. */
+    await page.selectOption('#predictor-week', 'w10');
+    assert.equal(await reset.isDisabled(), false);
+    await reset.click();
+    assert.equal(await page.locator('#predictor-week').inputValue(), 'w8');
+
+    await callSeason(page);
+    await page.waitForSelector('button.pbracket__team');
+    await page.locator('button.pbracket__team').first().click();
+    await page.waitForSelector('.pbracket__team--picked');
+
+    await reset.click();
+    assert.equal(await page.locator('#predictor-week').inputValue(), 'w8');
+    assert.equal(await page.locator('.predictor__side--picked').count(), 0);
+    assert.match(await page.locator('.predictor__sub').innerText(), /Every game below is still simulated/);
+    assert.match(await weekCount(page), /0 of 3 called/);
+    /* The title card is back to one number: no "as called" beside it. */
+    assert.doesNotMatch(await page.locator('.predictor__you').innerText(), /as called/i);
+    /* The bracket went with the season it was built on. */
+    await page.selectOption('#predictor-week', 'playoffs');
+    assert.equal(await page.locator('button.pbracket__team').count(), 0);
+    assert.match(await weekCount(page), /0 of 5 called/);
+    assert.equal(
+      await page.evaluate(() => Object.keys(window.localStorage).filter((name) => name.startsWith('og.predictor.')).length),
+      0,
+      'calls survived the reset in storage',
+    );
+  } finally {
+    await page.close();
+  }
+});
+
+test('a finished week the league has not settled is counted, final, and not asked for', async () => {
+  /* The same league twice: once as the provider reports it mid-gap, with
+     last week missing from every record, and once settled. The standings a
+     person sees must be the same either way. */
+  const records = async (query) => {
+    const page = await open(query);
+    try {
+      await page.waitForSelector('.predictor__row');
+      return {
+        page: await page.evaluate(() => ({
+          week: document.querySelector('#predictor-week').value,
+          options: [...document.querySelector('#predictor-week').options].map((option) => option.value),
+          rows: Object.fromEntries([...document.querySelectorAll('.predictor__row')].map((row) => [
+            row.querySelector('.predictor__row-name').textContent,
+            `${row.querySelector('.predictor__row-rec').textContent} ${row.querySelector('.predictor__row-pf').textContent}`,
+          ])),
+          sub: document.querySelector('.predictor__sub').textContent,
+        })),
+      };
+    } finally {
+      await page.close();
+    }
+  };
+  const settled = (await records('')).page;
+  const gap = (await records('&unsettled')).page;
+
+  assert.deepEqual(gap.rows, settled.rows, 'the unsettled week is missing from the standings');
+  /* Lands on the week being played, with the finished one a step back. */
+  assert.equal(gap.week, 'w8');
+  assert.deepEqual(gap.options.slice(0, 2), ['w7', 'w8']);
+  /* Nine games to call either way: the three finals are not among them. */
+  assert.match(gap.sub, /3 games are already decided/);
+
+  const page = await open('&unsettled');
+  try {
+    await page.locator('button.predictor__side:not(:disabled)').first().click();
+    await page.waitForSelector('.predictor__side--picked');
+    assert.match(await page.locator('.predictor__sub').innerText(), /1 of 9 games called/);
+
+    await page.selectOption('#predictor-week', 'w7');
+    assert.match(await weekCount(page), /All decided/);
+    assert.equal(await page.locator('button.predictor__side:not(:disabled)').count(), 0);
+    const figures = await page.locator('.predictor__side-prob').allInnerTexts();
+    assert.equal(figures.length, 6);
+    for (const figure of figures) assert.match(figure, /^final\s+\d+\.\d$/i, `"${figure}" is not a final score`);
+
+    /* Reset to now comes back to the week being played, not the finals. */
+    await page.getByRole('button', { name: 'Reset to now' }).click();
+    assert.equal(await page.locator('#predictor-week').inputValue(), 'w8');
   } finally {
     await page.close();
   }

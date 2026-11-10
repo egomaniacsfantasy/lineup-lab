@@ -33,6 +33,53 @@ export interface DecidedGame {
   week: number;
   matchupId: number;
   winnerRosterId: string;
+  /** The real score, when the game is over and the score is known. Sent so
+   *  the engine credits what was scored and not a projection of it. */
+  winnerPoints?: number;
+  loserPoints?: number;
+}
+
+/**
+ * The result of a finished game, or null for a tie.
+ *
+ * A tie cannot be sent as a forced result, which names a winner. It is left
+ * to the engine, which already holds the week's real scores.
+ */
+export function finalResult(
+  sides: readonly { rosterId: string; points: number }[],
+): { winnerRosterId: string; winnerPoints: number; loserPoints: number } | null {
+  if (sides.length !== 2) return null;
+  const [a, b] = sides;
+  if (!Number.isFinite(a.points) || !Number.isFinite(b.points) || a.points === b.points) return null;
+  const [winner, loser] = a.points > b.points ? [a, b] : [b, a];
+  return { winnerRosterId: winner.rosterId, winnerPoints: winner.points, loserPoints: loser.points };
+}
+
+/**
+ * The standings with the decided games counted.
+ *
+ * Arithmetic on results that have happened, nothing more: a win, a loss, and
+ * the points where the real score is known. Without it the board sits one
+ * game short until the first call is made, then jumps.
+ */
+export function withDecided<R extends {
+  rosterId: string;
+  record: { wins: number; losses: number; ties: number };
+  pointsFor: number | null;
+}>(rows: readonly R[], decided: readonly DecidedGame[], sidesOf: (game: DecidedGame) => readonly string[]): R[] {
+  return rows.map((row) => {
+    let { wins, losses } = row.record;
+    let pointsFor = row.pointsFor;
+    for (const game of decided) {
+      if (!sidesOf(game).includes(row.rosterId)) continue;
+      const won = game.winnerRosterId === row.rosterId;
+      if (won) wins += 1;
+      else losses += 1;
+      const scored = won ? game.winnerPoints : game.loserPoints;
+      if (pointsFor != null && scored != null) pointsFor += scored;
+    }
+    return { ...row, record: { ...row.record, wins, losses }, pointsFor };
+  });
 }
 
 /**
@@ -102,7 +149,31 @@ export function picksToSend<P extends LockPick>(
       week: game.week,
       matchupId: game.matchupId,
       winnerRosterId: game.winnerRosterId,
+      ...(game.winnerPoints != null ? { winnerPoints: game.winnerPoints } : {}),
+      ...(game.loserPoints != null ? { loserPoints: game.loserPoints } : {}),
     })),
     ...openPicks(picks, decided),
   ];
+}
+
+/**
+ * The first week that is still open to call.
+ *
+ * Normally the league's current week. But a provider settles a finished week
+ * into every team's record before it moves its own week counter on, and for
+ * that stretch the "current" week is one that has already been played and
+ * counted. The engine starts its season from games recorded plus one for
+ * exactly this reason (seasonStartWeek), so a call for the settled week would
+ * be forced on top of a result the record already holds.
+ */
+export function firstOpenWeek(
+  currentWeek: number,
+  teams: readonly { record?: { wins?: number; losses?: number; ties?: number } | null }[],
+): number {
+  const recorded = teams.reduce((most, team) => {
+    const r = team.record;
+    const games = (r?.wins ?? 0) + (r?.losses ?? 0) + (r?.ties ?? 0);
+    return Number.isFinite(games) ? Math.max(most, games) : most;
+  }, 0);
+  return Math.max(currentWeek, recorded + 1);
 }

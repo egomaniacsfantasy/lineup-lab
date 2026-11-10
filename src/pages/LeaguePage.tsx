@@ -26,7 +26,7 @@ import {
   type WeekForksResult,
   type ProjectedScores,
 } from '../services/predictor';
-import { decidedWinner } from '../utils/predictorLocks';
+import { decidedWinner, finalResult, firstOpenWeek } from '../utils/predictorLocks';
 import { leagueRecords } from '../utils/leagueRecords';
 import { TradeTargetTeaser } from '../components/league/TradeTargetTeaser';
 import { SeasonalNotice } from '../components/layout/SeasonalNotice';
@@ -438,8 +438,34 @@ export function LeaguePage() {
      the engine, not from here. */
   const predictorGames = useMemo<PredictorGame[]>(() => {
     if (!bootstrap || !schedule) return [];
-    return schedule.flatMap((weekEntry) => {
-      if (weekEntry.week < bootstrap.week) return [];
+    /* Not simply the current week: a week already settled into the records
+       is not open to call, even while the provider still names it current. */
+    const openFrom = firstOpenWeek(bootstrap.week, bootstrap.teams);
+    const teamOf = (rosterId: string) =>
+      bootstrap.teams.find((candidate) => String(candidate.rosterId) === rosterId);
+    /* Finished weeks the provider has not settled into the records. They are
+       in neither the standings nor the games left to call, so without these
+       every team reads one game short. Final, at the real score, never
+       asked for. A week the records already hold is not repeated. */
+    const settledGames = (projScores?.settled ?? []).flatMap<PredictorGame>((game) => {
+      if (game.week >= openFrom) return [];
+      const result = finalResult(game.sides);
+      const named = game.sides.map((side) => ({
+        rosterId: side.rosterId,
+        teamName: teamOf(side.rosterId)?.teamName ?? '',
+        avatarUrl: teamOf(side.rosterId)?.avatarUrl ?? null,
+      }));
+      if (!result || named.length !== 2 || named.some((side) => !side.teamName)) return [];
+      return [{
+        week: game.week,
+        matchupId: game.matchupId,
+        away: named[0],
+        home: named[1],
+        decided: { ...result, final: true },
+      }];
+    });
+    const upcoming = schedule.flatMap((weekEntry) => {
+      if (weekEntry.week < openFrom) return [];
       const byMatchup = new Map<number, typeof weekEntry.matchups>();
       for (const matchup of weekEntry.matchups) {
         byMatchup.set(matchup.matchupId, [...(byMatchup.get(matchup.matchupId) ?? []), matchup]);
@@ -478,7 +504,8 @@ export function LeaguePage() {
         }];
       });
     });
-  }, [bootstrap, schedule, projByWeekRoster, winProbByRoster]);
+    return [...settledGames, ...upcoming];
+  }, [bootstrap, schedule, projScores, projByWeekRoster, winProbByRoster]);
 
   const predictorBaseline = useMemo<PredictorBaselineRow[]>(() => {
     if (!connected) return [];

@@ -279,6 +279,10 @@ export interface ProjectedScores {
      *  week, best first. The score beside it already accounts for them. */
     byes?: Record<string, ByePlayer[]>;
   }[];
+  /** Finished games from weeks the provider has not yet settled into the
+   *  records, at their real scores. Shown as final and sent as forced
+   *  results, or every team reads one game short. */
+  settled?: { week: number; matchupId: number; sides: { rosterId: string; points: number }[] }[];
 }
 
 export async function fetchProjectedScores(

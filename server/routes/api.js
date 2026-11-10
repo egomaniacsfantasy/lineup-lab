@@ -28,6 +28,7 @@ import {
 } from '../engine/engine.js';
 import { predictSeason, weekForks, weekProjections, PREDICTOR_SIMS } from '../engine/leverage.js';
 import { keyByesByWeek } from '../services/predictorByes.js';
+import { settledResults } from '../services/predictorSettled.js';
 import { findSuccessorLeague } from '../leagueSuccession.js';
 import { readHistory, readTitleHistory, recordPricing } from '../engine/lineStore.js';
 import { registerLeague, readRegistry } from '../engine/leagueRegistry.js';
@@ -2605,7 +2606,8 @@ apiRouter.get('/league/:leagueId/forks', async (req, res, next) => {
  * Each team's projected points per remaining week (no Monte Carlo - distribution
  * means). Drives the Predictor's per-matchup projection + the override-box default.
  * Each week also carries `byes`: per roster, the would-be starters whose NFL team is
- * off that week (see services/predictorByes.js).
+ * off that week (see services/predictorByes.js). `settled` lists finished weeks that are
+ * not in the records yet (see services/predictorSettled.js).
  * Query: userId. Cached 5m per league/user/build.
  */
 apiRouter.get('/league/:leagueId/projected-scores', async (req, res, next) => {
@@ -2617,7 +2619,9 @@ apiRouter.get('/league/:leagueId/projected-scores', async (req, res, next) => {
     const build = process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev';
     const key = `agg:projscores:${leagueId}:${userId}:${build}`;
     const result = await cached(key, 5 * 60_000, () => {
-      const projected = weekProjections(ctx);
+      // Finished weeks the provider has not put in the records yet, at their real
+      // scores, so the Predictor counts them as played (see predictorSettled.js).
+      const projected = { ...weekProjections(ctx), settled: settledResults(ctx.priorFinalMatchups) };
       // Who is missing each week, beside the number it explains. Display only: the
       // projection above already benches a bye player and fills his slot. "Key" is
       // the lineup the engine's own optimalAssign picks on season-long means.
